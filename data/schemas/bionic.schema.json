@@ -1,0 +1,469 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BionicDef",
+  "description": "A bionic/CBM definition from JSON type `\"bionic\"`.\n\nBionics are cybernetic implants that can be installed in a character's body, providing special abilities, stat boosts, or other effects.",
+  "type": "object",
+  "required": [
+    "description",
+    "id",
+    "name"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "act_cost": {
+      "description": "Power cost to activate.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "activated_eocs": {
+      "description": "Activated EOC effects.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "active": {
+      "description": "Whether this bionic is active.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "active_flags": {
+      "description": "Active flags",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "body_part": {
+      "description": "Which body part this bionic is installed in.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "canceled_mutations": {
+      "description": "Canceled by mutations.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "capacity": {
+      "description": "Power capacity in Joules.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Energy"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "copy_from": {
+      "description": "copy-from parent",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "coverage": {
+      "description": "Coverage overrides.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "deactivated_eocs": {
+      "description": "Deactivated EOC effects.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "description": {
+      "description": "Description text.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        }
+      ]
+    },
+    "difficulty": {
+      "description": "Difficulty of installation.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "enchantments": {
+      "description": "Enchantments granted. CDDA enchantments can be bare strings like \"THERMAL_VISION_GOOD\" or objects.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/RawValue"
+      }
+    },
+    "encumbrance": {
+      "description": "Encumbrance per body part as raw value (format: [[\"head\", 1]]).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/RawValue"
+      }
+    },
+    "fake_item": {
+      "description": "Fake item created by this bionic.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "fake_weapon": {
+      "description": "Fake weapon",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "flags": {
+      "description": "Flags.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "fuel_capacity": {
+      "description": "Fuel capacity.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "fuel_efficiency": {
+      "description": "Fuel efficiency",
+      "default": null,
+      "type": [
+        "number",
+        "null"
+      ],
+      "format": "double"
+    },
+    "fuel_options": {
+      "description": "Fuel options",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "fuel_type": {
+      "description": "Fuel type for this bionic.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "group": {
+      "description": "Bionic groups for spawning.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"bio_adrenaline\", \"bio_tools\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "installable": {
+      "description": "Installation requirement IDs.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "mutation_conflicts": {
+      "description": "Mutation conflicts.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "name": {
+      "description": "Display name.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        }
+      ]
+    },
+    "occupied_bodyparts": {
+      "description": "Body parts occupied by this bionic and their capacity usage.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/BodyPartOccupation"
+      }
+    },
+    "passive_pseudo_items": {
+      "description": "Passive pseudo items provided.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "processed_eocs": {
+      "description": "Processing EOC effects (every turn while active).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "protec": {
+      "description": "Protection values per body part as raw value (format: [[\"arm_r\", {...}]]).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/RawValue"
+      }
+    },
+    "react_cost": {
+      "description": "Power cost per turn while active.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "social_modifiers": {
+      "description": "Social effects (key=social_score, value=modifier).",
+      "default": null,
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "type": "integer",
+        "format": "int32"
+      }
+    },
+    "time": {
+      "description": "Activation time.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "trigger_cost": {
+      "description": "Power cost to trigger.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "upgraded_bionic": {
+      "description": "Whether this is an upgrade bionic.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "BodyPartOccupation": {
+      "description": "A body part slot occupied by a bionic.\n\nCDDA format: either `[\"torso\", 4]` (pair) or `{\"body_part\": \"torso\", ...}` (object).",
+      "anyOf": [
+        {
+          "description": "Simple pair: [\"body_part\", capacity]",
+          "type": "array",
+          "items": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          ],
+          "maxItems": 2,
+          "minItems": 2
+        },
+        {
+          "description": "Object form: {\"body_part\": \"torso\", ...}",
+          "type": "object",
+          "required": [
+            "body_part"
+          ],
+          "properties": {
+            "body_part": {
+              "type": "string"
+            },
+            "coverage": {
+              "default": null,
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          }
+        }
+      ]
+    },
+    "DefId": {
+      "type": "string"
+    },
+    "Energy": {
+      "description": "Energy measured in Joules.\n\nUsed for bionics, vehicle power, and other energy systems.\n\n# Deserialization\n\nAccepts both a bare number (interpreted as Joules) and CDDA-style human-readable strings like `\"1 kJ\"`, `\"500 J\"`.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "RawValue": {
+      "description": "A flexible JSON-like value for catch-all fields where CDDA data can be a string, number, boolean, array, or object. This replaces `serde_json::Value` to avoid pulling in the serde_json dependency for type definitions.",
+      "anyOf": [
+        {
+          "description": "A string value.",
+          "type": "string"
+        },
+        {
+          "description": "A numeric value (integer or float).",
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "description": "A boolean value.",
+          "type": "boolean"
+        },
+        {
+          "description": "An array of values.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        {
+          "description": "An object/map of string keys to values.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        }
+      ]
+    }
+  }
+}

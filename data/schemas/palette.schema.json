@@ -1,0 +1,190 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MapgenPaletteDef",
+  "description": "A mapgen palette definition from JSON type `\"palette\"`.\n\nPalettes are shared mappings from map characters to terrain/furniture/items/etc. Multiple mapgen defs can reference the same palette.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "flags": {
+      "description": "Flags.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "furniture": {
+      "description": "Character → furniture mappings.",
+      "default": null,
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "$ref": "#/definitions/RawValue"
+      }
+    },
+    "id": {
+      "description": "Unique identifier.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "items": {
+      "description": "Character → item group mappings.",
+      "default": null,
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "$ref": "#/definitions/RawValue"
+      }
+    },
+    "palettes": {
+      "description": "Nested / referenced palettes.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/PaletteRef"
+      }
+    },
+    "parameters": {
+      "description": "Parameters for parameterized palettes.",
+      "default": null,
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "$ref": "#/definitions/RawValue"
+      }
+    },
+    "terrain": {
+      "description": "Character → terrain mappings.",
+      "default": null,
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "$ref": "#/definitions/RawValue"
+      }
+    },
+    "toilets": {
+      "description": "Toilet mappings.",
+      "default": null,
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "$ref": "#/definitions/RawValue"
+      }
+    },
+    "vendingmachines": {
+      "description": "Vending machine mappings.",
+      "default": null,
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "$ref": "#/definitions/RawValue"
+      }
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "PaletteRef": {
+      "description": "A palette reference in mapgen, which can be a string or a parameterized reference.",
+      "anyOf": [
+        {
+          "description": "Simple: palette ID string.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/DefId"
+            }
+          ]
+        },
+        {
+          "description": "Parameterized: {\"param\": \"palette_id_param\"}.",
+          "type": "object",
+          "required": [
+            "param"
+          ],
+          "properties": {
+            "param": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "description": "Object: {\"palette\": \"id\"}.",
+          "type": "object",
+          "required": [
+            "palette"
+          ],
+          "properties": {
+            "palette": {
+              "$ref": "#/definitions/DefId"
+            }
+          }
+        },
+        {
+          "description": "Distribution: {\"distribution\": [[\"id\", weight], ...]}.",
+          "type": "object",
+          "required": [
+            "distribution"
+          ],
+          "properties": {
+            "distribution": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/RawValue"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "RawValue": {
+      "description": "A flexible JSON-like value for catch-all fields where CDDA data can be a string, number, boolean, array, or object. This replaces `serde_json::Value` to avoid pulling in the serde_json dependency for type definitions.",
+      "anyOf": [
+        {
+          "description": "A string value.",
+          "type": "string"
+        },
+        {
+          "description": "A numeric value (integer or float).",
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "description": "A boolean value.",
+          "type": "boolean"
+        },
+        {
+          "description": "An array of values.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        {
+          "description": "An object/map of string keys to values.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        }
+      ]
+    }
+  }
+}

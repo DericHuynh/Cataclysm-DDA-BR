@@ -1,0 +1,592 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FieldDef",
+  "description": "A field type definition from JSON type `\"field_type\"`.\n\nFields are area effects like smoke, gas, fire, or electromagnetic interference that occupy tiles and can have intensity levels with different properties.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "accelerated_decay": {
+      "description": "Whether the field has accelerated decay.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "ambient_damage": {
+      "description": "Ambient damage dealt by this field (map of damage_type -> amount).",
+      "default": null,
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "$ref": "#/definitions/RawValue"
+      }
+    },
+    "apply_effects": {
+      "description": "Chance per turn of field applying effect.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/FieldEffect"
+      }
+    },
+    "color": {
+      "description": "Display color.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "copy_from": {
+      "description": "copy-from parent",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "dangerous": {
+      "description": "Whether field is dangerous.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "decay_amount_factor": {
+      "description": "Decay amount factor",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "decay_time": {
+      "description": "Time until the field decays (in turns).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "description": {
+      "description": "Description text.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "description_affix": {
+      "description": "Description affix (e.g. \"covered_in\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "display_field": {
+      "description": "Display field (parent field type) - can be string ID or boolean.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "edible": {
+      "description": "Whether this field is edible.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "gas_absorption_factor": {
+      "description": "Gas absorption factor CDDA uses time strings like \"80m\", \"20h\", or floats like 0.01.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "half_life": {
+      "description": "Half life (string duration or number).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"fd_smoke\", \"fd_fire\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "intensity_levels": {
+      "description": "Intensity levels with their properties.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/FieldIntensity"
+      }
+    },
+    "is_splatter": {
+      "description": "Whether field doubles as a splatter (data uses `is_splattering`).",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "is_splattering": {
+      "description": "Whether field is splattering (alternate name).",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "is_trap": {
+      "description": "Whether field doubles as a trap.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "legacy_enum_id": {
+      "description": "Legacy enum ID.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "looks_like": {
+      "description": "Looks like another field type",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "name": {
+      "description": "Display name.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "no_thickness": {
+      "description": "Whether field exists in complete darkness.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "opaque": {
+      "description": "Whether field is opaque.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "outdoor_age_speedup": {
+      "description": "Outdoor age speedup",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "percent_spread": {
+      "description": "Percent spread per turn",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "phase": {
+      "description": "Phases this field is present in.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "priority": {
+      "description": "Display priority (higher draws first).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "sight_override": {
+      "description": "Whether field can be seen through.",
+      "default": null,
+      "type": [
+        "number",
+        "null"
+      ],
+      "format": "double"
+    },
+    "symbol": {
+      "description": "ASCII symbol for display.",
+      "default": "%",
+      "type": "string"
+    },
+    "transparent": {
+      "description": "Whether field is transparent.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "underwater_age_speedup": {
+      "description": "Underwater age speedup",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "wall": {
+      "description": "Whether this field counts as a wall.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "FieldEffect": {
+      "description": "An effect that a field applies to creatures standing in it.",
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "chance": {
+          "description": "Chance per turn of application.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "id": {
+          "description": "Effect type ID.",
+          "type": "string"
+        },
+        "intensity": {
+          "description": "Minimum intensity to apply.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "message": {
+          "description": "Message to show on application.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "FieldIntensity": {
+      "description": "Properties of a specific field intensity level.",
+      "type": "object",
+      "properties": {
+        "color": {
+          "description": "Color for this intensity.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "damage": {
+          "description": "Damage at this intensity (map of damage_type -> amount).",
+          "default": null,
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "dangerous": {
+          "description": "Whether field is dangerous at this intensity.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "effects": {
+          "description": "Effects applied at this intensity.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/FieldIntensityEffect"
+          }
+        },
+        "extra_radius": {
+          "description": "Extra radius (for area effects).",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "humidity": {
+          "description": "Humidity modifier.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "light_emitted": {
+          "description": "Intensity of light emitted. CDDA uses floats like 0.01, 2.5, 7.5.",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "light_override": {
+          "description": "Intensity of light that can be seen through.",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "move_cost": {
+          "description": "Movement cost modifier.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "name": {
+          "description": "Name for this intensity level.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/LocalizedString"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sticky": {
+          "description": "Whether field is sticky at this intensity.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "symbol": {
+          "description": "Symbol for this intensity.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "transparency": {
+          "description": "Transparency at this intensity (0.0 = opaque, 1.0 = transparent).",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      }
+    },
+    "FieldIntensityEffect": {
+      "description": "An effect applied by a field intensity.",
+      "type": "object",
+      "required": [
+        "effect_id"
+      ],
+      "properties": {
+        "body_part": {
+          "description": "Body part to apply effect to.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "chance": {
+          "description": "Chance per tick.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "effect_id": {
+          "description": "Effect ID.",
+          "type": "string"
+        },
+        "intensity": {
+          "description": "Intensity of the effect.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "RawValue": {
+      "description": "A flexible JSON-like value for catch-all fields where CDDA data can be a string, number, boolean, array, or object. This replaces `serde_json::Value` to avoid pulling in the serde_json dependency for type definitions.",
+      "anyOf": [
+        {
+          "description": "A string value.",
+          "type": "string"
+        },
+        {
+          "description": "A numeric value (integer or float).",
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "description": "A boolean value.",
+          "type": "boolean"
+        },
+        {
+          "description": "An array of values.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        {
+          "description": "An object/map of string keys to values.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        }
+      ]
+    }
+  }
+}

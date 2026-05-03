@@ -1,0 +1,610 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FurnitureDef",
+  "description": "A furniture definition from JSON type `\"furniture\"`.\n\nFurniture is placed on top of terrain (e.g. chairs, tables, counters).",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "bash": {
+      "description": "Bash result. Can be a string (reference) or an object.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "bgcolor": {
+      "description": "Background color Can be a single color string or an array like [\"white\"].",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "burn_into": {
+      "description": "What this furniture becomes when burned. Can be a string ID or an object.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "close": {
+      "description": "Close action — can be a string, number, array, or object.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "color": {
+      "description": "Color for map display.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/CddaColor"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "comfort": {
+      "description": "Comfort level (can be negative for uncomfortable furniture).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "connect_groups": {
+      "description": "Connection groups this furniture belongs to. Can be a single string or an array of strings.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "connects_to": {
+      "description": "Connection group(s) this furniture connects to. Can be a single string or an array of strings.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "copy_from": {
+      "description": "copy-from parent",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "coverage": {
+      "description": "Coverage percentage (for cover in combat).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "crafting_pseudo_item": {
+      "description": "A pseudo item used for crafting at this furniture. Can be a string ID or an object.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "deconstruct": {
+      "description": "Deconstruction result. Can be an object or an array of objects.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "deployed_item": {
+      "description": "Deployed item Can be a string ID or an object.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "description": {
+      "description": "Description text.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "examine_action": {
+      "description": "Examine action triggered when examining this furniture.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ExamineAction"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "flags": {
+      "description": "Flags. CDDA can use a single string or an array of strings.",
+      "default": "",
+      "allOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        }
+      ]
+    },
+    "floor_bedding_warmth": {
+      "description": "Floor bedding warmth (can be negative for cooling furniture).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"f_chair\", \"f_table\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "item": {
+      "description": "Spawned item Can be a string ID or an object.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "light_emitted": {
+      "description": "Amount of light emitted.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "looks_like": {
+      "description": "Another furniture this one \"looks like\".",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "mass": {
+      "description": "Mass of the furniture object.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Weight"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "max_light_emitted": {
+      "description": "Maximum brightness this furniture can emit.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "max_volume": {
+      "description": "Maximum volume (for containers)",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Volume"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "move_cost_mod": {
+      "description": "Movement cost modifier (added to terrain move_cost).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "name": {
+      "description": "Display name.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "open": {
+      "description": "Open action — can be a string, number, array, or object.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "required_str": {
+      "description": "Required strength to move / interact.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "rotates_to": {
+      "description": "Rotates to terrain/furniture",
+      "default": "",
+      "allOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        }
+      ]
+    },
+    "shoot": {
+      "description": "Shoot action — can be a string, number, array, or object.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "symbol": {
+      "description": "ASCII symbol on the map.",
+      "default": "#",
+      "type": "string"
+    }
+  },
+  "definitions": {
+    "CddaColor": {
+      "description": "A color value in CDDA can be a simple name, a list of names (random), or a structured map with foreground/background.\n\nExamples: - `\"red\"` - `[\"white\", \"light_gray\"]` - `{\"fg\": \"red\", \"bg\": \"blue\"}`",
+      "anyOf": [
+        {
+          "description": "Single color name: `\"red\"`, `\"light_blue\"`, etc.",
+          "type": "string"
+        },
+        {
+          "description": "Multiple color names (random selection): `[\"white\", \"light_gray\"]`",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Structured color with foreground (and optional background / season variants).",
+          "allOf": [
+            {
+              "$ref": "#/definitions/CddaColorStructured"
+            }
+          ]
+        }
+      ]
+    },
+    "CddaColorStructured": {
+      "description": "A structured color with optional foreground and background.",
+      "type": "object",
+      "properties": {
+        "autumn": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bg": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fg": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "spring": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "summer": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "winter": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "DefId": {
+      "type": "string"
+    },
+    "ExamineAction": {
+      "description": "An examine action — the `\"examine_action\"` field on terrain/furniture.\n\nCan be a simple string action ID or an object with a type and parameters.",
+      "anyOf": [
+        {
+          "description": "Simple action name.",
+          "type": "string"
+        },
+        {
+          "description": "Structured action definition.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ExamineActionDef"
+            }
+          ]
+        }
+      ]
+    },
+    "ExamineActionDef": {
+      "description": "A structured examine action definition.",
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "moves": {
+          "description": "Move cost.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "msg": {
+          "description": "Message shown.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "needs": {
+          "description": "Items needed.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/definitions/RawValue"
+            }
+          }
+        },
+        "result": {
+          "description": "Resulting terrain/furniture.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "type": {
+          "description": "Action type.",
+          "type": "string"
+        }
+      }
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "RawValue": {
+      "description": "A flexible JSON-like value for catch-all fields where CDDA data can be a string, number, boolean, array, or object. This replaces `serde_json::Value` to avoid pulling in the serde_json dependency for type definitions.",
+      "anyOf": [
+        {
+          "description": "A string value.",
+          "type": "string"
+        },
+        {
+          "description": "A numeric value (integer or float).",
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "description": "A boolean value.",
+          "type": "boolean"
+        },
+        {
+          "description": "An array of values.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        {
+          "description": "An object/map of string keys to values.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        }
+      ]
+    },
+    "StringOrArray": {
+      "description": "A value that can be a single string or an array of strings.\n\nUsed by `connect_groups`, `connects_to`, `rotates_to`, and similar fields.\n\nExamples: - `\"wall\"` → `Single(\"wall\")` - `[\"wall\", \"fence\"]` → `Multi(vec![\"wall\", \"fence\"])`",
+      "anyOf": [
+        {
+          "description": "Single string value.",
+          "type": "string"
+        },
+        {
+          "description": "Array of strings.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "Volume": {
+      "description": "Volume measured in milliliters.\n\nCDDA internally stores volumes in mL (1 mL = 0.001 L).\n\nAccepts both a bare number (mL) and CDDA-style strings like `\"250 ml\"`, `\"1 L\"`.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "Weight": {
+      "description": "Weight measured in grams.\n\nAccepts both a bare number (grams) and CDDA-style strings like `\"100 g\"`, `\"1 kg\"`.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    }
+  }
+}

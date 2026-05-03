@@ -1,0 +1,925 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "VehiclePartDef",
+  "description": "A vehicle part definition from JSON type \"vehicle_part\".\n\nDefines a component that can be installed on a vehicle (e.g. engine, wheel, seat, battery).",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "backup_camera_cover": {
+      "description": "Backup camera cover.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "belt": {
+      "description": "Seat belt type.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "bonus": {
+      "description": "Bonus stats CDDA uses bonus as a plain integer (e.g. 10, 50) or a VehiclePartBonus object.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "breaks_into": {
+      "description": "Whether part breaks first. Can be a string ID or array of break entries.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/BreaksInto"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "broken_color": {
+      "description": "Broken color",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/CddaColor"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "cargo_capacity": {
+      "description": "Cargo capacity.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Volume"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "categories": {
+      "description": "Categories this part belongs to.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/DefId"
+      }
+    },
+    "color": {
+      "description": "Color for display.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/CddaColor"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "color_broken": {
+      "description": "Color when part is broken.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/CddaColor"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "contact_area": {
+      "description": "Contact area (for wheels)",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "copy_from": {
+      "description": "copy-from parent",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "coverage": {
+      "description": "Coverage percentage.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "damage_modifier": {
+      "description": "Damage modifier (armor).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "damage_reduction": {
+      "description": "Damage reduction (e.g. {\"all\": 20} or {\"bash\": 5, \"cut\": 3}).",
+      "default": null,
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 0.0
+      }
+    },
+    "description": {
+      "description": "Description text.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "description_extra": {
+      "description": "Description of what this part does (fuel consumption, power generation, etc).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "durability": {
+      "description": "Part durability / hit points.",
+      "default": 100,
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "emission": {
+      "description": "Whether this part emits light.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/VehiclePartEmission"
+      }
+    },
+    "energy_consumption": {
+      "description": "Energy consumption rate. CDDA uses energy strings like \"559500 W\".",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "engine_type": {
+      "description": "Engine type.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "epower": {
+      "description": "Electrical power consumption/generation CDDA uses epower strings like \"-350 W\" or \"3000 W\".",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "exhaust": {
+      "description": "Whether this part generates exhaust.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "flags": {
+      "description": "Flags.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "folded_volume": {
+      "description": "Foldable: folded volume.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Volume"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "fuel_capacity": {
+      "description": "Fuel capacity.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "fuel_type": {
+      "description": "Fuel type this part uses.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "has_backup_camera": {
+      "description": "Backup camera.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"diesel_engine\", \"wheel_wide\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "install_skills": {
+      "description": "Required strength to install.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/VehiclePartSkillReq"
+      }
+    },
+    "install_time": {
+      "description": "Time to install.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "item": {
+      "description": "Item from which this part is made",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "location": {
+      "description": "Location on the vehicle (e.g. \"on_roof\", \"under\").",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "looks_like": {
+      "description": "Aesthetics category.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "mass": {
+      "description": "Mass / weight of the part.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Weight"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "military": {
+      "description": "Whether part is a military variant.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "name": {
+      "description": "Display name.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "power": {
+      "description": "Engine power (for engine parts). CDDA uses power strings like \"223800 W\" or \"-12 W\".",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "prohibited": {
+      "description": "Cannot be removed if true.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "pseudo_tools": {
+      "description": "Pseudo tools CDDA uses arrays of objects like `{\"id\": \"crane_pseudo_item\"}`.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/RawValue"
+      }
+    },
+    "remove_folded": {
+      "description": "Removed when folded.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "repair_item": {
+      "description": "Items used to repair this part.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "requirements": {
+      "description": "Requirements for install/removal/repair (object with nested operation requirements).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/VehiclePartRequirements"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "rolling_resistance": {
+      "description": "Roller bearing type.",
+      "default": null,
+      "type": [
+        "number",
+        "null"
+      ],
+      "format": "double"
+    },
+    "seat": {
+      "description": "Seat type.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "seat_type": {
+      "description": "Whether this part can be used as a seat.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "size": {
+      "description": "Size / volume of the part.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Volume"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "standard": {
+      "description": "Whether part is a standard variant.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "symbol": {
+      "description": "Symbol on the map.",
+      "default": "#",
+      "type": "string"
+    },
+    "symbol_broken": {
+      "description": "Symbol when part is broken.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "variants": {
+      "description": "Variants (array of variant objects).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/VehiclePartVariant"
+      }
+    },
+    "wheel_diameter": {
+      "description": "Wheel diameter (for wheels).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "wheel_width": {
+      "description": "Wheel width (for wheels).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "width": {
+      "description": "Width of the part.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    }
+  },
+  "definitions": {
+    "BreaksInto": {
+      "description": "Breaks into can be a simple item group ID string or an array of break entries.",
+      "anyOf": [
+        {
+          "description": "Simple item group ID: `\"ig_vp_frame\"`",
+          "type": "string"
+        },
+        {
+          "description": "Array of break entries: `[{ \"item\": \"chunk\", \"count\": [0, 2] }]`",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/VehiclePartBreak"
+          }
+        }
+      ]
+    },
+    "CddaColor": {
+      "description": "A color value in CDDA can be a simple name, a list of names (random), or a structured map with foreground/background.\n\nExamples: - `\"red\"` - `[\"white\", \"light_gray\"]` - `{\"fg\": \"red\", \"bg\": \"blue\"}`",
+      "anyOf": [
+        {
+          "description": "Single color name: `\"red\"`, `\"light_blue\"`, etc.",
+          "type": "string"
+        },
+        {
+          "description": "Multiple color names (random selection): `[\"white\", \"light_gray\"]`",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Structured color with foreground (and optional background / season variants).",
+          "allOf": [
+            {
+              "$ref": "#/definitions/CddaColorStructured"
+            }
+          ]
+        }
+      ]
+    },
+    "CddaColorStructured": {
+      "description": "A structured color with optional foreground and background.",
+      "type": "object",
+      "properties": {
+        "autumn": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bg": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fg": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "spring": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "summer": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "winter": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "RawValue": {
+      "description": "A flexible JSON-like value for catch-all fields where CDDA data can be a string, number, boolean, array, or object. This replaces `serde_json::Value` to avoid pulling in the serde_json dependency for type definitions.",
+      "anyOf": [
+        {
+          "description": "A string value.",
+          "type": "string"
+        },
+        {
+          "description": "A numeric value (integer or float).",
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "description": "A boolean value.",
+          "type": "boolean"
+        },
+        {
+          "description": "An array of values.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        {
+          "description": "An object/map of string keys to values.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        }
+      ]
+    },
+    "VehiclePartBreak": {
+      "description": "Items dropped when a vehicle part breaks.",
+      "type": "object",
+      "properties": {
+        "charges": {
+          "description": "Item charges range [min, max] or single number. CDDA can use `3` or `[0, 2]`.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "container-item": {
+          "description": "Container item.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "count": {
+          "description": "Item count range [min, max] or single number. CDDA can use `6` or `[0, 2]`.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "group": {
+          "description": "Item group id (alternative to item).",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "item": {
+          "description": "Item id.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prob": {
+          "description": "Probability (percentage).",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    "VehiclePartEmission": {
+      "description": "Emission from a vehicle part.",
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "rate": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    "VehiclePartRequirements": {
+      "description": "Requirements for installing/removing/repairing a vehicle part. CDDA format: `{\"install\": {...}, \"removal\": {...}, \"repair\": {...}}` Uses RawValue for the whole struct since CDDA formats are complex.",
+      "type": "object",
+      "properties": {
+        "install": {
+          "description": "Install operation requirements.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "removal": {
+          "description": "Removal operation requirements.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "repair": {
+          "description": "Repair operation requirements.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "VehiclePartSkillReq": {
+      "description": "A skill requirement for vehicle part installation.",
+      "type": "object",
+      "required": [
+        "level",
+        "skill"
+      ],
+      "properties": {
+        "level": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "skill": {
+          "type": "string"
+        }
+      }
+    },
+    "VehiclePartVariant": {
+      "description": "A vehicle part variant for different visual styles.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Variant ID (optional).",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "label": {
+          "description": "Display label.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "symbols": {
+          "description": "Symbol string (can be a single char or multi-character string).",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "symbols_broken": {
+          "description": "Symbol when broken.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "Volume": {
+      "description": "Volume measured in milliliters.\n\nCDDA internally stores volumes in mL (1 mL = 0.001 L).\n\nAccepts both a bare number (mL) and CDDA-style strings like `\"250 ml\"`, `\"1 L\"`.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "Weight": {
+      "description": "Weight measured in grams.\n\nAccepts both a bare number (grams) and CDDA-style strings like `\"100 g\"`, `\"1 kg\"`.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    }
+  }
+}

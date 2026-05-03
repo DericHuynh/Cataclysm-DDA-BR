@@ -1,0 +1,139 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TraitGroupDef",
+  "description": "A trait group definition from JSON type `\"trait_group\"`.\n\nDefines weighted groups of traits/mutations for random selection.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "entries": {
+      "description": "Entries (subtype: \"distribution\" or \"collection\").",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/TraitGroupEntry"
+      }
+    },
+    "id": {
+      "description": "Unique identifier.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "subtype": {
+      "description": "Subtype: distribution or collection.",
+      "default": "",
+      "type": "string"
+    },
+    "traits": {
+      "description": "Alternative entries format (array of trait/group objects).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/TraitGroupEntry"
+      }
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "TraitGroupEntry": {
+      "description": "An entry in a trait group.",
+      "anyOf": [
+        {
+          "description": "Simple: \"trait_id\"",
+          "type": "string"
+        },
+        {
+          "description": "Object with probability and optional trait field.",
+          "type": "object",
+          "required": [
+            "trait"
+          ],
+          "properties": {
+            "prob": {
+              "description": "Probability weight (default 100).",
+              "default": 100,
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            "trait": {
+              "description": "Trait/mutation ID.",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "description": "Object with group reference (subgroups).",
+          "type": "object",
+          "required": [
+            "group"
+          ],
+          "properties": {
+            "group": {
+              "description": "Reference to another trait group.",
+              "type": "string"
+            },
+            "prob": {
+              "description": "Probability weight.",
+              "default": 100,
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          }
+        },
+        {
+          "description": "Object with collection of traits.",
+          "type": "object",
+          "properties": {
+            "collection": {
+              "description": "Sub-entries.",
+              "default": [],
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/TraitGroupEntry"
+              }
+            },
+            "prob": {
+              "description": "Probability weight.",
+              "default": 100,
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          }
+        },
+        {
+          "description": "Object with distribution of traits.",
+          "type": "object",
+          "properties": {
+            "distribution": {
+              "description": "Sub-entries.",
+              "default": [],
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/TraitGroupEntry"
+              }
+            },
+            "prob": {
+              "description": "Probability weight.",
+              "default": 100,
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          }
+        }
+      ]
+    }
+  }
+}

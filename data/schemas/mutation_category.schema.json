@@ -1,0 +1,156 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MutationCategoryDef",
+  "description": "Mutation category definition from JSON type `\"mutation_category\"`.\n\nDefines a group/category of mutations (e.g. \"LIZARD\", \"BEAST\", \"PLANT\").",
+  "type": "object",
+  "required": [
+    "id",
+    "name"
+  ],
+  "properties": {
+    "category": {
+      "description": "Display category for UI.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "description": {
+      "description": "Description.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"LIZARD\", \"BEAST\", \"PLANT\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "iv": {
+      "description": "Ivy poison item from this category.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "memorial_message": {
+      "description": "Blood analysis message.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "mutagen": {
+      "description": "Mutagen item type.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "mutagen_group": {
+      "description": "Mutagen item type (group).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "mutagenic": {
+      "description": "Mutagenic liquid item.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "name": {
+      "description": "Display name.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        }
+      ]
+    },
+    "preferred_part": {
+      "description": "Preferred body part for mutations.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "threshold_name": {
+      "description": "Display name for the threshold.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

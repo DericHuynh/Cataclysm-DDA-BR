@@ -1,0 +1,736 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MutationDef",
+  "description": "A mutation/trait definition from JSON type `\"mutation\"`.\n\nMutations are genetic or radiation-induced traits that can be gained or lost during gameplay (e.g. \"huge\", \"scales\", \"tentacles\").",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "active": {
+      "description": "Active state threshold amount.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "adds": {
+      "description": "Mutations added by this one (string or array).",
+      "default": "",
+      "allOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        }
+      ]
+    },
+    "allows_soft_gear": {
+      "description": "Allows this body part to wear items.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "body_part": {
+      "description": "Body part that is changed by this mutation.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "body_part_changes": {
+      "description": "Body part changes.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/MutationBodyPart"
+      }
+    },
+    "bodytemp_mod": {
+      "description": "Modifies body temperature.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "integer",
+        "format": "int32"
+      },
+      "maxItems": 2,
+      "minItems": 2
+    },
+    "cancels": {
+      "description": "Mutations that cancel this one (string or array).",
+      "default": "",
+      "allOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        }
+      ]
+    },
+    "category": {
+      "description": "Category this mutation belongs to.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/DefId"
+      }
+    },
+    "changes_to": {
+      "description": "Changes to mutation (string or array).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "combat_bonus": {
+      "description": "Combat damage bonuses.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/MutationCombat"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "conflicts": {
+      "description": "Mutations that conflict with this one (string or array).",
+      "default": "",
+      "allOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        }
+      ]
+    },
+    "cooldown": {
+      "description": "Cooldown turns.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "copy_from": {
+      "description": "copy-from parent",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "cost": {
+      "description": "Cost to activate (in kcal).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "description": {
+      "description": "Description text.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "drops": {
+      "description": "Provides item group drops.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "enchantments": {
+      "description": "Enchantments granted by this mutation. CDDA enchantments can be bare strings like \"SQUEAKY_ANKLES\" or objects.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/RawValue"
+      }
+    },
+    "encoding": {
+      "description": "Encoding of genetic material.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "fatigue": {
+      "description": "Fatigue requirement.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "flags": {
+      "description": "Flags (string or array). CDDA can use a single string like \"HERBIVORE_DIET\" or an array.",
+      "default": "",
+      "allOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        }
+      ]
+    },
+    "hunger": {
+      "description": "Hunger requirement.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"HUGE\", \"SCALES\", \"LEG_TENTACLES\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "integrated_armor": {
+      "description": "Armor that is always worn.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "leads_to": {
+      "description": "Leads to (string or array).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "leak": {
+      "description": "Leaks something when damaged.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "mixed_breed": {
+      "description": "Mixed breed (can't be in same category as other mutations).",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "mutation_type": {
+      "description": "Type of mutation.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "name": {
+      "description": "Display name.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "passive_pseudo_items": {
+      "description": "Passive pseudo items.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "points": {
+      "description": "Points cost (positive = bad, negative = good).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "prereqs": {
+      "description": "Prerequisite mutations (string or array).",
+      "default": "",
+      "allOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        }
+      ]
+    },
+    "prereqs2": {
+      "description": "Prereqs2 (string or array).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "purifiable": {
+      "description": "Purifiable (can be removed with purifier).",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "replaces": {
+      "description": "Mutations that replace this one.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/DefId"
+      }
+    },
+    "restricts_armor": {
+      "description": "Restricts armor on this body part.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/MutationBodyPartSlot"
+      }
+    },
+    "social_mods": {
+      "description": "Social modifiers.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/MutationSocial"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "starting_trait": {
+      "description": "Starting trait (available at character creation).",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "thirst": {
+      "description": "Thirst requirement.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "threshold": {
+      "description": "Threshold mutation (can't be purified).",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "threshreq": {
+      "description": "Threshold requirement (string or array).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "types": {
+      "description": "Types array (string or array).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ugliness": {
+      "description": "Ugliness (can be negative for beauty)",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "valid": {
+      "description": "Whether this mutation is valid for chargen.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "visibility": {
+      "description": "Visibility (can be negative for stealth)",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "vitamin_cost": {
+      "description": "Vitamin cost (number or map).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/VitaminCost"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "MutationBodyPart": {
+      "description": "Body part change from a mutation.",
+      "type": "object",
+      "required": [
+        "part"
+      ],
+      "properties": {
+        "armor": {
+          "description": "New armor.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "coverage": {
+          "description": "New coverage.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "encumbrance": {
+          "description": "New encumbrance.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "hp": {
+          "description": "New hp.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "new_type": {
+          "description": "New type.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "part": {
+          "description": "Body part ID.",
+          "type": "string"
+        }
+      }
+    },
+    "MutationBodyPartSlot": {
+      "description": "Body part slot restriction.",
+      "type": "object",
+      "required": [
+        "part"
+      ],
+      "properties": {
+        "allowed": {
+          "description": "Allow items of this type.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "part": {
+          "description": "Body part ID.",
+          "type": "string"
+        }
+      }
+    },
+    "MutationCombat": {
+      "description": "Combat bonuses from a mutation.",
+      "type": "object",
+      "properties": {
+        "attack": {
+          "description": "Melee attack bonus.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "defense": {
+          "description": "Melee defense bonus.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "dodge": {
+          "description": "Dodge bonus.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "melee_damage": {
+          "description": "Melee damage bonus.",
+          "default": null,
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "move_cost": {
+          "description": "Move cost modifier.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        }
+      }
+    },
+    "MutationSocial": {
+      "description": "Social modifiers from a mutation.",
+      "type": "object",
+      "properties": {
+        "intimidation": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "lie": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "persuasion": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        }
+      }
+    },
+    "RawValue": {
+      "description": "A flexible JSON-like value for catch-all fields where CDDA data can be a string, number, boolean, array, or object. This replaces `serde_json::Value` to avoid pulling in the serde_json dependency for type definitions.",
+      "anyOf": [
+        {
+          "description": "A string value.",
+          "type": "string"
+        },
+        {
+          "description": "A numeric value (integer or float).",
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "description": "A boolean value.",
+          "type": "boolean"
+        },
+        {
+          "description": "An array of values.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        {
+          "description": "An object/map of string keys to values.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        }
+      ]
+    },
+    "StringOrArray": {
+      "description": "A value that can be a single string or an array of strings.\n\nUsed by `connect_groups`, `connects_to`, `rotates_to`, and similar fields.\n\nExamples: - `\"wall\"` → `Single(\"wall\")` - `[\"wall\", \"fence\"]` → `Multi(vec![\"wall\", \"fence\"])`",
+      "anyOf": [
+        {
+          "description": "Single string value.",
+          "type": "string"
+        },
+        {
+          "description": "Array of strings.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "VitaminCost": {
+      "description": "Vitamin cost can be a single number (most common) or a map of vitamin_id -> amount.",
+      "anyOf": [
+        {
+          "description": "Simple numeric cost (e.g. `60`).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        {
+          "description": "Map of vitamin ID to amount (e.g. `{\"vit_C\": 1}`).",
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0.0
+          }
+        }
+      ]
+    }
+  }
+}

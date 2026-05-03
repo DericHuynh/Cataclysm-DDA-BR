@@ -1,0 +1,419 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FactionDef",
+  "description": "A faction definition from JSON type `\"faction\"`.\n\nFactions are groups with their own goals, relationships, and territories.",
+  "type": "object",
+  "required": [
+    "id",
+    "name"
+  ],
+  "properties": {
+    "color": {
+      "description": "Faction color for the overmap.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/CddaColor"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "combat_ability": {
+      "description": "Combat ability rating.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "consumes_food": {
+      "description": "Whether the faction consumes food.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "currency": {
+      "description": "Starting currency held.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "description": {
+      "description": "Description text.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "dislikes": {
+      "description": "Dislikes values.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "epilogues": {
+      "description": "Epilogues.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/RawValue"
+      }
+    },
+    "fac_food_supply": {
+      "description": "Food supply rating (complex CDDA food array).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/RawValue"
+      }
+    },
+    "flags": {
+      "description": "Flags.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"free_merchants\", \"hells_raiders\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "known_by_u": {
+      "description": "Known by us.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "likes": {
+      "description": "Likes values.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "likes_u": {
+      "description": "Likes us.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "map_symbol": {
+      "description": "Faction map symbol.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "mon_faction": {
+      "description": "Monster faction.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "name": {
+      "description": "Display name.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        }
+      ]
+    },
+    "playable": {
+      "description": "Whether the faction is playable.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "power": {
+      "description": "Power level.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "price_rules": {
+      "description": "Price markup percentage. CDDA format: array of {\"group\": \"...\", \"markup\": 2} or map.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "relations": {
+      "description": "Relationship with other factions (nested map).",
+      "default": null,
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/definitions/RawValue"
+        }
+      }
+    },
+    "respects_u": {
+      "description": "Respects us.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "size": {
+      "description": "Size of the faction.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/FactionSize"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "standard": {
+      "description": "Whether the faction is standard.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "wealth": {
+      "description": "Wealth.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    }
+  },
+  "definitions": {
+    "CddaColor": {
+      "description": "A color value in CDDA can be a simple name, a list of names (random), or a structured map with foreground/background.\n\nExamples: - `\"red\"` - `[\"white\", \"light_gray\"]` - `{\"fg\": \"red\", \"bg\": \"blue\"}`",
+      "anyOf": [
+        {
+          "description": "Single color name: `\"red\"`, `\"light_blue\"`, etc.",
+          "type": "string"
+        },
+        {
+          "description": "Multiple color names (random selection): `[\"white\", \"light_gray\"]`",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Structured color with foreground (and optional background / season variants).",
+          "allOf": [
+            {
+              "$ref": "#/definitions/CddaColorStructured"
+            }
+          ]
+        }
+      ]
+    },
+    "CddaColorStructured": {
+      "description": "A structured color with optional foreground and background.",
+      "type": "object",
+      "properties": {
+        "autumn": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bg": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fg": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "spring": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "summer": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "winter": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "DefId": {
+      "type": "string"
+    },
+    "FactionSize": {
+      "description": "Faction size — the `\"size\"` field on factions.\n\nCDDA stores this as either a string like `\"large\"`, `\"medium\"`, or a numeric population count.",
+      "anyOf": [
+        {
+          "description": "Named size category.",
+          "type": "string"
+        },
+        {
+          "description": "Numeric population count.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      ]
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "RawValue": {
+      "description": "A flexible JSON-like value for catch-all fields where CDDA data can be a string, number, boolean, array, or object. This replaces `serde_json::Value` to avoid pulling in the serde_json dependency for type definitions.",
+      "anyOf": [
+        {
+          "description": "A string value.",
+          "type": "string"
+        },
+        {
+          "description": "A numeric value (integer or float).",
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "description": "A boolean value.",
+          "type": "boolean"
+        },
+        {
+          "description": "An array of values.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        {
+          "description": "An object/map of string keys to values.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        }
+      ]
+    }
+  }
+}

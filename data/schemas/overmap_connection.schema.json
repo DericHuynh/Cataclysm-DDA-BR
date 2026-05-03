@@ -1,0 +1,141 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OvermapConnectionDef",
+  "description": "Overmap connection definition from JSON type `\"overmap_connection\"`.\n\nDefines how different OMTs connect (e.g. \"road\" connecting \"forest\" and \"house\").",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "default_terrain": {
+      "description": "Default terrain subtype.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "subtypes": {
+      "description": "Subtype connections.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/ConnectionSubtype"
+      }
+    },
+    "terrains": {
+      "description": "Terrain types this connection can travel through.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/ConnectionTerrain"
+      }
+    }
+  },
+  "definitions": {
+    "ConnectionSubtype": {
+      "description": "Subtype of a connection.",
+      "type": "object",
+      "required": [
+        "terrain"
+      ],
+      "properties": {
+        "basic_cost": {
+          "description": "Basic cost for travel.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "flags": {
+          "description": "Flags for this connection subtype.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "locations": {
+          "description": "Valid locations for this connection subtype.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "terrain": {
+          "description": "Terrain ID.",
+          "type": "string"
+        }
+      }
+    },
+    "ConnectionTerrain": {
+      "description": "Terrain type in a connection.",
+      "type": "object",
+      "required": [
+        "terrain"
+      ],
+      "properties": {
+        "connect_chance": {
+          "description": "Chance of connecting.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "is_connector": {
+          "description": "Whether connection is blocked.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "terrain": {
+          "description": "OMT ID or list.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/StringOrArray"
+            }
+          ]
+        }
+      }
+    },
+    "DefId": {
+      "type": "string"
+    },
+    "StringOrArray": {
+      "description": "A value that can be a single string or an array of strings.\n\nUsed by `connect_groups`, `connects_to`, `rotates_to`, and similar fields.\n\nExamples: - `\"wall\"` → `Single(\"wall\")` - `[\"wall\", \"fence\"]` → `Multi(vec![\"wall\", \"fence\"])`",
+      "anyOf": [
+        {
+          "description": "Single string value.",
+          "type": "string"
+        },
+        {
+          "description": "Array of strings.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    }
+  }
+}

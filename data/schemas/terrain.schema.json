@@ -1,0 +1,675 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TerrainDef",
+  "description": "A terrain definition from JSON type `\"terrain\"`.\n\nTerrain is the base ground / wall / floor that makes up the map. Every tile must have exactly one terrain.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "bash": {
+      "description": "Bash result data. CDDA can use a string (\"wall_bash_results\") or an object.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/TerrainBashOrString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "close": {
+      "description": "Close action — values can be strings, numbers, arrays (e.g. `[15, 30]`), or objects.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "color": {
+      "description": "Color for map display. CDDA variations: \"red\", [\"white\", \"light_gray\"], {\"fg\": \"red\", \"bg\": \"blue\"}",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/CddaColor"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "connect_groups": {
+      "description": "Connection groups for automatic terrain transitions. Can be a string or array of strings.",
+      "default": "",
+      "allOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        }
+      ]
+    },
+    "connects_to": {
+      "description": "Which connection group this terrain connects to. Can be a string or array of strings.",
+      "default": "",
+      "allOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        }
+      ]
+    },
+    "copy_from": {
+      "description": "copy-from parent",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "coverage": {
+      "description": "Coverage percentage",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "deconstruct": {
+      "description": "Deconstruction result data. Can be an object or an array of objects.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "description": {
+      "description": "Description text.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "examine_action": {
+      "description": "Examine action (can be a string like \"cardreader\" or an object).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ExamineAction"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "exterior": {
+      "description": "Exterior tile (what it looks like from outside).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "flags": {
+      "description": "Flags. CDDA can use a single string (\"WALL\") or an array ([\"WALL\", \"NOITEM\"]).",
+      "default": "",
+      "allOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        }
+      ]
+    },
+    "harvest": {
+      "description": "Harvest result data. Can be a string ID (e.g. `\"harvest_id\"`) or an object (e.g. `{\"id\": \"...\", \"message\": \"...\"}`).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "has_ceiling": {
+      "description": "Whether this tile has a ceiling (for z-level checks).",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"t_floor\", \"t_wall_brick\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "light_color": {
+      "description": "Light color emitted.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "integer",
+        "format": "uint8",
+        "minimum": 0.0
+      },
+      "maxItems": 3,
+      "minItems": 3
+    },
+    "light_emitted": {
+      "description": "Light emitted by this tile (for glowing terrain).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "looks_like": {
+      "description": "Another terrain this one \"looks like\" for display purposes.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "move_cost": {
+      "description": "Movement cost to enter this tile (0 = impassable).",
+      "default": 0,
+      "type": "integer",
+      "format": "int32"
+    },
+    "movecost": {
+      "description": "Speed penalty / multiplier when moving through.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "name": {
+      "description": "Display name.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "open": {
+      "description": "Open action — values can be strings, numbers, arrays (e.g. `[15, 30]`), or objects.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "roof": {
+      "description": "Roof terrain above this tile.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "rotates_to": {
+      "description": "Rotates to terrain",
+      "default": "",
+      "allOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        }
+      ]
+    },
+    "shoot": {
+      "description": "Shoot action — values can be strings, numbers, arrays (e.g. `[15, 30]`), or objects.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "symbol": {
+      "description": "ASCII symbol on the map.",
+      "default": ".",
+      "type": "string"
+    },
+    "transforms_into": {
+      "description": "Transforms into terrain",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "trap": {
+      "description": "Trap that appears when this terrain is disturbed.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "CddaColor": {
+      "description": "A color value in CDDA can be a simple name, a list of names (random), or a structured map with foreground/background.\n\nExamples: - `\"red\"` - `[\"white\", \"light_gray\"]` - `{\"fg\": \"red\", \"bg\": \"blue\"}`",
+      "anyOf": [
+        {
+          "description": "Single color name: `\"red\"`, `\"light_blue\"`, etc.",
+          "type": "string"
+        },
+        {
+          "description": "Multiple color names (random selection): `[\"white\", \"light_gray\"]`",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Structured color with foreground (and optional background / season variants).",
+          "allOf": [
+            {
+              "$ref": "#/definitions/CddaColorStructured"
+            }
+          ]
+        }
+      ]
+    },
+    "CddaColorStructured": {
+      "description": "A structured color with optional foreground and background.",
+      "type": "object",
+      "properties": {
+        "autumn": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bg": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fg": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "spring": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "summer": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "winter": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "DefId": {
+      "type": "string"
+    },
+    "ExamineAction": {
+      "description": "An examine action — the `\"examine_action\"` field on terrain/furniture.\n\nCan be a simple string action ID or an object with a type and parameters.",
+      "anyOf": [
+        {
+          "description": "Simple action name.",
+          "type": "string"
+        },
+        {
+          "description": "Structured action definition.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ExamineActionDef"
+            }
+          ]
+        }
+      ]
+    },
+    "ExamineActionDef": {
+      "description": "A structured examine action definition.",
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "moves": {
+          "description": "Move cost.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "msg": {
+          "description": "Message shown.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "needs": {
+          "description": "Items needed.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/definitions/RawValue"
+            }
+          }
+        },
+        "result": {
+          "description": "Resulting terrain/furniture.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "type": {
+          "description": "Action type.",
+          "type": "string"
+        }
+      }
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "RawValue": {
+      "description": "A flexible JSON-like value for catch-all fields where CDDA data can be a string, number, boolean, array, or object. This replaces `serde_json::Value` to avoid pulling in the serde_json dependency for type definitions.",
+      "anyOf": [
+        {
+          "description": "A string value.",
+          "type": "string"
+        },
+        {
+          "description": "A numeric value (integer or float).",
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "description": "A boolean value.",
+          "type": "boolean"
+        },
+        {
+          "description": "An array of values.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        {
+          "description": "An object/map of string keys to values.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        }
+      ]
+    },
+    "StringOrArray": {
+      "description": "A value that can be a single string or an array of strings.\n\nUsed by `connect_groups`, `connects_to`, `rotates_to`, and similar fields.\n\nExamples: - `\"wall\"` → `Single(\"wall\")` - `[\"wall\", \"fence\"]` → `Multi(vec![\"wall\", \"fence\"])`",
+      "anyOf": [
+        {
+          "description": "Single string value.",
+          "type": "string"
+        },
+        {
+          "description": "Array of strings.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "TerrainBash": {
+      "description": "Result of bashing this terrain.",
+      "type": "object",
+      "properties": {
+        "furn_set": {
+          "description": "Furniture that spawns after bash.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DefId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "items": {
+          "description": "Items dropped when bashed. Can be a string (group reference) or an array of BashItemDrop objects.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RawValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sound": {
+          "description": "Sound made when bashing.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sound_fail": {
+          "description": "Sound made when bashing fails.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sound_fail_vol": {
+          "description": "Volume of the fail sound.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "sound_vol": {
+          "description": "Volume of the sound.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "str_max": {
+          "description": "Maximum strength required (for randomization).",
+          "default": 0,
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "str_min": {
+          "description": "Minimum strength required to bash.",
+          "default": 0,
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "str_min_supported": {
+          "description": "Minimum strength if supported.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "ter_set": {
+          "description": "Terrain this becomes after successful bash.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DefId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "TerrainBashOrString": {
+      "description": "Bash result data — CDDA can reference a bash group by name (string) or inline (object).",
+      "anyOf": [
+        {
+          "description": "Reference to a named bash result group (e.g. \"wall_bash_results\").",
+          "type": "string"
+        },
+        {
+          "description": "Inline bash result object.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/TerrainBash"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

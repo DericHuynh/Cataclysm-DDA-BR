@@ -1,0 +1,158 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SkillDef",
+  "description": "A skill definition from JSON type `\"skill\"`.\n\nDefines a skill (e.g. \"mechanics\", \"cooking\", \"bashing\").",
+  "type": "object",
+  "required": [
+    "id",
+    "name"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag — if true, this definition is a template that should not be instantiated directly.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "combat_skill": {
+      "description": "Whether the skill is combat-related.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "companion_skill_practice": {
+      "description": "Companion skill practice",
+      "default": null
+    },
+    "copy_from": {
+      "description": "Base definition id to copy fields from.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "description": {
+      "description": "Description text (may be a string, an array-of-objects translation block, etc.).",
+      "default": null
+    },
+    "display_category": {
+      "description": "Display category.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "extend": {
+      "description": "Extension data merged into this definition."
+    },
+    "extra": {
+      "description": "Catch-all",
+      "default": null
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"mechanics\", \"cooking\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "level_descriptions_practice": {
+      "description": "Level descriptions (practice)",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": true
+    },
+    "level_descriptions_theory": {
+      "description": "Level descriptions (theoretical)",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": true
+    },
+    "name": {
+      "description": "Display name.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        }
+      ]
+    },
+    "sort_rank": {
+      "description": "Sort rank in UI",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "tags": {
+      "description": "Tags.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "time_to_attack": {
+      "description": "Time to attack",
+      "default": null
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

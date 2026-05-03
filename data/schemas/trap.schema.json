@@ -1,0 +1,406 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TrapDef",
+  "description": "A trap definition from JSON type `\"trap\"`.\n\nDefines a trap that can be placed on the map (e.g. \"tr_beartrap\", \"tr_net\", \"tr_pit\").",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "action": {
+      "description": "Action performed by this trap.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "always_invisible": {
+      "description": "Always invisible.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "avoidance": {
+      "description": "Avoidance difficulty.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "benign": {
+      "description": "Benign trap.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "color": {
+      "description": "Color.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "copy_from": {
+      "description": "copy-from parent (allows trap inheritance).",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "damage": {
+      "description": "Damage dealt by the trap (map of damage_type -> amount).",
+      "default": null,
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "$ref": "#/definitions/RawValue"
+      }
+    },
+    "description": {
+      "description": "Description text (many CDDA traps omit this).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "difficulty": {
+      "description": "Difficulty to disarm (can be negative).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "disarm_message": {
+      "description": "Message shown when disarmed.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "drops": {
+      "description": "Item drops.",
+      "default": null
+    },
+    "eocs": {
+      "description": "EOC effects.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "extra": {
+      "description": "Catch-all for any unrecognized fields.",
+      "default": null
+    },
+    "flags": {
+      "description": "Flags.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"tr_beartrap\", \"tr_pit\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "memorial_female": {
+      "description": "Memorial log (female). Can be string or structured object.",
+      "default": null
+    },
+    "memorial_male": {
+      "description": "Memorial log (male). Can be string or structured object.",
+      "default": null
+    },
+    "name": {
+      "description": "Display name.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sound": {
+      "description": "Sound made when triggered.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sound_volume": {
+      "description": "Volume of the trigger sound (can be a map value in some definitions).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "spell_data": {
+      "description": "Spell data.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/TrapSpellData"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "symbol": {
+      "description": "ASCII symbol.",
+      "default": "^",
+      "type": "string"
+    },
+    "trap_radius": {
+      "description": "Trap radius.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "trigger": {
+      "description": "Whether the trap is triggerable.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "trigger_message": {
+      "description": "Message shown when triggered.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "vehicle_data": {
+      "description": "Vehicle data.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/TrapVehicleData"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "visibility": {
+      "description": "Visibility for spotting the trap (can be -1 for always invisible).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "RawValue": {
+      "description": "A flexible JSON-like value for catch-all fields where CDDA data can be a string, number, boolean, array, or object. This replaces `serde_json::Value` to avoid pulling in the serde_json dependency for type definitions.",
+      "anyOf": [
+        {
+          "description": "A string value.",
+          "type": "string"
+        },
+        {
+          "description": "A numeric value (integer or float).",
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "description": "A boolean value.",
+          "type": "boolean"
+        },
+        {
+          "description": "An array of values.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        {
+          "description": "An object/map of string keys to values.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        }
+      ]
+    },
+    "TrapSpellData": {
+      "description": "Trap spell data — the `\"spell_data\"` field on traps.",
+      "type": "object",
+      "properties": {
+        "difficulty": {
+          "description": "Spell difficulty.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "id": {
+          "description": "Spell ID.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_level": {
+          "description": "Maximum level.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "min_level": {
+          "description": "Minimum level.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    "TrapVehicleData": {
+      "description": "Trap vehicle data — the `\"vehicle_data\"` field on traps.\n\nCDDA traps can have `vehicle_data` in two formats: - `{\"sound_volume\": N, \"sound\": \"str\"}` for noise-making traps - `{\"id\": \"vehicle_id\", \"chance\": N}` for vehicle-spawning traps",
+      "type": "object",
+      "properties": {
+        "chance": {
+          "description": "Chance of spawning.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "faction": {
+          "description": "Faction for the vehicle.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "The vehicle type ID to spawn.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sound": {
+          "description": "Sound made when triggered (noise-making traps).",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sound_volume": {
+          "description": "Volume of the sound made when triggered (noise-making traps).",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    }
+  }
+}

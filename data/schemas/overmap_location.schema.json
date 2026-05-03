@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OvermapLocationDef",
+  "description": "Overmap location definition from JSON type `\"overmap_location\"`.\n\nDefines a named location type for overmap generation (e.g. \"land\", \"water\", \"forest\").",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "flags": {
+      "description": "Flags. CDDA can use a single string or an array of strings.",
+      "default": "",
+      "allOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        }
+      ]
+    },
+    "id": {
+      "description": "Unique identifier.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "terrains": {
+      "description": "Terrain flags that define this location. CDDA can use a single string or an array of strings.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "StringOrArray": {
+      "description": "A value that can be a single string or an array of strings.\n\nUsed by `connect_groups`, `connects_to`, `rotates_to`, and similar fields.\n\nExamples: - `\"wall\"` → `Single(\"wall\")` - `[\"wall\", \"fence\"]` → `Multi(vec![\"wall\", \"fence\"])`",
+      "anyOf": [
+        {
+          "description": "Single string value.",
+          "type": "string"
+        },
+        {
+          "description": "Array of strings.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,950 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EffectDef",
+  "description": "An effect type definition from JSON type `\"effect_type\"`.\n\nDefines a status effect that can be applied to characters or monsters (e.g. \"stunned\", \"poisoned\", \"bleeding\", \"on_fire\").",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "apply_message": {
+      "description": "Message shown when effect starts. Can be a single string, or an array of [message, type] pairs per intensity.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "base_mods": {
+      "description": "Base effect modifier.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/EffectMods"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "blood_analysis": {
+      "description": "Body part modifiers.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "blood_analysis_description": {
+      "description": "Whether the effect has a visual indicator.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "continuous": {
+      "description": "Whether the effect applies continuously.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "copy_from": {
+      "description": "copy-from parent",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "death_event": {
+      "description": "Death event.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "decay": {
+      "description": "Whether the effect decays over time.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "desc": {
+      "description": "Description text per intensity level.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/EffectNamedValue"
+      }
+    },
+    "dur_add_perc": {
+      "description": "Duration add percentage",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "dur_per_intensity": {
+      "description": "Duration per intensity level.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "effect_on_condition": {
+      "description": "Effect on condition.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "enchantments": {
+      "description": "Enchantments CDDA enchantments can be bare strings, objects, or arrays.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/RawValue"
+      }
+    },
+    "flags": {
+      "description": "Flags.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"poisoned\", \"stunned\", \"bleeding\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "int_add_val": {
+      "description": "Value added to intensity each tick.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "int_decay_remove": {
+      "description": "Whether to remove effect when intensity reaches 0 from decay.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "int_decay_step": {
+      "description": "Intensity decay step.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "int_decay_tick": {
+      "description": "Intensity decay tick.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "int_dur_factor": {
+      "description": "Intensity duration factor. Can be a number or time string like \"5 s\".",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "int_minus": {
+      "description": "Whether the effect intensity decreases.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "int_plus": {
+      "description": "Whether the effect intensity increases.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "limb_score_mods": {
+      "description": "Limb score modifiers (array of per-limb modifiers).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/LimbScoreMod"
+      }
+    },
+    "max_duration": {
+      "description": "Maximum duration (in turns). Can be a number or time string like \"30 s\".",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "max_effective": {
+      "description": "Effect disappears after max duration.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "max_intensity": {
+      "description": "Maximum intensity level.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "miss_messages": {
+      "description": "Miss messages.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/EffectMissMessage"
+      }
+    },
+    "name": {
+      "description": "Display name (each intensity level can have its own name). Can be an array of strings or array of named-value objects.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/EffectNamedValue"
+      }
+    },
+    "paint": {
+      "description": "Paint color to apply.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "rating": {
+      "description": "Rating (good/bad/neutral).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "remove_message": {
+      "description": "Message shown when effect ends.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "remove_on_damage": {
+      "description": "Remove effect on damage.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "remove_on_heal": {
+      "description": "Remove effect on healing.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "removes_effects": {
+      "description": "Removed effects when this one is applied",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "resist_effects": {
+      "description": "Resist effects",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "resist_traits": {
+      "description": "Resist traits",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "scaling_mods": {
+      "description": "Modifiers per intensity level.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/EffectMods"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "show_effect": {
+      "description": "Whether the effect has an icon.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "show_in_info": {
+      "description": "Whether to show in the character info.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "show_intensity": {
+      "description": "Show intensity",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "EffectMissMessage": {
+      "description": "A miss message for when an attack fails due to this effect. CDDA format: `[\"message\", chance]` — a 2-element array (tuple).",
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      ],
+      "maxItems": 2,
+      "minItems": 2
+    },
+    "EffectMods": {
+      "description": "Effect modifiers applied to the character.\n\nEach modifier is a vector of numeric values (typically 1 or 2 elements). This uses RawValue to accept all CDDA formats including integers and floats.",
+      "type": "object",
+      "properties": {
+        "bash_mod": {
+          "description": "Bash damage modifier.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "body_part": {
+          "description": "Body parts affected.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "damage_amount": {
+          "description": "Damage amount.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "damage_chance": {
+          "description": "Body part damage chance.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "damage_message": {
+          "description": "Damage message.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "damage_type": {
+          "description": "Damage type.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "dex_mod": {
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "dodge_mod": {
+          "description": "Dodge modifier.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "fatigue_mod": {
+          "description": "Fatigue modifier.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "field_chance": {
+          "description": "Field chance.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "field_intensity": {
+          "description": "Field intensity.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "field_type": {
+          "description": "Field type.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "health_amount": {
+          "description": "Health amount modifier.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "health_min": {
+          "description": "Health minimum modifier.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "health_mod": {
+          "description": "Health modifier (long-term).",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "hit_mod": {
+          "description": "Hit modifier.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "hunger_mod": {
+          "description": "Hunger modifier.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "hurt_amount": {
+          "description": "Hurt amount.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "hurt_chance": {
+          "description": "Hurt chance.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "hurt_min": {
+          "description": "Hurt minimum.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "int_mod": {
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "is_sleep": {
+          "description": "This is a sleep effect.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "pain_chance": {
+          "description": "Pain chance (negative = more?).",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "pain_chance_bot": {
+          "description": "Pain chance bottom.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "pain_max_val": {
+          "description": "Pain max value.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "pain_min": {
+          "description": "Pain minimum value.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "pain_mod": {
+          "description": "Pain modifier.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "per_mod": {
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "radiation": {
+          "description": "Radiation modifier.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "size_mod": {
+          "description": "Size modifier.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "sleepiness_mod": {
+          "description": "Sleepiness modifier.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "speed_mod": {
+          "description": "Speed modifier.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "stamina_mod": {
+          "description": "Stamina modifier.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "str_mod": {
+          "description": "Stat modifiers.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "thirst_mod": {
+          "description": "Thirst modifier.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "toxicity": {
+          "description": "Toxicity modifier.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "vomit_chance": {
+          "description": "Vomit chance.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "vomit_tick": {
+          "description": "Vomit tick.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        }
+      }
+    },
+    "EffectNamedValue": {
+      "description": "A named value pair for effect names/descriptions per intensity level. Can be either a plain string or an object with `str` and optional context.",
+      "anyOf": [
+        {
+          "description": "Plain string name/description.",
+          "type": "string"
+        },
+        {
+          "description": "Object with `str` field and optional translator context.",
+          "type": "object",
+          "required": [
+            "str"
+          ],
+          "properties": {
+            "//~": {
+              "description": "Context/translator note (e.g. \"NO_I18N\").",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "description": "The actual string value.",
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "LimbScoreMod": {
+      "description": "Limb score modifier — the `\"limb_score_mods\"` field on effects/bionics.",
+      "type": "object",
+      "required": [
+        "limb_score"
+      ],
+      "properties": {
+        "limb_score": {
+          "description": "Which score this modifies (e.g. \"balance\", \"reaction\", \"vision\").",
+          "type": "string"
+        },
+        "max": {
+          "description": "Maximum value.",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "modifier": {
+          "description": "Additive modifier (multiplier for the score).",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "resist_modifier": {
+          "description": "Resist modifier (how much resist traits affect this).",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "resist_scaling": {
+          "description": "Resist scaling factor.",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "scaling": {
+          "description": "Scaling factor per intensity.",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      }
+    },
+    "RawValue": {
+      "description": "A flexible JSON-like value for catch-all fields where CDDA data can be a string, number, boolean, array, or object. This replaces `serde_json::Value` to avoid pulling in the serde_json dependency for type definitions.",
+      "anyOf": [
+        {
+          "description": "A string value.",
+          "type": "string"
+        },
+        {
+          "description": "A numeric value (integer or float).",
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "description": "A boolean value.",
+          "type": "boolean"
+        },
+        {
+          "description": "An array of values.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        {
+          "description": "An object/map of string keys to values.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,1980 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ItemDef",
+  "description": "A single item definition from JSON type `\"ITEM\"`.\n\nCDDA has many subtypes of ITEM (GUN, AMMO, COMESTIBLE, TOOL, etc.) that all share this same struct with different fields populated.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag (not a real game object)",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "ammo_type": {
+      "description": "Ammo type (string or array of strings for magazines).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "armor": {
+      "description": "Armor values — array of body part armor data (CDDA format).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/BodyPartArmor"
+      }
+    },
+    "calories": {
+      "description": "Calories (for food)",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "capacity": {
+      "description": "Rechargeable / energy capacity if applicable.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Energy"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "category": {
+      "description": "Category (e.g. \"weapons\", \"ammo\", \"food\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "charges": {
+      "description": "Charges",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "charges_per_use": {
+      "description": "Charges per use (for tools).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "color": {
+      "description": "Color for map display (can be string, map, or array in CDDA data).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/CddaColor"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "comestible_type": {
+      "description": "Comestible type (food/drink/med)",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ComestibleType"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "conductive": {
+      "description": "Whether item is conductive (electric damage passes through).",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "container": {
+      "description": "Container (the container item this comes in)",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "copy_from": {
+      "description": "copy-from parent ID",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "count_mode": {
+      "description": "How charges work for this item.",
+      "default": null,
+      "allOf": [
+        {
+          "$ref": "#/definitions/CountMode"
+        }
+      ]
+    },
+    "covers_head": {
+      "description": "Whether item covers the wearer's head (for helmets).",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "default_ammo": {
+      "description": "Default ammo",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "description": {
+      "description": "Description text.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "extra": {
+      "description": "Catch-all for unknown fields",
+      "default": null,
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "$ref": "#/definitions/RawValue"
+      }
+    },
+    "flags": {
+      "description": "Flags applied to this item.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "fun": {
+      "description": "Fun rating (for reading)",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "id": {
+      "description": "Unique string identifier.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "initial_charges": {
+      "description": "Initial charges",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "longest_side": {
+      "description": "Longest dimension of the item (for pocket fitting).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Length"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "looks_like": {
+      "description": "Item looks like another item for display",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "material": {
+      "description": "Materials this item is made from.",
+      "default": [],
+      "allOf": [
+        {
+          "$ref": "#/definitions/MaterialList"
+        }
+      ]
+    },
+    "material_thickness": {
+      "description": "Material thickness (for armor)",
+      "default": null,
+      "type": [
+        "number",
+        "null"
+      ],
+      "format": "double"
+    },
+    "max_charges": {
+      "description": "Max charges",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "melee_damage": {
+      "description": "Damage data for melee (can be object or number).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/MeleeDamage"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "name": {
+      "description": "Display name.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "phase": {
+      "description": "Phase of matter.",
+      "default": "solid",
+      "allOf": [
+        {
+          "$ref": "#/definitions/Phase"
+        }
+      ]
+    },
+    "pocket_data": {
+      "description": "If set, this item is a container with the given pocket data.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/PocketDef"
+      }
+    },
+    "power_draw": {
+      "description": "Power draw (for electric tools).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "price": {
+      "description": "Item price before the cataclysm.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/CddaPrice"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "price_postapoc": {
+      "description": "Item price after the cataclysm.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/CddaPrice"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "qualities": {
+      "description": "Tool qualities (e.g. `[[\"CUT\", 2], [\"BUTCHER\", -18]]`).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/ToolQuality"
+      }
+    },
+    "quench": {
+      "description": "Quench value (for drinks)",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "revert_to": {
+      "description": "Revert to item ID (for activated tools).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "rigid": {
+      "description": "Whether the item is rigid (volume doesn't change when empty).",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "snippet_category": {
+      "description": "Snippet category (for random text)",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/SnippetCategory"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "spoils_in": {
+      "description": "Spoils in (time string)",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/CddaDuration"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "stack_size": {
+      "description": "Stack size",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "stackable": {
+      "description": "If true, item is a pseudo item (used internally, not a real object).",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "subtypes": {
+      "description": "Category override",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "symbol": {
+      "description": "ASCII symbol for map display.",
+      "default": "#",
+      "type": "string"
+    },
+    "techniques": {
+      "description": "Techniques for melee",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "to_hit": {
+      "description": "To-hit modifier",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ToHit"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "tool": {
+      "description": "Tool requirement (tool ID string or map of tool IDs to counts).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ToolRequirement"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "tool_ammo": {
+      "description": "Tool ammo (ammunition type(s) this tool accepts).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "use_action": {
+      "description": "Use action (interaction behavior)",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/UseAction"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "variants": {
+      "description": "Variants (different appearances)",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/ItemVariant"
+      }
+    },
+    "vitamins": {
+      "description": "Vitamins",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/VitaminContents"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "volume": {
+      "description": "Volume of the item (in mL).",
+      "default": 250,
+      "allOf": [
+        {
+          "$ref": "#/definitions/Volume"
+        }
+      ]
+    },
+    "warmth": {
+      "description": "Warmth value (for clothing)",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "weight": {
+      "description": "Weight of the item (in grams).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Weight"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "ArmorMaterialLayer": {
+      "description": "A material layer in an armor piece.",
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "covered_by_mat": {
+          "description": "Percentage of the armor piece covered by this material.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "thickness": {
+          "description": "Material thickness.",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "type": {
+          "description": "Material ID.",
+          "type": "string"
+        }
+      }
+    },
+    "BodyPartArmor": {
+      "description": "A body part armor data — the individual elements in the `\"armor\"` array on items.\n\nCDDA items store armor as an array of these objects, each describing how a piece of armor covers a specific body part.\n\nExample: ```json { \"encumbrance_modifiers\": [\"NONE\"], \"coverage\": 100, \"covers\": [\"head\"], \"specifically_covers\": [\"head_crown\", \"head_forehead\"] } ```",
+      "type": "object",
+      "properties": {
+        "ablative": {
+          "description": "Whether this is ablative armor.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "coverage": {
+          "description": "Coverage percentage (0-100).",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "covers": {
+          "description": "Coverages body parts (single string or array of strings).",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArray"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "description": "Description.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "encumbrance": {
+          "description": "Encumbrance value (single value or range `[min, max]`).",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/EncumbranceOrRange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "encumbrance_modifiers": {
+          "description": "Encumbrance modifiers.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "material": {
+          "description": "Materials layered in this armor piece.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/ArmorMaterialLayer"
+          }
+        },
+        "max_contains_volume": {
+          "description": "Max volume the pocket/armor can hold.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_contains_weight": {
+          "description": "Max weight.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "moves": {
+          "description": "Move cost to interact.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "specifically_covers": {
+          "description": "Specific sub-parts covered.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "volume_encumber_modifier": {
+          "description": "Volume encumber modifier (float, e.g. 0.3).",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      }
+    },
+    "CddaColor": {
+      "description": "A color value in CDDA can be a simple name, a list of names (random), or a structured map with foreground/background.\n\nExamples: - `\"red\"` - `[\"white\", \"light_gray\"]` - `{\"fg\": \"red\", \"bg\": \"blue\"}`",
+      "anyOf": [
+        {
+          "description": "Single color name: `\"red\"`, `\"light_blue\"`, etc.",
+          "type": "string"
+        },
+        {
+          "description": "Multiple color names (random selection): `[\"white\", \"light_gray\"]`",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Structured color with foreground (and optional background / season variants).",
+          "allOf": [
+            {
+              "$ref": "#/definitions/CddaColorStructured"
+            }
+          ]
+        }
+      ]
+    },
+    "CddaColorStructured": {
+      "description": "A structured color with optional foreground and background.",
+      "type": "object",
+      "properties": {
+        "autumn": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bg": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fg": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "spring": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "summer": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "winter": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "CddaDuration": {
+      "description": "A time duration value from CDDA.\n\nCDDA uses human-readable time strings in many places. Examples: `\"1 day\"`, `\"14 days\"`, `\"30 minutes\"`, `\"6 h\"`.\n\nAlso accepts raw numeric second values.",
+      "anyOf": [
+        {
+          "description": "Raw number of seconds/minutes/turns.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        {
+          "description": "Human-readable time string.",
+          "type": "string"
+        }
+      ]
+    },
+    "CddaPrice": {
+      "description": "Item price.\n\nCDDA prices can be plain integers (in cents) or strings with currency units like `\"13 cent\"`, `\"16 USD\"`, `\"34 USD\"`.",
+      "anyOf": [
+        {
+          "description": "Numeric price in cents.",
+          "type": "integer",
+          "format": "int64"
+        },
+        {
+          "description": "String with currency unit (e.g. \"13 cent\", \"16 USD\").",
+          "type": "string"
+        }
+      ]
+    },
+    "ComestibleType": {
+      "description": "Comestible type — the `\"comestible_type\"` field on COMESTIBLE items.\n\nCDDA uses \"INVALID\" for items that are not actually comestible but have COMESTIBLE type for other reasons (e.g., chemicals, non-food items).",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "FOOD",
+            "DRINK",
+            "MED",
+            "TOOL"
+          ]
+        },
+        {
+          "description": "\"INVALID\" — item is not actually a comestible (used for chemicals, etc.)",
+          "type": "string",
+          "enum": [
+            "INVALID"
+          ]
+        }
+      ]
+    },
+    "CountMode": {
+      "description": "How charges work for this item.\n\nCDDA has long-standing bugs from confusing charges-count meaning; `CountMode` makes this explicit.",
+      "anyOf": [
+        {
+          "description": "Item is not a stackable/charged item.",
+          "type": "null"
+        },
+        {
+          "description": "Item that stacks by count (e.g. rocks, nails).",
+          "type": "object",
+          "properties": {
+            "default": {
+              "default": 1,
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            "max": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          }
+        },
+        {
+          "description": "Item that stores charges (e.g. battery, fuel, liquid).",
+          "type": "object",
+          "properties": {
+            "default": {
+              "default": 1,
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            "max": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          }
+        }
+      ]
+    },
+    "DefId": {
+      "type": "string"
+    },
+    "EncumbranceOrRange": {
+      "description": "Encumbrance value — single u32 or a range `[min, max]`.",
+      "anyOf": [
+        {
+          "description": "Single encumbrance value.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        {
+          "description": "Encumbrance range `[min, max]`.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0.0
+          }
+        }
+      ]
+    },
+    "Energy": {
+      "description": "Energy measured in Joules.\n\nUsed for bionics, vehicle power, and other energy systems.\n\n# Deserialization\n\nAccepts both a bare number (interpreted as Joules) and CDDA-style human-readable strings like `\"1 kJ\"`, `\"500 J\"`.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "ItemVariant": {
+      "description": "Item variant entry — the `\"variants\"` field on items.\n\nEach variant is an alternate appearance/description for the same item.",
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "append": {
+          "description": "Whether variant properties append to base item.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "color": {
+          "description": "Alternative color.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "description": "Alternative description (plain string or object with `str` key).",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/LocalizedText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "description": "Unique variant ID.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Alternative name.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/LocalizedText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "weight": {
+          "description": "Alternative weight (gram delta or absolute).",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        }
+      }
+    },
+    "Length": {
+      "description": "Length measured in millimeters.\n\nAccepts both a bare number (mm) and CDDA-style strings like `\"250 mm\"`, `\"10 cm\"`, `\"1 m\"`.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "LocalizedText": {
+      "description": "A localized text value — either a plain string or a structured object with `str`, `str_pl`, `ctxt`, and/or `str_sp` fields.\n\nExamples: - `\"A rusty pipe.\"` - `{\"str\": \"zombie\", \"str_pl\": \"zombies\"}` - `{\"ctxt\": \"verb\", \"str\": \"dented\"}`",
+      "anyOf": [
+        {
+          "description": "Plain string (no translation context).",
+          "type": "string"
+        },
+        {
+          "description": "Structured text with optional singular, plural, context, and spatial forms.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/StructuredText"
+            }
+          ]
+        }
+      ]
+    },
+    "MaterialList": {
+      "description": "Material list — can be an array of material references or a single map.\n\nCDDA supports multiple material formats: - `[\"wood\", \"steel\"]` — array of strings - `[{\"type\": \"paper\", \"portion\": 2}, ...]` — array of objects - `{\"paper\": 2, \"plastic\": 1}` — single map of material ID to count",
+      "anyOf": [
+        {
+          "description": "Array of material references: `[\"wood\", \"steel\"]` or `[{\"type\": \"paper\", \"portion\": 2}]`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MaterialRef"
+          }
+        },
+        {
+          "description": "Single map of material ID to count: `{\"paper\": 2, \"plastic\": 1}`.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      ]
+    },
+    "MaterialPortion": {
+      "description": "A material with a weight portion (for composite items).\n\nCDDA material objects can have: - `\"type\"`: material ID (required) - `\"portion\"`: weight percentage (for composite items) - `\"covered_by_mat\"`: coverage percentage (for armor layers) - `\"thickness\"`: material thickness (for armor layers)",
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "covered_by_mat": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "portion": {
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "thickness": {
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "type": {
+          "type": "string"
+        }
+      }
+    },
+    "MaterialRef": {
+      "description": "Material reference — can be a simple string (\"flesh\", \"steel\"), an object with type and portion (for composite materials), or a map of material ID to count (e.g. `{\"paper\": 2, \"plastic\": 1}`).",
+      "anyOf": [
+        {
+          "description": "Single material ID.",
+          "type": "string"
+        },
+        {
+          "description": "Composite material with type and portion.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/MaterialPortion"
+            }
+          ]
+        },
+        {
+          "description": "Map of material ID to count (e.g. `{\"paper\": 2, \"plastic\": 1}`).",
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      ]
+    },
+    "MeleeDamage": {
+      "description": "CDDA melee damage — the `\"melee_damage\"` field.\n\nCDDA has evolved through multiple damage formats: 1. Simple bash number: `4` 2. Object with damage-type keys: `{\"bash\": 4, \"cut\": 2}` 3. Array of typed entries: `[{\"damage_type\": \"cut\", \"amount\": 2}]`\n\nThe array form is the current CDDA standard, but all three are still in use.",
+      "anyOf": [
+        {
+          "description": "Simple bash damage number (legacy format).",
+          "type": "integer",
+          "format": "int32"
+        },
+        {
+          "description": "Object with damage-type keys: `{\"bash\": 4, \"cut\": 2}`.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        {
+          "description": "Array of typed damage: `[{\"damage_type\": \"cut\", \"amount\": 2}]`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TypedDamage"
+          }
+        }
+      ]
+    },
+    "Phase": {
+      "description": "Phase of matter for an item.",
+      "type": "string",
+      "enum": [
+        "solid",
+        "liquid",
+        "gas",
+        "plasma"
+      ]
+    },
+    "PocketDef": {
+      "description": "A pocket inside a container item.",
+      "type": "object",
+      "properties": {
+        "ablative": {
+          "description": "Whether this pocket is ablative.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "ammo_restriction": {
+          "description": "Whether the pocket can be used to store ammo (maps ammo type to capacity).",
+          "default": null,
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0.0
+          }
+        },
+        "description": {
+          "description": "Description of the pocket.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "flag": {
+          "description": "Extra flags.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "holster": {
+          "description": "Whether this pocket acts as a holster.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "max_contains": {
+          "description": "Number of items that can be stored.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_contains_volume": {
+          "description": "Max contains volume (string like \"2 L\").",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_contains_weight": {
+          "description": "Max contains weight (string like \"2 kg\").",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_item_length": {
+          "description": "Maximum item length to fit in this pocket.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Length"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_volume": {
+          "description": "Maximum volume this pocket can hold.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Volume"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_weight": {
+          "description": "Maximum weight this pocket can hold.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Weight"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "min_item_volume": {
+          "description": "Minimum item volume to fit in this pocket.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Volume"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "moves": {
+          "description": "Move cost to interact.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "pocket_type": {
+          "description": "Type of pocket.",
+          "default": "CONTAINER",
+          "allOf": [
+            {
+              "$ref": "#/definitions/PocketType"
+            }
+          ]
+        },
+        "rigid": {
+          "description": "Whether this pocket is rigid (volume doesn't change when empty).",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "sealed": {
+          "description": "Whether the pocket is sealed (can't be opened).",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "volume_encumber_modifier": {
+          "description": "Volume encumber modifier (float, e.g. 0.3).",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      }
+    },
+    "PocketType": {
+      "description": "Pocket type enumeration.",
+      "oneOf": [
+        {
+          "description": "General-purpose container.",
+          "type": "string",
+          "enum": [
+            "CONTAINER"
+          ]
+        },
+        {
+          "description": "Magazine for ammunition.",
+          "type": "string",
+          "enum": [
+            "MAGAZINE"
+          ]
+        },
+        {
+          "description": "Magazine well (for weapons that accept magazines).",
+          "type": "string",
+          "enum": [
+            "MAGAZINE_WELL"
+          ]
+        },
+        {
+          "description": "Holster sized for specific weapon types.",
+          "type": "string",
+          "enum": [
+            "HOLSTER"
+          ]
+        },
+        {
+          "description": "Special-purpose pocket (e.g. canteen).",
+          "type": "string",
+          "enum": [
+            "SPECIAL"
+          ]
+        },
+        {
+          "description": "Corrosion-resistant outer layer for things like hip pouches.",
+          "type": "string",
+          "enum": [
+            "CORROSION"
+          ]
+        },
+        {
+          "description": "Migrates items.",
+          "type": "string",
+          "enum": [
+            "MIGRATING"
+          ]
+        },
+        {
+          "description": "Pocket that only stores items with certain qualifiers.",
+          "type": "string",
+          "enum": [
+            "MOD"
+          ]
+        },
+        {
+          "description": "Software storage.",
+          "type": "string",
+          "enum": [
+            "SOFTWARE"
+          ]
+        },
+        {
+          "description": "File storage (e.g. USB drives).",
+          "type": "string",
+          "enum": [
+            "E_FILE_STORAGE"
+          ]
+        }
+      ]
+    },
+    "RawValue": {
+      "description": "A flexible JSON-like value for catch-all fields where CDDA data can be a string, number, boolean, array, or object. This replaces `serde_json::Value` to avoid pulling in the serde_json dependency for type definitions.",
+      "anyOf": [
+        {
+          "description": "A string value.",
+          "type": "string"
+        },
+        {
+          "description": "A numeric value (integer or float).",
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "description": "A boolean value.",
+          "type": "boolean"
+        },
+        {
+          "description": "An array of values.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        {
+          "description": "An object/map of string keys to values.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        }
+      ]
+    },
+    "SnippetCategory": {
+      "description": "Snippet category reference — the `\"snippet_category\"` field.\n\nCan be a simple category ID string or a structured snippet list.",
+      "anyOf": [
+        {
+          "description": "Named snippet category ID.",
+          "type": "string"
+        },
+        {
+          "description": "Inline array of snippet objects (CDDA format with `id` and `text` fields).",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "StringOrArray": {
+      "description": "A value that can be a single string or an array of strings.\n\nUsed by `connect_groups`, `connects_to`, `rotates_to`, and similar fields.\n\nExamples: - `\"wall\"` → `Single(\"wall\")` - `[\"wall\", \"fence\"]` → `Multi(vec![\"wall\", \"fence\"])`",
+      "anyOf": [
+        {
+          "description": "Single string value.",
+          "type": "string"
+        },
+        {
+          "description": "Array of strings.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "StructuredText": {
+      "description": "A structured text value from CDDA JSON.",
+      "type": "object",
+      "properties": {
+        "ctxt": {
+          "description": "Context for translation disambiguation (e.g. \"verb\" vs \"noun\").",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "str": {
+          "description": "Singular (or default) form.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "str_pl": {
+          "description": "Plural form.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "str_sp": {
+          "description": "Spatial form (same for singular and plural).",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "ToHit": {
+      "description": "To-hit modifier — the `\"to_hit\"` field on items.\n\nCDDA can have to_hit as a simple number (legacy) or as an object with grip/length/surface/balance keys.\n\nExamples: - `100` — simple numeric bonus - `{\"grip\": \"weapon\", \"length\": \"long\", \"surface\": \"any\", \"balance\": \"good\"}` — structured",
+      "anyOf": [
+        {
+          "description": "Simple numeric to-hit value (legacy format).",
+          "type": "integer",
+          "format": "int32"
+        },
+        {
+          "description": "Structured to-hit with grip/length/surface/balance.",
+          "type": "object",
+          "properties": {
+            "balance": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "grip": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "length": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "surface": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "ToolQuality": {
+      "description": "A tool quality entry (e.g. \"CUT\" quality level 2).\n\nCDDA format is `[[\"CUT\", 2], [\"BUTCHER\", -18], ...]` — an array of 2-element arrays. This can also be objects `{\"id\": \"CUT\", \"level\": 2}`.",
+      "type": "object",
+      "required": [
+        "id",
+        "level"
+      ],
+      "properties": {
+        "id": {
+          "description": "Quality type identifier (e.g. \"CUT\", \"BOIL\", \"HAMMER\").",
+          "type": "string"
+        },
+        "level": {
+          "description": "Level of the quality (can be negative for \"anti-qualities\").",
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "ToolRequirement": {
+      "description": "Tool requirement — a single tool ID string, or a map of tool IDs to counts.\n\nCDDA uses `\"tool\": \"syringe\"` for single-tool requirements and `\"tool\": { \"syringe\": 1 }` for tool-with-count requirements.",
+      "anyOf": [
+        {
+          "description": "Single tool ID: `\"syringe\"`.",
+          "type": "string"
+        },
+        {
+          "description": "Map of tool IDs to counts: `{ \"syringe\": 1 }`.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        }
+      ]
+    },
+    "TypedDamage": {
+      "description": "A damage entry with explicit type and amount (current CDDA format).",
+      "type": "object",
+      "required": [
+        "amount",
+        "damage_type"
+      ],
+      "properties": {
+        "amount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "damage_type": {
+          "type": "string"
+        }
+      }
+    },
+    "UseAction": {
+      "description": "Item use action — the `\"use_action\"` field.\n\nCan be a simple string ID referencing a built-in action, or an object with `\"type\"` and optional extra parameters.",
+      "anyOf": [
+        {
+          "description": "Simple action name: `\"CROWBAR\"`, `\"PICKAXE\"`, etc.",
+          "type": "string"
+        },
+        {
+          "description": "Tool action with tool ID and charges: `[\"CROWBAR\", 0]`.",
+          "type": "array",
+          "items": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          ],
+          "maxItems": 2,
+          "minItems": 2
+        },
+        {
+          "description": "Structured action definition (single object).",
+          "allOf": [
+            {
+              "$ref": "#/definitions/UseActionDef"
+            }
+          ]
+        },
+        {
+          "description": "Array of actions (CDDA format where use_action is an array).",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/UseAction"
+          }
+        },
+        {
+          "description": "Catch-all for any action type not specifically modeled.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        }
+      ]
+    },
+    "UseActionDef": {
+      "description": "A use action definition object with the most common fields. CDDA has many action types; this covers the majority.",
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "activation_message": {
+          "description": "Activation message.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "charges_to_use": {
+          "description": "Charges consumed per use.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "cooldown": {
+          "description": "Cooldown after use.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "effects": {
+          "description": "Effects triggered by use.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/UseActionEffect"
+          }
+        },
+        "holster_msg": {
+          "description": "Holster completion message.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "holster_prompt": {
+          "description": "Holster prompt text.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "items_needed": {
+          "description": "Items consumed by use.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/UseActionItem"
+          }
+        },
+        "move_speed": {
+          "description": "Speed penalty for the action.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "moves": {
+          "description": "Move cost.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "moves_slow": {
+          "description": "Slow move speed (alternative to moves for firestarters etc).",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "msg": {
+          "description": "Message when activating.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "need_charges": {
+          "description": "Charges needed to activate.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "need_charges_msg": {
+          "description": "Message when not enough charges.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "need_wielding": {
+          "description": "Whether the item needs to be wielded.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "resulting_item": {
+          "description": "Final item after transformation.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "seal": {
+          "description": "Sealed status for containers.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "target": {
+          "description": "Target item ID (for transforms, etc.).",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tools_needed": {
+          "description": "Tools consumed by use.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/UseActionTool"
+          }
+        },
+        "type": {
+          "description": "Action type identifier.",
+          "type": "string"
+        },
+        "unseal": {
+          "description": "Whether it unseals containers.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "UseActionEffect": {
+      "description": "An effect reference in a use action — either a simple effect ID or an object.",
+      "anyOf": [
+        {
+          "description": "Simple effect ID string.",
+          "type": "string"
+        },
+        {
+          "description": "Object with effect type and parameters.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        }
+      ]
+    },
+    "UseActionItem": {
+      "description": "An item reference in a use action.",
+      "anyOf": [
+        {
+          "description": "Simple item ID.",
+          "type": "string"
+        },
+        {
+          "description": "Item with quantity: `[\"item_id\", count]`",
+          "type": "array",
+          "items": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          ],
+          "maxItems": 2,
+          "minItems": 2
+        },
+        {
+          "description": "Object with type and amount.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        }
+      ]
+    },
+    "UseActionTool": {
+      "description": "A tool reference in a use action.",
+      "anyOf": [
+        {
+          "description": "Simple tool ID.",
+          "type": "string"
+        },
+        {
+          "description": "Tool with quantity: `[\"tool_id\", count]`",
+          "type": "array",
+          "items": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          ],
+          "maxItems": 2,
+          "minItems": 2
+        },
+        {
+          "description": "Object with type and amount.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        }
+      ]
+    },
+    "VitaminContents": {
+      "description": "Vitamin cost mapping — the `\"vitamins\"` field on comestibles.\n\nExample: `[[\"calcium\", 2], [\"iron\", 6], [\"meat_allergen\", 1]]`",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/VitaminEntry"
+      }
+    },
+    "VitaminEntry": {
+      "description": "A single vitamin entry: `[\"vitamin_id\", amount]`.\n\nAmount can be a number or a string like \"14 mg\" or \"500 μg\".",
+      "anyOf": [
+        {
+          "description": "Numeric amount: `[\"vitC\", 14]`",
+          "type": "array",
+          "items": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          ],
+          "maxItems": 2,
+          "minItems": 2
+        },
+        {
+          "description": "String amount: `[\"vitC\", \"14 mg\"]`",
+          "type": "array",
+          "items": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "maxItems": 2,
+          "minItems": 2
+        }
+      ]
+    },
+    "Volume": {
+      "description": "Volume measured in milliliters.\n\nCDDA internally stores volumes in mL (1 mL = 0.001 L).\n\nAccepts both a bare number (mL) and CDDA-style strings like `\"250 ml\"`, `\"1 L\"`.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "Weight": {
+      "description": "Weight measured in grams.\n\nAccepts both a bare number (grams) and CDDA-style strings like `\"100 g\"`, `\"1 kg\"`.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    }
+  }
+}

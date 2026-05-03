@@ -1,0 +1,1175 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MonsterDef",
+  "description": "A monster definition from JSON type `\"MONSTER\"`.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "aggression": {
+      "description": "Aggression (0 = passive, higher = more aggressive).",
+      "default": 0,
+      "type": "integer",
+      "format": "int32"
+    },
+    "aggro_character": {
+      "description": "Aggro character",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "anger_triggers": {
+      "description": "Anger triggers",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "armor": {
+      "description": "Armor values by damage type.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ArmorSet"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "baby_flags": {
+      "description": "Baby flags",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "bleed_rate": {
+      "description": "Bleed rate",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "bodytype": {
+      "description": "Body type (e.g. \"human\", \"quadruped\", \"insect\", \"bird\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "burn_into": {
+      "description": "What the monster burns into when set on fire.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "categories": {
+      "description": "Categories (e.g. \"CLASSIC\"). Can be a single string or array of strings.",
+      "default": "",
+      "allOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        }
+      ]
+    },
+    "color": {
+      "description": "Color for map display (can be string or map).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/CddaColor"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "copy_from": {
+      "description": "copy-from parent",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "death_drops": {
+      "description": "ID of the item group used for death drops.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DeathDrops"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "death_function": {
+      "description": "Death function",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DeathFunction"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "decay": {
+      "description": "Decay result definition.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "default_faction": {
+      "description": "Default faction this monster belongs to.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "description": {
+      "description": "Description text.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "diff": {
+      "description": "Difficulty",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "dissect": {
+      "description": "Dissect result (item group ID string).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "dodge": {
+      "description": "Dodge skill",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "families": {
+      "description": "Proficiency families for dissection. Can be a single string, array of strings, or array of mixed strings and objects.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "fear_triggers": {
+      "description": "Fear triggers",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "flags": {
+      "description": "Flags.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "fungalize_into": {
+      "description": "What the monster becomes when fungalized.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "grab_strength": {
+      "description": "Grab strength (for grappling attacks).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "harvest": {
+      "description": "Harvest drop definition (string ID or inline object).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "hp": {
+      "description": "Hit points.",
+      "default": 80,
+      "type": "integer",
+      "format": "int32"
+    },
+    "id": {
+      "description": "Unique identifier.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "looks_like": {
+      "description": "Looks like another monster",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "material": {
+      "description": "Materials this monster is made of (e.g. \"flesh\", \"bone\", \"steel\"). Can be a single string or array of strings.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "melee_damage": {
+      "description": "Additional flat melee damage by type.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/DamageByType"
+      }
+    },
+    "melee_dice": {
+      "description": "Number of melee damage dice.",
+      "default": 0,
+      "type": "integer",
+      "format": "int32"
+    },
+    "melee_dice_sides": {
+      "description": "Sides per melee damage die.",
+      "default": 0,
+      "type": "integer",
+      "format": "int32"
+    },
+    "melee_skill": {
+      "description": "Melee skill level.",
+      "default": 0,
+      "type": "integer",
+      "format": "int32"
+    },
+    "morale": {
+      "description": "Morale (willingness to continue fighting).",
+      "default": 0,
+      "type": "integer",
+      "format": "int32"
+    },
+    "move_skills": {
+      "description": "Move skills as map of skill name to value (e.g. `{\"climb\": 8}`).",
+      "default": null,
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "$ref": "#/definitions/RawValue"
+      }
+    },
+    "name": {
+      "description": "Display name.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "path_settings": {
+      "description": "Pathfinding settings.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/PathSettings"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "reproduction": {
+      "description": "Reproduction data",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Reproduction"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "special_attacks": {
+      "description": "Special attacks this monster can perform.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/SpecialAttack"
+      }
+    },
+    "species": {
+      "description": "Species this monster belongs to (e.g. \"ZOMBIE\", \"HUMAN\", \"FUNGUS\"). Can be a single string or array of strings.",
+      "default": "",
+      "allOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        }
+      ]
+    },
+    "speed": {
+      "description": "Base movement speed (higher = faster).",
+      "default": 0,
+      "type": "integer",
+      "format": "int32"
+    },
+    "symbol": {
+      "description": "ASCII symbol on the map.",
+      "default": "Z",
+      "type": "string"
+    },
+    "upgrades": {
+      "description": "Upgrade path (evolution into another monster type). Can be an object with upgrade info, or `false` to disable.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/UpgradeInfo"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "vision_day": {
+      "description": "Daytime vision range.",
+      "default": 30,
+      "type": "integer",
+      "format": "int32"
+    },
+    "vision_night": {
+      "description": "Nighttime vision range.",
+      "default": 30,
+      "type": "integer",
+      "format": "int32"
+    },
+    "volume": {
+      "description": "Physical volume of the monster.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Volume"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "weakpoint_sets": {
+      "description": "Weakpoint sets for targeting. Can be a single string or array of strings.",
+      "default": "",
+      "allOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        }
+      ]
+    },
+    "weakpoints": {
+      "description": "Inline weakpoint definitions. Array of weakpoint objects with name, coverage, armor_mult, etc.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/definitions/RawValue"
+        }
+      }
+    },
+    "weight": {
+      "description": "Physical weight of the monster.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Weight"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "zombify_into": {
+      "description": "Zombify into",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "definitions": {
+    "ArmorSet": {
+      "description": "Armor values for different damage types.",
+      "type": "object",
+      "properties": {
+        "acid": {
+          "default": 0,
+          "type": "integer",
+          "format": "int32"
+        },
+        "bash": {
+          "default": 0,
+          "type": "integer",
+          "format": "int32"
+        },
+        "biological": {
+          "default": 0,
+          "type": "integer",
+          "format": "int32"
+        },
+        "bullet": {
+          "default": 0,
+          "type": "integer",
+          "format": "int32"
+        },
+        "cold": {
+          "default": 0,
+          "type": "integer",
+          "format": "int32"
+        },
+        "cut": {
+          "default": 0,
+          "type": "integer",
+          "format": "int32"
+        },
+        "electric": {
+          "default": 0,
+          "type": "integer",
+          "format": "int32"
+        },
+        "heat": {
+          "default": 0,
+          "type": "integer",
+          "format": "int32"
+        },
+        "stab": {
+          "default": 0,
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "BabyType": {
+      "description": "The type of baby produced by a monster.",
+      "type": "object",
+      "properties": {
+        "baby_egg": {
+          "description": "Egg item ID.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "baby_monster": {
+          "description": "Monster ID(s) produced. Can be a single string or array of strings.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArray"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "baby_monster_group": {
+          "description": "Monster group ID(s) produced. Can be a single string or array of strings.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArray"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "CddaColor": {
+      "description": "A color value in CDDA can be a simple name, a list of names (random), or a structured map with foreground/background.\n\nExamples: - `\"red\"` - `[\"white\", \"light_gray\"]` - `{\"fg\": \"red\", \"bg\": \"blue\"}`",
+      "anyOf": [
+        {
+          "description": "Single color name: `\"red\"`, `\"light_blue\"`, etc.",
+          "type": "string"
+        },
+        {
+          "description": "Multiple color names (random selection): `[\"white\", \"light_gray\"]`",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Structured color with foreground (and optional background / season variants).",
+          "allOf": [
+            {
+              "$ref": "#/definitions/CddaColorStructured"
+            }
+          ]
+        }
+      ]
+    },
+    "CddaColorStructured": {
+      "description": "A structured color with optional foreground and background.",
+      "type": "object",
+      "properties": {
+        "autumn": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bg": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fg": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "spring": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "summer": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "winter": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CddaColor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "DamageByType": {
+      "description": "Damage by type (e.g. `{ \"damage_type\": \"cut\", \"amount\": 2 }`). `amount` is f64 because CDDA data sometimes uses `15.0` instead of `15`.",
+      "type": "object",
+      "required": [
+        "amount",
+        "damage_type"
+      ],
+      "properties": {
+        "amount": {
+          "type": "number",
+          "format": "double"
+        },
+        "damage_type": {
+          "type": "string"
+        }
+      }
+    },
+    "DeathDrops": {
+      "description": "Monster death drops — the `\"death_drops\"` field.\n\nCan be a simple item group ID string or an inline item group definition.",
+      "anyOf": [
+        {
+          "description": "Reference to a named item group.",
+          "type": "string"
+        },
+        {
+          "description": "Inline item group definition (object with subtype, entries, etc.).",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        {
+          "description": "Array of inline item group definitions (each with group, count, etc.).",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/definitions/RawValue"
+            }
+          }
+        }
+      ]
+    },
+    "DeathFunction": {
+      "description": "Monster death function — the `\"death_function\"` field.\n\nCan be a single function name, a list, or an object.",
+      "anyOf": [
+        {
+          "description": "Single death function name: `\"NORMAL\"`, `\"SMOKEBURST\"`, etc.",
+          "type": "string"
+        },
+        {
+          "description": "Multiple death functions: `[\"SPLATTER\", \"SMOKEBURST\"]`.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Object form: `{\"corpse_type\": \"NO_CORPSE\", \"message\": \"...\"}`",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        {
+          "description": "Fallback for any unrecognized death function format.",
+          "type": "string"
+        }
+      ]
+    },
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "PathSettings": {
+      "description": "Pathfinding settings.",
+      "type": "object",
+      "properties": {
+        "allow_climb_stairs": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "allow_open_doors": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "avoid_sharp": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "avoid_traps": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "bash": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "max_dist": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "max_length": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        }
+      }
+    },
+    "RawValue": {
+      "description": "A flexible JSON-like value for catch-all fields where CDDA data can be a string, number, boolean, array, or object. This replaces `serde_json::Value` to avoid pulling in the serde_json dependency for type definitions.",
+      "anyOf": [
+        {
+          "description": "A string value.",
+          "type": "string"
+        },
+        {
+          "description": "A numeric value (integer or float).",
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "description": "A boolean value.",
+          "type": "boolean"
+        },
+        {
+          "description": "An array of values.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        {
+          "description": "An object/map of string keys to values.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        }
+      ]
+    },
+    "Reproduction": {
+      "description": "Monster reproduction data — the `\"reproduction\"` field.",
+      "type": "object",
+      "properties": {
+        "baby_chance": {
+          "description": "Chance per reproduction attempt.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "baby_count": {
+          "description": "Count of babies produced.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "baby_timer": {
+          "description": "Time between reproduction attempts.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "baby_type": {
+          "description": "Type of baby produced (wraps baby_egg or baby_monster).",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BabyType"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "intensity": {
+          "description": "Intensity of reproduction trigger.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_population": {
+          "description": "Maximum population limit.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    "SpecialAttack": {
+      "description": "A special attack entry.",
+      "anyOf": [
+        {
+          "description": "Simple pair: [\"attack_id\", cooldown]",
+          "type": "array",
+          "items": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          ],
+          "maxItems": 2,
+          "minItems": 2
+        },
+        {
+          "description": "Object with detailed attack data.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SpecialAttackObj"
+            }
+          ]
+        },
+        {
+          "description": "Fallback for any unrecognized special attack format.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RawValue"
+            }
+          ]
+        }
+      ]
+    },
+    "SpecialAttackObj": {
+      "description": "Detailed special attack object.",
+      "type": "object",
+      "properties": {
+        "accuracy": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "blockable": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "cooldown": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "cost": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "damage": {
+          "default": null,
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        "dodgeable": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "hit_msg": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "Attack ID (used by most attacks).",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_range": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "min_range": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "miss_msg": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "no_dmg_msg": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "type": {
+          "description": "Attack type (used for \"gun\", \"spell\", etc. attacks).",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "StringOrArray": {
+      "description": "A value that can be a single string or an array of strings.\n\nUsed by `connect_groups`, `connects_to`, `rotates_to`, and similar fields.\n\nExamples: - `\"wall\"` → `Single(\"wall\")` - `[\"wall\", \"fence\"]` → `Multi(vec![\"wall\", \"fence\"])`",
+      "anyOf": [
+        {
+          "description": "Single string value.",
+          "type": "string"
+        },
+        {
+          "description": "Array of strings.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "UpgradeDef": {
+      "description": "Monster upgrade parameters.",
+      "type": "object",
+      "properties": {
+        "age_grow": {
+          "description": "Age to grow (in days).",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "half_life": {
+          "description": "Half-life in days (evolution speed).",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "into": {
+          "description": "Evolves into a specific monster type.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "into_group": {
+          "description": "Evolves into a monster group.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "multi_level": {
+          "description": "Whether to use multi-level upgrades.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "UpgradeInfo": {
+      "description": "Monster upgrade info — the `\"upgrades\"` field.\n\nCan be `false` (no upgrades), or an object with upgrade parameters.",
+      "anyOf": [
+        {
+          "description": "Explicitly disabled (`\"upgrades\": false`).",
+          "type": "boolean"
+        },
+        {
+          "description": "Active upgrade definition.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/UpgradeDef"
+            }
+          ]
+        }
+      ]
+    },
+    "Volume": {
+      "description": "Volume measured in milliliters.\n\nCDDA internally stores volumes in mL (1 mL = 0.001 L).\n\nAccepts both a bare number (mL) and CDDA-style strings like `\"250 ml\"`, `\"1 L\"`.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "Weight": {
+      "description": "Weight measured in grams.\n\nAccepts both a bare number (grams) and CDDA-style strings like `\"100 g\"`, `\"1 kg\"`.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    }
+  }
+}

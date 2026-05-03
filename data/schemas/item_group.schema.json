@@ -1,0 +1,323 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ItemGroupDef",
+  "description": "An item group definition from JSON type `\"item_group\"`.\n\nItem groups define loot tables: probability-weighted lists of items (or nested groups) that spawn in containers, on monsters, or in mapgen.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "ammo": {
+      "description": "Whether contained items should have ammo loaded.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "charges": {
+      "description": "Whether this group uses charges.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "container": {
+      "description": "Container item type for all entries.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "container_item": {
+      "description": "Container item",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "entries": {
+      "description": "Entries in this item group.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/ItemGroupEntry"
+      }
+    },
+    "groups": {
+      "description": "Groups (alternative to entries for nested groups).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": true
+    },
+    "id": {
+      "description": "Unique identifier.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "items": {
+      "description": "Items (alternative to entries, simpler format).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": true
+    },
+    "magazine": {
+      "description": "Whether contained items should have ammo loaded.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "on_overflow": {
+      "description": "On overflow behavior",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sealed": {
+      "description": "Whether items are sealed in their container.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "subtype": {
+      "description": "Subtype: \"distribution\" (pick one) or \"collection\" (pick all).",
+      "default": "distribution",
+      "allOf": [
+        {
+          "$ref": "#/definitions/ItemGroupSubtype"
+        }
+      ]
+    },
+    "with_ammo": {
+      "description": "With ammunition probability.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "ItemGroupEntry": {
+      "description": "An entry in an item group.",
+      "anyOf": [
+        {
+          "description": "Simple item reference.",
+          "type": "object",
+          "required": [
+            "item"
+          ],
+          "properties": {
+            "charges": {
+              "description": "Charges.",
+              "default": null,
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0.0
+              },
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "container": {
+              "description": "Whether contained.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "contents_group": {
+              "description": "Contents item group.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "count": {
+              "description": "Count range [min, max].",
+              "default": null,
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0.0
+              },
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "damage": {
+              "description": "Whether item is custom-damaged.",
+              "default": null,
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            "flags": {
+              "description": "Custom flags.",
+              "default": null,
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string"
+              }
+            },
+            "item": {
+              "description": "Item type ID.",
+              "type": "string"
+            },
+            "prob": {
+              "description": "Probability weight (default 100).",
+              "default": 100,
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            "sealed": {
+              "description": "Whether sealed.",
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "variant": {
+              "description": "Whether item is custom-damaged.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        {
+          "description": "Nested group reference.",
+          "type": "object",
+          "required": [
+            "group"
+          ],
+          "properties": {
+            "count": {
+              "description": "Count range.",
+              "default": null,
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0.0
+              },
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "group": {
+              "description": "Group ID.",
+              "type": "string"
+            },
+            "prob": {
+              "description": "Probability weight.",
+              "default": 100,
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          }
+        },
+        {
+          "description": "Distribution of possible entries.",
+          "type": "object",
+          "required": [
+            "distribution"
+          ],
+          "properties": {
+            "distribution": {
+              "description": "Distribution entries.",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/ItemGroupEntry"
+              }
+            },
+            "prob": {
+              "description": "Probability weight.",
+              "default": 100,
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          }
+        },
+        {
+          "description": "Fallback for any unrecognized entry format."
+        }
+      ]
+    },
+    "ItemGroupSubtype": {
+      "description": "Whether the group uses \"distribution\" (pick one) or \"collection\" (pick all) semantics.",
+      "oneOf": [
+        {
+          "description": "Pick one entry (weighted random).",
+          "type": "string",
+          "enum": [
+            "distribution"
+          ]
+        },
+        {
+          "description": "Pick all entries.",
+          "type": "string",
+          "enum": [
+            "collection"
+          ]
+        }
+      ]
+    }
+  }
+}

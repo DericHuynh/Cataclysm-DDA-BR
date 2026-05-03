@@ -1,0 +1,1137 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RecipeDef",
+  "description": "A crafting recipe definition from JSON type `\"recipe\"`.",
+  "type": "object",
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "activity_level": {
+      "description": "Activity level required by this recipe.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "autolearn": {
+      "description": "Whether this recipe is automatically learned. Accepts a boolean or a list of skill requirements `[[\"skill_id\", level], ...]`.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Autolearn"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "batch_time_factors": {
+      "description": "Batch time factors.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/BatchTimeFactors"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "blueprint_excludes": {
+      "description": "Blueprint excludes — other blueprint IDs that conflict with this one.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/BlueprintReq"
+      }
+    },
+    "blueprint_name": {
+      "description": "Blueprint name (for faction camp blueprints).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "blueprint_provides": {
+      "description": "Blueprint provides — capabilities this blueprint adds to a camp.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/BlueprintReq"
+      }
+    },
+    "blueprint_requires": {
+      "description": "Blueprint requires — other blueprints that must exist first.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/BlueprintReq"
+      }
+    },
+    "book_learn": {
+      "description": "Books that teach this recipe. Can be an array `[[\"book_id\", skill_level], ...]` or an object `{\"book_id\": {\"skill_level\": 2, ...}}`.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/BookLearnList"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "byproducts": {
+      "description": "Byproducts produced by this recipe. Each entry can be `[\"item_id\"]` (count=1) or `[\"item_id\", count]`.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/ByproductEntry"
+      }
+    },
+    "category": {
+      "description": "Recipe category (e.g. \"CC_CHEM\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "charges": {
+      "description": "Number of charges the result has.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "components": {
+      "description": "Components required.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "array",
+        "items": {
+          "$ref": "#/definitions/ComponentOption"
+        }
+      }
+    },
+    "construction_blueprint": {
+      "description": "Construction blueprint (the camp tile type built).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "container": {
+      "description": "Container item for result.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "copy_from": {
+      "description": "copy-from parent.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "decomp_learn": {
+      "description": "Deconstruct learn — how the recipe is learned when deconstructing the result item. Can be a boolean, a level number, or a list of skill requirements.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DecompLearn"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "description": {
+      "description": "Description text.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "difficulty": {
+      "description": "Difficulty level (0 = trivial).",
+      "default": 0,
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "flags": {
+      "description": "Flags.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "id": {
+      "description": "Unique identifier (usually the result item ID).",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id_suffix": {
+      "description": "ID suffix.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "name": {
+      "description": "Display name for the recipe.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "never_learn": {
+      "description": "Never learn automatically.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "proficiencies": {
+      "description": "Proficiencies required.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/ProficiencyReq"
+      }
+    },
+    "qualities": {
+      "description": "Tool qualities required. Each entry can be a single quality object or a list of alternatives: - `{\"id\": \"ANVIL\", \"level\": 3}` - `[{\"id\": \"SAW_M\", \"level\": 1}, {\"id\": \"DRILL\", \"level\": 1}]`",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/QualityEntry"
+      }
+    },
+    "result": {
+      "description": "Result item from this recipe. Optional for abstract or practice recipes.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "result_mult": {
+      "description": "Result item count.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "reversible": {
+      "description": "Whether this recipe is reversible (uncraft). Can be a boolean `true` or an object `{\"time\": \"5 s\"}`.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Reversible"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "skill_used": {
+      "description": "Primary skill used.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "skills_required": {
+      "description": "Required skills and their minimum level. Accepts multiple formats: - `[[\"fabrication\", 3], [\"mechanics\", 2]]` (array of tuples) - `[\"fabrication\", 3]` (single skill shorthand) - `{\"fabrication\": 3, \"mechanics\": 2}` (object map)",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/SkillsRequired"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "subcategory": {
+      "description": "Recipe subcategory (e.g. \"CSC_CHEM_DRUGS\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "time": {
+      "description": "Time to craft (in-game time).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "tools": {
+      "description": "Tools required.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "array",
+        "items": {
+          "$ref": "#/definitions/ToolOption"
+        }
+      }
+    },
+    "using": {
+      "description": "Using statement (reuse component lists from other recipes). Each entry is `[\"recipe_id\", count]`.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/UsingEntry"
+      }
+    }
+  },
+  "definitions": {
+    "Autolearn": {
+      "description": "How a recipe is automatically learned.",
+      "anyOf": [
+        {
+          "description": "Simple boolean: `true` or `false`.",
+          "type": "boolean"
+        },
+        {
+          "description": "Skill requirements: `[[\"skill_id\", level], ...]`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SkillRequirement"
+          }
+        }
+      ]
+    },
+    "BatchTimeFactors": {
+      "description": "Batch time factors — the `\"batch_time_factors\"` field on recipes. Batch time factors, either as an object or an array of 2 or 3 floats.\n\nObject form: `{ \"first\": 1.5, \"subsequent\": 0.8, \"reduction\": 0.5 }` Array forms: `[1.5, 0.8]` or `[1.5, 0.8, 0.5]`",
+      "anyOf": [
+        {
+          "description": "Object form with named fields.",
+          "type": "object",
+          "properties": {
+            "first": {
+              "default": null,
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "reduction": {
+              "default": null,
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "subsequent": {
+              "default": null,
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            }
+          }
+        },
+        {
+          "description": "Two-element array: `[first, subsequent]`",
+          "type": "array",
+          "items": [
+            {
+              "type": "number",
+              "format": "double"
+            },
+            {
+              "type": "number",
+              "format": "double"
+            }
+          ],
+          "maxItems": 2,
+          "minItems": 2
+        },
+        {
+          "description": "Three-element array: `[first, subsequent, reduction]`",
+          "type": "array",
+          "items": [
+            {
+              "type": "number",
+              "format": "double"
+            },
+            {
+              "type": "number",
+              "format": "double"
+            },
+            {
+              "type": "number",
+              "format": "double"
+            }
+          ],
+          "maxItems": 3,
+          "minItems": 3
+        }
+      ]
+    },
+    "BlueprintReq": {
+      "description": "A reference to another blueprint (by ID), with an optional amount.",
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "amount": {
+          "description": "Optional amount.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "id": {
+          "description": "Blueprint ID.",
+          "type": "string"
+        }
+      }
+    },
+    "BookLearnEntry": {
+      "description": "A single book-learn entry in array format.\n\nCDDA stores each entry as either: - `[\"book_id\"]` (just the book ID) - `[\"book_id\", skill_level]`\n\nNote: `[\"book_id\"]` is a 1-element array, so we use `[String; 1]` to handle it (a 1-tuple newtype would deserialize from a bare string).",
+      "anyOf": [
+        {
+          "description": "`[\"book_id\", skill_level]`",
+          "type": "array",
+          "items": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          ],
+          "maxItems": 2,
+          "minItems": 2
+        },
+        {
+          "description": "`[\"book_id\"]` (skill_level defaults to 0)",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 1,
+          "minItems": 1
+        }
+      ]
+    },
+    "BookLearnEntryObj": {
+      "description": "A single book-learn entry in object format (value side of the map).",
+      "type": "object",
+      "properties": {
+        "consumed": {
+          "description": "If true, the book is consumed on use.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "exclusive": {
+          "description": "If true, can only be learned from this book.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "recipe_name": {
+          "description": "Custom recipe name shown for this book.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "secret": {
+          "description": "If true, hides the recipe from the book.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "skill_level": {
+          "description": "Skill level required to learn from this book.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    "BookLearnList": {
+      "description": "Book-learn entries, either as a list or a map of book IDs to details.",
+      "anyOf": [
+        {
+          "description": "Array format: `[[\"book_id\", skill_level], ...]`",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/BookLearnEntry"
+          }
+        },
+        {
+          "description": "Object/map format: `{\"book_id\": {\"skill_level\": 2, ...}}`",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/BookLearnEntryObj"
+          }
+        }
+      ]
+    },
+    "ByproductEntry": {
+      "description": "An entry in a `byproducts` list. Each entry can be: - `[\"item_id\"]` (count defaults to 1) - `[\"item_id\", count]`",
+      "anyOf": [
+        {
+          "description": "Single-element array: `[\"item_id\"]` (count=1).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 1,
+          "minItems": 1
+        },
+        {
+          "description": "Two-element array: `[\"item_id\", count]`.",
+          "type": "array",
+          "items": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          ],
+          "maxItems": 2,
+          "minItems": 2
+        }
+      ]
+    },
+    "ComponentOption": {
+      "description": "Component option (multiple alternatives per component slot).\n\nCDDA accepts these JSON shapes: - A plain string: `\"nail\"` (matches just the item ID) - A 2-element array: `[\"nail\", 100]` (item ID + count) - A 3-element array with string flag: `[\"nail\", 100, \"LIST\"]` - An object: `{\"item\": \"nail\", \"count\": 100, ...}`",
+      "anyOf": [
+        {
+          "description": "Plain string ID: `\"nail\"`",
+          "type": "string"
+        },
+        {
+          "description": "Simple pair: `[\"item_id\", count]`",
+          "type": "array",
+          "items": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          ],
+          "maxItems": 2,
+          "minItems": 2
+        },
+        {
+          "description": "With a string flag (e.g. \"LIST\"): `[\"item_id\", count, \"FLAG\"]`.",
+          "type": "array",
+          "items": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "maxItems": 3,
+          "minItems": 3
+        },
+        {
+          "description": "Object form.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ComponentOptionObj"
+            }
+          ]
+        }
+      ]
+    },
+    "ComponentOptionObj": {
+      "description": "Component option object.",
+      "type": "object",
+      "required": [
+        "item"
+      ],
+      "properties": {
+        "charges": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "count": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "item": {
+          "type": "string"
+        },
+        "list": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "prob": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "recoverable": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "required": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "DecompLearn": {
+      "description": "How a recipe is learned from deconstructing its result item.",
+      "anyOf": [
+        {
+          "description": "A skill level (numeric shorthand).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        {
+          "description": "Boolean flag (`true` = learn from deconstructing).",
+          "type": "boolean"
+        },
+        {
+          "description": "A list of skill requirements.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SkillRequirement"
+          }
+        }
+      ]
+    },
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "ProficiencyReq": {
+      "description": "Proficiency requirement — the `\"proficiencies\"` field on recipes.",
+      "type": "object",
+      "properties": {
+        "fail_multiplier": {
+          "description": "Failure multiplier when not proficient.",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "id": {
+          "description": "The proficiency-id list (alternative single format). Example: `[\"prof_leatherworking\", 2]` or `[\"prof_tailoring\"]`",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "learning_time_multiplier": {
+          "description": "Learning time estimate.",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "level": {
+          "description": "Required level (from simple [id, level] form).",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max_expertise": {
+          "description": "Maximum expertise level considered.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "proficiency": {
+          "description": "Proficiency ID.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "time_multiplier": {
+          "description": "Time multiplier when proficient.",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      }
+    },
+    "QualReq": {
+      "description": "Quality requirement.",
+      "type": "object",
+      "required": [
+        "id",
+        "level"
+      ],
+      "properties": {
+        "id": {
+          "description": "Quality type ID.",
+          "type": "string"
+        },
+        "level": {
+          "description": "Quality level needed.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    "QualityEntry": {
+      "description": "A single quality entry: either a quality object or an array of alternative quality objects.",
+      "anyOf": [
+        {
+          "description": "Single quality: `{\"id\": \"ANVIL\", \"level\": 3}`",
+          "allOf": [
+            {
+              "$ref": "#/definitions/QualReq"
+            }
+          ]
+        },
+        {
+          "description": "Alternatives list: `[{\"id\": \"SAW_M\", \"level\": 1}, {\"id\": \"CUT\", \"level\": 2}]`",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/QualReq"
+          }
+        }
+      ]
+    },
+    "Reversible": {
+      "description": "Whether a recipe is reversible. Can be `true`/`false` or an object specifying uncraft time: `{\"time\": \"5 m\"}`.",
+      "anyOf": [
+        {
+          "description": "Simple boolean: `true` or `false`.",
+          "type": "boolean"
+        },
+        {
+          "description": "Uncraft properties.",
+          "type": "object",
+          "properties": {
+            "move_cost": {
+              "description": "Whether the uncraft can fail.",
+              "default": null,
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            "time": {
+              "description": "Time the uncraft takes.",
+              "default": null,
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Time"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "SkillRequirement": {
+      "description": "A skill level requirement, either as an object `{\"id\": \"...\", \"level\": N}` or a tuple `[\"skill_name\", level]`.",
+      "anyOf": [
+        {
+          "description": "Object form: `{ \"id\": \"fabrication\", \"level\": 3 }`",
+          "type": "object",
+          "required": [
+            "id",
+            "level"
+          ],
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/DefId"
+            },
+            "level": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          }
+        },
+        {
+          "description": "Tuple form: `[\"fabrication\", 3]`",
+          "type": "array",
+          "items": [
+            {
+              "$ref": "#/definitions/DefId"
+            },
+            {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          ],
+          "maxItems": 2,
+          "minItems": 2
+        }
+      ]
+    },
+    "SkillsRequired": {
+      "description": "Skill requirements in one of several CDDA JSON formats.",
+      "anyOf": [
+        {
+          "description": "Array of skill requirement entries: `[[\"fabrication\", 3], [\"mechanics\", 2]]`",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SkillRequirement"
+          }
+        },
+        {
+          "description": "Single skill shorthand: `[\"fabrication\", 3]`",
+          "type": "array",
+          "items": [
+            {
+              "$ref": "#/definitions/DefId"
+            },
+            {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          ],
+          "maxItems": 2,
+          "minItems": 2
+        },
+        {
+          "description": "Object map: `{\"fabrication\": 3, \"mechanics\": 2}`",
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0.0
+          }
+        }
+      ]
+    },
+    "Time": {
+      "description": "Game time measured in turns. 1 turn ≈ 1 second.\n\nAccepts both bare numbers (turns) and CDDA-style strings like `\"1 h\"`, `\"30 m\"`, `\"26 h 12 m\"`, `\"744m\"`.",
+      "type": "integer",
+      "format": "int64"
+    },
+    "ToolOption": {
+      "description": "Tool option (multiple alternatives per tool slot).\n\nCDDA accepts these JSON shapes: - A plain string: `\"hammer\"` (count=1, no charges) - A 2-element array: `[\"hammer\", 2]` (item ID + count; count may be -1) - A 3-element array: `[\"soldering_iron\", 1, 100]` (item ID + count + charges) - A 3-element array with string flag: `[\"metalworking_tongs_any\", 1, \"LIST\"]` - An object: `{\"item\": \"soldering_iron\", \"count\": 1, \"charges\": 100}`",
+      "anyOf": [
+        {
+          "description": "Plain string ID: `\"hammer\"` (implies count=1, no charges).",
+          "type": "string"
+        },
+        {
+          "description": "Simple pair: `[\"item_id\", required_count]` (count may be -1).",
+          "type": "array",
+          "items": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer",
+              "format": "int32"
+            }
+          ],
+          "maxItems": 2,
+          "minItems": 2
+        },
+        {
+          "description": "With charge requirement: `[\"item_id\", required_count, charge_count]`.",
+          "type": "array",
+          "items": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer",
+              "format": "int32"
+            },
+            {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          ],
+          "maxItems": 3,
+          "minItems": 3
+        },
+        {
+          "description": "With a string flag (e.g. \"LIST\"): `[\"item_id\", count, \"FLAG\"]`.",
+          "type": "array",
+          "items": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer",
+              "format": "int32"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "maxItems": 3,
+          "minItems": 3
+        },
+        {
+          "description": "Object form.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ToolOptionObj"
+            }
+          ]
+        }
+      ]
+    },
+    "ToolOptionObj": {
+      "description": "Tool option object.",
+      "type": "object",
+      "required": [
+        "item"
+      ],
+      "properties": {
+        "charges": {
+          "description": "Required charges.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "count": {
+          "description": "Required count (may be -1 for \"use but don't consume\").",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "item": {
+          "description": "Item ID.",
+          "type": "string"
+        },
+        "list": {
+          "description": "List flag.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "UsingEntry": {
+      "description": "An entry in a `using` list, which reuses component lists from another recipe. Each entry is `[\"recipe_id\", count]` where count may be a floating-point multiplier.",
+      "type": "array",
+      "items": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number",
+          "format": "double"
+        }
+      ],
+      "maxItems": 2,
+      "minItems": 2
+    }
+  }
+}

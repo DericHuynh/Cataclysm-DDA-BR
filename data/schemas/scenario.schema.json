@@ -1,0 +1,447 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ScenarioDef",
+  "description": "A scenario definition from JSON type `\"scenario\"`.\n\nScenarios define the starting conditions for a new game: what profession, location, traits, and equipment the player begins with.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "add_vehicle": {
+      "description": "Whether this scenario adds a vehicle.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "allowed_locations": {
+      "description": "Allowed starting locations.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "allowed_locs": {
+      "description": "Allowed locations (short form)",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "allowed_traits": {
+      "description": "Allowed traits.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/DefId"
+      }
+    },
+    "copy_from": {
+      "description": "copy-from parent",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "default_profession": {
+      "description": "Default profession if none selected.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "description": {
+      "description": "Description text.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "distance_initial_visibility": {
+      "description": "Distance initial visibility",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "eoc": {
+      "description": "EOC effects",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "eoc_at_start": {
+      "description": "EOC effects to run at game start.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "flags": {
+      "description": "Flags.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "forbidden_professions": {
+      "description": "Professions that are forbidden.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "forbidden_traits": {
+      "description": "Traits that are forbidden.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/DefId"
+      }
+    },
+    "forced_traits": {
+      "description": "Traits the player always starts with.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/DefId"
+      }
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"evacuee\", \"lab_chal\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "map_extra": {
+      "description": "Map extras.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "missions": {
+      "description": "Missions automatically started (array of mission IDs).",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "name": {
+      "description": "Display name.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "points": {
+      "description": "Points cost (negative = bonus points, positive = costs points).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "professions": {
+      "description": "Professions allowed in this scenario.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "requirement": {
+      "description": "Requirements",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reveal_locale": {
+      "description": "Reveal locale",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "shelter": {
+      "description": "Whether to place player in a shelter.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "start_location": {
+      "description": "Starting location ID.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "start_monsters": {
+      "description": "Monsters to spawn at start.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/ScenarioStartMonster"
+      }
+    },
+    "start_name": {
+      "description": "Start name (for display)",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "start_of_cataclysm": {
+      "description": "Start of cataclysm Can be a boolean or an object like {\"hour\": 0, \"day\": 56, \"season\": \"spring\", \"year\": 1}.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "start_of_game": {
+      "description": "Start of game (optional date override) Object like {\"hour\": 8, \"day\": 1, \"season\": \"winter\", \"year\": 1}.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "starting_items": {
+      "description": "Additional items to start with.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/StartingItems"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "surrounding_terrain": {
+      "description": "Terrain types that surround the start location.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "unlocked": {
+      "description": "Whether use of the scenario is allowed (locked / unlocked).",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "vehicle": {
+      "description": "Starting vehicle.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "RawValue": {
+      "description": "A flexible JSON-like value for catch-all fields where CDDA data can be a string, number, boolean, array, or object. This replaces `serde_json::Value` to avoid pulling in the serde_json dependency for type definitions.",
+      "anyOf": [
+        {
+          "description": "A string value.",
+          "type": "string"
+        },
+        {
+          "description": "A numeric value (integer or float).",
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "description": "A boolean value.",
+          "type": "boolean"
+        },
+        {
+          "description": "An array of values.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        {
+          "description": "An object/map of string keys to values.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        }
+      ]
+    },
+    "ScenarioStartMonster": {
+      "description": "A monster that spawns at game start.",
+      "type": "object",
+      "required": [
+        "monster"
+      ],
+      "properties": {
+        "chance": {
+          "description": "Chance of spawning.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "monster": {
+          "description": "Monster ID.",
+          "type": "string"
+        },
+        "x": {
+          "description": "Position offset from player.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "y": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        }
+      }
+    },
+    "StartingItems": {
+      "description": "Starting items for a scenario — the `\"starting_items\"` field.\n\nCan be a simple list of item IDs or a structured object.",
+      "anyOf": [
+        {
+          "description": "Simple list of item IDs.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Structured item assignment (with counts, charges, etc.).",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/definitions/RawValue"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

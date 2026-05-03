@@ -1,0 +1,569 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MaterialDef",
+  "description": "A material definition from JSON type `\"material\"`.\n\nDefines material properties (e.g. \"wood\", \"steel\", \"flesh\", \"glass\").",
+  "type": "object",
+  "required": [
+    "id",
+    "name"
+  ],
+  "properties": {
+    "bash_dmg_verb": {
+      "description": "Bash damage verb — can be a plain string like `\"gouged\"` or an object like `{\"ctxt\": \"verb\", \"str\": \"dented\"}`.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedText"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "burn_data": {
+      "description": "Burn data (per-intensity fuel/smoke/burn values). Format: `[{ \"fuel\": 0.1, \"smoke\": 2, \"burn\": 0.001 }, ...]`",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/definitions/RawValue"
+        }
+      }
+    },
+    "burn_products": {
+      "description": "Burn products (what items are produced when burning). Can be a map or an array of [item_id, amount] pairs.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "chip_resist": {
+      "description": "Chip resistance — can be an integer or an object.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ChipResist"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "conductive": {
+      "description": "Conductive flag.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "copy_from": {
+      "description": "copy-from parent material id.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "cut_dmg_verb": {
+      "description": "Cut damage verb — can be a plain string like `\"gouged\"` or an object like `{\"ctxt\": \"verb\", \"str\": \"dented\"}`.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedText"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "density": {
+      "description": "Density in g/cm^3.",
+      "default": null,
+      "type": [
+        "number",
+        "null"
+      ],
+      "format": "double"
+    },
+    "dmg_adj": {
+      "description": "Damage adjectives describing increasing damage states. Elements can be plain strings or objects with context/str keys.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "flags": {
+      "description": "Material flags.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "fuel": {
+      "description": "Fuel data (if this material can be used as fuel). This is the structured form; see also `fuel_data` for JSON flexible form.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/MaterialFuel"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "fuel_data": {
+      "description": "Fuel data (object with energy and other fuel properties). Format: `{ \"energy\": \"1000 kJ\" }` or more complex.",
+      "default": null,
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "$ref": "#/definitions/RawValue"
+      }
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"wood\", \"steel\", \"flesh\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "latent_heat": {
+      "description": "Latent heat (melting/vaporization).",
+      "default": null,
+      "type": [
+        "number",
+        "null"
+      ],
+      "format": "double"
+    },
+    "name": {
+      "description": "Display name.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        }
+      ]
+    },
+    "repair_difficulty": {
+      "description": "Repair difficulty.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "repaired_with": {
+      "description": "Repaired with item id.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "resist": {
+      "description": "Resist values by damage type, as a JSON object. Example: `{\"bash\": 4, \"cut\": 5, \"acid\": 10, \"heat\": 6, \"bullet\": 3}`",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DamageResistance"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "salvage": {
+      "description": "Salvage data.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/MaterialSalvage"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "salvaged_into": {
+      "description": "Salvaged into item id.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "soft": {
+      "description": "Soft material flag.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "specific_heat_liquid": {
+      "description": "Specific heat capacity.",
+      "default": null,
+      "type": [
+        "number",
+        "null"
+      ],
+      "format": "double"
+    },
+    "specific_heat_solid": {
+      "default": null,
+      "type": [
+        "number",
+        "null"
+      ],
+      "format": "double"
+    },
+    "type": {
+      "description": "Type of material (solid, liquid, gas, etc).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "definitions": {
+    "ChipResist": {
+      "description": "Chip resistance — the `\"chip_resist\"` field on materials.\n\nCan be a simple number or an object with per-damage-type values.",
+      "anyOf": [
+        {
+          "description": "Uniform resistance value.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        {
+          "description": "Per-damage-type resistance.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0.0
+          }
+        }
+      ]
+    },
+    "DamageResistance": {
+      "description": "Material damage resistance values — the `\"resist\"` field on materials.\n\nExample: `{\"bash\": 4, \"cut\": 5, \"acid\": 10, \"heat\": 6, \"bullet\": 3}`",
+      "type": "object",
+      "properties": {
+        "acid": {
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "bash": {
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "bullet": {
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "cold": {
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "cut": {
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "electric": {
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "heat": {
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "stab": {
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      }
+    },
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "LocalizedText": {
+      "description": "A localized text value — either a plain string or a structured object with `str`, `str_pl`, `ctxt`, and/or `str_sp` fields.\n\nExamples: - `\"A rusty pipe.\"` - `{\"str\": \"zombie\", \"str_pl\": \"zombies\"}` - `{\"ctxt\": \"verb\", \"str\": \"dented\"}`",
+      "anyOf": [
+        {
+          "description": "Plain string (no translation context).",
+          "type": "string"
+        },
+        {
+          "description": "Structured text with optional singular, plural, context, and spatial forms.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/StructuredText"
+            }
+          ]
+        }
+      ]
+    },
+    "MaterialFuel": {
+      "description": "Fuel properties for a material.",
+      "type": "object",
+      "properties": {
+        "burn": {
+          "description": "Percentage of fuel that burns.",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "burnt": {
+          "description": "Percentage of fuel per turn.",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "companion": {
+          "description": "Companion fuel type.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "energy": {
+          "description": "Energy per unit volume.",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "perpetual": {
+          "description": "Whether fuel is perpetual.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "type_": {
+          "description": "Fuel type.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "MaterialSalvage": {
+      "description": "Salvage yields from this material.",
+      "type": "object",
+      "properties": {
+        "amount": {
+          "description": "Amount per unit.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "result": {
+          "description": "Item produced.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "skill": {
+          "description": "Skill required.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "volume_per_unit": {
+          "description": "Base volume consumed.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    "RawValue": {
+      "description": "A flexible JSON-like value for catch-all fields where CDDA data can be a string, number, boolean, array, or object. This replaces `serde_json::Value` to avoid pulling in the serde_json dependency for type definitions.",
+      "anyOf": [
+        {
+          "description": "A string value.",
+          "type": "string"
+        },
+        {
+          "description": "A numeric value (integer or float).",
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "description": "A boolean value.",
+          "type": "boolean"
+        },
+        {
+          "description": "An array of values.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        {
+          "description": "An object/map of string keys to values.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        }
+      ]
+    },
+    "StructuredText": {
+      "description": "A structured text value from CDDA JSON.",
+      "type": "object",
+      "properties": {
+        "ctxt": {
+          "description": "Context for translation disambiguation (e.g. \"verb\" vs \"noun\").",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "str": {
+          "description": "Singular (or default) form.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "str_pl": {
+          "description": "Plural form.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "str_sp": {
+          "description": "Spatial form (same for singular and plural).",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

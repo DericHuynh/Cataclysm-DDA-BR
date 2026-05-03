@@ -1,0 +1,450 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OvermapTerrainDef",
+  "description": "Overmap terrain definition from JSON type `\"overmap_terrain\"`.\n\nDefines a 24×24 tile region on the overmap (e.g. \"house\", \"forest\", \"lake\").",
+  "type": "object",
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "color": {
+      "description": "Color on the overmap. Can be a string name or a structured color object.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "connect_to": {
+      "description": "Connection to other OMTs. Can be a string or an object.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "connections": {
+      "description": "Which overmap connections are valid.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/OmtConnection"
+      }
+    },
+    "copy_from": {
+      "description": "copy-from parent",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "extras": {
+      "description": "Map extras that can appear on this OMT. Can be a string or an object.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "flags": {
+      "description": "Flags for overmap generation. CDDA can use a single string or an array of strings.",
+      "default": "",
+      "allOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        }
+      ]
+    },
+    "has_basement": {
+      "description": "Whether this OMT has a basement.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"house_garage\", \"forest\", \"lake_surrounding\"). CDDA can use a single string or an array of strings.",
+      "default": "",
+      "allOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        }
+      ]
+    },
+    "is_urban": {
+      "description": "Whether this is a city-building OMT.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "land_use_code": {
+      "description": "Land use code — can be a string or an object.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "light": {
+      "description": "Tiles with lighting for night display.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "looks_like": {
+      "description": "Look-alike for display. Can be a string ID or an object.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "mapgen": {
+      "description": "Mapgen ID(s) (references to mapgen definitions). Can be an array of strings or an array of objects like {\"builtin\": \"forest\"}.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/RawValue"
+      }
+    },
+    "mondensity": {
+      "description": "Monster density",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "name": {
+      "description": "Display name.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "see_cost": {
+      "description": "See cost (visibility) — CDDA uses string values like \"high\", \"none\", \"low\"",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/SeeCost"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "side": {
+      "description": "Side (for OMTs that are building sides).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/OvermapSide"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "spawn_chance": {
+      "description": "Spawn chance for this OMT.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "spawns": {
+      "description": "Spawns — can be a string ID or an object with group/population/chance.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sym": {
+      "description": "Symbol (short form) — can be a string or an object.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "symbol": {
+      "description": "Symbol used on the overmap.",
+      "default": ".",
+      "type": "string"
+    },
+    "travel_cost_type": {
+      "description": "Travel cost type — can be a string or an object.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "vision_levels": {
+      "description": "Vision levels — can be a string like `\"always_full\"` or a structured object.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/VisionLevelsOrString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "OmtConnection": {
+      "description": "Connection to adjacent OMTs.",
+      "type": "object",
+      "properties": {
+        "connection": {
+          "description": "Connection type.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sides": {
+          "description": "Which sides have the connection.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "OvermapSide": {
+      "description": "Side of a building for multi-tile structures.",
+      "type": "string",
+      "enum": [
+        "north",
+        "south",
+        "east",
+        "west"
+      ]
+    },
+    "RawValue": {
+      "description": "A flexible JSON-like value for catch-all fields where CDDA data can be a string, number, boolean, array, or object. This replaces `serde_json::Value` to avoid pulling in the serde_json dependency for type definitions.",
+      "anyOf": [
+        {
+          "description": "A string value.",
+          "type": "string"
+        },
+        {
+          "description": "A numeric value (integer or float).",
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "description": "A boolean value.",
+          "type": "boolean"
+        },
+        {
+          "description": "An array of values.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RawValue"
+          }
+        },
+        {
+          "description": "An object/map of string keys to values.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawValue"
+          }
+        }
+      ]
+    },
+    "SeeCost": {
+      "description": "Overmap terrain see cost — the `\"see_cost\"` field.\n\nCan be a string like `\"high\"`, `\"low\"`, `\"none\"` or a numeric value.",
+      "anyOf": [
+        {
+          "description": "Named visibility category.",
+          "type": "string"
+        },
+        {
+          "description": "Numeric visibility cost.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      ]
+    },
+    "StringOrArray": {
+      "description": "A value that can be a single string or an array of strings.\n\nUsed by `connect_groups`, `connects_to`, `rotates_to`, and similar fields.\n\nExamples: - `\"wall\"` → `Single(\"wall\")` - `[\"wall\", \"fence\"]` → `Multi(vec![\"wall\", \"fence\"])`",
+      "anyOf": [
+        {
+          "description": "Single string value.",
+          "type": "string"
+        },
+        {
+          "description": "Array of strings.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "VisionLevels": {
+      "description": "Vision levels — used in `\"vision_levels\"` on overmap terrain.",
+      "type": "object",
+      "properties": {
+        "low": {
+          "description": "Light level below which vision degrades.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "max": {
+          "description": "Maximum vision distance in this terrain.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "normal": {
+          "description": "Light level above which normal vision works.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    "VisionLevelsOrString": {
+      "description": "Vision levels — can be a named string (e.g. `\"always_full\"`) or a structured object with `low`, `normal`, and `max` fields.",
+      "anyOf": [
+        {
+          "description": "A named vision level string (e.g. `\"always_full\"`, `\"none\"`).",
+          "type": "string"
+        },
+        {
+          "description": "Structured vision level object with low/normal/max fields.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/VisionLevels"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
