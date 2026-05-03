@@ -1,0 +1,14 @@
+[package]
+name = "cdda_core"
+version = "0.1.0"
+edition = "2021"
+description = "Pure types and units – coordinates, damage, calendar, RNG. Zero Bevy dependency."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+schemars.workspace = true
+thiserror.workspace = true
+rand.workspace = true
+
+[dev-dependencies]

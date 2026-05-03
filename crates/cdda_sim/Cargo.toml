@@ -1,0 +1,19 @@
+[package]
+name = "cdda_sim"
+version = "0.1.0"
+edition = "2021"
+description = "Simulation: components, systems, logic, tick loop. Depends on bevy_ecs/bevy_reflect (not full bevy)."
+
+[dependencies]
+cdda_map.workspace = true
+cdda_mod.workspace = true
+cdda_data.workspace = true
+cdda_core.workspace = true
+bevy_ecs.workspace = true
+bevy_reflect.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+rand.workspace = true
+
+[dev-dependencies]

@@ -1,0 +1,24 @@
+[package]
+name = "cdda_app"
+version = "0.1.0"
+edition = "2021"
+description = "Binary entry point – App::new() + plugin registration."
+
+[[bin]]
+name = "cdda"
+path = "src/main.rs"
+
+[dependencies]
+cdda_render.workspace = true
+cdda_input.workspace = true
+cdda_audio.workspace = true
+cdda_sim.workspace = true
+cdda_core.workspace = true
+bevy.workspace = true
+tracing.workspace = true
+
+[features]
+default = ["dynamic"]
+dynamic = ["bevy/dynamic_linking"]
+
+[dev-dependencies]

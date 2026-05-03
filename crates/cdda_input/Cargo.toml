@@ -1,0 +1,12 @@
+[package]
+name = "cdda_input"
+version = "0.1.0"
+edition = "2021"
+description = "Bevy input plugin – keybinds, input contexts."
+
+[dependencies]
+cdda_core.workspace = true
+bevy.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]

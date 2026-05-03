@@ -1,0 +1,19 @@
+[package]
+name = "cdda_render"
+version = "0.1.0"
+edition = "2021"
+description = "Bevy rendering plugin – tiles, UI, ASCII mode."
+
+[dependencies]
+cdda_sim.workspace = true
+cdda_map.workspace = true
+cdda_core.workspace = true
+bevy = { workspace = true, features = ["2d"] }
+bevy_fast_tilemap.workspace = true
+bevy-inspector-egui = { workspace = true, optional = true }
+
+[dev-dependencies]
+
+[features]
+default = ["inspector"]
+inspector = ["bevy-inspector-egui"]

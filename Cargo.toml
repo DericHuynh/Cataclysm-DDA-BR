@@ -1,0 +1,42 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/cdda_core",
+    "crates/cdda_data",
+    "crates/cdda_mod",
+    "crates/cdda_sim",
+    "crates/cdda_map",
+]
+
+[workspace.dependencies]
+# Bevy 0.18
+bevy_ecs        = "0.18"
+bevy_reflect    = "0.18"
+serde           = { version = "1", features = ["derive"] }
+serde_json      = "1"
+schemars        = "0.8"
+thiserror       = "2"
+indexmap        = "2"
+rand            = "0.9"
+tracing         = "0.1"
+smallvec        = "1"
+rstar           = "0.12"
+pathfinding     = "4"
+
+# Internal workspace crates
+cdda_core = { path = "crates/cdda_core" }
+cdda_data = { path = "crates/cdda_data" }
+cdda_mod  = { path = "crates/cdda_mod" }
+cdda_sim  = { path = "crates/cdda_sim" }
+cdda_map  = { path = "crates/cdda_map" }
+
+[profile.dev]
+opt-level = 0
+
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1

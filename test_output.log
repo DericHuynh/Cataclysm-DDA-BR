@@ -1,0 +1,16 @@
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+
+running 1 test
+test no_duplicate_ids ... FAILED
+
+failures:
+
+failures:
+    no_duplicate_ids
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 14 filtered out; finished in 3.80s
+

@@ -1,0 +1,10 @@
+# Fast dev builds
+# Dynamic linking speeds up incremental builds on Linux and macOS.
+# Does NOT work reliably on Windows.
+# Never enable in release builds.
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "link-arg=-fuse-ld=/usr/local/bin/zld"]
