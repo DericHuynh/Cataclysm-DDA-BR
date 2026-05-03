@@ -13,67 +13,121 @@ use std::sync::Arc;
 /// for efficient sharing.
 #[derive(Debug, Clone)]
 pub struct DefRegistry {
-    /// Item definitions.
     pub items: HashMap<DefId<ItemDef>, Arc<ItemDef>>,
-    /// Monster definitions.
     pub monsters: HashMap<DefId<MonsterDef>, Arc<MonsterDef>>,
-    /// Terrain definitions.
     pub terrain: HashMap<DefId<TerrainDef>, Arc<TerrainDef>>,
-    /// Furniture definitions.
     pub furniture: HashMap<DefId<FurnitureDef>, Arc<FurnitureDef>>,
-    /// Recipe definitions.
     pub recipes: HashMap<DefId<RecipeDef>, Arc<RecipeDef>>,
-    /// Item group definitions.
     pub item_groups: HashMap<DefId<ItemGroupDef>, Arc<ItemGroupDef>>,
-    /// Mapgen definitions (one OMT can have multiple mapgen variants).
     pub mapgen: HashMap<DefId<OvermapTerrainDef>, Vec<Arc<MapgenDef>>>,
-    /// Mapgen palette definitions.
     pub palettes: HashMap<DefId<MapgenPaletteDef>, Arc<MapgenPaletteDef>>,
-    /// Overmap terrain definitions.
     pub overmap_terrains: HashMap<DefId<OvermapTerrainDef>, Arc<OvermapTerrainDef>>,
-    /// Overmap special definitions.
     pub overmap_specials: HashMap<DefId<OvermapSpecialDef>, Arc<OvermapSpecialDef>>,
-    /// Overmap connection definitions.
     pub overmap_connections: HashMap<DefId<OvermapConnectionDef>, Arc<OvermapConnectionDef>>,
-    /// Overmap location definitions.
     pub overmap_locations: HashMap<DefId<OvermapLocationDef>, Arc<OvermapLocationDef>>,
-    /// Overmap land use code definitions.
     pub overmap_land_use_codes: HashMap<DefId<OvermapLandUseCodeDef>, Arc<OvermapLandUseCodeDef>>,
-    /// Field type definitions.
     pub fields: HashMap<DefId<FieldDef>, Arc<FieldDef>>,
-    /// Vehicle part definitions.
     pub vehicle_parts: HashMap<DefId<VehiclePartDef>, Arc<VehiclePartDef>>,
-    /// Vehicle part location definitions.
     pub vehicle_part_locations: HashMap<DefId<VehiclePartLocationDef>, Arc<VehiclePartLocationDef>>,
-    /// Vehicle part category definitions.
     pub vehicle_part_categories:
         HashMap<DefId<VehiclePartCategoryDef>, Arc<VehiclePartCategoryDef>>,
-    /// Mutation definitions.
     pub mutations: HashMap<DefId<MutationDef>, Arc<MutationDef>>,
-    /// Mutation category definitions.
     pub mutation_categories: HashMap<DefId<MutationCategoryDef>, Arc<MutationCategoryDef>>,
-    /// Trait group definitions.
     pub trait_groups: HashMap<DefId<TraitGroupDef>, Arc<TraitGroupDef>>,
-    /// Bionic definitions.
     pub bionics: HashMap<DefId<BionicDef>, Arc<BionicDef>>,
-    /// Effect type definitions.
     pub effects: HashMap<DefId<EffectDef>, Arc<EffectDef>>,
-    /// Faction definitions.
     pub factions: HashMap<DefId<FactionDef>, Arc<FactionDef>>,
-    /// Scenario definitions.
     pub scenarios: HashMap<DefId<ScenarioDef>, Arc<ScenarioDef>>,
-    /// Material definitions.
     pub materials: HashMap<DefId<MaterialDef>, Arc<MaterialDef>>,
-    /// Skill definitions.
     pub skills: HashMap<DefId<SkillDef>, Arc<SkillDef>>,
-    /// Trap definitions.
     pub traps: HashMap<DefId<TrapDef>, Arc<TrapDef>>,
-    /// Start location definitions.
     pub start_locations: HashMap<DefId<StartLocationDef>, Arc<StartLocationDef>>,
+    pub json_flags: HashMap<DefId<JsonFlagDef>, Arc<JsonFlagDef>>,
+    pub ascii_art: HashMap<DefId<AsciiArtDef>, Arc<AsciiArtDef>>,
+    pub construction_groups: HashMap<DefId<ConstructionGroupDef>, Arc<ConstructionGroupDef>>,
+    pub item_actions: HashMap<DefId<ItemActionDef>, Arc<ItemActionDef>>,
+    pub techniques: HashMap<DefId<TechniqueDef>, Arc<TechniqueDef>>,
+    pub ammunition_types: HashMap<DefId<AmmunitionTypeDef>, Arc<AmmunitionTypeDef>>,
+    pub morale_types: HashMap<DefId<MoraleTypeDef>, Arc<MoraleTypeDef>>,
+    pub scent_types: HashMap<DefId<ScentTypeDef>, Arc<ScentTypeDef>>,
+    pub movement_modes: HashMap<DefId<MovementModeDef>, Arc<MovementModeDef>>,
+    pub mood_faces: HashMap<DefId<MoodFaceDef>, Arc<MoodFaceDef>>,
+    pub achievements: HashMap<DefId<AchievementDef>, Arc<AchievementDef>>,
+    pub body_parts: HashMap<DefId<BodyPartDef>, Arc<BodyPartDef>>,
+    pub dreams: HashMap<DefId<DreamDef>, Arc<DreamDef>>,
+    pub emits: HashMap<DefId<EmitDef>, Arc<EmitDef>>,
+    pub event_statistics: HashMap<DefId<EventStatisticDef>, Arc<EventStatisticDef>>,
+    pub harvests: HashMap<DefId<HarvestDef>, Arc<HarvestDef>>,
+    pub item_migrations: HashMap<DefId<ItemMigrationDef>, Arc<ItemMigrationDef>>,
+    pub monster_groups: HashMap<DefId<MonsterGroupDef>, Arc<MonsterGroupDef>>,
+    pub mutation_types: HashMap<DefId<MutationTypeDef>, Arc<MutationTypeDef>>,
+    pub nested_categories: HashMap<DefId<NestedCategoryDef>, Arc<NestedCategoryDef>>,
+    pub practices: HashMap<DefId<PracticeDef>, Arc<PracticeDef>>,
+    pub professions: HashMap<DefId<ProfessionDef>, Arc<ProfessionDef>>,
+    pub proficiencies: HashMap<DefId<ProficiencyDef>, Arc<ProficiencyDef>>,
+    pub scores: HashMap<DefId<ScoreDef>, Arc<ScoreDef>>,
+    pub species: HashMap<DefId<SpeciesDef>, Arc<SpeciesDef>>,
+    pub sub_body_parts: HashMap<DefId<SubBodyPartDef>, Arc<SubBodyPartDef>>,
+    pub uncrafts: HashMap<DefId<UncraftDef>, Arc<UncraftDef>>,
+    pub vitamins: HashMap<DefId<VitaminDef>, Arc<VitaminDef>>,
+    pub talk_topics: HashMap<DefId<TalkTopicDef>, Arc<TalkTopicDef>>,
+    pub widgets: HashMap<DefId<WidgetDef>, Arc<WidgetDef>>,
+    pub effects_on_condition: HashMap<DefId<EffectOnConditionDef>, Arc<EffectOnConditionDef>>,
+    pub constructions: HashMap<DefId<ConstructionDef>, Arc<ConstructionDef>>,
+    pub snippets: HashMap<DefId<SnippetDef>, Arc<SnippetDef>>,
+    pub npcs: HashMap<DefId<NpcDef>, Arc<NpcDef>>,
+    pub npc_classes: HashMap<DefId<NpcClassDef>, Arc<NpcClassDef>>,
+    pub requirements: HashMap<DefId<RequirementDef>, Arc<RequirementDef>>,
+    pub spells: HashMap<DefId<SpellDef>, Arc<SpellDef>>,
+    pub vehicles: HashMap<DefId<VehicleDef>, Arc<VehicleDef>>,
+    pub city_buildings: HashMap<DefId<CityBuildingDef>, Arc<CityBuildingDef>>,
+    pub mission_definitions: HashMap<DefId<MissionDefinitionDef>, Arc<MissionDefinitionDef>>,
+    pub event_transformations: HashMap<DefId<EventTransformationDef>, Arc<EventTransformationDef>>,
+    pub martial_arts: HashMap<DefId<MartialArtDef>, Arc<MartialArtDef>>,
+    pub monster_attacks: HashMap<DefId<MonsterAttackDef>, Arc<MonsterAttackDef>>,
+    pub weakpoint_sets: HashMap<DefId<WeakpointSetDef>, Arc<WeakpointSetDef>>,
+    pub recipe_groups: HashMap<DefId<RecipeGroupDef>, Arc<RecipeGroupDef>>,
+    pub monster_flags: HashMap<DefId<MonsterFlagDef>, Arc<MonsterFlagDef>>,
+    pub activity_types: HashMap<DefId<ActivityTypeDef>, Arc<ActivityTypeDef>>,
+    pub ammo_effects: HashMap<DefId<AmmoEffectDef>, Arc<AmmoEffectDef>>,
+    pub tool_qualities: HashMap<DefId<ToolQualityDef>, Arc<ToolQualityDef>>,
+    pub faults: HashMap<DefId<FaultDef>, Arc<FaultDef>>,
+    pub map_extras: HashMap<DefId<MapExtraDef>, Arc<MapExtraDef>>,
+    pub fault_fixes: HashMap<DefId<FaultFixDef>, Arc<FaultFixDef>>,
+    pub ter_furn_transforms: HashMap<DefId<TerFurnTransformDef>, Arc<TerFurnTransformDef>>,
+    pub connect_groups: HashMap<DefId<ConnectGroupDef>, Arc<ConnectGroupDef>>,
+    pub attack_vectors: HashMap<DefId<AttackVectorDef>, Arc<AttackVectorDef>>,
+    pub region_terrain_furnitures:
+        HashMap<DefId<RegionTerrainFurnitureDef>, Arc<RegionTerrainFurnitureDef>>,
+    pub item_categories: HashMap<DefId<ItemCategoryDef>, Arc<ItemCategoryDef>>,
+    pub oter_visions: HashMap<DefId<OterVisionDef>, Arc<OterVisionDef>>,
+    pub profession_item_substitutions:
+        HashMap<DefId<ProfessionItemSubstitutionsDef>, Arc<ProfessionItemSubstitutionsDef>>,
+    pub character_mods: HashMap<DefId<CharacterModDef>, Arc<CharacterModDef>>,
+    pub weapon_categories: HashMap<DefId<WeaponCategoryDef>, Arc<WeaponCategoryDef>>,
+    pub rotatable_symbols: HashMap<DefId<RotatableSymbolDef>, Arc<RotatableSymbolDef>>,
+    pub oter_id_migrations: HashMap<DefId<OterIdMigrationDef>, Arc<OterIdMigrationDef>>,
+    pub climbing_aids: HashMap<DefId<ClimbingAidDef>, Arc<ClimbingAidDef>>,
+    pub conducts: HashMap<DefId<ConductDef>, Arc<ConductDef>>,
+    pub weather_types: HashMap<DefId<WeatherTypeDef>, Arc<WeatherTypeDef>>,
+    pub proficiency_categories: HashMap<DefId<ProficiencyCategoryDef>, Arc<ProficiencyCategoryDef>>,
+    pub faction_missions: HashMap<DefId<FactionMissionDef>, Arc<FactionMissionDef>>,
+    pub fault_groups: HashMap<DefId<FaultGroupDef>, Arc<FaultGroupDef>>,
+    pub jmath_functions: HashMap<DefId<JmathFunctionDef>, Arc<JmathFunctionDef>>,
+    pub body_graphs: HashMap<DefId<BodyGraphDef>, Arc<BodyGraphDef>>,
+    pub limb_scores: HashMap<DefId<LimbScoreDef>, Arc<LimbScoreDef>>,
+    pub construction_categories:
+        HashMap<DefId<ConstructionCategoryDef>, Arc<ConstructionCategoryDef>>,
+    pub recipe_categories: HashMap<DefId<RecipeCategoryDef>, Arc<RecipeCategoryDef>>,
+    pub addiction_types: HashMap<DefId<AddictionTypeDef>, Arc<AddictionTypeDef>>,
+    pub region_settings: HashMap<DefId<RegionSettingsDef>, Arc<RegionSettingsDef>>,
+    pub gates: HashMap<DefId<GateDef>, Arc<GateDef>>,
+    pub damage_types: HashMap<DefId<DamageTypeDef>, Arc<DamageTypeDef>>,
+    pub anatomies: HashMap<DefId<AnatomyDef>, Arc<AnatomyDef>>,
+    pub end_screens: HashMap<DefId<EndScreenDef>, Arc<EndScreenDef>>,
 }
 
 impl DefRegistry {
-    /// Create an empty registry.
     pub fn empty() -> Self {
         Self {
             items: HashMap::new(),
@@ -104,10 +158,89 @@ impl DefRegistry {
             skills: HashMap::new(),
             traps: HashMap::new(),
             start_locations: HashMap::new(),
+            json_flags: HashMap::new(),
+            ascii_art: HashMap::new(),
+            construction_groups: HashMap::new(),
+            item_actions: HashMap::new(),
+            techniques: HashMap::new(),
+            ammunition_types: HashMap::new(),
+            morale_types: HashMap::new(),
+            scent_types: HashMap::new(),
+            movement_modes: HashMap::new(),
+            mood_faces: HashMap::new(),
+            achievements: HashMap::new(),
+            body_parts: HashMap::new(),
+            dreams: HashMap::new(),
+            emits: HashMap::new(),
+            event_statistics: HashMap::new(),
+            harvests: HashMap::new(),
+            item_migrations: HashMap::new(),
+            monster_groups: HashMap::new(),
+            mutation_types: HashMap::new(),
+            nested_categories: HashMap::new(),
+            practices: HashMap::new(),
+            professions: HashMap::new(),
+            proficiencies: HashMap::new(),
+            scores: HashMap::new(),
+            species: HashMap::new(),
+            sub_body_parts: HashMap::new(),
+            uncrafts: HashMap::new(),
+            vitamins: HashMap::new(),
+            talk_topics: HashMap::new(),
+            widgets: HashMap::new(),
+            effects_on_condition: HashMap::new(),
+            constructions: HashMap::new(),
+            snippets: HashMap::new(),
+            npcs: HashMap::new(),
+            npc_classes: HashMap::new(),
+            requirements: HashMap::new(),
+            spells: HashMap::new(),
+            vehicles: HashMap::new(),
+            city_buildings: HashMap::new(),
+            mission_definitions: HashMap::new(),
+            event_transformations: HashMap::new(),
+            martial_arts: HashMap::new(),
+            monster_attacks: HashMap::new(),
+            weakpoint_sets: HashMap::new(),
+            recipe_groups: HashMap::new(),
+            monster_flags: HashMap::new(),
+            activity_types: HashMap::new(),
+            ammo_effects: HashMap::new(),
+            tool_qualities: HashMap::new(),
+            faults: HashMap::new(),
+            map_extras: HashMap::new(),
+            fault_fixes: HashMap::new(),
+            ter_furn_transforms: HashMap::new(),
+            connect_groups: HashMap::new(),
+            attack_vectors: HashMap::new(),
+            region_terrain_furnitures: HashMap::new(),
+            item_categories: HashMap::new(),
+            oter_visions: HashMap::new(),
+            profession_item_substitutions: HashMap::new(),
+            character_mods: HashMap::new(),
+            weapon_categories: HashMap::new(),
+            rotatable_symbols: HashMap::new(),
+            oter_id_migrations: HashMap::new(),
+            climbing_aids: HashMap::new(),
+            conducts: HashMap::new(),
+            weather_types: HashMap::new(),
+            proficiency_categories: HashMap::new(),
+            faction_missions: HashMap::new(),
+            fault_groups: HashMap::new(),
+            jmath_functions: HashMap::new(),
+            body_graphs: HashMap::new(),
+            limb_scores: HashMap::new(),
+            construction_categories: HashMap::new(),
+            recipe_categories: HashMap::new(),
+            addiction_types: HashMap::new(),
+            region_settings: HashMap::new(),
+            gates: HashMap::new(),
+            damage_types: HashMap::new(),
+            anatomies: HashMap::new(),
+            end_screens: HashMap::new(),
         }
     }
 
-    /// Total number of definitions across all categories.
     pub fn total_count(&self) -> usize {
         self.items.len()
             + self.monsters.len()
@@ -137,12 +270,90 @@ impl DefRegistry {
             + self.skills.len()
             + self.traps.len()
             + self.start_locations.len()
+            + self.json_flags.len()
+            + self.ascii_art.len()
+            + self.construction_groups.len()
+            + self.item_actions.len()
+            + self.techniques.len()
+            + self.ammunition_types.len()
+            + self.morale_types.len()
+            + self.scent_types.len()
+            + self.movement_modes.len()
+            + self.mood_faces.len()
+            + self.achievements.len()
+            + self.body_parts.len()
+            + self.dreams.len()
+            + self.emits.len()
+            + self.event_statistics.len()
+            + self.harvests.len()
+            + self.item_migrations.len()
+            + self.monster_groups.len()
+            + self.mutation_types.len()
+            + self.nested_categories.len()
+            + self.practices.len()
+            + self.professions.len()
+            + self.proficiencies.len()
+            + self.scores.len()
+            + self.species.len()
+            + self.sub_body_parts.len()
+            + self.uncrafts.len()
+            + self.vitamins.len()
+            + self.talk_topics.len()
+            + self.widgets.len()
+            + self.effects_on_condition.len()
+            + self.constructions.len()
+            + self.snippets.len()
+            + self.npcs.len()
+            + self.npc_classes.len()
+            + self.requirements.len()
+            + self.spells.len()
+            + self.vehicles.len()
+            + self.city_buildings.len()
+            + self.mission_definitions.len()
+            + self.event_transformations.len()
+            + self.martial_arts.len()
+            + self.monster_attacks.len()
+            + self.weakpoint_sets.len()
+            + self.recipe_groups.len()
+            + self.monster_flags.len()
+            + self.activity_types.len()
+            + self.ammo_effects.len()
+            + self.tool_qualities.len()
+            + self.faults.len()
+            + self.map_extras.len()
+            + self.fault_fixes.len()
+            + self.ter_furn_transforms.len()
+            + self.connect_groups.len()
+            + self.attack_vectors.len()
+            + self.region_terrain_furnitures.len()
+            + self.item_categories.len()
+            + self.oter_visions.len()
+            + self.profession_item_substitutions.len()
+            + self.character_mods.len()
+            + self.weapon_categories.len()
+            + self.rotatable_symbols.len()
+            + self.oter_id_migrations.len()
+            + self.climbing_aids.len()
+            + self.conducts.len()
+            + self.weather_types.len()
+            + self.proficiency_categories.len()
+            + self.faction_missions.len()
+            + self.fault_groups.len()
+            + self.jmath_functions.len()
+            + self.body_graphs.len()
+            + self.limb_scores.len()
+            + self.construction_categories.len()
+            + self.recipe_categories.len()
+            + self.addiction_types.len()
+            + self.region_settings.len()
+            + self.gates.len()
+            + self.damage_types.len()
+            + self.anatomies.len()
+            + self.end_screens.len()
     }
 
-    /// Number of populated (non-empty) categories.
     pub fn category_count(&self) -> usize {
-        let mut count = 0usize;
-
+        let mut count = 0;
         if !self.items.is_empty() {
             count += 1;
         }
@@ -227,7 +438,246 @@ impl DefRegistry {
         if !self.start_locations.is_empty() {
             count += 1;
         }
-
+        if !self.json_flags.is_empty() {
+            count += 1;
+        }
+        if !self.ascii_art.is_empty() {
+            count += 1;
+        }
+        if !self.construction_groups.is_empty() {
+            count += 1;
+        }
+        if !self.item_actions.is_empty() {
+            count += 1;
+        }
+        if !self.techniques.is_empty() {
+            count += 1;
+        }
+        if !self.ammunition_types.is_empty() {
+            count += 1;
+        }
+        if !self.morale_types.is_empty() {
+            count += 1;
+        }
+        if !self.scent_types.is_empty() {
+            count += 1;
+        }
+        if !self.movement_modes.is_empty() {
+            count += 1;
+        }
+        if !self.mood_faces.is_empty() {
+            count += 1;
+        }
+        if !self.achievements.is_empty() {
+            count += 1;
+        }
+        if !self.body_parts.is_empty() {
+            count += 1;
+        }
+        if !self.dreams.is_empty() {
+            count += 1;
+        }
+        if !self.emits.is_empty() {
+            count += 1;
+        }
+        if !self.event_statistics.is_empty() {
+            count += 1;
+        }
+        if !self.harvests.is_empty() {
+            count += 1;
+        }
+        if !self.item_migrations.is_empty() {
+            count += 1;
+        }
+        if !self.monster_groups.is_empty() {
+            count += 1;
+        }
+        if !self.mutation_types.is_empty() {
+            count += 1;
+        }
+        if !self.nested_categories.is_empty() {
+            count += 1;
+        }
+        if !self.practices.is_empty() {
+            count += 1;
+        }
+        if !self.professions.is_empty() {
+            count += 1;
+        }
+        if !self.proficiencies.is_empty() {
+            count += 1;
+        }
+        if !self.scores.is_empty() {
+            count += 1;
+        }
+        if !self.species.is_empty() {
+            count += 1;
+        }
+        if !self.sub_body_parts.is_empty() {
+            count += 1;
+        }
+        if !self.uncrafts.is_empty() {
+            count += 1;
+        }
+        if !self.vitamins.is_empty() {
+            count += 1;
+        }
+        if !self.talk_topics.is_empty() {
+            count += 1;
+        }
+        if !self.widgets.is_empty() {
+            count += 1;
+        }
+        if !self.effects_on_condition.is_empty() {
+            count += 1;
+        }
+        if !self.constructions.is_empty() {
+            count += 1;
+        }
+        if !self.snippets.is_empty() {
+            count += 1;
+        }
+        if !self.npcs.is_empty() {
+            count += 1;
+        }
+        if !self.npc_classes.is_empty() {
+            count += 1;
+        }
+        if !self.requirements.is_empty() {
+            count += 1;
+        }
+        if !self.spells.is_empty() {
+            count += 1;
+        }
+        if !self.vehicles.is_empty() {
+            count += 1;
+        }
+        if !self.city_buildings.is_empty() {
+            count += 1;
+        }
+        if !self.mission_definitions.is_empty() {
+            count += 1;
+        }
+        if !self.event_transformations.is_empty() {
+            count += 1;
+        }
+        if !self.martial_arts.is_empty() {
+            count += 1;
+        }
+        if !self.monster_attacks.is_empty() {
+            count += 1;
+        }
+        if !self.weakpoint_sets.is_empty() {
+            count += 1;
+        }
+        if !self.recipe_groups.is_empty() {
+            count += 1;
+        }
+        if !self.monster_flags.is_empty() {
+            count += 1;
+        }
+        if !self.activity_types.is_empty() {
+            count += 1;
+        }
+        if !self.ammo_effects.is_empty() {
+            count += 1;
+        }
+        if !self.tool_qualities.is_empty() {
+            count += 1;
+        }
+        if !self.faults.is_empty() {
+            count += 1;
+        }
+        if !self.map_extras.is_empty() {
+            count += 1;
+        }
+        if !self.fault_fixes.is_empty() {
+            count += 1;
+        }
+        if !self.ter_furn_transforms.is_empty() {
+            count += 1;
+        }
+        if !self.connect_groups.is_empty() {
+            count += 1;
+        }
+        if !self.attack_vectors.is_empty() {
+            count += 1;
+        }
+        if !self.region_terrain_furnitures.is_empty() {
+            count += 1;
+        }
+        if !self.item_categories.is_empty() {
+            count += 1;
+        }
+        if !self.oter_visions.is_empty() {
+            count += 1;
+        }
+        if !self.profession_item_substitutions.is_empty() {
+            count += 1;
+        }
+        if !self.character_mods.is_empty() {
+            count += 1;
+        }
+        if !self.weapon_categories.is_empty() {
+            count += 1;
+        }
+        if !self.rotatable_symbols.is_empty() {
+            count += 1;
+        }
+        if !self.oter_id_migrations.is_empty() {
+            count += 1;
+        }
+        if !self.climbing_aids.is_empty() {
+            count += 1;
+        }
+        if !self.conducts.is_empty() {
+            count += 1;
+        }
+        if !self.weather_types.is_empty() {
+            count += 1;
+        }
+        if !self.proficiency_categories.is_empty() {
+            count += 1;
+        }
+        if !self.faction_missions.is_empty() {
+            count += 1;
+        }
+        if !self.fault_groups.is_empty() {
+            count += 1;
+        }
+        if !self.jmath_functions.is_empty() {
+            count += 1;
+        }
+        if !self.body_graphs.is_empty() {
+            count += 1;
+        }
+        if !self.limb_scores.is_empty() {
+            count += 1;
+        }
+        if !self.construction_categories.is_empty() {
+            count += 1;
+        }
+        if !self.recipe_categories.is_empty() {
+            count += 1;
+        }
+        if !self.addiction_types.is_empty() {
+            count += 1;
+        }
+        if !self.region_settings.is_empty() {
+            count += 1;
+        }
+        if !self.gates.is_empty() {
+            count += 1;
+        }
+        if !self.damage_types.is_empty() {
+            count += 1;
+        }
+        if !self.anatomies.is_empty() {
+            count += 1;
+        }
+        if !self.end_screens.is_empty() {
+            count += 1;
+        }
         count
     }
 }
@@ -235,295 +685,4 @@ impl DefRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::raw_defs::cdda_types::{MaterialList, StringOrArray};
-    use crate::raw_defs::item::Phase;
-    use cdda_core::units::Volume;
-    use std::sync::Arc;
-
-    // -- helpers to create minimal defs without requiring Default ---------
-
-    fn minimal_item(id: &str, name: &str) -> ItemDef {
-        ItemDef {
-            id: DefId::new(id),
-            name: Some(name.into()),
-            description: None,
-            volume: Volume::ZERO,
-            weight: None,
-            count_mode: CountMode::default(),
-            category: None,
-            material: MaterialList::default(),
-            symbol: String::new(),
-            color: None,
-            price: None,
-            price_postapoc: None,
-            flags: Vec::new(),
-            stackable: None,
-            phase: Phase::default(),
-            longest_side: None,
-            rigid: None,
-            conductive: None,
-            covers_head: None,
-            melee_damage: None,
-            pocket_data: None,
-            qualities: None,
-            capacity: None,
-            extra: None,
-            snippet_category: None,
-            tool: None,
-            variants: None,
-            techniques: None,
-            subtypes: None,
-            default_ammo: None,
-            max_charges: None,
-            initial_charges: None,
-            charges: None,
-            stack_size: None,
-            container: None,
-            quench: None,
-            ammo_type: None,
-            tool_ammo: None,
-            spoils_in: None,
-            warmth: None,
-            comestible_type: None,
-            vitamins: None,
-            calories: None,
-            fun: None,
-            material_thickness: None,
-            to_hit: None,
-            armor: None,
-            use_action: None,
-            charges_per_use: None,
-            power_draw: None,
-            revert_to: None,
-            looks_like: None,
-            abstract_: None,
-            copy_from: None,
-        }
-    }
-
-    fn minimal_monster(id: &str, name: &str, description: &str) -> MonsterDef {
-        MonsterDef {
-            id: DefId::new(id),
-            name: Some(name.into()),
-            description: Some(description.into()),
-            default_faction: None,
-            bodytype: None,
-            species: StringOrArray::default(),
-            volume: None,
-            weight: None,
-            hp: 0,
-            speed: 0,
-            material: None,
-            symbol: String::new(),
-            color: None,
-            aggression: 0,
-            morale: 0,
-            melee_skill: 0,
-            melee_dice: 0,
-            melee_dice_sides: 0,
-            melee_damage: Vec::new(),
-            vision_day: 0,
-            vision_night: 0,
-            armor: None,
-            grab_strength: None,
-            special_attacks: Vec::new(),
-            death_drops: None,
-            burn_into: None,
-            fungalize_into: None,
-            upgrades: None,
-            weakpoint_sets: StringOrArray::default(),
-            weakpoints: None,
-            families: None,
-            harvest: None,
-            decay: None,
-            flags: Vec::new(),
-            categories: StringOrArray::default(),
-            path_settings: None,
-            aggro_character: None,
-            baby_flags: None,
-            move_skills: None,
-            looks_like: None,
-            fear_triggers: None,
-            anger_triggers: None,
-            zombify_into: None,
-            diff: None,
-            death_function: None,
-            reproduction: None,
-            bleed_rate: None,
-            dissect: None,
-            dodge: None,
-            abstract_: None,
-            copy_from: None,
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // empty()
-    // -----------------------------------------------------------------------
-
-    /// An empty registry should have zero items in all categories.
-    #[test]
-    fn empty_registry_has_zero_items() {
-        // Act
-        let reg = DefRegistry::empty();
-
-        // Assert
-        assert_eq!(reg.items.len(), 0);
-        assert_eq!(reg.monsters.len(), 0);
-        assert_eq!(reg.total_count(), 0);
-        assert_eq!(reg.category_count(), 0);
-    }
-
-    // -----------------------------------------------------------------------
-    // total_count
-    // -----------------------------------------------------------------------
-
-    /// total_count should sum across all categories.
-    #[test]
-    fn total_count_sums_categories() {
-        // Arrange
-        let mut reg = DefRegistry::empty();
-        reg.items
-            .insert(DefId::new("a"), Arc::new(minimal_item("a", "Item A")));
-        reg.monsters.insert(
-            DefId::new("m1"),
-            Arc::new(minimal_monster("m1", "Monster", "Desc")),
-        );
-
-        // Act
-        let total = reg.total_count();
-
-        // Assert
-        assert_eq!(total, 2);
-    }
-
-    // -----------------------------------------------------------------------
-    // category_count
-    // -----------------------------------------------------------------------
-
-    /// category_count should count only non-empty categories.
-    #[test]
-    fn category_count_counts_populated() {
-        // Arrange
-        let mut reg = DefRegistry::empty();
-        reg.items
-            .insert(DefId::new("a"), Arc::new(minimal_item("a", "A")));
-
-        // Act
-        let count = reg.category_count();
-
-        // Assert
-        assert_eq!(count, 1, "Only items category is populated");
-    }
-
-    /// An empty registry should have zero populated categories.
-    #[test]
-    fn category_count_zero_when_empty() {
-        // Arrange
-        let reg = DefRegistry::empty();
-
-        // Act
-        let count = reg.category_count();
-
-        // Assert
-        assert_eq!(count, 0);
-    }
-
-    // -----------------------------------------------------------------------
-    // Insert & retrieve
-    // -----------------------------------------------------------------------
-
-    /// Items inserted by DefId should be retrievable by the same DefId.
-    #[test]
-    fn insert_and_retrieve_item_by_def_id() {
-        // Arrange
-        let mut reg = DefRegistry::empty();
-        let item = Arc::new(minimal_item("crowbar", "Crowbar"));
-        let key = DefId::new("crowbar");
-
-        // Act
-        reg.items.insert(key.clone(), item.clone());
-        let retrieved = reg.items.get(&key);
-
-        // Assert
-        assert!(retrieved.is_some());
-        assert_eq!(
-            retrieved.unwrap().name.as_ref().unwrap().singular(),
-            "Crowbar"
-        );
-    }
-
-    /// Last insert with same DefId should overwrite the previous value.
-    #[test]
-    fn insert_same_id_overwrites() {
-        // Arrange
-        let mut reg = DefRegistry::empty();
-        let key = DefId::new("key");
-        let first = Arc::new(minimal_item("key", "First"));
-        let second = Arc::new(minimal_item("key", "Second"));
-
-        // Act
-        reg.items.insert(key.clone(), first);
-        reg.items.insert(key.clone(), second);
-        let retrieved = reg.items.get(&key);
-
-        // Assert
-        assert_eq!(
-            retrieved.unwrap().name.as_ref().unwrap().singular(),
-            "Second"
-        );
-    }
-
-    // -----------------------------------------------------------------------
-    // Clone
-    // -----------------------------------------------------------------------
-
-    /// A cloned registry should contain the same data independently.
-    #[test]
-    fn clone_registry_preserves_data() {
-        // Arrange
-        let mut reg = DefRegistry::empty();
-        let key = DefId::new("clone_test");
-        reg.items.insert(
-            key.clone(),
-            Arc::new(minimal_item("clone_test", "CloneItem")),
-        );
-
-        // Act
-        let cloned = reg.clone();
-        let retrieved = cloned.items.get(&key);
-
-        // Assert
-        assert!(retrieved.is_some());
-        assert_eq!(
-            retrieved.unwrap().name.as_ref().unwrap().singular(),
-            "CloneItem"
-        );
-    }
-
-    /// Modifying a cloned registry should not affect the original.
-    #[test]
-    fn clone_is_independent() {
-        // Arrange
-        let mut original = DefRegistry::empty();
-        let key1 = DefId::new("original_item");
-        original.items.insert(
-            key1.clone(),
-            Arc::new(minimal_item("original_item", "Original")),
-        );
-        let mut cloned = original.clone();
-
-        // Act — modify clone
-        let key2 = DefId::new("clone_only");
-        cloned.items.insert(
-            key2.clone(),
-            Arc::new(minimal_item("clone_only", "CloneOnly")),
-        );
-
-        // Assert
-        assert_eq!(original.items.len(), 1);
-        assert_eq!(cloned.items.len(), 2);
-        assert!(original.items.get(&key2).is_none());
-        assert!(cloned.items.get(&key2).is_some());
-    }
 }

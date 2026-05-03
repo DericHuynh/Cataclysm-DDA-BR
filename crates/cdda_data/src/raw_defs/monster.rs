@@ -2,7 +2,6 @@ use crate::raw_defs::cdda_types::{
     CddaColor, DeathDrops, DeathFunction, RawValue, Reproduction, StringOrArray, UpgradeInfo,
 };
 use crate::raw_types::{DefId, LocalizedString};
-use cdda_core::damage::Damage;
 use cdda_core::units::{Volume, Weight};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -298,7 +297,7 @@ pub struct SpecialAttackObj {
     #[serde(default)]
     pub accuracy: Option<i32>,
     #[serde(default)]
-    pub damage: Option<Damage>,
+    pub damage: Option<HashMap<String, RawValue>>,
     #[serde(default)]
     pub dodgeable: Option<bool>,
     #[serde(default)]

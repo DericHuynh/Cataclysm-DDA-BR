@@ -1,6 +1,8 @@
+use crate::raw_defs::cdda_types::RawValue;
 use crate::raw_types::{DefId, LocalizedString};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// A trap definition from JSON type `"trap"`.
 ///
@@ -46,9 +48,9 @@ pub struct TrapDef {
     #[serde(default)]
     pub trigger: Option<String>,
 
-    /// Damage dealt by the trap.
+    /// Damage dealt by the trap (map of damage_type -> amount).
     #[serde(default)]
-    pub damage: Option<cdda_core::damage::Damage>,
+    pub damage: Option<HashMap<String, RawValue>>,
 
     /// Sound made when triggered.
     #[serde(default)]

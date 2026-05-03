@@ -1,10 +1,18 @@
 [package]
-name = "cdda_integration"
+name = "tests"
 version = "0.1.0"
 edition = "2021"
-description = "Workspace-level integration tests that depend on data/core/"
+description = "Integration tests for the CDDA data pipeline (schema validation + full load)."
 publish = false
 
 [dependencies]
-cdda_core.workspace = true
 cdda_data.workspace = true
+serde_json.workspace = true
+
+[[test]]
+name = "load_and_validate"
+path = "load_and_validate.rs"
+
+[[test]]
+name = "mods_validate"
+path = "mods_validate.rs"

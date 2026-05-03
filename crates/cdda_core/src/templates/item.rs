@@ -4,10 +4,11 @@
 //! every game item, with optional sub-behaviours for weapons, armour,
 //! containers, food, tools, ammo, magazines, and books.
 
+use crate::damage::Damage;
 use crate::flags::FlagSet;
 use crate::id::*;
 use crate::units::*;
-use crate::damage::Damage;
+use std::collections::BTreeSet;
 
 // ---------------------------------------------------------------------------
 // Phase
@@ -55,15 +56,26 @@ pub enum CountMode {
     /// A single discrete item (the default).
     Single,
     /// Items that stack by count (nails, bolts, …).
-    ByCount {
-        default: u32,
-        max: Option<u32>,
-    },
+    ByCount { default: u32, max: Option<u32> },
     /// Items that stack by charges (gasoline, water, …).
-    Charges {
-        default: u32,
-        max: Option<u32>,
-    },
+    Charges { default: u32, max: Option<u32> },
+}
+
+// ---------------------------------------------------------------------------
+// Container tag
+// ---------------------------------------------------------------------------
+
+/// Behavioural tags for containers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum ContainerTag {
+    /// Contents are sealed inside.
+    Sealed,
+    /// The container has rigid walls.
+    Rigid,
+    /// Contents are hidden from view (e.g. a safe).
+    Watertight,
+    /// The container preserves temperature.
+    Preserves,
 }
 
 // ---------------------------------------------------------------------------
@@ -81,16 +93,10 @@ pub struct ContainerBehavior {
     pub max_weight: Weight,
     /// Maximum length of a single item that can fit (target spec).
     pub max_item_length: Length,
-    /// Whether the contents are sealed inside.
-    pub sealed: bool,
-    /// Whether the container has rigid walls (target spec).
-    pub rigid: bool,
     /// The pocket type (target spec).
     pub pocket_type: PocketType,
-    /// Whether contents are hidden from view (e.g. a safe).
-    pub watertight: bool,
-    /// Whether the container preserves temperature.
-    pub preserves: bool,
+    /// Behavioural tags.
+    pub tags: BTreeSet<ContainerTag>,
 }
 
 // ---------------------------------------------------------------------------
@@ -171,14 +177,25 @@ pub struct FoodBehavior {
 }
 
 // ---------------------------------------------------------------------------
+// Tool tag
+// ---------------------------------------------------------------------------
+
+/// Behavioural tags for tools.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum ToolTag {
+    /// The tool needs charges to work.
+    UsesCharges,
+}
+
+// ---------------------------------------------------------------------------
 // Tool behaviour
 // ---------------------------------------------------------------------------
 
 /// Properties for items that act as tools.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ToolBehavior {
-    /// Whether the tool needs charges to work.
-    pub uses_charges: bool,
+    /// Behavioural tags.
+    pub tags: BTreeSet<ToolTag>,
     /// Turns needed per use.
     pub turns_per_use: u32,
     /// Ammo type consumed (if any).

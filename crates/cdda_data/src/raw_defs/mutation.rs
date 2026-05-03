@@ -1,4 +1,4 @@
-use crate::raw_defs::cdda_types::StringOrArray;
+use crate::raw_defs::cdda_types::{RawValue, StringOrArray};
 use crate::raw_types::{DefId, LocalizedString};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -253,7 +253,7 @@ pub struct MutationBodyPartSlot {
 pub struct MutationCombat {
     /// Melee damage bonus.
     #[serde(default)]
-    pub melee_damage: Option<cdda_core::damage::Damage>,
+    pub melee_damage: Option<HashMap<String, RawValue>>,
     /// Melee attack bonus.
     #[serde(default)]
     pub attack: Option<u32>,

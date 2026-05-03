@@ -2,6 +2,7 @@ use crate::raw_defs::cdda_types::RawValue;
 use crate::raw_types::{DefId, LocalizedString};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// A field type definition from JSON type `"field_type"`.
 ///
@@ -92,9 +93,9 @@ pub struct FieldDef {
     #[serde(default)]
     pub description_affix: Option<String>,
 
-    /// Ambient damage dealt by this field.
+    /// Ambient damage dealt by this field (map of damage_type -> amount).
     #[serde(default)]
-    pub ambient_damage: Option<cdda_core::damage::Damage>,
+    pub ambient_damage: Option<HashMap<String, RawValue>>,
 
     /// Gas absorption factor
     /// CDDA uses time strings like "80m", "20h", or floats like 0.01.
@@ -172,9 +173,9 @@ pub struct FieldIntensity {
     #[serde(default)]
     pub extra_radius: Option<u32>,
 
-    /// Damage at this intensity.
+    /// Damage at this intensity (map of damage_type -> amount).
     #[serde(default)]
-    pub damage: Option<cdda_core::damage::Damage>,
+    pub damage: Option<HashMap<String, RawValue>>,
 
     /// Intensity of light emitted.
     /// CDDA uses floats like 0.01, 2.5, 7.5.

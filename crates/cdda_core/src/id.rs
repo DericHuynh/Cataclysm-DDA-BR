@@ -86,6 +86,7 @@ pub enum DefCategory {
     OvermapLandUseCode,
     AmmoType,
     BodyPart,
+    DamageType,
     Material,
     MutationCategory,
     TraitGroup,
@@ -158,6 +159,7 @@ def_id_type!(OvermapLocationId, OvermapLocation);
 def_id_type!(OvermapLandUseCodeId, OvermapLandUseCode);
 def_id_type!(AmmoTypeId, AmmoType);
 def_id_type!(BodyPartId, BodyPart);
+def_id_type!(DamageTypeId, DamageType);
 def_id_type!(MaterialId, Material);
 def_id_type!(SpeciesId, Species);
 def_id_type!(VitaminId, Vitamin);

@@ -1,11 +1,10 @@
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
 /// A set of string flags.
 ///
 /// Flags are used throughout CDDA definitions to tag items, terrain, monsters, etc.
 /// with boolean properties (e.g. "FIRE", "CONTAINER", "NO_FLOOR").
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FlagSet {
     flags: BTreeSet<String>,
 }

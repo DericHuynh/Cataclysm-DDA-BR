@@ -8,6 +8,7 @@
 
 pub mod coords;
 pub mod damage;
+pub mod def_kinds;
 pub mod error;
 pub mod flags;
 pub mod id;
@@ -32,7 +33,7 @@ pub use stats::Stats;
 pub use units::{Energy, Length, Time, Volume, Weight};
 
 // -- ID types
-pub use id::{AmmoTypeId, BodyPartId, MaterialId, SpeciesId, VitaminId};
+pub use id::{AmmoTypeId, BodyPartId, DamageTypeId, MaterialId, SpeciesId, VitaminId};
 pub use id::{BionicId, EffectId, FactionId, SkillId};
 pub use id::{DefCategory, DefIdx, GenId};
 pub use id::{FieldId, ItemGroupId, MutationCategoryId, MutationId, TraitGroupId};

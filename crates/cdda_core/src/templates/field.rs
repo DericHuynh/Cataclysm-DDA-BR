@@ -5,6 +5,16 @@
 //! fields, gas clouds, etc.
 
 use crate::units::*;
+use std::collections::BTreeSet;
+
+/// Behavioural tags for fields.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum FieldTag {
+    /// Line-of-sight passes through this field.
+    Transparent,
+    /// Entering / being in this field harms the player.
+    Dangerous,
+}
 
 /// The blueprint for a field type at a given intensity level.
 ///
@@ -20,8 +30,6 @@ pub struct FieldTemplate {
     pub intensity: u32,
     /// How long this field intensity lasts before decaying / disappearing.
     pub decay: Time,
-    /// Whether line-of-sight passes through this field.
-    pub transparent: bool,
-    /// Whether entering / being in this field harms the player.
-    pub dangerous: bool,
+    /// Behavioural tags.
+    pub tags: BTreeSet<FieldTag>,
 }

@@ -4,15 +4,52 @@
 //! against it. This makes the Rust types the authoritative source of truth
 //! for the data format.
 
+use crate::for_each_raw_def_kind;
 use schemars::gen::SchemaGenerator;
 use schemars::schema::RootSchema;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::path::Path;
 
 /// Generate a JSON Schema document for a given type.
 pub fn generate_schema<T: schemars::JsonSchema>() -> RootSchema {
     let gen = SchemaGenerator::default();
     gen.into_root_schema_for::<T>()
+}
+
+/// Generate a JSON Schema for a type and write it to a file.
+pub fn write_schema<T: schemars::JsonSchema>(
+    path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let schema = generate_schema::<T>();
+    let json = serde_json::to_string_pretty(&schema)?;
+    std::fs::write(path, json)?;
+    Ok(())
+}
+
+/// Write JSON Schema files for all known CDDA definition types.
+pub fn write_all_schemas(out_dir: &Path) -> Result<(), Vec<Box<dyn std::error::Error>>> {
+    let mut errors = Vec::new();
+    std::fs::create_dir_all(out_dir).unwrap_or(());
+
+    macro_rules! write_one {
+        ($name:ident, $def_ty:ty, $json:expr, $field:ident, $strategy:ident) => {
+            let path = out_dir.join(format!("{}.schema.json", $json));
+            if let Err(e) = write_schema::<$def_ty>(&path) {
+                errors.push(e);
+            } else {
+                eprintln!("  wrote {}", path.display());
+            }
+        };
+    }
+
+    for_each_raw_def_kind!(call write_one);
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
 }
 
 /// Validate a raw JSON value against a type's schema.

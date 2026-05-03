@@ -18,6 +18,7 @@
 //!
 //! This crate has **zero Bevy dependencies**.
 
+pub mod def_kinds;
 pub mod loader;
 pub mod mod_layer;
 pub mod raw_defs;

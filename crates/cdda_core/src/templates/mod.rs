@@ -44,11 +44,12 @@ pub mod vehicle_part_location;
 pub use bionic::BionicTemplate;
 pub use effect::EffectTemplate;
 pub use faction::FactionTemplate;
-pub use field::FieldTemplate;
+pub use field::{FieldTag, FieldTemplate};
 pub use furniture::FurnitureTemplate;
 pub use item::{
-    AmmoBehavior, ArmorBehavior, BookBehavior, ContainerBehavior, CountMode, FoodBehavior,
-    ItemBase, ItemTemplate, MagazineBehavior, Phase, ToolBehavior, WeaponBehavior,
+    AmmoBehavior, ArmorBehavior, BookBehavior, ContainerBehavior, ContainerTag, CountMode,
+    FoodBehavior, ItemBase, ItemTemplate, MagazineBehavior, Phase, ToolBehavior, ToolTag,
+    WeaponBehavior,
 };
 pub use item_group::{ItemGroupEntry, ItemGroupSubtype, ItemGroupTemplate};
 pub use mapgen_palette::MapgenPaletteTemplate;
@@ -57,7 +58,7 @@ pub use monster::{ArmorSet, MonsterBase, MonsterStats, MonsterTemplate, Vision};
 pub use mutation::MutationTemplate;
 pub use mutation_category::MutationCategoryTemplate;
 pub use overmap_connection::OvermapConnectionTemplate;
-pub use overmap_land_use_code::OvermapLandUseCodeTemplate;
+pub use overmap_land_use_code::{OvermapLandUseCodeTag, OvermapLandUseCodeTemplate};
 pub use overmap_location::OvermapLocationTemplate;
 pub use overmap_special::{OvermapOccurrence, OvermapSpecialTemplate};
 pub use overmap_terrain::OvermapTerrainTemplate;
@@ -67,7 +68,7 @@ pub use skill::SkillTemplate;
 pub use start_location::StartLocationTemplate;
 pub use terrain::TerrainTemplate;
 pub use trait_group::TraitGroupTemplate;
-pub use trap::TrapTemplate;
+pub use trap::{TrapTag, TrapTemplate};
 pub use vehicle_part::VehiclePartTemplate;
 pub use vehicle_part_category::VehiclePartCategoryTemplate;
 pub use vehicle_part_location::VehiclePartLocationTemplate;

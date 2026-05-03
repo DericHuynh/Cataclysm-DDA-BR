@@ -6,7 +6,7 @@ members = [
     "crates/cdda_mod",
     "crates/cdda_sim",
     "crates/cdda_map",
-    "tests/integration",
+    "tests",
 ]
 
 [workspace.dependencies]
