@@ -483,6 +483,8 @@ pub enum DeathDrops {
     GroupId(String),
     /// Inline item group definition (object with subtype, entries, etc.).
     Inline(HashMap<String, RawValue>),
+    /// Array of inline item group definitions (each with group, count, etc.).
+    Array(Vec<HashMap<String, RawValue>>),
 }
 
 /// Monster death function — the `"death_function"` field.
@@ -539,9 +541,12 @@ pub struct BabyType {
     /// Egg item ID.
     #[serde(default)]
     pub baby_egg: Option<String>,
-    /// Monster ID(s) produced.
+    /// Monster ID(s) produced. Can be a single string or array of strings.
     #[serde(default)]
-    pub baby_monster: Option<Vec<String>>,
+    pub baby_monster: Option<StringOrArray>,
+    /// Monster group ID(s) produced. Can be a single string or array of strings.
+    #[serde(default)]
+    pub baby_monster_group: Option<StringOrArray>,
 }
 
 /// Monster reproduction data — the `"reproduction"` field.
@@ -664,21 +669,21 @@ pub enum SeeCost {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct DamageResistance {
     #[serde(default)]
-    pub bash: Option<u32>,
+    pub bash: Option<f64>,
     #[serde(default)]
-    pub cut: Option<u32>,
+    pub cut: Option<f64>,
     #[serde(default)]
-    pub stab: Option<u32>,
+    pub stab: Option<f64>,
     #[serde(default)]
-    pub bullet: Option<u32>,
+    pub bullet: Option<f64>,
     #[serde(default)]
-    pub heat: Option<u32>,
+    pub heat: Option<f64>,
     #[serde(default)]
-    pub cold: Option<u32>,
+    pub cold: Option<f64>,
     #[serde(default)]
-    pub electric: Option<u32>,
+    pub electric: Option<f64>,
     #[serde(default)]
-    pub acid: Option<u32>,
+    pub acid: Option<f64>,
 }
 
 /// Chip resistance — the `"chip_resist"` field on materials.
@@ -1016,14 +1021,16 @@ pub struct Enchantment {
     #[serde(default)]
     pub id: Option<String>,
     /// Condition for the enchantment to be active.
+    /// Can be a string like "ALWAYS" or an object like {"not": "u_has_weapon"}.
     #[serde(default)]
-    pub condition: Option<String>,
+    pub condition: Option<RawValue>,
     /// Stat values modified by this enchantment.
     #[serde(default)]
     pub values: Option<Vec<HashMap<String, RawValue>>>,
     /// What items/equipment slots this requires active.
+    /// Can be a string or an object/array.
     #[serde(default)]
-    pub has: Option<String>,
+    pub has: Option<RawValue>,
     /// Hit effects (when attacking).
     #[serde(default)]
     pub hit_you_effect: Option<Vec<HashMap<String, RawValue>>>,

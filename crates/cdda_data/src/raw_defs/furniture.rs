@@ -1,4 +1,4 @@
-use crate::raw_defs::cdda_types::{CddaColor, CountRange, RawValue, StringOrArray};
+use crate::raw_defs::cdda_types::{CddaColor, ExamineAction, RawValue, StringOrArray};
 use crate::raw_types::{DefId, LocalizedString};
 use cdda_core::units::Weight;
 use schemars::JsonSchema;
@@ -49,12 +49,13 @@ pub struct FurnitureDef {
     pub mass: Option<Weight>,
 
     /// A pseudo item used for crafting at this furniture.
+    /// Can be a string ID or an object.
     #[serde(default)]
-    pub crafting_pseudo_item: Option<DefId<crate::raw_defs::item::ItemDef>>,
+    pub crafting_pseudo_item: Option<RawValue>,
 
     /// Examine action triggered when examining this furniture.
     #[serde(default)]
-    pub examine_action: Option<String>,
+    pub examine_action: Option<ExamineAction>,
 
     /// Flags.
     /// CDDA can use a single string or an array of strings.
@@ -70,16 +71,19 @@ pub struct FurnitureDef {
     pub max_light_emitted: Option<u32>,
 
     /// Bash result.
+    /// Can be a string (reference) or an object.
     #[serde(default)]
-    pub bash: Option<FurnitureBash>,
+    pub bash: Option<RawValue>,
 
     /// Deconstruction result.
+    /// Can be an object or an array of objects.
     #[serde(default)]
-    pub deconstruct: Option<FurnitureDeconstruct>,
+    pub deconstruct: Option<RawValue>,
 
     /// What this furniture becomes when burned.
+    /// Can be a string ID or an object.
     #[serde(default)]
-    pub burn_into: Option<DefId<FurnitureDef>>,
+    pub burn_into: Option<RawValue>,
 
     /// Shoot action — can be a string, number, array, or object.
     #[serde(default)]
@@ -98,16 +102,18 @@ pub struct FurnitureDef {
     pub floor_bedding_warmth: Option<i32>,
 
     /// Deployed item
+    /// Can be a string ID or an object.
     #[serde(default)]
-    pub deployed_item: Option<String>,
+    pub deployed_item: Option<RawValue>,
 
     /// Rotates to terrain/furniture
     #[serde(default)]
     pub rotates_to: StringOrArray,
 
     /// Spawned item
+    /// Can be a string ID or an object.
     #[serde(default)]
-    pub item: Option<String>,
+    pub item: Option<RawValue>,
 
     /// Comfort level (can be negative for uncomfortable furniture).
     #[serde(default)]
@@ -128,8 +134,9 @@ pub struct FurnitureDef {
     pub connect_groups: Option<StringOrArray>,
 
     /// Background color
+    /// Can be a single color string or an array like ["white"].
     #[serde(default)]
-    pub bgcolor: Option<String>,
+    pub bgcolor: Option<StringOrArray>,
 
     /// Abstract flag
     #[serde(default)]
@@ -142,77 +149,4 @@ pub struct FurnitureDef {
 
 fn default_symbol() -> String {
     "#".to_string()
-}
-
-/// Bash result for furniture.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct FurnitureBash {
-    /// Sound made when bashing.
-    #[serde(default)]
-    pub sound: Option<String>,
-
-    /// Volume of the sound.
-    #[serde(default)]
-    pub sound_vol: Option<u32>,
-
-    /// Sound made when bash fails.
-    #[serde(default)]
-    pub sound_fail: Option<String>,
-
-    /// Volume of the fail sound.
-    #[serde(default)]
-    pub sound_fail_vol: Option<u32>,
-
-    /// Terrain this becomes after bash.
-    #[serde(default)]
-    pub ter_set: Option<DefId<crate::raw_defs::terrain::TerrainDef>>,
-
-    /// Furniture this becomes after bash.
-    #[serde(default)]
-    pub furn_set: Option<DefId<FurnitureDef>>,
-
-    /// Minimum strength to bash.
-    #[serde(default)]
-    pub str_min: u32,
-
-    /// Maximum strength for randomization.
-    #[serde(default)]
-    pub str_max: u32,
-
-    /// Items dropped.
-    #[serde(default)]
-    pub items: Option<Vec<FurnitureBashItem>>,
-}
-
-/// Item dropped from bashing furniture.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct FurnitureBashItem {
-    pub item: String,
-    /// Count range [min, max] or single value.
-    #[serde(default)]
-    pub count: CountRange,
-    #[serde(default)]
-    pub prob: Option<u32>,
-}
-
-/// Deconstruction result for furniture.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct FurnitureDeconstruct {
-    /// Items returned.
-    pub items: Vec<FurnitureDeconItem>,
-    /// Furniture set after deconstruction.
-    #[serde(default)]
-    pub furn_set: Option<DefId<FurnitureDef>>,
-}
-
-/// An item from deconstructing furniture.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct FurnitureDeconItem {
-    pub item: String,
-    /// Count (single value or [min, max] array).
-    #[serde(default)]
-    pub count: CountRange,
-    /// Charges (single value or [min, max] array).
-    #[serde(default)]
-    pub charges: CountRange,
 }

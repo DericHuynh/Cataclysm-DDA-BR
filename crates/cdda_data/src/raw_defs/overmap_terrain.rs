@@ -1,4 +1,4 @@
-use crate::raw_defs::cdda_types::{SeeCost, StringOrArray};
+use crate::raw_defs::cdda_types::{RawValue, SeeCost, StringOrArray};
 use crate::raw_types::{DefId, LocalizedString};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -9,7 +9,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct OvermapTerrainDef {
     /// Unique identifier (e.g. "house_garage", "forest", "lake_surrounding").
-    pub id: DefId<OvermapTerrainDef>,
+    /// CDDA can use a single string or an array of strings.
+    #[serde(default)]
+    pub id: StringOrArray,
 
     /// Display name.
     #[serde(default)]
@@ -20,12 +22,14 @@ pub struct OvermapTerrainDef {
     pub symbol: String,
 
     /// Color on the overmap.
+    /// Can be a string name or a structured color object.
     #[serde(default)]
-    pub color: Option<String>,
+    pub color: Option<RawValue>,
 
     /// Look-alike for display.
+    /// Can be a string ID or an object.
     #[serde(default)]
-    pub looks_like: Option<String>,
+    pub looks_like: Option<RawValue>,
 
     /// Flags for overmap generation.
     /// CDDA can use a single string or an array of strings.
@@ -37,8 +41,9 @@ pub struct OvermapTerrainDef {
     pub spawn_chance: Option<u32>,
 
     /// Map extras that can appear on this OMT.
+    /// Can be a string or an object.
     #[serde(default)]
-    pub extras: Option<String>,
+    pub extras: Option<RawValue>,
 
     /// Whether this is a city-building OMT.
     #[serde(default)]
@@ -49,8 +54,9 @@ pub struct OvermapTerrainDef {
     pub has_basement: Option<bool>,
 
     /// Mapgen ID(s) (references to mapgen definitions).
+    /// Can be an array of strings or an array of objects like {"builtin": "forest"}.
     #[serde(default)]
-    pub mapgen: Option<Vec<String>>,
+    pub mapgen: Option<Vec<RawValue>>,
 
     /// Tiles with lighting for night display.
     #[serde(default)]
@@ -61,28 +67,29 @@ pub struct OvermapTerrainDef {
     pub side: Option<OvermapSide>,
 
     /// Connection to other OMTs.
+    /// Can be a string or an object.
     #[serde(default)]
-    pub connect_to: Option<String>,
+    pub connect_to: Option<RawValue>,
 
     /// Which overmap connections are valid.
     #[serde(default)]
     pub connections: Option<Vec<OmtConnection>>,
 
-    /// Land use code
+    /// Land use code — can be a string or an object.
     #[serde(default)]
-    pub land_use_code: Option<String>,
+    pub land_use_code: Option<RawValue>,
 
-    /// Spawns
+    /// Spawns — can be a string ID or an object with group/population/chance.
     #[serde(default)]
-    pub spawns: Option<crate::raw_defs::cdda_types::MonsterSpawn>,
+    pub spawns: Option<RawValue>,
 
     /// Monster density
     #[serde(default)]
     pub mondensity: Option<u32>,
 
-    /// Travel cost type
+    /// Travel cost type — can be a string or an object.
     #[serde(default)]
-    pub travel_cost_type: Option<String>,
+    pub travel_cost_type: Option<RawValue>,
 
     /// See cost (visibility) — CDDA uses string values like "high", "none", "low"
     #[serde(default)]
@@ -92,9 +99,9 @@ pub struct OvermapTerrainDef {
     #[serde(default)]
     pub vision_levels: Option<VisionLevelsOrString>,
 
-    /// Symbol (short form)
+    /// Symbol (short form) — can be a string or an object.
     #[serde(default)]
-    pub sym: Option<String>,
+    pub sym: Option<RawValue>,
 
     /// Abstract flag
     #[serde(default)]
@@ -155,9 +162,10 @@ pub struct OvermapSpecialDef {
     pub name: Option<LocalizedString>,
 
     /// Overmap terrains that make up this special.
-    /// Can be an array of SpecialOmt objects, or an array of strings.
+    /// For standard specials: an array of SpecialOmt objects or strings.
+    /// For mutable specials: an object/map with named overmap entries.
     #[serde(default)]
-    pub overmaps: Vec<SpecialOmtOrString>,
+    pub overmaps: Option<RawValue>,
 
     /// Locations this special can spawn in.
     /// Can be a single string (e.g. `"forest"`) or an array of strings.

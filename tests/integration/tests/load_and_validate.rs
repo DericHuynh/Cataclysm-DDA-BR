@@ -19,6 +19,12 @@ fn data_core_path() -> PathBuf {
     manifest_dir.join("../../data/core")
 }
 
+/// Resolve the path to Magiclysm mod data.
+fn magiclysm_path() -> PathBuf {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    manifest_dir.join("../../data/mods/Magiclysm")
+}
+
 /// Macro to validate all definitions of a type and collect errors.
 macro_rules! validate_type {
     ($loader:expr, $errors:expr, $type_name:literal, $rust_type:ty) => {{
@@ -47,10 +53,16 @@ fn load_and_validate() {
     // Setup
     // -----------------------------------------------------------------------
     let core_path = data_core_path();
+    let magic_path = magiclysm_path();
     assert!(
         core_path.exists(),
         "data/core directory not found at {:?}. Are you running from the workspace root?",
         core_path
+    );
+    assert!(
+        magic_path.exists(),
+        "Magiclysm directory not found at {:?}",
+        magic_path
     );
 
     // =======================================================================
@@ -58,8 +70,13 @@ fn load_and_validate() {
     // Run the complete two-pass pipeline (ingest + resolve).
     // After this, both the raw defs AND resolved registry are available.
     // =======================================================================
-    let mut loader = Loader::new(vec![core_path]);
+    eprintln!("Loading core data + Magiclysm mod...");
+    let mut loader = Loader::new(vec![core_path, magic_path]);
     let registry = loader.load().expect("Full pipeline load should succeed");
+    eprintln!(
+        "Registry loaded: {} total definitions",
+        registry.total_count()
+    );
 
     // =======================================================================
     // PHASE 2: Schema Validation

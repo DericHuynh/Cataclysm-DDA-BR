@@ -1,3 +1,4 @@
+use crate::raw_defs::cdda_types::RawValue;
 use crate::raw_types::{DefId, LocalizedString};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -12,10 +13,12 @@ pub struct ScenarioDef {
     pub id: DefId<ScenarioDef>,
 
     /// Display name.
-    pub name: LocalizedString,
+    #[serde(default)]
+    pub name: Option<LocalizedString>,
 
     /// Description text.
-    pub description: LocalizedString,
+    #[serde(default)]
+    pub description: Option<LocalizedString>,
 
     /// Points cost (negative = bonus points, positive = costs points).
     #[serde(default)]
@@ -97,8 +100,14 @@ pub struct ScenarioDef {
     pub shelter: Option<bool>,
 
     /// Start of cataclysm
+    /// Can be a boolean or an object like {"hour": 0, "day": 56, "season": "spring", "year": 1}.
     #[serde(default)]
-    pub start_of_cataclysm: Option<bool>,
+    pub start_of_cataclysm: Option<RawValue>,
+
+    /// Start of game (optional date override)
+    /// Object like {"hour": 8, "day": 1, "season": "winter", "year": 1}.
+    #[serde(default)]
+    pub start_of_game: Option<RawValue>,
 
     /// Reveal locale
     #[serde(default)]

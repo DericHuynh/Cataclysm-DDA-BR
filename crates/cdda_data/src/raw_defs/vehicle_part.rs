@@ -93,12 +93,14 @@ pub struct VehiclePartDef {
     pub fuel_type: Option<String>,
 
     /// Engine power (for engine parts).
+    /// CDDA uses power strings like "223800 W" or "-12 W".
     #[serde(default)]
-    pub power: Option<cdda_core::units::Energy>,
+    pub power: Option<RawValue>,
 
     /// Energy consumption rate.
+    /// CDDA uses energy strings like "559500 W".
     #[serde(default)]
-    pub energy_consumption: Option<cdda_core::units::Energy>,
+    pub energy_consumption: Option<RawValue>,
 
     /// Description of what this part does (fuel consumption, power generation, etc).
     #[serde(default)]
@@ -154,7 +156,7 @@ pub struct VehiclePartDef {
 
     /// Roller bearing type.
     #[serde(default)]
-    pub rolling_resistance: Option<u32>,
+    pub rolling_resistance: Option<f64>,
 
     /// Seat belt type.
     #[serde(default)]
@@ -193,16 +195,19 @@ pub struct VehiclePartDef {
     pub contact_area: Option<u32>,
 
     /// Pseudo tools
+    /// CDDA uses arrays of objects like `{"id": "crane_pseudo_item"}`.
     #[serde(default)]
-    pub pseudo_tools: Option<Vec<String>>,
+    pub pseudo_tools: Option<Vec<RawValue>>,
 
     /// Bonus stats
+    /// CDDA uses bonus as a plain integer (e.g. 10, 50) or a VehiclePartBonus object.
     #[serde(default)]
-    pub bonus: Option<crate::raw_defs::cdda_types::VehiclePartBonus>,
+    pub bonus: Option<RawValue>,
 
     /// Electrical power consumption/generation
+    /// CDDA uses epower strings like "-350 W" or "3000 W".
     #[serde(default)]
-    pub epower: Option<i32>,
+    pub epower: Option<RawValue>,
 
     /// Broken color
     #[serde(default)]
@@ -271,13 +276,20 @@ pub struct VehiclePartSkillReq {
 /// Items dropped when a vehicle part breaks.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct VehiclePartBreak {
-    pub item: String,
-    /// Item count range [min, max].
+    /// Item id.
     #[serde(default)]
-    pub count: Option<[u32; 2]>,
-    /// Item charges range [min, max].
+    pub item: Option<String>,
+    /// Item group id (alternative to item).
     #[serde(default)]
-    pub charges: Option<[u32; 2]>,
+    pub group: Option<String>,
+    /// Item count range [min, max] or single number.
+    /// CDDA can use `6` or `[0, 2]`.
+    #[serde(default)]
+    pub count: Option<RawValue>,
+    /// Item charges range [min, max] or single number.
+    /// CDDA can use `3` or `[0, 2]`.
+    #[serde(default)]
+    pub charges: Option<RawValue>,
     /// Probability (percentage).
     #[serde(default)]
     pub prob: Option<u32>,

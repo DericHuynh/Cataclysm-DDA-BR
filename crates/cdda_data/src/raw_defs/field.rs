@@ -97,8 +97,9 @@ pub struct FieldDef {
     pub ambient_damage: Option<cdda_core::damage::Damage>,
 
     /// Gas absorption factor
+    /// CDDA uses time strings like "80m", "20h", or floats like 0.01.
     #[serde(default)]
-    pub gas_absorption_factor: Option<u32>,
+    pub gas_absorption_factor: Option<RawValue>,
 
     /// Underwater age speedup
     #[serde(default)]
@@ -176,8 +177,9 @@ pub struct FieldIntensity {
     pub damage: Option<cdda_core::damage::Damage>,
 
     /// Intensity of light emitted.
+    /// CDDA uses floats like 0.01, 2.5, 7.5.
     #[serde(default)]
-    pub light_emitted: Option<u32>,
+    pub light_emitted: Option<f64>,
 
     /// Intensity of light that can be seen through.
     #[serde(default)]

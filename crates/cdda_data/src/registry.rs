@@ -235,7 +235,7 @@ impl DefRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::raw_defs::cdda_types::MaterialList;
+    use crate::raw_defs::cdda_types::{MaterialList, StringOrArray};
     use crate::raw_defs::item::Phase;
     use cdda_core::units::Volume;
     use std::sync::Arc;
@@ -308,7 +308,7 @@ mod tests {
             description: Some(description.into()),
             default_faction: None,
             bodytype: None,
-            species: Vec::new(),
+            species: StringOrArray::default(),
             volume: None,
             weight: None,
             hp: 0,
@@ -331,12 +331,13 @@ mod tests {
             burn_into: None,
             fungalize_into: None,
             upgrades: None,
-            weakpoint_sets: Vec::new(),
-            families: Vec::new(),
+            weakpoint_sets: StringOrArray::default(),
+            weakpoints: None,
+            families: None,
             harvest: None,
             decay: None,
             flags: Vec::new(),
-            categories: Vec::new(),
+            categories: StringOrArray::default(),
             path_settings: None,
             aggro_character: None,
             baby_flags: None,

@@ -31,7 +31,7 @@ pub struct MaterialDef {
 
     /// Latent heat (melting/vaporization).
     #[serde(default)]
-    pub latent_heat: Option<u32>,
+    pub latent_heat: Option<f64>,
 
     /// Material flags.
     #[serde(default)]
@@ -60,8 +60,9 @@ pub struct MaterialDef {
     pub fuel_data: Option<HashMap<String, RawValue>>,
 
     /// Burn products (what items are produced when burning).
+    /// Can be a map or an array of [item_id, amount] pairs.
     #[serde(default)]
-    pub burn_products: Option<HashMap<String, RawValue>>,
+    pub burn_products: Option<RawValue>,
 
     /// Burn data (per-intensity fuel/smoke/burn values).
     /// Format: `[{ "fuel": 0.1, "smoke": 2, "burn": 0.001 }, ...]`

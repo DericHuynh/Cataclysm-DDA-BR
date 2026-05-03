@@ -1,8 +1,8 @@
-use cdda_core::damage::Damage;
 use crate::raw_defs::cdda_types::{
-    CddaColor, DeathDrops, DeathFunction, RawValue, Reproduction, UpgradeInfo,
+    CddaColor, DeathDrops, DeathFunction, RawValue, Reproduction, StringOrArray, UpgradeInfo,
 };
 use crate::raw_types::{DefId, LocalizedString};
+use cdda_core::damage::Damage;
 use cdda_core::units::{Volume, Weight};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -31,8 +31,9 @@ pub struct MonsterDef {
     pub bodytype: Option<String>,
 
     /// Species this monster belongs to (e.g. "ZOMBIE", "HUMAN", "FUNGUS").
+    /// Can be a single string or array of strings.
     #[serde(default)]
-    pub species: Vec<String>,
+    pub species: StringOrArray,
 
     /// Physical volume of the monster.
     #[serde(default)]
@@ -125,12 +126,19 @@ pub struct MonsterDef {
     pub upgrades: Option<UpgradeInfo>,
 
     /// Weakpoint sets for targeting.
+    /// Can be a single string or array of strings.
     #[serde(default)]
-    pub weakpoint_sets: Vec<String>,
+    pub weakpoint_sets: StringOrArray,
+
+    /// Inline weakpoint definitions.
+    /// Array of weakpoint objects with name, coverage, armor_mult, etc.
+    #[serde(default)]
+    pub weakpoints: Option<Vec<HashMap<String, RawValue>>>,
 
     /// Proficiency families for dissection.
+    /// Can be a single string, array of strings, or array of mixed strings and objects.
     #[serde(default)]
-    pub families: Vec<String>,
+    pub families: Option<RawValue>,
 
     /// Harvest drop definition (string ID or inline object).
     #[serde(default)]
@@ -145,8 +153,9 @@ pub struct MonsterDef {
     pub flags: Vec<String>,
 
     /// Categories (e.g. "CLASSIC").
+    /// Can be a single string or array of strings.
     #[serde(default)]
-    pub categories: Vec<String>,
+    pub categories: StringOrArray,
 
     /// Pathfinding settings.
     #[serde(default)]
@@ -160,9 +169,9 @@ pub struct MonsterDef {
     #[serde(default)]
     pub baby_flags: Option<Vec<String>>,
 
-    /// Move skills
+    /// Move skills as map of skill name to value (e.g. `{"climb": 8}`).
     #[serde(default)]
-    pub move_skills: Option<Vec<HashMap<String, String>>>,
+    pub move_skills: Option<HashMap<String, RawValue>>,
 
     /// Looks like another monster
     #[serde(default)]
@@ -226,11 +235,12 @@ fn default_vision() -> i32 {
 }
 
 /// Damage by type (e.g. `{ "damage_type": "cut", "amount": 2 }`).
+/// `amount` is f64 because CDDA data sometimes uses `15.0` instead of `15`.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct DamageByType {
     #[serde(rename = "damage_type")]
     pub damage_type: String,
-    pub amount: i32,
+    pub amount: f64,
 }
 
 /// Armor values for different damage types.

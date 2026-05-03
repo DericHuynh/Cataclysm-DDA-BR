@@ -1,3 +1,4 @@
+use crate::raw_defs::cdda_types::StringOrArray;
 use crate::raw_types::{DefId, LocalizedString};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -38,25 +39,25 @@ pub struct MutationDef {
     #[serde(default)]
     pub category: Vec<DefId<MutationCategoryDef>>,
 
-    /// Prerequisite mutations.
+    /// Prerequisite mutations (string or array).
     #[serde(default)]
-    pub prereqs: Vec<String>,
+    pub prereqs: StringOrArray,
 
-    /// Mutations that cancel this one.
+    /// Mutations that cancel this one (string or array).
     #[serde(default)]
-    pub cancels: Vec<String>,
+    pub cancels: StringOrArray,
 
-    /// Mutations that conflict with this one.
+    /// Mutations that conflict with this one (string or array).
     #[serde(default)]
-    pub conflicts: Vec<String>,
+    pub conflicts: StringOrArray,
 
     /// Mutations that replace this one.
     #[serde(default)]
     pub replaces: Vec<DefId<MutationDef>>,
 
-    /// Mutations added by this one.
+    /// Mutations added by this one (string or array).
     #[serde(default)]
-    pub adds: Vec<String>,
+    pub adds: StringOrArray,
 
     /// Purifiable (can be removed with purifier).
     #[serde(default)]
@@ -78,9 +79,10 @@ pub struct MutationDef {
     #[serde(default)]
     pub valid: Option<bool>,
 
-    /// Flags.
+    /// Flags (string or array).
+    /// CDDA can use a single string like "HERBIVORE_DIET" or an array.
     #[serde(default)]
-    pub flags: Vec<String>,
+    pub flags: StringOrArray,
 
     /// Body part changes.
     #[serde(default)]
@@ -111,8 +113,9 @@ pub struct MutationDef {
     pub fatigue: Option<bool>,
 
     /// Enchantments granted by this mutation.
+    /// CDDA enchantments can be bare strings like "SQUEAKY_ANKLES" or objects.
     #[serde(default)]
-    pub enchantments: Option<Vec<crate::raw_defs::cdda_types::Enchantment>>,
+    pub enchantments: Option<Vec<crate::raw_defs::cdda_types::RawValue>>,
 
     /// Modifies body temperature.
     #[serde(default)]
@@ -162,37 +165,37 @@ pub struct MutationDef {
     #[serde(default)]
     pub mutation_type: Option<String>,
 
-    /// Leads to
+    /// Leads to (string or array).
     #[serde(default)]
-    pub leads_to: Option<Vec<String>>,
+    pub leads_to: Option<StringOrArray>,
 
-    /// Prereqs2
+    /// Prereqs2 (string or array).
     #[serde(default)]
-    pub prereqs2: Option<Vec<String>>,
+    pub prereqs2: Option<StringOrArray>,
 
-    /// Threshold requirement
+    /// Threshold requirement (string or array).
     #[serde(default)]
-    pub threshreq: Option<Vec<String>>,
+    pub threshreq: Option<StringOrArray>,
 
-    /// Changer to mutation
+    /// Changes to mutation (string or array).
     #[serde(default)]
-    pub changes_to: Option<Vec<String>>,
+    pub changes_to: Option<StringOrArray>,
 
-    /// Ugliness
+    /// Ugliness (can be negative for beauty)
     #[serde(default)]
-    pub ugliness: Option<u32>,
+    pub ugliness: Option<i32>,
 
-    /// Visibility
+    /// Visibility (can be negative for stealth)
     #[serde(default)]
-    pub visibility: Option<u32>,
+    pub visibility: Option<i32>,
 
     /// Vitamin cost (number or map).
     #[serde(default)]
     pub vitamin_cost: Option<VitaminCost>,
 
-    /// Types array
+    /// Types array (string or array).
     #[serde(default)]
-    pub types: Option<Vec<String>>,
+    pub types: Option<StringOrArray>,
 
     /// Abstract flag
     #[serde(default)]

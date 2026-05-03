@@ -111,8 +111,9 @@ pub struct EffectDef {
     pub miss_messages: Option<Vec<EffectMissMessage>>,
 
     /// Message shown when effect starts.
+    /// Can be a single string, or an array of [message, type] pairs per intensity.
     #[serde(default)]
-    pub apply_message: Option<String>,
+    pub apply_message: Option<RawValue>,
 
     /// Message shown when effect ends.
     #[serde(default)]
@@ -147,8 +148,9 @@ pub struct EffectDef {
     pub dur_add_perc: Option<i32>,
 
     /// Enchantments
+    /// CDDA enchantments can be bare strings, objects, or arrays.
     #[serde(default)]
-    pub enchantments: Option<Vec<crate::raw_defs::cdda_types::Enchantment>>,
+    pub enchantments: Option<Vec<crate::raw_defs::cdda_types::RawValue>>,
 
     /// Intensity duration factor. Can be a number or time string like "5 s".
     #[serde(default)]
@@ -346,7 +348,7 @@ pub struct EffectMods {
 
     /// Catch-all for any other modifier fields.
     #[serde(flatten)]
-    pub extra: HashMap<String, Vec<RawValue>>,
+    pub extra: HashMap<String, RawValue>,
 }
 
 /// A miss message for when an attack fails due to this effect.

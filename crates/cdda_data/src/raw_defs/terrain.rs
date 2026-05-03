@@ -1,4 +1,4 @@
-use crate::raw_defs::cdda_types::{CddaColor, CountRange, RawValue, StringOrArray};
+use crate::raw_defs::cdda_types::{CddaColor, CountRange, ExamineAction, RawValue, StringOrArray};
 use crate::raw_types::{DefId, LocalizedString};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -78,7 +78,7 @@ pub struct TerrainDef {
 
     /// Trap that appears when this terrain is disturbed.
     #[serde(default)]
-    pub trap: Option<DefId<crate::raw_defs::trap::TrapDef>>,
+    pub trap: Option<RawValue>,
 
     /// Bash result data.
     /// CDDA can use a string ("wall_bash_results") or an object.
@@ -86,12 +86,14 @@ pub struct TerrainDef {
     pub bash: Option<TerrainBashOrString>,
 
     /// Deconstruction result data.
+    /// Can be an object or an array of objects.
     #[serde(default)]
-    pub deconstruct: Option<DeconstructResult>,
+    pub deconstruct: Option<RawValue>,
 
     /// Harvest result data.
+    /// Can be a string ID (e.g. `"harvest_id"`) or an object (e.g. `{"id": "...", "message": "..."}`).
     #[serde(default)]
-    pub harvest: Option<HarvestResult>,
+    pub harvest: Option<RawValue>,
 
     /// Shoot action — values can be strings, numbers, arrays (e.g. `[15, 30]`), or objects.
     #[serde(default)]
@@ -113,9 +115,9 @@ pub struct TerrainDef {
     #[serde(default)]
     pub rotates_to: StringOrArray,
 
-    /// Examine action
+    /// Examine action (can be a string like "cardreader" or an object).
     #[serde(default)]
-    pub examine_action: Option<String>,
+    pub examine_action: Option<ExamineAction>,
 
     /// Coverage percentage
     #[serde(default)]
@@ -184,54 +186,25 @@ pub struct TerrainBash {
     pub str_min_supported: Option<u32>,
 
     /// Items dropped when bashed.
+    /// Can be a string (group reference) or an array of BashItemDrop objects.
     #[serde(default)]
-    pub items: Option<Vec<BashItemDrop>>,
+    pub items: Option<RawValue>,
 }
 
 /// An item dropped when bashing a tile.
+/// CDDA format can use `"item"` (item ID) or `"group"` (item group ID).
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct BashItemDrop {
     /// Item type to drop.
-    pub item: DefId<crate::raw_defs::item::ItemDef>,
+    #[serde(default)]
+    pub item: Option<DefId<crate::raw_defs::item::ItemDef>>,
+    /// Item group reference (alternative to `item`).
+    #[serde(default)]
+    pub group: Option<String>,
     /// Count range [min, max] or single value.
     #[serde(default)]
     pub count: CountRange,
     /// Chance (as percentage).
     #[serde(default)]
     pub prob: Option<u32>,
-}
-
-/// Deconstruction result.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct DeconstructResult {
-    /// Items returned on deconstruction.
-    #[serde(default)]
-    pub items: Vec<DeconstructItem>,
-    /// Terrain set after deconstruction.
-    #[serde(default)]
-    pub ter_set: Option<DefId<TerrainDef>>,
-    /// Furniture set after deconstruction.
-    #[serde(default)]
-    pub furn_set: Option<DefId<crate::raw_defs::furniture::FurnitureDef>>,
-}
-
-/// An item from deconstruction.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct DeconstructItem {
-    pub item: String,
-    /// Count (single value or [min, max] array).
-    #[serde(default)]
-    pub count: CountRange,
-    /// Charges (single value or [min, max] array).
-    #[serde(default)]
-    pub charges: CountRange,
-}
-
-/// Harvest result.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct HarvestResult {
-    #[serde(default)]
-    pub id: Option<String>,
-    #[serde(default)]
-    pub message: Option<String>,
 }

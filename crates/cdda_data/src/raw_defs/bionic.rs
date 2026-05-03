@@ -45,8 +45,9 @@ pub struct BionicDef {
     pub flags: Vec<String>,
 
     /// Enchantments granted.
+    /// CDDA enchantments can be bare strings like "THERMAL_VISION_GOOD" or objects.
     #[serde(default)]
-    pub enchantments: Option<Vec<crate::raw_defs::cdda_types::Enchantment>>,
+    pub enchantments: Option<Vec<crate::raw_defs::cdda_types::RawValue>>,
 
     /// Activated EOC effects.
     #[serde(default)]
