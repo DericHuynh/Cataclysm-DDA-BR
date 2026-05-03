@@ -85,7 +85,13 @@ fn apply_definition(def: &Value, target: &mut Value) {
     for (key, val) in def_obj {
         if matches!(
             key.as_str(),
-            "copy-from" | "copy_from" | "extend" | "delete" | "relative" | "proportional" | "abstract"
+            "copy-from"
+                | "copy_from"
+                | "extend"
+                | "delete"
+                | "relative"
+                | "proportional"
+                | "abstract"
         ) {
             continue;
         }
@@ -98,17 +104,15 @@ fn apply_extend(target: &mut Value, key: &str, val: &Value) {
     let Some(target_obj) = target.as_object_mut() else {
         return;
     };
-    let entry = target_obj
-        .entry(key.to_string())
-        .or_insert_with(|| {
-            if val.is_array() {
-                Value::Array(Vec::new())
-            } else if val.is_object() {
-                Value::Object(serde_json::Map::new())
-            } else {
-                Value::Null
-            }
-        });
+    let entry = target_obj.entry(key.to_string()).or_insert_with(|| {
+        if val.is_array() {
+            Value::Array(Vec::new())
+        } else if val.is_object() {
+            Value::Object(serde_json::Map::new())
+        } else {
+            Value::Null
+        }
+    });
 
     match (entry, val) {
         (Value::Array(arr), Value::Array(extras)) => {
@@ -257,24 +261,36 @@ mod tests {
 
     #[test]
     fn test_basic_copy_from() {
+        // Arrange
         let mut defs = HashMap::new();
         defs.insert(
             "base_item".into(),
-            json!({"id": "base_item", "volume": "250 ml", "weight": "100 g"}),
+            json!({ "id": "base_item", "volume": "250 ml", "weight": "100 g" }),
         );
         defs.insert(
             "child_item".into(),
-            json!({"id": "child_item", "copy-from": "base_item", "color": "red"}),
+            json!({ "id": "child_item", "copy-from": "base_item", "color": "red" }),
         );
         let mut chain = Vec::new();
+
+        // Act
         let resolved = resolve_copy_from("child_item", &defs, &mut chain).unwrap();
-        assert_eq!(resolved.get("volume").and_then(|v| v.as_str()), Some("250 ml"));
-        assert_eq!(resolved.get("weight").and_then(|v| v.as_str()), Some("100 g"));
+
+        // Assert
+        assert_eq!(
+            resolved.get("volume").and_then(|v| v.as_str()),
+            Some("250 ml")
+        );
+        assert_eq!(
+            resolved.get("weight").and_then(|v| v.as_str()),
+            Some("100 g")
+        );
         assert_eq!(resolved.get("color").and_then(|v| v.as_str()), Some("red"));
     }
 
     #[test]
     fn test_extend_flags() {
+        // Arrange
         let mut defs = HashMap::new();
         defs.insert("base".into(), json!({"id": "base", "flags": ["FLAG_A"]}));
         defs.insert(
@@ -282,30 +298,43 @@ mod tests {
             json!({"id": "child", "copy-from": "base", "extend": {"flags": ["FLAG_B"]}}),
         );
         let mut chain = Vec::new();
+
+        // Act
         let resolved = resolve_copy_from("child", &defs, &mut chain).unwrap();
         let flags = resolved["flags"].as_array().unwrap();
         let strs: Vec<&str> = flags.iter().map(|v| v.as_str().unwrap()).collect();
+
+        // Assert
         assert!(strs.contains(&"FLAG_A"));
         assert!(strs.contains(&"FLAG_B"));
     }
 
     #[test]
     fn test_delete_flags() {
+        // Arrange
         let mut defs = HashMap::new();
-        defs.insert("base".into(), json!({"id": "base", "flags": ["A", "B", "C"]}));
+        defs.insert(
+            "base".into(),
+            json!({"id": "base", "flags": ["A", "B", "C"]}),
+        );
         defs.insert(
             "child".into(),
             json!({"id": "child", "copy-from": "base", "delete": {"flags": ["B"]}}),
         );
         let mut chain = Vec::new();
+
+        // Act
         let resolved = resolve_copy_from("child", &defs, &mut chain).unwrap();
         let flags = resolved["flags"].as_array().unwrap();
         let strs: Vec<&str> = flags.iter().map(|v| v.as_str().unwrap()).collect();
+
+        // Assert
         assert_eq!(strs, vec!["A", "C"]);
     }
 
     #[test]
     fn test_relative() {
+        // Arrange
         let mut defs = HashMap::new();
         defs.insert("base".into(), json!({"id": "base", "weight": 1000}));
         defs.insert(
@@ -313,28 +342,109 @@ mod tests {
             json!({"id": "child", "copy-from": "base", "relative": {"weight": 200}}),
         );
         let mut chain = Vec::new();
+
+        // Act
         let resolved = resolve_copy_from("child", &defs, &mut chain).unwrap();
+
+        // Assert
         assert_eq!(resolved["weight"].as_i64(), Some(1200));
     }
 
     #[test]
     fn test_cycle_detection() {
+        // Arrange
         let mut defs = HashMap::new();
         defs.insert("a".into(), json!({"id": "a", "copy-from": "b"}));
         defs.insert("b".into(), json!({"id": "b", "copy-from": "a"}));
         let mut chain = Vec::new();
+
+        // Act
         let result = resolve_copy_from("a", &defs, &mut chain);
+
+        // Assert
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Circular"));
     }
 
     #[test]
     fn test_topological_sort() {
+        // Arrange
         let mut defs = HashMap::new();
         defs.insert("a".into(), json!({"id": "a"}));
         defs.insert("b".into(), json!({"id": "b", "copy-from": "a"}));
         defs.insert("c".into(), json!({"id": "c", "copy-from": "b"}));
+
+        // Act
         let order = topological_sort(&defs).unwrap();
+
+        // Assert
         assert_eq!(order, vec!["a", "b", "c"]);
+    }
+
+    /// proportional multiplies numeric fields.
+    #[test]
+    fn test_proportional() {
+        // Arrange
+        let mut defs = HashMap::new();
+        defs.insert("base".into(), json!({"id": "base", "weight": 1000}));
+        defs.insert(
+            "child".into(),
+            json!({"id": "child", "copy-from": "base", "proportional": {"weight": 0.5}}),
+        );
+        let mut chain = Vec::new();
+
+        // Act
+        let resolved = resolve_copy_from("child", &defs, &mut chain).unwrap();
+
+        // Assert
+        assert_eq!(resolved["weight"].as_f64(), Some(500.0));
+    }
+
+    /// Child fields override parent fields.
+    #[test]
+    fn test_override_parent_field() {
+        // Arrange
+        let mut defs = HashMap::new();
+        defs.insert(
+            "base".into(),
+            json!({"id": "base", "volume": "1 L", "color": "red"}),
+        );
+        defs.insert(
+            "child".into(),
+            json!({"id": "child", "copy-from": "base", "color": "blue"}),
+        );
+        let mut chain = Vec::new();
+
+        // Act
+        let resolved = resolve_copy_from("child", &defs, &mut chain).unwrap();
+
+        // Assert
+        assert_eq!(resolved["color"].as_str(), Some("blue"));
+        assert_eq!(resolved["volume"].as_str(), Some("1 L"));
+    }
+
+    /// Chained copy-from resolves all levels.
+    #[test]
+    fn test_three_level_chain() {
+        // Arrange
+        let mut defs = HashMap::new();
+        defs.insert("1".into(), json!({"id": "1", "a": "from_1"}));
+        defs.insert(
+            "2".into(),
+            json!({"id": "2", "copy-from": "1", "b": "from_2"}),
+        );
+        defs.insert(
+            "3".into(),
+            json!({"id": "3", "copy-from": "2", "c": "from_3"}),
+        );
+        let mut chain = Vec::new();
+
+        // Act
+        let resolved = resolve_copy_from("3", &defs, &mut chain).unwrap();
+
+        // Assert
+        assert_eq!(resolved["a"].as_str(), Some("from_1"));
+        assert_eq!(resolved["b"].as_str(), Some("from_2"));
+        assert_eq!(resolved["c"].as_str(), Some("from_3"));
     }
 }

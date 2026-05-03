@@ -6,6 +6,7 @@ members = [
     "crates/cdda_mod",
     "crates/cdda_sim",
     "crates/cdda_map",
+    "tests/integration",
 ]
 
 [workspace.dependencies]
@@ -14,7 +15,7 @@ bevy_ecs        = "0.18"
 bevy_reflect    = "0.18"
 serde           = { version = "1", features = ["derive"] }
 serde_json      = "1"
-schemars        = "0.8"
+schemars        = { version = "0.8", features = ["derive"] }
 thiserror       = "2"
 indexmap        = "2"
 rand            = "0.9"

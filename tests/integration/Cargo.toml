@@ -1,0 +1,10 @@
+[package]
+name = "cdda_integration"
+version = "0.1.0"
+edition = "2021"
+description = "Workspace-level integration tests: schema validation + registry loading"
+publish = false
+
+[dependencies]
+cdda_core.workspace = true
+cdda_data.workspace = true

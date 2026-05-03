@@ -1,16 +1,13 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::cmp::Ordering;
 use std::ops::{Add, Sub};
 
 /// Length measured in millimeters.
 ///
-/// Used for item dimensions and other lengths in the game.
-///
-/// # Deserialization
-///
-/// Accepts both a bare number (interpreted as millimeters) and CDDA-style
-/// human-readable strings like `"250 mm"`, `"10 cm"`, `"1 m"`, `"60 meter"`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+/// Accepts both a bare number (mm) and CDDA-style strings like `"250 mm"`, `"10 cm"`, `"1 m"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[schemars(with = "String")]
 pub struct Length(pub u32);
 
 impl Length {
@@ -104,6 +101,9 @@ fn parse_length(s: &str) -> Option<Length> {
             Some(Length::from_millimeters((value * 10.0) as u32))
         }
         "m" | "meter" | "meters" => Some(Length::from_millimeters((value * 1000.0) as u32)),
+        "km" | "kilometer" | "kilometers" => {
+            Some(Length::from_millimeters((value * 1_000_000.0) as u32))
+        }
         _ => None,
     }
 }

@@ -1,17 +1,28 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Damage types used in combat calculations.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Damage {
+    #[serde(default)]
     pub bash: u32,
+    #[serde(default)]
     pub cut: u32,
+    #[serde(default)]
     pub stab: u32,
+    #[serde(default)]
     pub bullet: u32,
+    #[serde(default)]
     pub heat: u32,
+    #[serde(default)]
     pub cold: u32,
+    #[serde(default)]
     pub electric: u32,
+    #[serde(default)]
     pub acid: u32,
+    #[serde(default)]
     pub biological: u32,
+    #[serde(default)]
     pub pure: u32,
 }
 

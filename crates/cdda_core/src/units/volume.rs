@@ -1,3 +1,4 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::cmp::Ordering;
 use std::ops::{Add, Sub};
@@ -6,11 +7,9 @@ use std::ops::{Add, Sub};
 ///
 /// CDDA internally stores volumes in mL (1 mL = 0.001 L).
 ///
-/// # Deserialization
-///
-/// Accepts both a bare number (interpreted as mL) and CDDA-style
-/// human-readable strings like `"250 ml"`, `"1 L"`, `"500mL"`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+/// Accepts both a bare number (mL) and CDDA-style strings like `"250 ml"`, `"1 L"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[schemars(with = "String")]
 pub struct Volume(pub u64);
 
 impl Volume {

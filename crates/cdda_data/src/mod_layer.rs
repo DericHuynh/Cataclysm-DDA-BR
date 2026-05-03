@@ -162,3 +162,136 @@ pub fn load_with_mods(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::DefRegistry;
+
+    // -----------------------------------------------------------------------
+    // ModManager construction
+    // -----------------------------------------------------------------------
+
+    /// A new ModManager should have no available mods.
+    #[test]
+    fn new_mod_manager_has_empty_available() {
+        // Arrange
+        let core = DefRegistry::empty();
+
+        // Act
+        let mgr = ModManager::new(core);
+
+        // Assert
+        assert!(mgr.available.is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // ModInfo creation
+    // -----------------------------------------------------------------------
+
+    /// A ModInfo should display its id and name correctly.
+    #[test]
+    fn mod_info_display() {
+        // Arrange
+        let info = ModInfo {
+            id: "test_mod".into(),
+            name: "Test Mod".into(),
+            description: "A test mod".into(),
+            dependencies: vec![],
+            conflicts: vec![],
+            category: Some("content".into()),
+            version: Some("1.0".into()),
+            path: PathBuf::from("data/mods/test"),
+        };
+
+        // Assert
+        assert_eq!(info.id, "test_mod");
+        assert_eq!(info.name, "Test Mod");
+        assert!(info.dependencies.is_empty());
+        assert!(info.conflicts.is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // check_conflicts
+    // -----------------------------------------------------------------------
+
+    /// With no mods, checking conflicts returns Ok.
+    #[test]
+    fn check_conflicts_empty_returns_ok() {
+        // Arrange
+        let core = DefRegistry::empty();
+        let mgr = ModManager::new(core);
+
+        // Act
+        let result = mgr.check_conflicts(&[]);
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    // -----------------------------------------------------------------------
+    // ModErrors
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn mod_error_not_found_displays() {
+        // Arrange
+        let err = ModError::NotFound("missing_mod".into());
+
+        // Act
+        let msg = err.to_string();
+
+        // Assert
+        assert!(msg.contains("missing_mod"));
+    }
+
+    #[test]
+    fn mod_error_circular_displays() {
+        // Arrange
+        let err = ModError::CircularDependency("mod_a".into());
+
+        // Act
+        let msg = err.to_string();
+
+        // Assert
+        assert!(msg.contains("mod_a"));
+    }
+
+    #[test]
+    fn mod_error_conflict_displays() {
+        // Arrange
+        let err = ModError::Conflict("mod_a".into(), "mod_b".into());
+
+        // Act
+        let msg = err.to_string();
+
+        // Assert
+        assert!(msg.contains("mod_a"));
+        assert!(msg.contains("mod_b"));
+    }
+
+    #[test]
+    fn mod_error_missing_dependency_displays() {
+        // Arrange
+        let err = ModError::MissingDependency("mod_a".into(), "dep_b".into());
+
+        // Act
+        let msg = err.to_string();
+
+        // Assert
+        assert!(msg.contains("mod_a"));
+        assert!(msg.contains("dep_b"));
+    }
+
+    #[test]
+    fn mod_error_load_error_displays() {
+        // Arrange
+        let err = ModError::LoadError("something went wrong".into());
+
+        // Act
+        let msg = err.to_string();
+
+        // Assert
+        assert!(msg.contains("went wrong"));
+    }
+}

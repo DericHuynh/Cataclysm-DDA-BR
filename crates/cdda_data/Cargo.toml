@@ -8,6 +8,7 @@ description = "JSON loading, def registry, copy-from resolver. Zero Bevy depende
 cdda_core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+schemars.workspace = true
 thiserror.workspace = true
 indexmap.workspace = true
 tracing.workspace = true

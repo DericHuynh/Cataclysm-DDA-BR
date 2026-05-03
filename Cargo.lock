@@ -281,10 +281,19 @@ version = "0.1.0"
 dependencies = [
  "cdda_core",
  "indexmap",
+ "schemars",
  "serde",
  "serde_json",
  "thiserror",
  "tracing",
+]
+
+[[package]]
+name = "cdda_integration"
+version = "0.1.0"
+dependencies = [
+ "cdda_core",
+ "cdda_data",
 ]
 
 [[package]]

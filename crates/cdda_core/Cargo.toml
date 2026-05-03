@@ -2,13 +2,13 @@
 name = "cdda_core"
 version = "0.1.0"
 edition = "2021"
-description = "Pure types and units – coordinates, damage, calendar, RNG. Zero Bevy dependency."
+description = "Pure domain types – units, coords, IDs, templates. Zero serde, zero Bevy."
 
 [dependencies]
+rand.workspace = true
 serde.workspace = true
-serde_json.workspace = true
 schemars.workspace = true
 thiserror.workspace = true
-rand.workspace = true
 
 [dev-dependencies]
+serde_json.workspace = true

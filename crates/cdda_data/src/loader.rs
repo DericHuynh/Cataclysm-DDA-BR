@@ -1,7 +1,7 @@
+use crate::raw_defs::*;
+use crate::raw_types::DefId;
 use crate::registry::DefRegistry;
 use crate::resolve;
-use cdda_core::defs::*;
-use cdda_core::types::DefId;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -77,6 +77,11 @@ impl Loader {
     pub fn with_dir(mut self, dir: PathBuf) -> Self {
         self.data_dirs.push(dir);
         self
+    }
+
+    /// Expose the raw-by-type map for inspection or schema validation.
+    pub fn raw_by_type(&self) -> &HashMap<String, Vec<RawDef>> {
+        &self.raw_by_type
     }
 
     /// Build the default mapping of CDDA JSON type strings to canonical types.
@@ -639,5 +644,328 @@ impl Loader {
             let count = self.raw_by_type["mapgen"].len();
             debug!("Mapgen resolution deferred ({} defs, Stage 2)", count);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    // -----------------------------------------------------------------------
+    // Loader construction
+    // -----------------------------------------------------------------------
+
+    /// Verify a new Loader starts with no data and no directories.
+    #[test]
+    fn loader_new_is_empty() {
+        // Arrange
+        let dirs: Vec<PathBuf> = vec![];
+
+        // Act
+        let loader = Loader::new(dirs);
+
+        // Assert
+        assert!(loader.data_dirs.is_empty());
+        assert!(loader.raw_by_type.is_empty());
+        assert!(!loader.type_aliases.is_empty()); // default aliases populated
+    }
+
+    /// Verify with_dir() appends directories.
+    #[test]
+    fn with_dir_adds_directory() {
+        // Arrange
+        let mut loader = Loader::new(vec![]);
+        let dir = PathBuf::from("/fake/path");
+
+        // Act
+        loader = loader.with_dir(dir.clone());
+
+        // Assert
+        assert_eq!(loader.data_dirs.len(), 1);
+        assert_eq!(loader.data_dirs[0], dir);
+    }
+
+    // -----------------------------------------------------------------------
+    // Type alias canonicalization
+    // -----------------------------------------------------------------------
+
+    /// Verify CDDA ITEM subtypes (GUN, AMMO, etc.) are mapped to "ITEM".
+    #[test]
+    fn default_type_aliases_maps_item_subtypes() {
+        // Arrange — type aliases built in constructor
+
+        // Act
+        let aliases = Loader::default_type_aliases();
+
+        // Assert
+        assert_eq!(aliases.get("GUN"), Some(&"ITEM".to_string()));
+        assert_eq!(aliases.get("AMMO"), Some(&"ITEM".to_string()));
+        assert_eq!(aliases.get("COMESTIBLE"), Some(&"ITEM".to_string()));
+        assert_eq!(aliases.get("TOOL"), Some(&"ITEM".to_string()));
+        assert_eq!(aliases.get("MAGAZINE"), Some(&"ITEM".to_string()));
+        assert_eq!(aliases.get("BOOK"), Some(&"ITEM".to_string()));
+    }
+
+    /// Verify canonicalize_types() merges GUN definitions into ITEM.
+    #[test]
+    fn canonicalize_types_merges_aliases() {
+        // Arrange
+        let mut loader = Loader::new(vec![]);
+        let raw_gun = RawDef {
+            type_name: "GUN".into(),
+            id: Some("glock".into()),
+            value: json!({"type": "GUN", "id": "glock"}),
+            source: PathBuf::from("guns.json"),
+        };
+        let raw_item = RawDef {
+            type_name: "ITEM".into(),
+            id: Some("rock".into()),
+            value: json!({"type": "ITEM", "id": "rock"}),
+            source: PathBuf::from("misc.json"),
+        };
+        loader
+            .raw_by_type
+            .entry("GUN".to_string())
+            .or_default()
+            .push(raw_gun);
+        loader
+            .raw_by_type
+            .entry("ITEM".to_string())
+            .or_default()
+            .push(raw_item);
+
+        // Act
+        loader.canonicalize_types();
+
+        // Assert
+        assert!(
+            !loader.raw_by_type.contains_key("GUN"),
+            "GUN should be removed"
+        );
+        assert_eq!(loader.raw_by_type.get("ITEM").map(|v| v.len()), Some(2));
+    }
+
+    // -----------------------------------------------------------------------
+    // extract_def_id
+    // -----------------------------------------------------------------------
+
+    /// Should return "id" field first.
+    #[test]
+    fn extract_def_id_prefers_id_field() {
+        // Arrange
+        let value = json!({"id": "thing", "result": "other_id"});
+
+        // Act
+        let id = Loader::extract_def_id(&value);
+
+        // Assert
+        assert_eq!(id, Some("thing".to_string()));
+    }
+
+    /// Should fall back to "result" when no "id".
+    #[test]
+    fn extract_def_id_falls_back_to_result() {
+        // Arrange
+        let value = json!({"result": "crafted_item"});
+
+        // Act
+        let id = Loader::extract_def_id(&value);
+
+        // Assert
+        assert_eq!(id, Some("crafted_item".to_string()));
+    }
+
+    /// Should fall back to "abstract" when no "id" or "result".
+    #[test]
+    fn extract_def_id_falls_back_to_abstract() {
+        // Arrange
+        let value = json!({"abstract": "base_def"});
+
+        // Act
+        let id = Loader::extract_def_id(&value);
+
+        // Assert
+        assert_eq!(id, Some("base_def".to_string()));
+    }
+
+    /// Returns None when no identifying field exists.
+    #[test]
+    fn extract_def_id_returns_none_when_no_id() {
+        // Arrange
+        let value = json!({"name": "just a name"});
+
+        // Act
+        let id = Loader::extract_def_id(&value);
+
+        // Assert
+        assert_eq!(id, None);
+    }
+
+    // -----------------------------------------------------------------------
+    // build_raw_map
+    // -----------------------------------------------------------------------
+
+    /// Should build a map keyed by "id".
+    #[test]
+    fn build_raw_map_keys_by_id() {
+        // Arrange
+        let mut loader = Loader::new(vec![]);
+        loader.raw_by_type.insert(
+            "test_type".into(),
+            vec![
+                RawDef {
+                    type_name: "test_type".into(),
+                    id: Some("alpha".into()),
+                    value: json!({"id": "alpha", "volume": "250 ml"}),
+                    source: PathBuf::new(),
+                },
+                RawDef {
+                    type_name: "test_type".into(),
+                    id: Some("beta".into()),
+                    value: json!({"id": "beta", "volume": "500 ml"}),
+                    source: PathBuf::new(),
+                },
+            ],
+        );
+
+        // Act
+        let map = loader.build_raw_map("test_type");
+
+        // Assert
+        assert_eq!(map.len(), 2);
+        assert!(map.contains_key("alpha"));
+        assert!(map.contains_key("beta"));
+    }
+
+    /// Should fall back to "result" when "id" is missing.
+    #[test]
+    fn build_raw_map_falls_back_to_result() {
+        // Arrange
+        let mut loader = Loader::new(vec![]);
+        loader.raw_by_type.insert(
+            "recipe".into(),
+            vec![RawDef {
+                type_name: "recipe".into(),
+                id: None,
+                value: json!({"result": "soup", "difficulty": 1}),
+                source: PathBuf::new(),
+            }],
+        );
+
+        // Act
+        let map = loader.build_raw_map("recipe");
+
+        // Assert
+        assert_eq!(map.len(), 1);
+        assert!(map.contains_key("soup"));
+    }
+
+    /// Should use last-write-wins for duplicate IDs.
+    #[test]
+    fn build_raw_map_last_write_wins() {
+        // Arrange
+        let mut loader = Loader::new(vec![]);
+        loader.raw_by_type.insert(
+            "test_type".into(),
+            vec![
+                RawDef {
+                    type_name: "test_type".into(),
+                    id: Some("dupe".into()),
+                    value: json!({"id": "dupe", "volume": "100 ml"}),
+                    source: PathBuf::from("first.json"),
+                },
+                RawDef {
+                    type_name: "test_type".into(),
+                    id: Some("dupe".into()),
+                    value: json!({"id": "dupe", "volume": "200 ml"}),
+                    source: PathBuf::from("second.json"),
+                },
+            ],
+        );
+
+        // Act
+        let map = loader.build_raw_map("test_type");
+
+        // Assert
+        assert_eq!(map.len(), 1);
+        assert_eq!(
+            map.get("dupe")
+                .and_then(|v| v.get("volume").and_then(|v| v.as_str())),
+            Some("200 ml")
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // LoaderError formatting
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn loader_error_io_displays() {
+        // Arrange
+        let err = LoaderError::Io(std::io::Error::new(std::io::ErrorKind::NotFound, "gone"));
+
+        // Act
+        let msg = err.to_string();
+
+        // Assert
+        assert!(msg.contains("IO error"));
+        assert!(msg.contains("gone"));
+    }
+
+    #[test]
+    fn loader_error_circular_displays_chain() {
+        // Arrange
+        let err = LoaderError::CircularCopyFrom {
+            chain: vec!["a".into(), "b".into(), "a".into()],
+        };
+
+        // Act
+        let msg = err.to_string();
+
+        // Assert
+        assert!(msg.contains("Circular"));
+        assert!(msg.contains("a"));
+        assert!(msg.contains("b"));
+    }
+
+    // -----------------------------------------------------------------------
+    // process_raw_def
+    // -----------------------------------------------------------------------
+
+    /// Objects without a "type" field should be skipped silently.
+    #[test]
+    fn process_raw_def_skips_typeless_objects() {
+        // Arrange
+        let mut loader = Loader::new(vec![]);
+        let obj = json!({"id": "orphan", "name": "No Type"})
+            .as_object()
+            .unwrap()
+            .clone();
+
+        // Act
+        loader.process_raw_def(&obj, Path::new("test.json"), &mut vec![]);
+
+        // Assert
+        assert!(loader.raw_by_type.is_empty());
+    }
+
+    /// Objects with a "type" field should be ingested.
+    #[test]
+    fn process_raw_def_ingests_typed_object() {
+        // Arrange
+        let mut loader = Loader::new(vec![]);
+        let obj = json!({"type": "ITEM", "id": "rock", "name": "Rock"})
+            .as_object()
+            .unwrap()
+            .clone();
+
+        // Act
+        loader.process_raw_def(&obj, Path::new("items.json"), &mut vec![]);
+
+        // Assert
+        assert_eq!(loader.raw_by_type.len(), 1);
+        assert_eq!(loader.raw_by_type["ITEM"].len(), 1);
+        assert_eq!(loader.raw_by_type["ITEM"][0].id, Some("rock".to_string()));
     }
 }

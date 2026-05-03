@@ -1,16 +1,13 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::cmp::Ordering;
 use std::ops::{Add, Sub};
 
 /// Weight measured in grams.
 ///
-/// CDDA internally stores weights in grams.
-///
-/// # Deserialization
-///
-/// Accepts both a bare number (interpreted as grams) and CDDA-style
-/// human-readable strings like `"100 g"`, `"1 kg"`, `"500g"`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+/// Accepts both a bare number (grams) and CDDA-style strings like `"100 g"`, `"1 kg"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[schemars(with = "String")]
 pub struct Weight(pub u64);
 
 impl Weight {
@@ -20,7 +17,11 @@ impl Weight {
         Weight(g)
     }
 
-    pub const fn from_kilograms(kg: u64) -> Self {
+    pub fn from_kilograms(kg: f64) -> Self {
+        Weight((kg * 1000.0) as u64)
+    }
+
+    pub const fn from_kilograms_u64(kg: u64) -> Self {
         Weight(kg * 1000)
     }
 
@@ -87,7 +88,7 @@ fn parse_weight(s: &str) -> Option<Weight> {
 
     match unit.as_str() {
         "g" | "gram" | "grams" => Some(Weight::from_grams(value as u64)),
-        "kg" | "kilogram" | "kilograms" => Some(Weight::from_kilograms(value as u64)),
+        "kg" | "kilogram" | "kilograms" => Some(Weight::from_kilograms(value)),
         "mg" | "milligram" | "milligrams" => Some(Weight::from_grams((value / 1000.0) as u64)),
         _ => None,
     }
@@ -166,7 +167,7 @@ mod tests {
 
     #[test]
     fn test_weight_arithmetic() {
-        let w1 = Weight::from_kilograms(2);
+        let w1 = Weight::from_kilograms_u64(2);
         let w2 = Weight::from_grams(500);
         assert_eq!((w1 + w2).as_grams(), 2500);
     }
