@@ -97,6 +97,9 @@ pub enum DefCategory {
     Trap,
     StartLocation,
     Scenario,
+    Profession,
+    Proficiency,
+    Quality,
 }
 
 // ---------------------------------------------------------------------------
@@ -168,6 +171,9 @@ def_id_type!(SpecialAttackId, SpecialAttack);
 def_id_type!(TrapId, Trap);
 def_id_type!(StartLocationId, StartLocation);
 def_id_type!(ScenarioId, Scenario);
+def_id_type!(ProfessionId, Profession);
+def_id_type!(ProficiencyId, Proficiency);
+def_id_type!(QualityId, Quality);
 
 // ---------------------------------------------------------------------------
 // Tests

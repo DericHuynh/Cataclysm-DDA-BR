@@ -4,8 +4,11 @@
 //! Depends on bevy_ecs and bevy_reflect (not full Bevy).
 
 pub mod components;
+pub mod def_components;
+pub mod def_world;
 pub mod events;
 pub mod logic;
+pub mod spatial;
+pub mod state;
 pub mod systems;
-pub mod tick;
 pub mod world_setup;

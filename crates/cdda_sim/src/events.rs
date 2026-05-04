@@ -96,6 +96,56 @@ pub enum DamageKind {
     Cold,
 }
 
+// ---------------------------------------------------------------------------
+// Trade / Inventory
+// ---------------------------------------------------------------------------
+
+#[derive(Event, Debug, Clone)]
+pub struct ItemMoveEvent {
+    /// The item entity being moved.
+    pub item: Entity,
+    /// Where the item was (entity container or WorldPos on ground).
+    pub from: MoveLocation,
+    /// Where the item is going (entity container or WorldPos on ground).
+    pub to: MoveLocation,
+    /// How many items in the stack were moved.
+    pub count: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MoveLocation {
+    /// Item is on the ground at this world position.
+    Ground(cdda_core::coords::WorldPos),
+    /// Item is inside a container entity.
+    Container(Entity),
+    /// Item is wielded by an entity.
+    Wielded(Entity),
+    /// Item is worn by an entity.
+    Worn(Entity),
+}
+
+#[derive(Event, Debug, Clone)]
+pub struct EquipEvent {
+    pub wielder: Entity,
+    pub item: Entity,
+}
+
+#[derive(Event, Debug, Clone)]
+pub struct UnequipEvent {
+    pub wielder: Entity,
+    pub item: Entity,
+}
+
+#[derive(Event, Debug, Clone)]
+pub struct UseItemEvent {
+    pub user: Entity,
+    pub item: Entity,
+}
+
+// ---------------------------------------------------------------------------
+// Supporting enums
+// ---------------------------------------------------------------------------
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeathCause {
     Combat(Entity),

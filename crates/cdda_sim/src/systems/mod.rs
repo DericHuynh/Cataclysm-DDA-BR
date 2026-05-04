@@ -1,5 +1,9 @@
 pub mod ai;
 pub mod combat;
 pub mod effects;
+pub mod inventory;
 pub mod movement;
+pub mod spatial;
 pub mod spawning;
+pub mod spawning_impl;
+pub mod turn;

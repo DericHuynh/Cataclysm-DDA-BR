@@ -3,35 +3,104 @@
 use bevy_ecs::world::World;
 
 use crate::components::*;
+use crate::spatial::EntitySpatialIndex;
+use crate::state::*;
+use crate::systems::turn::TurnQueue;
 
 /// Register all ECS component types and initial resources.
 ///
-/// Event types are registered by `App::add_event` in cdda_app.
+/// Note: Events in Bevy 0.18 are trigger-based (via `World::trigger` /
+/// `Commands::trigger`) and observed via `Observer` systems.
+/// There is no `Events<T>` resource to pre-register — events are
+/// available as soon as the type is registered as a component
+/// (which happens automatically when they are first triggered).
 pub fn setup_world(world: &mut World) {
-    // --- Register all component types ---
+    // --- Register resources ---
+    world.insert_resource(EntitySpatialIndex::new());
+    world.insert_resource(GameTime::default());
+    world.insert_resource(LoadingStatus::default());
+    world.insert_resource(StartupConfig::default());
+    world.insert_resource(TurnQueue::default());
+
+    // --- Spatial ---
     world.register_component::<WorldPosition>();
-    world.register_component::<Item>();
+    world.register_component::<Solid>();
+    world.register_component::<Velocity>();
+
+    // --- Item — mutable runtime state ---
     world.register_component::<StackCount>();
-    world.register_component::<Weapon>();
-    world.register_component::<Armor>();
+    world.register_component::<CurrentCharges>();
+    world.register_component::<LoadedAmmo>();
+    world.register_component::<Spoilable>();
+    world.register_component::<ItemDamage>();
+
+    // --- Container tags ---
     world.register_component::<Container>();
-    world.register_component::<Food>();
-    world.register_component::<Tool>();
+    world.register_component::<Sealed>();
+    world.register_component::<Rigid>();
+    world.register_component::<Watertight>();
+    world.register_component::<PreservesTemp>();
+    world.register_component::<Fireproof>();
+    world.register_component::<GasTight>();
+
+    // --- Creature core ---
     world.register_component::<Creature>();
     world.register_component::<CombatStats>();
     world.register_component::<Vision>();
     world.register_component::<Health>();
     world.register_component::<Faction>();
+    world.register_component::<Stats>();
+    world.register_component::<BodyTemperature>();
+    world.register_component::<Wetness>();
 
-    // Tag components (zero-sized markers)
-    world.register_component::<Sealed>();
-    world.register_component::<Rigid>();
-    world.register_component::<Watertight>();
-    world.register_component::<PreservesTemp>();
-    world.register_component::<UsesCharges>();
+    // --- Creature progression ---
+    world.register_component::<SkillSet>();
+    world.register_component::<Mutations>();
+    world.register_component::<ProficiencySet>();
 
-    // Relationship components
+    // --- Bionics ---
+    world.register_component::<BionicOf>();
+    world.register_component::<InstalledBionics>();
+    world.register_component::<Bionic>();
+
+    // --- Morale ---
+    world.register_component::<MoraleBonusOf>();
+    world.register_component::<MoraleBonuses>();
+    world.register_component::<MoraleBonus>();
+    world.register_component::<Morale>();
+
+    // --- Status effects ---
+    world.register_component::<EffectOn>();
+    world.register_component::<ActiveEffects>();
+    world.register_component::<StatusEffect>();
+
+    // --- Player / NPC ---
+    world.register_component::<PlayerData>();
+    world.register_component::<NpcData>();
+
+    // --- Relationships ---
     world.register_component::<InsideContainer>();
+    world.register_component::<ContainerContents>();
     world.register_component::<WieldedBy>();
+    world.register_component::<WieldedItems>();
+    world.register_component::<WornOn>();
     world.register_component::<WornBy>();
+    world.register_component::<MountedOn>();
+    world.register_component::<MountedPockets>();
+
+    // --- Pocket system ---
+    world.register_component::<Pocket>();
+    world.register_component::<PocketRestriction>();
+    world.register_component::<AttachmentSlot>();
+
+    // --- Turn scheduling ---
+    world.register_component::<MovePoints>();
+    world.register_component::<Speed>();
+
+    // --- Status markers ---
+    world.register_component::<IsAlive>();
+    world.register_component::<Stunned>();
+    world.register_component::<Bleeding>();
+    world.register_component::<OnFire>();
+    world.register_component::<InFlight>();
 }

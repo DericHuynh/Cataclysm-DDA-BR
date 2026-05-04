@@ -13,10 +13,10 @@ pub mod error;
 pub mod flags;
 pub mod id;
 pub mod id_slab;
+pub mod id_str;
 pub mod registry;
 pub mod rng;
 pub mod stats;
-pub mod templates;
 pub mod units;
 
 // Re-export key types for ergonomic access.
@@ -40,8 +40,6 @@ pub use id::{FieldId, ItemGroupId, MutationCategoryId, MutationId, TraitGroupId}
 pub use id::{FurnitureId, ItemId, MonsterId, RecipeId, TerrainId};
 pub use id::{MapgenPaletteId, OvermapSpecialId, OvermapTerrainId};
 pub use id::{OvermapConnectionId, OvermapLandUseCodeId, OvermapLocationId};
+pub use id::{ProfessionId, ProficiencyId, QualityId};
 pub use id::{ScenarioId, SpecialAttackId, StartLocationId, TechniqueId, TrapId};
 pub use id::{VehiclePartCategoryId, VehiclePartId, VehiclePartLocationId};
-
-// -- Templates
-pub use templates::*;
