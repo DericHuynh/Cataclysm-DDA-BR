@@ -252,6 +252,11 @@ pub fn screen_def(screen: Screen) -> ScreenDefinition {
             commands: Vec::new(),
         },
 
+        DevSpawnPanel => ScreenDefinition {
+            title: "DEBUG: SPAWN ITEM",
+            commands: Vec::new(),
+        },
+
         DevWorldgen => ScreenDefinition {
             title: "DEV WORLDGEN — BUILDING SHOWCASE",
             commands: vec![
@@ -378,6 +383,52 @@ pub fn handle_navigation_input(
 }
 
 // ---------------------------------------------------------------------------
+// handle_panel_openers — OpenInventory / OpenCrafting / etc.
+// ---------------------------------------------------------------------------
+
+/// Maps `GameAction::Open*` actions to screen pushes.
+///
+/// These actions are emitted by context-specific keybindings (e.g. `i` in
+/// Gameplay → `OpenInventory`) and need to transition to the appropriate
+/// child screen. Runs in `PreUpdate` alongside `handle_navigation_input`.
+pub fn handle_panel_openers(
+    mut reader: MessageReader<InputAction>,
+    state: Res<State<Screen>>,
+    mut stack: ResMut<ScreenStack>,
+    mut next: ResMut<NextState<Screen>>,
+    mut focused: ResMut<FocusedCommandIndex>,
+) {
+    let current = *state.get();
+    for event in reader.read() {
+        match &event.action {
+            GameAction::OpenInventory => {
+                push_screen(current, Screen::Inventory, &mut stack, &mut next, &mut focused);
+            }
+            GameAction::OpenCrafting => {
+                push_screen(current, Screen::CraftingMenu, &mut stack, &mut next, &mut focused);
+            }
+            GameAction::OpenCharacterSheet => {
+                push_screen(current, Screen::CharacterSheet, &mut stack, &mut next, &mut focused);
+            }
+            GameAction::OpenHelp => {
+                push_screen(current, Screen::HelpScreen, &mut stack, &mut next, &mut focused);
+            }
+            GameAction::OpenCredits => {
+                push_screen(current, Screen::CreditsScreen, &mut stack, &mut next, &mut focused);
+            }
+            GameAction::OpenWorldMenu => {
+                push_screen(current, Screen::WorldMenu, &mut stack, &mut next, &mut focused);
+            }
+            // Custom(1) opens the debug spawn panel (bound to F2 in gameplay context).
+            GameAction::Custom(1) if current == Screen::Gameplay => {
+                push_screen(current, Screen::DevSpawnPanel, &mut stack, &mut next, &mut focused);
+            }
+            _ => {}
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // ScreenListItem — marker for dynamic list items
 // ---------------------------------------------------------------------------
 
@@ -403,6 +454,7 @@ pub fn sync_input_context(
         | ScenarioSelect | ProfessionSelect | CharacterCreation | CharacterConfirm | Custom(_) => {
             InputContextId::MainMenu
         }
+        DevSpawnPanel => InputContextId::Inventory,
         SettingsMenu => InputContextId::Settings,
         Inventory => InputContextId::Inventory,
         CraftingMenu => InputContextId::CraftingMenu,

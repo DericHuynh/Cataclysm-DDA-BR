@@ -23,9 +23,9 @@ pub use focus::{InputFocus, KeyboardFocusable};
 pub use menu::{MenuItem, MenuList, SelectedIndex};
 pub use screen::{Screen, ScreenStack};
 pub use screen_nav::{
-    handle_navigation_input, pop_screen, push_screen, screen_def, sync_input_context,
-    FocusedCommandIndex, GameEvent, ScreenCommand, ScreenDefinition, ScreenListItem,
-    TransitionTarget,
+    handle_navigation_input, handle_panel_openers, pop_screen, push_screen, screen_def,
+    sync_input_context, FocusedCommandIndex, GameEvent, ScreenCommand, ScreenDefinition,
+    ScreenListItem, TransitionTarget,
 };
 pub use systems::{menu_navigation, screen_and_cursor};
 
@@ -55,7 +55,7 @@ impl Plugin for ScreenNavigationPlugin {
         app.add_message::<GameEvent>();
 
         // Core navigation — processes InputAction messages and dispatches transitions
-        app.add_systems(PreUpdate, handle_navigation_input);
+        app.add_systems(PreUpdate, (handle_navigation_input, handle_panel_openers));
 
         // Sync input context with current screen
         app.add_systems(Update, crate::screen_nav::sync_input_context);

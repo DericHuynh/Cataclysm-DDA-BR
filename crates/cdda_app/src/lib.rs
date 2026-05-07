@@ -18,18 +18,23 @@ use bevy_state::state::NextState;
 
 use cdda_screen::Screen;
 use cdda_core::{GameSet, SimSet};
-use cdda_input::{GameAction, InputAction};
 
 use cdda_actor::plugin::ActorPlugin;
 use cdda_assets::CddaAssetsPlugin;
 use cdda_item::plugin::ItemPlugin;
 use cdda_sim::def_world::load_data_system;
 use cdda_sim::state::AppState;
+use cdda_sim::events::ItemMoveEvent;
 use cdda_sim::systems::ai::ai_phase;
 use cdda_sim::systems::bionics::tick_bionics;
 use cdda_sim::systems::combat::combat_phase;
 use cdda_sim::systems::effects::effects_phase;
 use cdda_sim::systems::healing::healing_phase;
+use cdda_sim::systems::dev_spawn::{build_dev_spawn_catalog, dev_spawn_flush, dev_spawn_panel_input};
+use cdda_sim::systems::inventory::{
+    assign_invlets_system, build_inventory_bins, dev_pickup_drop_system, inventory_screen_input,
+    process_item_move_events, spawn_dev_world,
+};
 use cdda_sim::systems::morale::tick_morale_decay;
 use cdda_sim::systems::movement::movement_phase;
 use cdda_sim::systems::spatial::update_spatial_index;
@@ -141,11 +146,14 @@ impl Plugin for CddaPlugin {
                 SimSet::Temperature,
                 SimSet::Vision,
                 SimSet::Spawning,
+                SimSet::Inventory,
                 SimSet::SpatialUpdate,
             )
                 .chain()
                 .in_set(GameSet::Sim),
         );
+
+        app.add_message::<ItemMoveEvent>();
 
         app.add_plugins(cdda_render::CddaRenderPlugin);
         app.add_plugins(cdda_input::CddaInputPlugin);
@@ -177,6 +185,9 @@ impl Plugin for CddaPlugin {
             });
         }
 
+        app.add_systems(OnEnter(AppState::InGame), spawn_dev_world);
+        // Build spawn catalog the first time the debug panel is opened.
+        app.add_systems(OnEnter(Screen::DevSpawnPanel), build_dev_spawn_catalog);
         app.add_systems(Update, load_data_system.run_if(in_state(AppState::DataLoading)));
         app.add_systems(Update, start_game_on_event.run_if(in_state(AppState::MainMenu)));
         app.add_systems(
@@ -207,10 +218,37 @@ impl Plugin for CddaPlugin {
                 temperature_phase.in_set(SimSet::Temperature),
                 update_vision.in_set(SimSet::Vision),
                 spawning_phase.in_set(SimSet::Spawning),
+                // Inventory pipeline: pickup/drop → process moves → assign letters → rebuild bins
+                dev_pickup_drop_system
+                    .in_set(SimSet::Inventory)
+                    .run_if(in_state(Screen::Gameplay)),
+                process_item_move_events.in_set(SimSet::Inventory),
+                assign_invlets_system.in_set(SimSet::Inventory),
+                build_inventory_bins.in_set(SimSet::Inventory),
+                // Inventory screen navigation + drop-from-inventory
+                inventory_screen_input
+                    .in_set(SimSet::Inventory)
+                    .run_if(in_state(Screen::Inventory)),
+                // Debug spawn panel — navigation queues a def-entity
+                dev_spawn_panel_input
+                    .in_set(SimSet::Inventory)
+                    .run_if(in_state(Screen::DevSpawnPanel)),
                 update_spatial_index.in_set(SimSet::SpatialUpdate),
                 debug_turn_queue.in_set(SimSet::SpatialUpdate),
             )
                 .run_if(in_state(AppState::InGame)),
+        );
+
+        // Exclusive system: drain spawn queue and call EntityCloner-based spawn_item.
+        // Must be separate from the tuple above because exclusive systems can't be
+        // grouped with regular systems.
+        app.add_systems(
+            Update,
+            dev_spawn_flush
+                .in_set(SimSet::Inventory)
+                .after(dev_spawn_panel_input)
+                .run_if(in_state(AppState::InGame))
+                .run_if(in_state(Screen::DevSpawnPanel)),
         );
     }
 }

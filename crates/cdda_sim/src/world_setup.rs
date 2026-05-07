@@ -5,12 +5,15 @@ use bevy_ecs::world::World;
 
 use crate::components::{InFlight, Solid, Velocity, WorldPosition};
 use crate::dev_worldgen::DevWorldgenConfig;
-use cdda_actor::components::*;
-use cdda_item::components::*;
 use crate::spatial::EntitySpatialIndex;
 use crate::state::*;
+use crate::systems::dev_spawn::{DevSpawnFocus, DevSpawnQueue};
+use crate::systems::inventory::{
+    DevGroundItemName, DevPlayer, Inventory, InventoryBin, InventoryFocus, Invlet, InvletFavorites,
+};
 use crate::systems::turn::TurnQueue;
-
+use cdda_actor::components::*;
+use cdda_item::components::*;
 
 /// Wrapper to store `cdda_map::WorldMap` as a Bevy resource.
 /// `WorldMap` lives in the zero-bevy `cdda_map` crate, so it cannot
@@ -34,6 +37,9 @@ impl Default for WorldMapResource {
 pub fn setup_world(world: &mut World) {
     // --- Register resources ---
     world.insert_resource(EntitySpatialIndex::new());
+    world.insert_resource(InventoryFocus::default());
+    world.insert_resource(DevSpawnFocus::default());
+    world.insert_resource(DevSpawnQueue::default());
     world.insert_resource(GameTime::default());
     world.insert_resource(LoadingStatus::default());
     world.insert_resource(StartupConfig::default());
@@ -41,6 +47,7 @@ pub fn setup_world(world: &mut World) {
     world.insert_resource(WorldMapResource::default());
     world.insert_resource(DevWorldgenConfig::default());
     world.insert_resource(crate::systems::dev_move::DevCamera::default());
+    world.insert_resource(InventoryBin::default());
 
     // --- Spatial ---
     world.register_component::<WorldPosition>();
@@ -123,9 +130,17 @@ pub fn setup_world(world: &mut World) {
     world.register_component::<PocketRestriction>();
     world.register_component::<AttachmentSlot>();
 
+    // --- Inventory ---
+    world.register_component::<Inventory>();
+    world.register_component::<InvletFavorites>();
+    world.register_component::<Invlet>();
+    world.register_component::<DevPlayer>();
+    world.register_component::<DevGroundItemName>();
+
     // --- Turn scheduling ---
     world.register_component::<MovePoints>();
     world.register_component::<Speed>();
+    world.register_component::<HandCount>();
 
     // --- Status markers ---
     world.register_component::<IsAlive>();
@@ -161,4 +176,3 @@ pub fn setup_world(world: &mut World) {
     world.register_component::<BodyPartSevered>();
     world.register_component::<InFlight>();
 }
-

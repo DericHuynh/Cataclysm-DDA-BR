@@ -249,6 +249,8 @@ pub fn default_bindings() -> ContextBindings {
             (k(KeyCode::KeyR), GameAction::Reload),
             (k(KeyCode::KeyF), GameAction::Fire),
             (k(KeyCode::KeyT), GameAction::Throw),
+            // Debug tools
+            (k(KeyCode::F2), GameAction::Custom(1)), // open debug spawn panel
             // Panel openers
             (k(KeyCode::KeyI), GameAction::OpenInventory),
             (k(KeyCode::KeyC), GameAction::OpenCrafting),
@@ -314,6 +316,8 @@ pub fn default_bindings() -> ContextBindings {
             (k(KeyCode::PageDown), GameAction::NavigatePageDown),
             (k(KeyCode::Home), GameAction::NavigateHome),
             (k(KeyCode::End), GameAction::NavigateEnd),
+            // [w] — wield / unwield focused item
+            (k(KeyCode::KeyW), GameAction::UseItem),
         ]),
     );
 

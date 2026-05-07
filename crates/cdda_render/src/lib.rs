@@ -17,7 +17,9 @@ use bevy::prelude::*;
 use bevy_state::state::OnEnter;
 use cdda_screen::screen::Screen;
 
+pub mod dev_spawn;
 pub mod dev_worldgen;
+pub mod inventory;
 pub mod tiles;
 pub mod main_menu;
 pub mod settings;
@@ -67,6 +69,20 @@ impl Plugin for CddaRenderPlugin {
             )
                 .chain()
                 .run_if(in_state(Screen::SettingsMenu)),
+        );
+
+        // ── Debug spawn panel ─────────────────────────────────────────────
+        app.add_systems(OnEnter(Screen::DevSpawnPanel), dev_spawn::spawn_dev_spawn_panel);
+        app.add_systems(
+            Update,
+            dev_spawn::update_dev_spawn_panel.run_if(in_state(Screen::DevSpawnPanel)),
+        );
+
+        // ── Inventory screen ──────────────────────────────────────────────
+        app.add_systems(OnEnter(Screen::Inventory), inventory::spawn_inventory_screen);
+        app.add_systems(
+            Update,
+            inventory::update_inventory_screen.run_if(in_state(Screen::Inventory)),
         );
 
         // ── Dev worldgen ───────────────────────────────────────────────────

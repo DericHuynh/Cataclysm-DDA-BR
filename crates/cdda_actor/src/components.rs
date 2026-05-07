@@ -375,3 +375,16 @@ impl Default for Speed {
         Self(100)
     }
 }
+
+/// Number of grasping hands this creature has.
+///
+/// Limits how many items can be wielded simultaneously:
+/// normal humans have 2, four-armed mutations have 4, etc.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Reflect)]
+pub struct HandCount(pub u8);
+
+impl Default for HandCount {
+    fn default() -> Self {
+        Self(2)
+    }
+}

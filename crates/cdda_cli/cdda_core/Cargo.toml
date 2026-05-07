@@ -1,0 +1,16 @@
+[package]
+name = "cdda_core"
+version = "0.1.0"
+edition = "2021"
+description = "Domain types – units, coords, IDs, templates, SystemSet labels, common messages."
+
+[dependencies]
+rand.workspace = true
+serde.workspace = true
+schemars.workspace = true
+thiserror.workspace = true
+bevy_ecs.workspace = true
+bevy_reflect.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

@@ -1,5 +1,6 @@
 pub mod ai;
 pub mod dev_move;
+pub mod dev_spawn;
 pub mod bionics;
 pub mod combat;
 pub mod crafting;

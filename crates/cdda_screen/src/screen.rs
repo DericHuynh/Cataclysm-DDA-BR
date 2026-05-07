@@ -69,6 +69,8 @@ pub enum Screen {
     VehicleInteraction,
     /// Dev-worldgen building showcase.
     DevWorldgen,
+    /// Debug item-spawn panel (press F2 in gameplay).
+    DevSpawnPanel,
     /// Extensible fallback.
     Custom(u32),
 }

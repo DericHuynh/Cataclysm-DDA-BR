@@ -217,3 +217,18 @@ pub enum AttachmentType {
 pub struct Container {
     pub capacity: cdda_core::Volume,
 }
+
+// ===========================================================================
+// Display / render hints
+// ===========================================================================
+
+/// CDDA type-string ID used for tileset sprite lookup.
+///
+/// Added to items that have a known CDDA type. Distinct from `DefStrId`
+/// which lives on definition entities only.
+///
+/// The render crate queries this to find the right `TileInfo` in
+/// `TileRegistry`. When no tile is registered for the ID renders fall
+/// back to `cdda_sim::def_components::ItemSymbol` if present.
+#[derive(Component, Debug, Clone, Reflect)]
+pub struct ItemTypeId(pub String);
