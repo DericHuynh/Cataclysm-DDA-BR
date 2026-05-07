@@ -27,6 +27,12 @@ pub struct Pos<Scale, Origin> {
     _origin: std::marker::PhantomData<Origin>,
 }
 
+impl<Scale, Origin> Default for Pos<Scale, Origin> {
+    fn default() -> Self {
+        Self::new(0, 0, ZLevel::new(0))
+    }
+}
+
 impl<Scale, Origin> Pos<Scale, Origin> {
     pub const fn new(x: i32, y: i32, z: ZLevel) -> Self {
         Self {

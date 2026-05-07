@@ -9,6 +9,8 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use cdda_core::coords::{WorldPos, ZLevel};
 use cdda_data::loader::Loader;
+use cdda_actor::components::*;
+use cdda_item::components::*;
 use cdda_sim::components::*;
 use cdda_sim::def_components::*;
 use cdda_sim::def_world::{build_def_world, DefinitionWorld};
@@ -182,8 +184,15 @@ fn register_all(world: &mut World) {
         Morale,
         BodyTemperature,
         Wetness,
-        SkillSet,
-        Mutations,
+        SkillOf,
+        CreatureSkills,
+        SkillEntry,
+        MutationOf,
+        CreatureMutations,
+        MutationEntry,
+        ProficiencyOf,
+        CreatureProficiencies,
+        ProficiencyEntry,
         EffectOn,
         ActiveEffects,
         StatusEffect,
@@ -206,8 +215,7 @@ fn register_all(world: &mut World) {
         InstalledBionics,
         MoraleBonus,
         MoraleBonusOf,
-        MoraleBonuses,
-        ProficiencySet
+        MoraleBonuses
     );
 }
 

@@ -10,6 +10,7 @@ serde.workspace = true
 schemars.workspace = true
 thiserror.workspace = true
 bevy_ecs.workspace = true
+bevy_reflect.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

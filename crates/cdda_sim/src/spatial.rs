@@ -43,8 +43,8 @@ impl EntitySpatialIndex {
     #[inline]
     fn cell(pos: WorldPos) -> (i32, i32, i32) {
         (
-            pos.x / CELL_SIZE,
-            pos.y / CELL_SIZE,
+            pos.x.div_euclid(CELL_SIZE),
+            pos.y.div_euclid(CELL_SIZE),
             pos.z.0 as i32 / Z_CELL_SIZE,
         )
     }

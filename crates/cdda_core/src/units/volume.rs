@@ -1,3 +1,4 @@
+use bevy_reflect::Reflect;
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::cmp::Ordering;
@@ -8,7 +9,7 @@ use std::ops::{Add, Sub};
 /// CDDA internally stores volumes in mL (1 mL = 0.001 L).
 ///
 /// Accepts both a bare number (mL) and CDDA-style strings like `"250 ml"`, `"1 L"`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema, Reflect)]
 #[schemars(with = "String")]
 pub struct Volume(pub u64);
 

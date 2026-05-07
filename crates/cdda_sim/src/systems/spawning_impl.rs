@@ -5,11 +5,13 @@
 //! operation. No manual component enumeration — any component with
 //! `#[derive(Clone)]` on a def entity automatically propagates to spawns.
 
-use crate::components::*;
+use crate::components::{Solid, WorldPosition};
 use crate::def_components::*;
 use bevy_ecs::entity::EntityCloner;
 use bevy_ecs::prelude::*;
+use cdda_actor::components::{BodyPartDef, BodyPartSlot, Faction, Health, IsAlive};
 use cdda_core::coords::WorldPos;
+use cdda_item::components::{CurrentCharges, DefOrigin, StackCount};
 
 /// Spawn a gameplay item entity by cloning a definition entity.
 ///

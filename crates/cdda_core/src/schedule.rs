@@ -4,10 +4,11 @@
 //!
 //! ```ignore
 //! app.configure_sets(Update, (GameSet::Input, GameSet::Sim, GameSet::Render).chain());
+//! app.configure_sets(Update, SimSet::ordered().in_set(GameSet::Sim));
 //! ```
 //!
 //! Systems in `cdda_input` → `GameSet::Input`
-//! Systems in `cdda_sim`   → `GameSet::Sim`
+//! Systems in `cdda_sim`   → `GameSet::Sim` via one of the `SimSet` variants
 //! Systems in `cdda_ui`    → `GameSet::Sim` (react to input)
 //! Systems in `cdda_render`→ `GameSet::Render`
 
@@ -22,4 +23,25 @@ pub enum GameSet {
     Sim,
     /// Rendering: tile drawing, UI overlay drawing.
     Render,
+}
+
+/// Fine-grained ordered sets within `GameSet::Sim`.
+///
+/// The canonical simulation phase order is expressed here as a chain so that
+/// new systems only need `in_set(SimSet::Combat)` (for example) instead of
+/// manually chaining `.after()` calls off specific function names.
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum SimSet {
+    TurnTick,
+    Ai,
+    Movement,
+    Combat,
+    Effects,
+    Healing,
+    Bionics,
+    Morale,
+    Temperature,
+    Vision,
+    Spawning,
+    SpatialUpdate,
 }

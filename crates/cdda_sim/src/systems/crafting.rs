@@ -7,7 +7,6 @@
 
 use bevy_ecs::prelude::*;
 use cdda_core::{RecipeId, Time};
-use cdda_actor::components::*;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -35,11 +34,13 @@ pub fn can_craft(
 ///
 /// Base time from recipe data, modified by skill level (higher skill
 /// = faster) and tool quality (good tools = faster).
+///
+/// `skill_level` is the relevant skill level for this recipe (0 = untrained).
 pub fn calculate_craft_time(
-    skill_set: &SkillSet,
+    skill_level: u32,
     has_required_tools: bool,
 ) -> Time {
-    let _ = (skill_set, has_required_tools);
+    let _ = (skill_level, has_required_tools);
     todo!("craft time formula: base time / (1 + skill/10) with tool bonus")
 }
 

@@ -9,6 +9,8 @@ publish = false
 cdda_core.workspace = true
 cdda_data.workspace = true
 cdda_sim.workspace = true
+cdda_actor = { path = "../crates/cdda_actor" }
+cdda_item = { path = "../crates/cdda_item" }
 bevy_ecs.workspace = true
 serde_json.workspace = true
 

@@ -61,11 +61,11 @@ fn temperature_health_effect(temp_celsius: f64, wetness: u32) -> i32 {
 #[test]
 fn body_temperature_normal() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::BodyTemperature>();
+    test.register::<cdda_actor::components::BodyTemperature>();
 
-    let e = test.spawn((cdda_sim::components::BodyTemperature(36.5),));
+    let e = test.spawn((cdda_actor::components::BodyTemperature(36.5),));
     let temp = test
-        .get::<cdda_sim::components::BodyTemperature>(e)
+        .get::<cdda_actor::components::BodyTemperature>(e)
         .unwrap();
     assert!((temp.0 - 36.5).abs() < f64::EPSILON);
 }
@@ -73,11 +73,11 @@ fn body_temperature_normal() {
 #[test]
 fn body_temperature_hypothermia() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::BodyTemperature>();
+    test.register::<cdda_actor::components::BodyTemperature>();
 
-    let e = test.spawn((cdda_sim::components::BodyTemperature(30.0),));
+    let e = test.spawn((cdda_actor::components::BodyTemperature(30.0),));
     let temp = test
-        .get::<cdda_sim::components::BodyTemperature>(e)
+        .get::<cdda_actor::components::BodyTemperature>(e)
         .unwrap();
     assert!((temp.0 - 30.0).abs() < f64::EPSILON);
 }
@@ -85,11 +85,11 @@ fn body_temperature_hypothermia() {
 #[test]
 fn body_temperature_hyperthermia() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::BodyTemperature>();
+    test.register::<cdda_actor::components::BodyTemperature>();
 
-    let e = test.spawn((cdda_sim::components::BodyTemperature(40.0),));
+    let e = test.spawn((cdda_actor::components::BodyTemperature(40.0),));
     let temp = test
-        .get::<cdda_sim::components::BodyTemperature>(e)
+        .get::<cdda_actor::components::BodyTemperature>(e)
         .unwrap();
     assert!((temp.0 - 40.0).abs() < f64::EPSILON);
 }
@@ -101,30 +101,30 @@ fn body_temperature_hyperthermia() {
 #[test]
 fn wetness_dry() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::Wetness>();
+    test.register::<cdda_actor::components::Wetness>();
 
-    let e = test.spawn((cdda_sim::components::Wetness(0),));
-    let wet = test.get::<cdda_sim::components::Wetness>(e).unwrap();
+    let e = test.spawn((cdda_actor::components::Wetness(0),));
+    let wet = test.get::<cdda_actor::components::Wetness>(e).unwrap();
     assert_eq!(wet.0, 0);
 }
 
 #[test]
 fn wetness_wet() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::Wetness>();
+    test.register::<cdda_actor::components::Wetness>();
 
-    let e = test.spawn((cdda_sim::components::Wetness(100),));
-    let wet = test.get::<cdda_sim::components::Wetness>(e).unwrap();
+    let e = test.spawn((cdda_actor::components::Wetness(100),));
+    let wet = test.get::<cdda_actor::components::Wetness>(e).unwrap();
     assert_eq!(wet.0, 100);
 }
 
 #[test]
 fn wetness_soaked() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::Wetness>();
+    test.register::<cdda_actor::components::Wetness>();
 
-    let e = test.spawn((cdda_sim::components::Wetness(500),));
-    let wet = test.get::<cdda_sim::components::Wetness>(e).unwrap();
+    let e = test.spawn((cdda_actor::components::Wetness(500),));
+    let wet = test.get::<cdda_actor::components::Wetness>(e).unwrap();
     assert_eq!(wet.0, 500);
 }
 
@@ -135,15 +135,15 @@ fn wetness_soaked() {
 #[test]
 fn temperature_and_wetness_independent() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::BodyTemperature>();
-    test.register::<cdda_sim::components::Wetness>();
+    test.register::<cdda_actor::components::BodyTemperature>();
+    test.register::<cdda_actor::components::Wetness>();
 
     let e = test.spawn((
-        cdda_sim::components::BodyTemperature(36.5),
-        cdda_sim::components::Wetness(100),
+        cdda_actor::components::BodyTemperature(36.5),
+        cdda_actor::components::Wetness(100),
     ));
-    assert!(test.get::<cdda_sim::components::BodyTemperature>(e).is_some());
-    assert!(test.get::<cdda_sim::components::Wetness>(e).is_some());
+    assert!(test.get::<cdda_actor::components::BodyTemperature>(e).is_some());
+    assert!(test.get::<cdda_actor::components::Wetness>(e).is_some());
 }
 
 // ---------------------------------------------------------------------------
@@ -176,33 +176,33 @@ fn temperature_affects_spoilage_rate() {
 #[test]
 fn preserves_temp_marker() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::PreservesTemp>();
+    test.register::<cdda_item::components::PreservesTemp>();
 
-    let e = test.spawn((cdda_sim::components::PreservesTemp,));
+    let e = test.spawn((cdda_item::components::PreservesTemp,));
     assert!(test
         .world()
         .entity(e)
-        .contains::<cdda_sim::components::PreservesTemp>());
+        .contains::<cdda_item::components::PreservesTemp>());
 }
 
 #[test]
 fn sealed_and_preserves_temp() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::Sealed>();
-    test.register::<cdda_sim::components::PreservesTemp>();
+    test.register::<cdda_item::components::Sealed>();
+    test.register::<cdda_item::components::PreservesTemp>();
 
     let e = test.spawn((
-        cdda_sim::components::Sealed,
-        cdda_sim::components::PreservesTemp,
+        cdda_item::components::Sealed,
+        cdda_item::components::PreservesTemp,
     ));
     assert!(test
         .world()
         .entity(e)
-        .contains::<cdda_sim::components::Sealed>());
+        .contains::<cdda_item::components::Sealed>());
     assert!(test
         .world()
         .entity(e)
-        .contains::<cdda_sim::components::PreservesTemp>());
+        .contains::<cdda_item::components::PreservesTemp>());
 }
 
 // ---------------------------------------------------------------------------

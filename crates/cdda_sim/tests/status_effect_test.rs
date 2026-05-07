@@ -11,18 +11,18 @@ fn empty_entity(test: &mut TestBed) -> Entity {
 #[test]
 fn effect_has_id_and_duration() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::StatusEffect>();
+    test.register::<cdda_actor::components::StatusEffect>();
 
     let creature = empty_entity(&mut test);
     let e = test.spawn((
-        cdda_sim::components::EffectOn(creature),
-        cdda_sim::components::StatusEffect {
+        cdda_actor::components::EffectOn(creature),
+        cdda_actor::components::StatusEffect {
             effect_id: cdda_core::EffectId::from(0u32),
             intensity: 1,
             remaining: Time::from_turns(100),
         },
     ));
-    let eff = test.get::<cdda_sim::components::StatusEffect>(e).unwrap();
+    let eff = test.get::<cdda_actor::components::StatusEffect>(e).unwrap();
     assert_eq!(eff.intensity, 1);
     assert!(eff.remaining.as_turns() > 0);
 }
@@ -30,19 +30,19 @@ fn effect_has_id_and_duration() {
 #[test]
 fn effect_intensity_increases() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::StatusEffect>();
+    test.register::<cdda_actor::components::StatusEffect>();
 
     let creature = empty_entity(&mut test);
     let e = test.spawn((
-        cdda_sim::components::EffectOn(creature),
-        cdda_sim::components::StatusEffect {
+        cdda_actor::components::EffectOn(creature),
+        cdda_actor::components::StatusEffect {
             effect_id: cdda_core::EffectId::from(0u32),
             intensity: 2,
             remaining: Time::from_turns(100),
         },
     ));
     assert_eq!(
-        test.get::<cdda_sim::components::StatusEffect>(e)
+        test.get::<cdda_actor::components::StatusEffect>(e)
             .unwrap()
             .intensity,
         2
@@ -52,12 +52,12 @@ fn effect_intensity_increases() {
 #[test]
 fn effect_duration_decays() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::StatusEffect>();
+    test.register::<cdda_actor::components::StatusEffect>();
 
     let creature = empty_entity(&mut test);
     let e = test.spawn((
-        cdda_sim::components::EffectOn(creature),
-        cdda_sim::components::StatusEffect {
+        cdda_actor::components::EffectOn(creature),
+        cdda_actor::components::StatusEffect {
             effect_id: cdda_core::EffectId::from(0u32),
             intensity: 1,
             remaining: Time::from_turns(50),
@@ -66,12 +66,12 @@ fn effect_duration_decays() {
     {
         let mut eff = test
             .world_mut()
-            .get_mut::<cdda_sim::components::StatusEffect>(e)
+            .get_mut::<cdda_actor::components::StatusEffect>(e)
             .unwrap();
         eff.remaining = eff.remaining - Time::from_turns(10);
     }
     assert_eq!(
-        test.get::<cdda_sim::components::StatusEffect>(e)
+        test.get::<cdda_actor::components::StatusEffect>(e)
             .unwrap()
             .remaining
             .as_turns(),
@@ -81,7 +81,7 @@ fn effect_duration_decays() {
 
 #[test]
 fn effect_expired_at_zero() {
-    let eff = cdda_sim::components::StatusEffect {
+    let eff = cdda_actor::components::StatusEffect {
         effect_id: cdda_core::EffectId::from(0u32),
         intensity: 1,
         remaining: Time::from_turns(0),
@@ -93,56 +93,56 @@ fn effect_expired_at_zero() {
 #[test]
 fn bleeding_marker_present() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::IsAlive>();
-    test.register::<cdda_sim::components::Bleeding>();
+    test.register::<cdda_actor::components::IsAlive>();
+    test.register::<cdda_actor::components::Bleeding>();
 
     let e = test.spawn((
-        cdda_sim::components::IsAlive,
-        cdda_sim::components::Bleeding,
+        cdda_actor::components::IsAlive,
+        cdda_actor::components::Bleeding,
     ));
     assert!(test
         .world()
         .entity(e)
-        .contains::<cdda_sim::components::Bleeding>());
+        .contains::<cdda_actor::components::Bleeding>());
 }
 
 #[test]
 fn stunned_marker_present() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::Stunned>();
-    let e = test.spawn((cdda_sim::components::Stunned,));
+    test.register::<cdda_actor::components::Stunned>();
+    let e = test.spawn((cdda_actor::components::Stunned,));
     assert!(test
         .world()
         .entity(e)
-        .contains::<cdda_sim::components::Stunned>());
+        .contains::<cdda_actor::components::Stunned>());
 }
 
 #[test]
 fn on_fire_marker_present() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::OnFire>();
-    let e = test.spawn((cdda_sim::components::OnFire,));
+    test.register::<cdda_actor::components::OnFire>();
+    let e = test.spawn((cdda_actor::components::OnFire,));
     assert!(test
         .world()
         .entity(e)
-        .contains::<cdda_sim::components::OnFire>());
+        .contains::<cdda_actor::components::OnFire>());
 }
 
 // Effect relationships
 #[test]
 fn effect_points_to_creature() {
     let mut test = TestBed::new();
-    let creature = test.spawn((cdda_sim::components::IsAlive,));
+    let creature = test.spawn((cdda_actor::components::IsAlive,));
     let effect = test.spawn((
-        cdda_sim::components::EffectOn(creature),
-        cdda_sim::components::StatusEffect {
+        cdda_actor::components::EffectOn(creature),
+        cdda_actor::components::StatusEffect {
             effect_id: cdda_core::EffectId::from(0u32),
             intensity: 1,
             remaining: Time::from_turns(100),
         },
     ));
     assert_eq!(
-        test.get::<cdda_sim::components::EffectOn>(effect)
+        test.get::<cdda_actor::components::EffectOn>(effect)
             .unwrap()
             .0,
         creature
@@ -153,37 +153,37 @@ fn effect_points_to_creature() {
 #[test]
 fn morale_default_is_zero() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::Morale>();
-    let e = test.spawn((cdda_sim::components::Morale(0),));
-    assert_eq!(test.get::<cdda_sim::components::Morale>(e).unwrap().0, 0);
+    test.register::<cdda_actor::components::Morale>();
+    let e = test.spawn((cdda_actor::components::Morale(0),));
+    assert_eq!(test.get::<cdda_actor::components::Morale>(e).unwrap().0, 0);
 }
 
 #[test]
 fn morale_increases_with_bonus() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::Morale>();
-    let e = test.spawn((cdda_sim::components::Morale(10),));
-    assert!(test.get::<cdda_sim::components::Morale>(e).unwrap().0 > 0);
+    test.register::<cdda_actor::components::Morale>();
+    let e = test.spawn((cdda_actor::components::Morale(10),));
+    assert!(test.get::<cdda_actor::components::Morale>(e).unwrap().0 > 0);
 }
 
 #[test]
 fn morale_negative_from_bad_events() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::Morale>();
-    let e = test.spawn((cdda_sim::components::Morale(-10),));
-    assert!(test.get::<cdda_sim::components::Morale>(e).unwrap().0 < 0);
+    test.register::<cdda_actor::components::Morale>();
+    let e = test.spawn((cdda_actor::components::Morale(-10),));
+    assert!(test.get::<cdda_actor::components::Morale>(e).unwrap().0 < 0);
 }
 
 #[test]
 fn morale_bonus_has_reason_and_duration() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::MoraleBonus>();
-    let e = test.spawn((cdda_sim::components::MoraleBonus {
+    test.register::<cdda_actor::components::MoraleBonus>();
+    let e = test.spawn((cdda_actor::components::MoraleBonus {
         reason: "ate_ice_cream".to_string(),
         amount: 15,
         remaining: Time::from_turns(200),
     },));
-    let bonus = test.get::<cdda_sim::components::MoraleBonus>(e).unwrap();
+    let bonus = test.get::<cdda_actor::components::MoraleBonus>(e).unwrap();
     assert_eq!(bonus.reason, "ate_ice_cream");
     assert_eq!(bonus.amount, 15);
     assert!(bonus.remaining.as_turns() > 0);
@@ -193,37 +193,37 @@ fn morale_bonus_has_reason_and_duration() {
 #[test]
 fn creature_can_have_multiple_statuses() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::IsAlive>();
-    test.register::<cdda_sim::components::Stunned>();
-    test.register::<cdda_sim::components::Bleeding>();
+    test.register::<cdda_actor::components::IsAlive>();
+    test.register::<cdda_actor::components::Stunned>();
+    test.register::<cdda_actor::components::Bleeding>();
 
     let e = test.spawn((
-        cdda_sim::components::IsAlive,
-        cdda_sim::components::Stunned,
-        cdda_sim::components::Bleeding,
+        cdda_actor::components::IsAlive,
+        cdda_actor::components::Stunned,
+        cdda_actor::components::Bleeding,
     ));
     assert!(test
         .world()
         .entity(e)
-        .contains::<cdda_sim::components::IsAlive>());
+        .contains::<cdda_actor::components::IsAlive>());
     assert!(test
         .world()
         .entity(e)
-        .contains::<cdda_sim::components::Stunned>());
+        .contains::<cdda_actor::components::Stunned>());
     assert!(test
         .world()
         .entity(e)
-        .contains::<cdda_sim::components::Bleeding>());
+        .contains::<cdda_actor::components::Bleeding>());
 }
 
 #[test]
 fn status_removed_after_despawn() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::Stunned>();
+    test.register::<cdda_actor::components::Stunned>();
 
-    let e = test.spawn((cdda_sim::components::Stunned,));
+    let e = test.spawn((cdda_actor::components::Stunned,));
     test.world_mut().despawn(e);
 
-    let mut q = test.world_mut().query::<&cdda_sim::components::Stunned>();
+    let mut q = test.world_mut().query::<&cdda_actor::components::Stunned>();
     assert!(q.iter(test.world()).next().is_none());
 }

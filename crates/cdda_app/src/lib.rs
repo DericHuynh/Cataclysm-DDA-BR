@@ -8,23 +8,32 @@ use bevy::ecs::message::MessageReader;
 use bevy::prelude::*;
 use bevy::render::settings::{RenderCreation, WgpuSettings};
 use bevy::render::RenderPlugin;
+use bevy::time::common_conditions::on_timer;
 use bevy::window::PresentMode;
+use std::time::Duration;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_state::app::AppExtStates;
-use bevy_state::state::{NextState, State};
+use bevy_state::prelude::OnEnter;
+use bevy_state::state::NextState;
 
-use cdda_core::GameSet;
+use cdda_ui::Screen;
+use cdda_core::{GameSet, SimSet};
 use cdda_input::{GameAction, InputAction};
 
 use cdda_sim::def_world::load_data_system;
 use cdda_sim::state::AppState;
 use cdda_sim::systems::ai::ai_phase;
+use cdda_sim::systems::bionics::tick_bionics;
 use cdda_sim::systems::combat::combat_phase;
 use cdda_sim::systems::effects::effects_phase;
+use cdda_sim::systems::healing::healing_phase;
+use cdda_sim::systems::morale::tick_morale_decay;
 use cdda_sim::systems::movement::movement_phase;
 use cdda_sim::systems::spatial::update_spatial_index;
 use cdda_sim::systems::spawning::spawning_phase;
+use cdda_sim::systems::temperature::temperature_phase;
 use cdda_sim::systems::turn::{debug_turn_queue, tick_move_points};
+use cdda_sim::systems::vision::update_vision;
 use cdda_sim::world_setup;
 
 // ---------------------------------------------------------------------------
@@ -53,23 +62,6 @@ impl Default for CddaStartupConfig {
 }
 
 // ---------------------------------------------------------------------------
-// Run condition functions
-// ---------------------------------------------------------------------------
-
-fn in_main_menu(state: Res<State<AppState>>) -> bool {
-    *state.get() == AppState::MainMenu
-}
-fn in_data_loading(state: Res<State<AppState>>) -> bool {
-    *state.get() == AppState::DataLoading
-}
-fn in_world_gen(state: Res<State<AppState>>) -> bool {
-    *state.get() == AppState::WorldGen
-}
-fn in_ingame(state: Res<State<AppState>>) -> bool {
-    *state.get() == AppState::InGame
-}
-
-// ---------------------------------------------------------------------------
 // StartGame transition system
 // ---------------------------------------------------------------------------
 
@@ -88,6 +80,123 @@ pub fn start_game_on_event(
 }
 
 // ---------------------------------------------------------------------------
+// Reflect type registration
+// ---------------------------------------------------------------------------
+
+fn register_reflect_types(app: &mut App) {
+    use cdda_sim::components::{InFlight, Solid, Velocity, WorldPosition};
+    use cdda_actor::components::*;
+    use cdda_item::components::*;
+
+    // Spatial
+    app.register_type::<WorldPosition>();
+    app.register_type::<Solid>();
+    app.register_type::<Velocity>();
+    app.register_type::<InFlight>();
+
+    // Creature identity
+    app.register_type::<Creature>();
+    app.register_type::<Gender>();
+    app.register_type::<PlayerData>();
+    app.register_type::<NpcPersonality>();
+    app.register_type::<NpcData>();
+
+    // Stats
+    app.register_type::<Health>();
+    app.register_type::<Stats>();
+    app.register_type::<Faction>();
+    app.register_type::<BodyTemperature>();
+    app.register_type::<Wetness>();
+
+    // Combat
+    app.register_type::<DamageReduction>();
+    app.register_type::<CombatStats>();
+    app.register_type::<Vision>();
+
+    // Skills (relationship-based)
+    app.register_type::<SkillOf>();
+    app.register_type::<CreatureSkills>();
+    app.register_type::<SkillEntry>();
+
+    // Mutations (relationship-based)
+    app.register_type::<MutationOf>();
+    app.register_type::<CreatureMutations>();
+    app.register_type::<MutationEntry>();
+
+    // Proficiencies (relationship-based)
+    app.register_type::<ProficiencyOf>();
+    app.register_type::<CreatureProficiencies>();
+    app.register_type::<ProficiencyEntry>();
+
+    // Bionics
+    app.register_type::<BionicOf>();
+    app.register_type::<InstalledBionics>();
+    app.register_type::<Bionic>();
+
+    // Morale
+    app.register_type::<MoraleBonusOf>();
+    app.register_type::<MoraleBonuses>();
+    app.register_type::<MoraleBonus>();
+    app.register_type::<Morale>();
+
+    // Status effects
+    app.register_type::<EffectOn>();
+    app.register_type::<ActiveEffects>();
+    app.register_type::<StatusEffect>();
+
+    // Turn scheduling + status markers
+    app.register_type::<MovePoints>();
+    app.register_type::<Speed>();
+    app.register_type::<IsAlive>();
+    app.register_type::<Stunned>();
+    app.register_type::<Bleeding>();
+    app.register_type::<OnFire>();
+
+    // Body parts
+    app.register_type::<BodyPartOf>();
+    app.register_type::<CreatureBodyParts>();
+    app.register_type::<BodyPartDef>();
+    app.register_type::<BodyPartSlot>();
+    app.register_type::<BodyPartHp>();
+    app.register_type::<BodyPartBroken>();
+    app.register_type::<BodyPartSevered>();
+
+    // Item state
+    app.register_type::<DefOrigin>();
+    app.register_type::<StackCount>();
+    app.register_type::<CurrentCharges>();
+    app.register_type::<LoadedAmmo>();
+    app.register_type::<Spoilable>();
+    app.register_type::<ItemDamage>();
+
+    // Container tags
+    app.register_type::<Sealed>();
+    app.register_type::<Rigid>();
+    app.register_type::<Watertight>();
+    app.register_type::<PreservesTemp>();
+    app.register_type::<Fireproof>();
+    app.register_type::<GasTight>();
+
+    // Relationships
+    app.register_type::<InsideContainer>();
+    app.register_type::<ContainerContents>();
+    app.register_type::<WieldedBy>();
+    app.register_type::<WieldedItems>();
+    app.register_type::<WornOn>();
+    app.register_type::<WornBy>();
+    app.register_type::<MountedOn>();
+    app.register_type::<MountedPockets>();
+
+    // Pocket system
+    app.register_type::<Pocket>();
+    app.register_type::<PocketType>();
+    app.register_type::<PocketRestriction>();
+    app.register_type::<AttachmentSlot>();
+    app.register_type::<AttachmentType>();
+    app.register_type::<Container>();
+}
+
+// ---------------------------------------------------------------------------
 // Root plugin
 // ---------------------------------------------------------------------------
 
@@ -96,12 +205,46 @@ pub struct CddaPlugin;
 impl Plugin for CddaPlugin {
     fn build(&self, app: &mut App) {
         world_setup::setup_world(app.world_mut());
+        register_reflect_types(app);
 
         app.init_state::<AppState>();
+
+        // Fix #5: Drive Screen from AppState so sim and render never desync.
+        app.add_systems(OnEnter(AppState::MainMenu), |mut next: ResMut<NextState<Screen>>| {
+            next.set(Screen::MainMenu);
+        });
+        app.add_systems(OnEnter(AppState::DataLoading), |mut next: ResMut<NextState<Screen>>| {
+            next.set(Screen::DevWorldgen); // loading screen reuses devworldgen view
+        });
+        app.add_systems(OnEnter(AppState::WorldGen), |mut next: ResMut<NextState<Screen>>| {
+            next.set(Screen::DevWorldgen);
+        });
+        app.add_systems(OnEnter(AppState::InGame), |mut next: ResMut<NextState<Screen>>| {
+            next.set(Screen::Gameplay);
+        });
 
         app.configure_sets(
             Update,
             (GameSet::Input, GameSet::Sim, GameSet::Render).chain(),
+        );
+        app.configure_sets(
+            Update,
+            (
+                SimSet::TurnTick,
+                SimSet::Ai,
+                SimSet::Movement,
+                SimSet::Combat,
+                SimSet::Effects,
+                SimSet::Healing,
+                SimSet::Bionics,
+                SimSet::Morale,
+                SimSet::Temperature,
+                SimSet::Vision,
+                SimSet::Spawning,
+                SimSet::SpatialUpdate,
+            )
+                .chain()
+                .in_set(GameSet::Sim),
         );
 
         app.add_plugins(cdda_render::CddaRenderPlugin);
@@ -134,46 +277,40 @@ impl Plugin for CddaPlugin {
             });
         }
 
-        app.add_systems(Update, load_data_system.run_if(in_data_loading));
-        app.add_systems(Update, start_game_on_event.run_if(in_main_menu));
+        app.add_systems(Update, load_data_system.run_if(in_state(AppState::DataLoading)));
+        app.add_systems(Update, start_game_on_event.run_if(in_state(AppState::MainMenu)));
         app.add_systems(
             Update,
-            cdda_sim::def_world::worldgen_system.run_if(in_world_gen),
+            cdda_sim::def_world::worldgen_system.run_if(in_state(AppState::WorldGen)),
+        );
+
+        // Fix #6: Gate turn tick so MP isn't granted every frame.
+        // tick_move_points runs at most once per 100 ms (10 turns/sec real-time max).
+        app.add_systems(
+            Update,
+            tick_move_points
+                .in_set(SimSet::TurnTick)
+                .run_if(in_state(AppState::InGame))
+                .run_if(on_timer(Duration::from_millis(100))),
         );
 
         app.add_systems(
             Update,
             (
-                tick_move_points.run_if(in_ingame).in_set(GameSet::Sim),
-                ai_phase
-                    .run_if(in_ingame)
-                    .after(tick_move_points)
-                    .in_set(GameSet::Sim),
-                movement_phase
-                    .run_if(in_ingame)
-                    .after(ai_phase)
-                    .in_set(GameSet::Sim),
-                combat_phase
-                    .run_if(in_ingame)
-                    .after(movement_phase)
-                    .in_set(GameSet::Sim),
-                effects_phase
-                    .run_if(in_ingame)
-                    .after(combat_phase)
-                    .in_set(GameSet::Sim),
-                spawning_phase
-                    .run_if(in_ingame)
-                    .after(effects_phase)
-                    .in_set(GameSet::Sim),
-                update_spatial_index
-                    .run_if(in_ingame)
-                    .after(spawning_phase)
-                    .in_set(GameSet::Sim),
-                debug_turn_queue
-                    .run_if(in_ingame)
-                    .after(update_spatial_index)
-                    .in_set(GameSet::Sim),
-            ),
+                ai_phase.in_set(SimSet::Ai),
+                movement_phase.in_set(SimSet::Movement),
+                combat_phase.in_set(SimSet::Combat),
+                effects_phase.in_set(SimSet::Effects),
+                healing_phase.in_set(SimSet::Healing),
+                tick_bionics.in_set(SimSet::Bionics),
+                tick_morale_decay.in_set(SimSet::Morale),
+                temperature_phase.in_set(SimSet::Temperature),
+                update_vision.in_set(SimSet::Vision),
+                spawning_phase.in_set(SimSet::Spawning),
+                update_spatial_index.in_set(SimSet::SpatialUpdate),
+                debug_turn_queue.in_set(SimSet::SpatialUpdate),
+            )
+                .run_if(in_state(AppState::InGame)),
         );
     }
 }

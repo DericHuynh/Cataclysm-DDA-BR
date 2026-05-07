@@ -2,6 +2,7 @@
 
 use bevy_ecs::prelude::Entity;
 use cdda_actor::components::*;
+use cdda_item::components::*;
 use cdda_core::*;
 use cdda_core::coords::WorldPos;
 use cdda_sim::components::*;

@@ -2024,6 +2024,7 @@ name = "cdda_actor"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
+ "bevy_reflect",
  "cdda_core",
  "cdda_sim",
 ]
@@ -2036,8 +2037,10 @@ dependencies = [
  "bevy-inspector-egui",
  "bevy_egui",
  "bevy_state",
+ "cdda_actor",
  "cdda_core",
  "cdda_input",
+ "cdda_item",
  "cdda_render",
  "cdda_replay",
  "cdda_sim",
@@ -2063,6 +2066,7 @@ name = "cdda_core"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
+ "bevy_reflect",
  "rand",
  "schemars",
  "serde",
@@ -2100,6 +2104,7 @@ name = "cdda_item"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
+ "bevy_reflect",
  "cdda_core",
  "cdda_sim",
 ]
@@ -5503,8 +5508,10 @@ name = "tests"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
+ "cdda_actor",
  "cdda_core",
  "cdda_data",
+ "cdda_item",
  "cdda_sim",
  "serde_json",
 ]

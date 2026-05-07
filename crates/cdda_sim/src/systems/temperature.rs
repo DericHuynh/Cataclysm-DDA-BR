@@ -6,9 +6,10 @@
 //! - Spoilage rate for perishable items based on temperature
 //! - Tick processing for both temperature and spoilage
 
-use crate::components::*;
 use crate::def_components::ArmourPart;
 use bevy_ecs::prelude::*;
+use cdda_actor::components::BodyTemperature;
+use cdda_item::components::Spoilable;
 
 /// Update body temperature for a creature based on ambient temperature and worn items.
 pub fn update_body_temperature(world: &mut World, entity: Entity, ambient_temp_celsius: f64) {

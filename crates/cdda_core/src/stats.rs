@@ -1,9 +1,10 @@
+use bevy_reflect::Reflect;
 use serde::{Deserialize, Serialize};
 
 /// Core creature statistics.
 ///
 /// These are the base attributes that every creature has.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Reflect)]
 pub struct Stats {
     pub strength: u32,
     pub dexterity: u32,

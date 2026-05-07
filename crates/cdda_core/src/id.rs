@@ -4,6 +4,7 @@
 //! * [`GenId`]   – a generation-counted handle for world entities (e.g. items on the map).
 //! * Per-category ID types wrap [`DefIdx`] to give each registry slot a concrete type.
 
+use bevy_reflect::Reflect;
 use core::fmt;
 use core::fmt::{Debug, Formatter};
 
@@ -15,7 +16,7 @@ use core::fmt::{Debug, Formatter};
 ///
 /// These are never recycled and are valid for the entire lifetime of the
 /// registry.  Comparison is by numeric value only.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Reflect)]
 pub struct DefIdx(pub u32);
 
 impl Debug for DefIdx {
@@ -111,7 +112,7 @@ pub enum DefCategory {
 macro_rules! def_id_type {
     ($name:ident, $variant:ident) => {
         #[doc = concat!("Concrete ID for a [`", stringify!($name), "`](crate::defs::", stringify!($name), ") definition.")]
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
         pub struct $name(pub DefIdx);
 
         impl From<DefIdx> for $name {

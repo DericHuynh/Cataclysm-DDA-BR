@@ -83,10 +83,10 @@ fn item_weight_positive() {
 #[test]
 fn stack_count_minimum_one() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::StackCount>();
-    let item = test.spawn((cdda_sim::components::StackCount::new(1),));
+    test.register::<cdda_item::components::StackCount>();
+    let item = test.spawn((cdda_item::components::StackCount::new(1),));
     assert_eq!(
-        test.get::<cdda_sim::components::StackCount>(item)
+        test.get::<cdda_item::components::StackCount>(item)
             .unwrap()
             .get(),
         1
@@ -96,10 +96,10 @@ fn stack_count_minimum_one() {
 #[test]
 fn stack_count_multi() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::StackCount>();
-    let item = test.spawn((cdda_sim::components::StackCount::new(10),));
+    test.register::<cdda_item::components::StackCount>();
+    let item = test.spawn((cdda_item::components::StackCount::new(10),));
     assert_eq!(
-        test.get::<cdda_sim::components::StackCount>(item)
+        test.get::<cdda_item::components::StackCount>(item)
             .unwrap()
             .get(),
         10
@@ -109,5 +109,5 @@ fn stack_count_multi() {
 #[test]
 #[should_panic(expected = "StackCount must be >= 1")]
 fn stack_count_zero_panics() {
-    let _ = cdda_sim::components::StackCount::new(0);
+    let _ = cdda_item::components::StackCount::new(0);
 }

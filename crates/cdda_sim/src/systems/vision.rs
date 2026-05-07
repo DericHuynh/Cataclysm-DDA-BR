@@ -5,7 +5,6 @@
 //! Uses the `EntitySpatialIndex` for efficient spatial proximity queries
 //! and terrain opacity data from `WorldMap` for line-of-sight blocking.
 
-use crate::components::*;
 use bevy_ecs::prelude::*;
 use cdda_actor::components::*;
 

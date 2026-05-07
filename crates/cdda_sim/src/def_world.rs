@@ -11,10 +11,12 @@
 //! Systems that need definition data query directly:
 //! `Query<&GunData, With<IsDef>>` — the entities are in the main World.
 
+use crate::components::{Solid, WorldPosition};
 use crate::def_components::*;
 use crate::state::{AppState, GameTime, LoadingStatus, StartupConfig};
 use bevy_ecs::prelude::*;
 use bevy_state::state::NextState;
+use cdda_actor::components::{Creature, Faction, Gender, Health, IsAlive, MovePoints, PlayerData, Speed};
 use cdda_core::coords::WorldPos;
 use std::collections::HashMap;
 
@@ -977,33 +979,33 @@ pub fn worldgen_system(world: &mut World) {
     if has_defs {
         let pos = WorldPos::new(0, 0, cdda_core::ZLevel::new(0));
         world.spawn((
-            crate::components::PlayerData {
+            PlayerData {
                 name: "Survivor".into(),
-                gender: crate::components::Gender::Male,
+                gender: Gender::Male,
                 age: 25,
                 height: 175,
                 blood_type: "O+".into(),
                 profession: None,
                 scenario: None,
             },
-            crate::components::IsAlive,
-            crate::components::WorldPosition(pos),
-            crate::components::Creature {
+            IsAlive,
+            WorldPosition(pos),
+            Creature {
                 def_id: "player".into(),
                 name: "Survivor".into(),
                 species: cdda_core::SpeciesId::from(0u32),
                 symbol: '@',
             },
-            crate::components::Health {
+            Health {
                 current: 100,
                 max: 100,
             },
-            crate::components::Faction {
+            Faction {
                 id: cdda_core::FactionId::from(0u32),
             },
-            crate::components::Solid,
-            crate::components::MovePoints(100),
-            crate::components::Speed(100),
+            Solid,
+            MovePoints(100),
+            Speed(100),
         ));
         info!("Spawned player at origin (0,0). Use the map to explore all buildings.");
     }

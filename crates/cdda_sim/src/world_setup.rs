@@ -3,8 +3,10 @@
 use bevy_ecs::prelude::Resource;
 use bevy_ecs::world::World;
 
-use crate::components::*;
+use crate::components::{InFlight, Solid, Velocity, WorldPosition};
 use crate::dev_worldgen::DevWorldgenConfig;
+use cdda_actor::components::*;
+use cdda_item::components::*;
 use crate::spatial::EntitySpatialIndex;
 use crate::state::*;
 use crate::systems::turn::TurnQueue;
@@ -71,10 +73,20 @@ pub fn setup_world(world: &mut World) {
     world.register_component::<BodyTemperature>();
     world.register_component::<Wetness>();
 
-    // --- Creature progression ---
-    world.register_component::<SkillSet>();
-    world.register_component::<Mutations>();
-    world.register_component::<ProficiencySet>();
+    // --- Skills (relationship-based) ---
+    world.register_component::<SkillOf>();
+    world.register_component::<CreatureSkills>();
+    world.register_component::<SkillEntry>();
+
+    // --- Mutations (relationship-based) ---
+    world.register_component::<MutationOf>();
+    world.register_component::<CreatureMutations>();
+    world.register_component::<MutationEntry>();
+
+    // --- Proficiencies (relationship-based) ---
+    world.register_component::<ProficiencyOf>();
+    world.register_component::<CreatureProficiencies>();
+    world.register_component::<ProficiencyEntry>();
 
     // --- Bionics ---
     world.register_component::<BionicOf>();
@@ -149,3 +161,4 @@ pub fn setup_world(world: &mut World) {
     world.register_component::<BodyPartSevered>();
     world.register_component::<InFlight>();
 }
+

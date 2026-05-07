@@ -2,7 +2,6 @@
 //!
 //! Emits DamageEvent, DeathEvent, and SoundEvent.
 
-use crate::components::*;
 use crate::def_components::{AmmoData, GunData, WeaponData};
 use crate::events::*;
 use bevy_ecs::prelude::*;

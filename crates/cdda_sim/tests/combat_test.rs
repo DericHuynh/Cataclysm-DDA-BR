@@ -14,7 +14,7 @@ use cdda_sim::test_utils::TestBed;
 /// Calculate melee hit probability from `CombatStats`.
 ///
 /// Formula: `(melee_skill * 0.1) + (melee_dice * melee_dice_sides * 0.01)`
-fn melee_to_hit(stats: &cdda_sim::components::CombatStats) -> f32 {
+fn melee_to_hit(stats: &cdda_actor::components::CombatStats) -> f32 {
     (stats.melee_skill as f32 * 0.1)
         + (stats.melee_dice as f32 * stats.melee_dice_sides as f32 * 0.01)
 }
@@ -38,14 +38,14 @@ fn apply_armor(raw_damage: u32, armor: u32) -> u32 {
 #[test]
 fn combat_stats_initialized() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::CombatStats>();
+    test.register::<cdda_actor::components::CombatStats>();
 
-    let e = test.spawn((cdda_sim::components::CombatStats {
+    let e = test.spawn((cdda_actor::components::CombatStats {
         melee_skill: 5,
         melee_dice: 2,
         melee_dice_sides: 6,
         dodge: 2,
-        armor: cdda_sim::components::DamageReduction {
+        armor: cdda_actor::components::DamageReduction {
             bash: 0,
             cut: 0,
             pierce: 0,
@@ -56,7 +56,7 @@ fn combat_stats_initialized() {
             cold: 0,
         },
     },));
-    let stats = test.get::<cdda_sim::components::CombatStats>(e).unwrap();
+    let stats = test.get::<cdda_actor::components::CombatStats>(e).unwrap();
     assert_eq!(stats.melee_skill, 5);
     assert_eq!(stats.melee_dice, 2);
     assert_eq!(stats.melee_dice_sides, 6);
@@ -66,14 +66,14 @@ fn combat_stats_initialized() {
 #[test]
 fn combat_stats_zero_skill() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::CombatStats>();
+    test.register::<cdda_actor::components::CombatStats>();
 
-    let e = test.spawn((cdda_sim::components::CombatStats {
+    let e = test.spawn((cdda_actor::components::CombatStats {
         melee_skill: 0,
         melee_dice: 1,
         melee_dice_sides: 1,
         dodge: 0,
-        armor: cdda_sim::components::DamageReduction {
+        armor: cdda_actor::components::DamageReduction {
             bash: 0,
             cut: 0,
             pierce: 0,
@@ -84,7 +84,7 @@ fn combat_stats_zero_skill() {
             cold: 0,
         },
     },));
-    let stats = test.get::<cdda_sim::components::CombatStats>(e).unwrap();
+    let stats = test.get::<cdda_actor::components::CombatStats>(e).unwrap();
     assert_eq!(stats.melee_skill, 0);
     assert_eq!(stats.dodge, 0);
 }
@@ -95,7 +95,7 @@ fn combat_stats_zero_skill() {
 
 #[test]
 fn damage_reduction_bash() {
-    let armor = cdda_sim::components::DamageReduction {
+    let armor = cdda_actor::components::DamageReduction {
         bash: 5,
         cut: 0,
         pierce: 0,
@@ -111,7 +111,7 @@ fn damage_reduction_bash() {
 
 #[test]
 fn damage_reduction_multiple_types() {
-    let armor = cdda_sim::components::DamageReduction {
+    let armor = cdda_actor::components::DamageReduction {
         bash: 3,
         cut: 7,
         bullet: 12,
@@ -135,13 +135,13 @@ fn damage_reduction_multiple_types() {
 #[test]
 fn vision_range() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::Vision>();
+    test.register::<cdda_actor::components::Vision>();
 
-    let e = test.spawn((cdda_sim::components::Vision {
+    let e = test.spawn((cdda_actor::components::Vision {
         day_range: 40,
         night_range: 5,
     },));
-    let vision = test.get::<cdda_sim::components::Vision>(e).unwrap();
+    let vision = test.get::<cdda_actor::components::Vision>(e).unwrap();
     assert_eq!(vision.day_range, 40);
     assert_eq!(vision.night_range, 5);
 }
@@ -149,13 +149,13 @@ fn vision_range() {
 #[test]
 fn vision_no_night() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::Vision>();
+    test.register::<cdda_actor::components::Vision>();
 
-    let e = test.spawn((cdda_sim::components::Vision {
+    let e = test.spawn((cdda_actor::components::Vision {
         day_range: 40,
         night_range: 0,
     },));
-    let vision = test.get::<cdda_sim::components::Vision>(e).unwrap();
+    let vision = test.get::<cdda_actor::components::Vision>(e).unwrap();
     assert_eq!(vision.day_range, 40);
     assert_eq!(vision.night_range, 0);
 }
@@ -167,15 +167,15 @@ fn vision_no_night() {
 #[test]
 fn creature_identity() {
     let mut test = TestBed::new();
-    test.register::<cdda_sim::components::Creature>();
+    test.register::<cdda_actor::components::Creature>();
 
-    let e = test.spawn((cdda_sim::components::Creature {
+    let e = test.spawn((cdda_actor::components::Creature {
         def_id: "mon_zombie".to_string(),
         name: "zombie".to_string(),
         species: cdda_core::SpeciesId::from(0u32),
         symbol: 'Z',
     },));
-    let creature = test.get::<cdda_sim::components::Creature>(e).unwrap();
+    let creature = test.get::<cdda_actor::components::Creature>(e).unwrap();
     assert_eq!(creature.def_id, "mon_zombie");
     assert_eq!(creature.name, "zombie");
     assert_eq!(creature.symbol, 'Z');
@@ -188,12 +188,12 @@ fn creature_identity() {
 #[test]
 fn melee_to_hit_calculation() {
     // skill=0, dice=1, sides=6 => 0.06
-    let stats = cdda_sim::components::CombatStats {
+    let stats = cdda_actor::components::CombatStats {
         melee_skill: 0,
         melee_dice: 1,
         melee_dice_sides: 6,
         dodge: 0,
-        armor: cdda_sim::components::DamageReduction {
+        armor: cdda_actor::components::DamageReduction {
             bash: 0,
             cut: 0,
             pierce: 0,
@@ -208,12 +208,12 @@ fn melee_to_hit_calculation() {
     assert!((hit - 0.06).abs() < f32::EPSILON);
 
     // skill=5, dice=2, sides=6 => 0.62
-    let stats = cdda_sim::components::CombatStats {
+    let stats = cdda_actor::components::CombatStats {
         melee_skill: 5,
         melee_dice: 2,
         melee_dice_sides: 6,
         dodge: 0,
-        armor: cdda_sim::components::DamageReduction {
+        armor: cdda_actor::components::DamageReduction {
             bash: 0,
             cut: 0,
             pierce: 0,
@@ -228,12 +228,12 @@ fn melee_to_hit_calculation() {
     assert!((hit - 0.62).abs() < f32::EPSILON);
 
     // skill=10, dice=3, sides=8 => 1.24
-    let stats = cdda_sim::components::CombatStats {
+    let stats = cdda_actor::components::CombatStats {
         melee_skill: 10,
         melee_dice: 3,
         melee_dice_sides: 8,
         dodge: 0,
-        armor: cdda_sim::components::DamageReduction {
+        armor: cdda_actor::components::DamageReduction {
             bash: 0,
             cut: 0,
             pierce: 0,

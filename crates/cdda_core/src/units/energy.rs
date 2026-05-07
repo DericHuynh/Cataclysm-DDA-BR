@@ -1,3 +1,4 @@
+use bevy_reflect::Reflect;
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::cmp::Ordering;
@@ -11,7 +12,7 @@ use std::ops::{Add, Sub};
 ///
 /// Accepts both a bare number (interpreted as Joules) and CDDA-style
 /// human-readable strings like `"1 kJ"`, `"500 J"`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema, Reflect)]
 #[schemars(with = "String")]
 pub struct Energy(pub u64);
 

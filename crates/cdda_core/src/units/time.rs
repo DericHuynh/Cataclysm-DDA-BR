@@ -1,3 +1,4 @@
+use bevy_reflect::Reflect;
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::cmp::Ordering;
@@ -7,7 +8,7 @@ use std::ops::{Add, Sub};
 ///
 /// Accepts both bare numbers (turns) and CDDA-style strings like
 /// `"1 h"`, `"30 m"`, `"26 h 12 m"`, `"744m"`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema, Reflect)]
 #[schemars(with = "String")]
 pub struct Time(pub i64);
 

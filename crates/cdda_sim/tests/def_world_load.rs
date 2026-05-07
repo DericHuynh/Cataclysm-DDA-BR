@@ -11,7 +11,7 @@ use bevy_ecs::world::World;
 use cdda_data::loader::Loader;
 use cdda_data::raw_defs::{FurnitureDef, ItemDef, MonsterDef, StringOrArray, TerrainDef};
 use cdda_data::raw_types::DefId;
-use cdda_sim::components::Health;
+use cdda_actor::components::Health;
 use cdda_sim::def_components::*;
 use cdda_sim::def_world::build_def_world;
 use std::sync::Arc;

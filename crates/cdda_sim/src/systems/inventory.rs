@@ -1,10 +1,11 @@
 //! Inventory system — handle picking up, dropping, and moving items.
 
-use crate::components::*;
+use crate::components::WorldPosition;
 use crate::events::{ItemMoveEvent, MoveLocation};
 use bevy_ecs::prelude::*;
 use cdda_core::coords::WorldPos;
 use cdda_core::units::*;
+use cdda_item::components::{Container, ContainerContents, CurrentCharges, DefOrigin, InsideContainer, ItemDamage, Pocket, StackCount};
 
 /// Pick up an item from the ground into a container entity.
 /// Returns an event for the calling system to emit.
@@ -199,7 +200,6 @@ pub fn total_container_weight(world: &World, container: Entity) -> Weight {
 /// the incoming item's `StackCount` is added to the target and the incoming
 /// entity is despawned. Returns `true` if the merge succeeded.
 pub fn merge_or_stack(world: &mut World, target: Entity, incoming: Entity) -> bool {
-    use crate::components::DefOrigin;
     use crate::def_components::{DefStrId, ItemName};
 
     // Phase 1: type identity check — try DefOrigin first (fast, numeric)

@@ -1,3 +1,4 @@
+use bevy_reflect::Reflect;
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::cmp::Ordering;
@@ -6,7 +7,7 @@ use std::ops::{Add, Sub};
 /// Length measured in millimeters.
 ///
 /// Accepts both a bare number (mm) and CDDA-style strings like `"250 mm"`, `"10 cm"`, `"1 m"`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema, Reflect)]
 #[schemars(with = "String")]
 pub struct Length(pub u32);
 

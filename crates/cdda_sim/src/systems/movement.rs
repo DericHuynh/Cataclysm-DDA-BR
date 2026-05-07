@@ -4,7 +4,7 @@
 //! sequentially to prevent collision conflicts. Each movement costs
 //! `MovePoints` based on terrain, furniture, and creature state.
 
-use crate::components::*;
+use crate::components::{Solid, WorldPosition};
 use bevy_ecs::prelude::*;
 use cdda_actor::components::*;
 use cdda_core::coords::WorldPos;
@@ -90,13 +90,6 @@ pub fn is_passable(world: &World, entity: Entity, position: WorldPos) -> bool {
     true
 }
 
-/// Grant all creatures their `Speed` worth of move points.
-/// Sets `MovePoints = Speed` for each entity with `IsAlive`.
-pub fn gain_move_points(world: &mut World) {
-    // STUB: no-op — apply Speed → MovePoints not yet implemented
-    let _ = world;
-}
-
 // ---------------------------------------------------------------------------
 // Phase orchestrator
 // ---------------------------------------------------------------------------
@@ -106,6 +99,5 @@ pub fn gain_move_points(world: &mut World) {
 /// Entities with movement intents are moved sequentially
 /// to prevent collision conflicts.
 pub fn movement_phase(world: &mut World) {
-    // STUB: gain_move_points then no-op for movement
-    gain_move_points(world);
+    let _ = world;
 }

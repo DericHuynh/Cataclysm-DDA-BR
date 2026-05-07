@@ -1,3 +1,4 @@
+use bevy_reflect::Reflect;
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::cmp::Ordering;
@@ -6,7 +7,7 @@ use std::ops::{Add, Sub};
 /// Weight measured in grams.
 ///
 /// Accepts both a bare number (grams) and CDDA-style strings like `"100 g"`, `"1 kg"`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema, Reflect)]
 #[schemars(with = "String")]
 pub struct Weight(pub u64);
 

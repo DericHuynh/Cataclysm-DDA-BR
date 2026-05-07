@@ -15,14 +15,14 @@
 
 use bevy_ecs::component::Component;
 use bevy_ecs::entity::Entity;
-use std::collections::{HashMap, HashSet};
+use bevy_reflect::Reflect;
 
 // ===========================================================================
 // Creature identity
 // ===========================================================================
 
 /// Creature identity — present on monsters and NPCs.
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
 pub struct Creature {
     pub def_id: String,
     pub name: String,
@@ -32,19 +32,23 @@ pub struct Creature {
 
 /// Player character data — only present on the player entity.
 /// `With<PlayerData>` replaces `With<IsPlayer>`.
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
 pub struct PlayerData {
     pub name: String,
+    #[reflect(ignore)]
     pub gender: Gender,
     pub age: u32,
     pub height: u32,
     pub blood_type: String,
+    #[reflect(ignore)]
     pub profession: Option<cdda_core::ProfessionId>,
+    #[reflect(ignore)]
     pub scenario: Option<cdda_core::ScenarioId>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Reflect)]
 pub enum Gender {
+    #[default]
     Male,
     Female,
     NonBinary,
@@ -53,16 +57,17 @@ pub enum Gender {
 
 /// Non-player character data — present on NPCs.
 /// `With<NpcData>` replaces `With<IsNPC>`.
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
 pub struct NpcData {
     pub name: String,
     pub npc_class: String,
+    #[reflect(ignore)]
     pub personality: NpcPersonality,
     pub dialogue_id: Option<String>,
     pub schedule: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default, Reflect)]
 pub struct NpcPersonality {
     pub aggression: i32,
     pub bravery: i32,
@@ -74,28 +79,28 @@ pub struct NpcPersonality {
 // Stats
 // ===========================================================================
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
 pub struct Health {
     pub current: i32,
     pub max: i32,
 }
 
 /// Character attributes (strength, dexterity, intelligence, perception).
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Reflect)]
 pub struct Stats(pub cdda_core::Stats);
 
 /// Faction affiliation.
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Reflect)]
 pub struct Faction {
     pub id: cdda_core::FactionId,
 }
 
 /// Body temperature in degrees Celsius.
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Reflect)]
 pub struct BodyTemperature(pub f64);
 
 /// Wetness level (0 = dry, higher = wetter).
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Reflect)]
 pub struct Wetness(pub u32);
 
 // ===========================================================================
@@ -103,7 +108,7 @@ pub struct Wetness(pub u32);
 // ===========================================================================
 
 /// Damage reduction (applied before health loss is calculated).
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Reflect)]
 pub struct DamageReduction {
     pub bash: u32,
     pub cut: u32,
@@ -116,7 +121,7 @@ pub struct DamageReduction {
 }
 
 /// Combat statistics.
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
 pub struct CombatStats {
     pub melee_skill: i32,
     pub melee_dice: i32,
@@ -126,55 +131,100 @@ pub struct CombatStats {
 }
 
 /// Vision range (day/night).
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
 pub struct Vision {
     pub day_range: i32,
     pub night_range: i32,
 }
 
 // ===========================================================================
-// Skills, mutations, proficiencies
+// Skills — relationship-based (one entity per skill)
 // ===========================================================================
 
-/// Skill levels for a creature.  O(1) lookup by SkillId.
-#[derive(Component, Debug, Clone)]
-pub struct SkillSet {
-    pub skills: HashMap<cdda_core::SkillId, SkillLevel>,
+#[derive(Component, Reflect)]
+#[component(immutable)]
+#[relationship(relationship_target = CreatureSkills)]
+pub struct SkillOf(pub Entity);
+
+#[derive(Component, Reflect)]
+#[relationship_target(relationship = SkillOf, linked_spawn)]
+pub struct CreatureSkills(Vec<Entity>);
+
+impl CreatureSkills {
+    pub fn iter(&self) -> impl Iterator<Item = Entity> + '_ {
+        self.0.iter().copied()
+    }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct SkillLevel {
+/// Data on a skill entity: which skill, its current level and XP.
+#[derive(Component, Debug, Clone, Reflect)]
+pub struct SkillEntry {
+    pub skill_id: cdda_core::SkillId,
     pub level: u32,
     pub experience: u32,
 }
 
-/// Active mutations on a creature.
-#[derive(Component, Debug, Clone)]
-pub struct Mutations {
-    pub active: Vec<MutationState>,
+// ===========================================================================
+// Mutations — relationship-based (one entity per active mutation)
+// ===========================================================================
+
+#[derive(Component, Reflect)]
+#[component(immutable)]
+#[relationship(relationship_target = CreatureMutations)]
+pub struct MutationOf(pub Entity);
+
+#[derive(Component, Reflect)]
+#[relationship_target(relationship = MutationOf, linked_spawn)]
+pub struct CreatureMutations(Vec<Entity>);
+
+impl CreatureMutations {
+    pub fn iter(&self) -> impl Iterator<Item = Entity> + '_ {
+        self.0.iter().copied()
+    }
 }
 
-#[derive(Debug, Clone)]
-pub struct MutationState {
+/// Data on a mutation entity: which mutation and whether it is visually apparent.
+#[derive(Component, Debug, Clone, Reflect)]
+pub struct MutationEntry {
     pub id: cdda_core::MutationId,
     pub visible: bool,
 }
 
-/// Proficiencies known by a creature.
-#[derive(Component, Debug, Clone)]
-pub struct ProficiencySet {
-    pub known: HashSet<cdda_core::ProficiencyId>,
+// ===========================================================================
+// Proficiencies — relationship-based (one entity per known proficiency)
+// ===========================================================================
+
+#[derive(Component, Reflect)]
+#[component(immutable)]
+#[relationship(relationship_target = CreatureProficiencies)]
+pub struct ProficiencyOf(pub Entity);
+
+#[derive(Component, Reflect)]
+#[relationship_target(relationship = ProficiencyOf, linked_spawn)]
+pub struct CreatureProficiencies(Vec<Entity>);
+
+impl CreatureProficiencies {
+    pub fn iter(&self) -> impl Iterator<Item = Entity> + '_ {
+        self.0.iter().copied()
+    }
+}
+
+/// Data on a proficiency entity: which proficiency is known.
+#[derive(Component, Debug, Clone, Reflect)]
+pub struct ProficiencyEntry {
+    pub id: cdda_core::ProficiencyId,
 }
 
 // ===========================================================================
 // Bionics
 // ===========================================================================
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[component(immutable)]
 #[relationship(relationship_target = InstalledBionics)]
 pub struct BionicOf(pub Entity);
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 #[relationship_target(relationship = BionicOf, linked_spawn)]
 pub struct InstalledBionics(Vec<Entity>);
 
@@ -184,7 +234,7 @@ impl InstalledBionics {
     }
 }
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
 pub struct Bionic {
     pub bionic_id: cdda_core::BionicId,
     pub active: bool,
@@ -195,11 +245,12 @@ pub struct Bionic {
 // Morale
 // ===========================================================================
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[component(immutable)]
 #[relationship(relationship_target = MoraleBonuses)]
 pub struct MoraleBonusOf(pub Entity);
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 #[relationship_target(relationship = MoraleBonusOf, linked_spawn)]
 pub struct MoraleBonuses(Vec<Entity>);
 
@@ -209,25 +260,26 @@ impl MoraleBonuses {
     }
 }
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
 pub struct MoraleBonus {
     pub reason: String,
     pub amount: i32,
     pub remaining: cdda_core::Time,
 }
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Reflect)]
 pub struct Morale(pub i32);
 
 // ===========================================================================
 // Status effects
 // ===========================================================================
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[component(immutable)]
 #[relationship(relationship_target = ActiveEffects)]
 pub struct EffectOn(pub Entity);
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 #[relationship_target(relationship = EffectOn, linked_spawn)]
 pub struct ActiveEffects(Vec<Entity>);
 
@@ -237,7 +289,7 @@ impl ActiveEffects {
     }
 }
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
 pub struct StatusEffect {
     pub effect_id: cdda_core::EffectId,
     pub intensity: u32,
@@ -248,11 +300,12 @@ pub struct StatusEffect {
 // Body parts
 // ===========================================================================
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
+#[component(immutable)]
 #[relationship(relationship_target = CreatureBodyParts)]
 pub struct BodyPartOf(pub Entity);
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
 #[relationship_target(relationship = BodyPartOf, linked_spawn)]
 pub struct CreatureBodyParts(Vec<Entity>);
 
@@ -262,24 +315,24 @@ impl CreatureBodyParts {
     }
 }
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
 pub struct BodyPartDef(pub Entity);
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
 pub struct BodyPartSlot(pub String);
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Reflect)]
 pub struct BodyPartHp {
     pub max: f32,
     pub current: f32,
     pub damage_multiplier: f32,
 }
 
-#[derive(Component, Debug, Default, Clone, Copy)]
+#[derive(Component, Debug, Default, Clone, Copy, Reflect)]
 #[component(storage = "SparseSet")]
 pub struct BodyPartBroken;
 
-#[derive(Component, Debug, Default, Clone, Copy)]
+#[derive(Component, Debug, Default, Clone, Copy, Reflect)]
 #[component(storage = "SparseSet")]
 pub struct BodyPartSevered;
 
@@ -287,16 +340,16 @@ pub struct BodyPartSevered;
 // Status markers
 // ===========================================================================
 
-#[derive(Component, Debug, Default, Clone, Copy)]
+#[derive(Component, Debug, Default, Clone, Copy, Reflect)]
 pub struct IsAlive;
 
-#[derive(Component, Debug, Default, Clone, Copy)]
+#[derive(Component, Debug, Default, Clone, Copy, Reflect)]
 pub struct Stunned;
 
-#[derive(Component, Debug, Default, Clone, Copy)]
+#[derive(Component, Debug, Default, Clone, Copy, Reflect)]
 pub struct Bleeding;
 
-#[derive(Component, Debug, Default, Clone, Copy)]
+#[derive(Component, Debug, Default, Clone, Copy, Reflect)]
 pub struct OnFire;
 
 // ===========================================================================
@@ -304,7 +357,7 @@ pub struct OnFire;
 // ===========================================================================
 
 /// Current action points (move points) for this entity.
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Reflect)]
 pub struct MovePoints(pub i32);
 
 impl Default for MovePoints {
@@ -314,7 +367,7 @@ impl Default for MovePoints {
 }
 
 /// How many action points this entity gains per turn (base 100).
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Reflect)]
 pub struct Speed(pub i32);
 
 impl Default for Speed {

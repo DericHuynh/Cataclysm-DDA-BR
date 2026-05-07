@@ -3,9 +3,11 @@
 //! Provides `TestBed` — a lightweight, `bevy_ecs`-compatible wrapper around `World`
 //! for testing systems and entities in isolation.  No full `bevy` dependency needed.
 
-use crate::components::*;
+use crate::components::{InFlight, Solid, Velocity, WorldPosition};
 use crate::def_components::*;
 use bevy_ecs::prelude::*;
+use cdda_actor::components::*;
+use cdda_item::components::*;
 use bevy_ecs::system::IntoSystem;
 use bevy_ecs::world::World;
 
@@ -158,9 +160,15 @@ impl TestBed {
         world.register_component::<Faction>();
         world.register_component::<BodyTemperature>();
         world.register_component::<Wetness>();
-        world.register_component::<SkillSet>();
-        world.register_component::<Mutations>();
-        world.register_component::<ProficiencySet>();
+        world.register_component::<SkillOf>();
+        world.register_component::<CreatureSkills>();
+        world.register_component::<SkillEntry>();
+        world.register_component::<MutationOf>();
+        world.register_component::<CreatureMutations>();
+        world.register_component::<MutationEntry>();
+        world.register_component::<ProficiencyOf>();
+        world.register_component::<CreatureProficiencies>();
+        world.register_component::<ProficiencyEntry>();
         world.register_component::<BionicOf>();
         world.register_component::<InstalledBionics>();
         world.register_component::<Bionic>();

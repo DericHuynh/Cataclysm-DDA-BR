@@ -1,7 +1,7 @@
 //! Item damage tests — damage level effects on item performance, repair, and
 //! combat effectiveness.
 
-use cdda_sim::components::ItemDamage;
+use cdda_item::components::ItemDamage;
 use cdda_sim::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------

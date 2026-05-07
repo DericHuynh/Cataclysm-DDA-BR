@@ -3,7 +3,7 @@
 
 use bevy_ecs::world::World;
 use cdda_data::loader::Loader;
-use cdda_sim::components::Health;
+use cdda_actor::components::Health;
 use cdda_sim::def_components::*;
 use cdda_sim::def_world::{build_def_world, DefinitionWorld};
 use std::path::PathBuf;

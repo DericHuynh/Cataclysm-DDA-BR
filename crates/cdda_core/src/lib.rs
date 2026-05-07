@@ -33,7 +33,7 @@ pub use damage::Damage;
 pub use error::CoreError;
 pub use flags::FlagSet;
 pub use messages::TurnAdvanced;
-pub use schedule::GameSet;
+pub use schedule::{GameSet, SimSet};
 pub use sim_id::SimId;
 pub use stats::Stats;
 pub use units::{Energy, Length, Time, Volume, Weight};

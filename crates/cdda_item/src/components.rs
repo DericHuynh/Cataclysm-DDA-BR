@@ -4,6 +4,7 @@
 
 use bevy_ecs::component::Component;
 use bevy_ecs::entity::Entity;
+use bevy_reflect::Reflect;
 
 // ===========================================================================
 // Item identity
@@ -11,14 +12,14 @@ use bevy_ecs::entity::Entity;
 
 /// Numeric index of the definition entity this runtime item was spawned from.
 /// Used by `merge_or_stack` to compare items without needing the string `DefStrId`.
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Reflect)]
 pub struct DefOrigin(pub u32);
 
 // ===========================================================================
 // Item state
 // ===========================================================================
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Reflect)]
 pub struct StackCount(u32);
 
 impl StackCount {
@@ -31,7 +32,7 @@ impl StackCount {
     }
 }
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Reflect)]
 pub struct CurrentCharges(pub i32);
 
 impl Default for CurrentCharges {
@@ -40,7 +41,7 @@ impl Default for CurrentCharges {
     }
 }
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Reflect)]
 pub struct LoadedAmmo(pub i32);
 
 impl Default for LoadedAmmo {
@@ -49,36 +50,36 @@ impl Default for LoadedAmmo {
     }
 }
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
 pub struct Spoilable {
     pub rotten: cdda_core::ItemId,
     pub total: cdda_core::Time,
     pub remaining: cdda_core::Time,
 }
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Reflect)]
 pub struct ItemDamage(pub u32);
 
 // ===========================================================================
 // Container tags (zero-sized)
 // ===========================================================================
 
-#[derive(Component, Debug, Default, Clone, Copy)]
+#[derive(Component, Debug, Default, Clone, Copy, Reflect)]
 pub struct Sealed;
 
-#[derive(Component, Debug, Default, Clone, Copy)]
+#[derive(Component, Debug, Default, Clone, Copy, Reflect)]
 pub struct Rigid;
 
-#[derive(Component, Debug, Default, Clone, Copy)]
+#[derive(Component, Debug, Default, Clone, Copy, Reflect)]
 pub struct Watertight;
 
-#[derive(Component, Debug, Default, Clone, Copy)]
+#[derive(Component, Debug, Default, Clone, Copy, Reflect)]
 pub struct PreservesTemp;
 
-#[derive(Component, Debug, Default, Clone, Copy)]
+#[derive(Component, Debug, Default, Clone, Copy, Reflect)]
 pub struct Fireproof;
 
-#[derive(Component, Debug, Default, Clone, Copy)]
+#[derive(Component, Debug, Default, Clone, Copy, Reflect)]
 pub struct GasTight;
 
 // ===========================================================================
@@ -87,11 +88,12 @@ pub struct GasTight;
 
 // -- Containment ------------------------------------------------------------
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[component(immutable)]
 #[relationship(relationship_target = ContainerContents)]
 pub struct InsideContainer(pub Entity);
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 #[relationship_target(relationship = InsideContainer, linked_spawn)]
 pub struct ContainerContents(Vec<Entity>);
 
@@ -103,11 +105,12 @@ impl ContainerContents {
 
 // -- Wielding ---------------------------------------------------------------
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[component(immutable)]
 #[relationship(relationship_target = WieldedItems)]
 pub struct WieldedBy(pub Entity);
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 #[relationship_target(relationship = WieldedBy, linked_spawn)]
 pub struct WieldedItems(Vec<Entity>);
 
@@ -119,7 +122,8 @@ impl WieldedItems {
 
 // -- Wearing ----------------------------------------------------------------
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[component(immutable)]
 #[relationship(relationship_target = WornBy)]
 pub struct WornOn {
     #[relationship]
@@ -127,7 +131,7 @@ pub struct WornOn {
     pub slot: Option<String>,
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 #[relationship_target(relationship = WornOn, linked_spawn)]
 pub struct WornBy(Vec<Entity>);
 
@@ -139,11 +143,12 @@ impl WornBy {
 
 // -- Pocket attachment ------------------------------------------------------
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[component(immutable)]
 #[relationship(relationship_target = MountedPockets)]
 pub struct MountedOn(pub Entity);
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 #[relationship_target(relationship = MountedOn, linked_spawn)]
 pub struct MountedPockets(Vec<Entity>);
 
@@ -157,17 +162,19 @@ impl MountedPockets {
 // Pocket system
 // ===========================================================================
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
 pub struct Pocket {
     pub max_volume: cdda_core::Volume,
     pub max_weight: cdda_core::Weight,
     pub max_item_length: cdda_core::Length,
     pub min_item_volume: cdda_core::Volume,
+    #[reflect(ignore)]
     pub pocket_type: PocketType,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Reflect)]
 pub enum PocketType {
+    #[default]
     Container,
     Magazine,
     MagazineWell,
@@ -175,23 +182,26 @@ pub enum PocketType {
     Special,
 }
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
 pub struct PocketRestriction {
     pub allowed_flags: Vec<String>,
+    #[reflect(ignore)]
     pub allowed_items: Vec<cdda_core::ItemId>,
     pub ammo_type: Option<String>,
     pub item_category: Option<String>,
     pub max_item_volume: cdda_core::Volume,
 }
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
 pub struct AttachmentSlot {
+    #[reflect(ignore)]
     pub slot_type: AttachmentType,
     pub max_volume: cdda_core::Volume,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Reflect)]
 pub enum AttachmentType {
+    #[default]
     Molle,
     Belt,
     Clip,
@@ -203,7 +213,7 @@ pub enum AttachmentType {
 // Container entity
 // ===========================================================================
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
 pub struct Container {
     pub capacity: cdda_core::Volume,
 }

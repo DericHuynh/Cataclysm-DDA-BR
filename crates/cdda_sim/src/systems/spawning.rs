@@ -12,7 +12,6 @@
 //! This keeps the spawning functions ID-agnostic and directly testable
 //! with manually constructed definition entities.
 
-use crate::components::*;
 use bevy_ecs::prelude::*;
 use cdda_core::coords::WorldPos;
 use cdda_core::{FactionId, ItemGroupId};
