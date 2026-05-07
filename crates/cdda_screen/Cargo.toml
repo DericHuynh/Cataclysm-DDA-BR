@@ -1,0 +1,13 @@
+[package]
+name = "cdda_screen"
+version = "0.1.0"
+edition = "2021"
+description = "Headless screen state machine: Screen enum, navigation, menus, focus, config. Zero render deps."
+
+[dependencies]
+cdda_core = { path = "../cdda_core" }
+cdda_input = { path = "../cdda_input" }
+bevy_ecs = "0.18"
+bevy_app = "0.18"
+bevy_state = "0.18"
+tracing.workspace = true
