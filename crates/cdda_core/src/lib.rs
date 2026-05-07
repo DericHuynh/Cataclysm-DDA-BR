@@ -17,7 +17,6 @@ pub mod id;
 pub mod id_slab;
 pub mod id_str;
 pub mod messages;
-pub mod registry;
 pub mod rng;
 pub mod schedule;
 pub mod sim_id;

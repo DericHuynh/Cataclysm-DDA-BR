@@ -16,10 +16,13 @@ use bevy_state::app::AppExtStates;
 use bevy_state::prelude::OnEnter;
 use bevy_state::state::NextState;
 
-use cdda_ui::Screen;
+use cdda_screen::Screen;
 use cdda_core::{GameSet, SimSet};
 use cdda_input::{GameAction, InputAction};
 
+use cdda_actor::plugin::ActorPlugin;
+use cdda_assets::CddaAssetsPlugin;
+use cdda_item::plugin::ItemPlugin;
 use cdda_sim::def_world::load_data_system;
 use cdda_sim::state::AppState;
 use cdda_sim::systems::ai::ai_phase;
@@ -68,11 +71,11 @@ impl Default for CddaStartupConfig {
 /// Listens for `GameEvent::StartNewGame` and transitions `AppState`
 /// from `MainMenu` → `Gameplay`, kicking off JSON loading + worldgen.
 pub fn start_game_on_event(
-    mut reader: MessageReader<cdda_ui::GameEvent>,
+    mut reader: MessageReader<cdda_screen::GameEvent>,
     mut next: ResMut<NextState<AppState>>,
 ) {
     for event in reader.read() {
-        if *event == cdda_ui::GameEvent::StartNewGame {
+        if *event == cdda_screen::GameEvent::StartNewGame {
             info!("Player confirmed start game — transitioning to DataLoading");
             next.set(AppState::DataLoading);
         }
@@ -85,115 +88,11 @@ pub fn start_game_on_event(
 
 fn register_reflect_types(app: &mut App) {
     use cdda_sim::components::{InFlight, Solid, Velocity, WorldPosition};
-    use cdda_actor::components::*;
-    use cdda_item::components::*;
 
-    // Spatial
     app.register_type::<WorldPosition>();
     app.register_type::<Solid>();
     app.register_type::<Velocity>();
     app.register_type::<InFlight>();
-
-    // Creature identity
-    app.register_type::<Creature>();
-    app.register_type::<Gender>();
-    app.register_type::<PlayerData>();
-    app.register_type::<NpcPersonality>();
-    app.register_type::<NpcData>();
-
-    // Stats
-    app.register_type::<Health>();
-    app.register_type::<Stats>();
-    app.register_type::<Faction>();
-    app.register_type::<BodyTemperature>();
-    app.register_type::<Wetness>();
-
-    // Combat
-    app.register_type::<DamageReduction>();
-    app.register_type::<CombatStats>();
-    app.register_type::<Vision>();
-
-    // Skills (relationship-based)
-    app.register_type::<SkillOf>();
-    app.register_type::<CreatureSkills>();
-    app.register_type::<SkillEntry>();
-
-    // Mutations (relationship-based)
-    app.register_type::<MutationOf>();
-    app.register_type::<CreatureMutations>();
-    app.register_type::<MutationEntry>();
-
-    // Proficiencies (relationship-based)
-    app.register_type::<ProficiencyOf>();
-    app.register_type::<CreatureProficiencies>();
-    app.register_type::<ProficiencyEntry>();
-
-    // Bionics
-    app.register_type::<BionicOf>();
-    app.register_type::<InstalledBionics>();
-    app.register_type::<Bionic>();
-
-    // Morale
-    app.register_type::<MoraleBonusOf>();
-    app.register_type::<MoraleBonuses>();
-    app.register_type::<MoraleBonus>();
-    app.register_type::<Morale>();
-
-    // Status effects
-    app.register_type::<EffectOn>();
-    app.register_type::<ActiveEffects>();
-    app.register_type::<StatusEffect>();
-
-    // Turn scheduling + status markers
-    app.register_type::<MovePoints>();
-    app.register_type::<Speed>();
-    app.register_type::<IsAlive>();
-    app.register_type::<Stunned>();
-    app.register_type::<Bleeding>();
-    app.register_type::<OnFire>();
-
-    // Body parts
-    app.register_type::<BodyPartOf>();
-    app.register_type::<CreatureBodyParts>();
-    app.register_type::<BodyPartDef>();
-    app.register_type::<BodyPartSlot>();
-    app.register_type::<BodyPartHp>();
-    app.register_type::<BodyPartBroken>();
-    app.register_type::<BodyPartSevered>();
-
-    // Item state
-    app.register_type::<DefOrigin>();
-    app.register_type::<StackCount>();
-    app.register_type::<CurrentCharges>();
-    app.register_type::<LoadedAmmo>();
-    app.register_type::<Spoilable>();
-    app.register_type::<ItemDamage>();
-
-    // Container tags
-    app.register_type::<Sealed>();
-    app.register_type::<Rigid>();
-    app.register_type::<Watertight>();
-    app.register_type::<PreservesTemp>();
-    app.register_type::<Fireproof>();
-    app.register_type::<GasTight>();
-
-    // Relationships
-    app.register_type::<InsideContainer>();
-    app.register_type::<ContainerContents>();
-    app.register_type::<WieldedBy>();
-    app.register_type::<WieldedItems>();
-    app.register_type::<WornOn>();
-    app.register_type::<WornBy>();
-    app.register_type::<MountedOn>();
-    app.register_type::<MountedPockets>();
-
-    // Pocket system
-    app.register_type::<Pocket>();
-    app.register_type::<PocketType>();
-    app.register_type::<PocketRestriction>();
-    app.register_type::<AttachmentSlot>();
-    app.register_type::<AttachmentType>();
-    app.register_type::<Container>();
 }
 
 // ---------------------------------------------------------------------------
@@ -204,6 +103,7 @@ pub struct CddaPlugin;
 
 impl Plugin for CddaPlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins((ActorPlugin, ItemPlugin, CddaAssetsPlugin));
         world_setup::setup_world(app.world_mut());
         register_reflect_types(app);
 
@@ -249,7 +149,7 @@ impl Plugin for CddaPlugin {
 
         app.add_plugins(cdda_render::CddaRenderPlugin);
         app.add_plugins(cdda_input::CddaInputPlugin);
-        app.add_plugins(cdda_ui::ScreenNavigationPlugin);
+        app.add_plugins(cdda_screen::ScreenNavigationPlugin);
 
         // Replay: record or replay based on startup config
         let config = app

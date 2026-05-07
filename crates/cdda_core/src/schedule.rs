@@ -9,7 +9,7 @@
 //!
 //! Systems in `cdda_input` → `GameSet::Input`
 //! Systems in `cdda_sim`   → `GameSet::Sim` via one of the `SimSet` variants
-//! Systems in `cdda_ui`    → `GameSet::Sim` (react to input)
+//! Systems in `cdda_screen`    → `GameSet::Sim` (react to input)
 //! Systems in `cdda_render`→ `GameSet::Render`
 
 use bevy_ecs::prelude::SystemSet;

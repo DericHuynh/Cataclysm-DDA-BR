@@ -12,7 +12,6 @@ cdda_mod.workspace = true
 cdda_data.workspace = true
 cdda_core.workspace = true
 cdda_input = { path = "../cdda_input" }
-cdda_ui = { path = "../cdda_ui" }
 bevy_ecs.workspace = true
 bevy_reflect.workspace = true
 bevy_state = "0.18"

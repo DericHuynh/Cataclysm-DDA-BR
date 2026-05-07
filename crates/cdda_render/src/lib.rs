@@ -15,7 +15,7 @@ use bevy::input_focus::{
 };
 use bevy::prelude::*;
 use bevy_state::state::OnEnter;
-use cdda_ui::screen::Screen;
+use cdda_screen::screen::Screen;
 
 pub mod dev_worldgen;
 pub mod tiles;

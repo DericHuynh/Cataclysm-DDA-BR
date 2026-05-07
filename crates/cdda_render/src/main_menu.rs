@@ -6,8 +6,8 @@
 use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
-use cdda_ui::screen::Screen;
-use cdda_ui::screen_nav::{screen_def, FocusedCommandIndex};
+use cdda_screen::screen::Screen;
+use cdda_screen::screen_nav::{screen_def, FocusedCommandIndex};
 
 /// Marks a command button, storing its index into the screen_def command list.
 #[derive(Component)]

@@ -13,10 +13,11 @@ cdda_render.workspace = true
 cdda_input.workspace = true
 cdda_sim.workspace = true
 cdda_core.workspace = true
-cdda_ui.workspace = true
-cdda_replay = { path = "../cdda_replay" }
-cdda_actor = { path = "../cdda_actor" }
-cdda_item = { path = "../cdda_item" }
+cdda_screen.workspace = true
+cdda_replay  = { path = "../cdda_replay" }
+cdda_actor   = { path = "../cdda_actor" }
+cdda_item    = { path = "../cdda_item" }
+cdda_assets  = { path = "../cdda_assets" }
 bevy = { workspace = true, features = ["3d"] }
 bevy-inspector-egui.workspace = true
 bevy_egui = { version = "0.39" }

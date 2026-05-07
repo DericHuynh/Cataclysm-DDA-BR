@@ -8,7 +8,7 @@ description = "Bevy rendering plugin – tiles, UI, ASCII mode. Uses standard be
 cdda_sim.workspace = true
 cdda_map.workspace = true
 cdda_core.workspace = true
-cdda_ui = { path = "../cdda_ui" }
+cdda_screen = { path = "../cdda_screen" }
 bevy_state = "0.18"
 cdda_input.workspace = true
 cdda_actor = { path = "../cdda_actor" }

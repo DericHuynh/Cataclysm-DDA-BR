@@ -10,8 +10,8 @@ use bevy_state::state_scoped::DespawnOnExit;
 use cdda_map::WorldMap;
 use cdda_sim::systems::dev_move::DevCamera;
 use cdda_sim::world_setup::WorldMapResource;
-use cdda_ui::screen::Screen;
-use cdda_ui::screen_nav::{screen_def, FocusedCommandIndex};
+use cdda_screen::screen::Screen;
+use cdda_screen::screen_nav::{screen_def, FocusedCommandIndex};
 use crate::tiles::TileRegistry;
 
 // ---------------------------------------------------------------------------

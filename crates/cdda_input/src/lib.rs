@@ -7,7 +7,7 @@
 //!
 //! Systems **never** see raw keys — they consume `InputAction` messages.
 //!
-//! Focus navigation has moved to the `cdda_ui` crate.
+//! Focus navigation has moved to the `cdda_screen` crate.
 
 pub mod actions;
 pub mod bindings;

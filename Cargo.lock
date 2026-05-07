@@ -2023,6 +2023,7 @@ dependencies = [
 name = "cdda_actor"
 version = "0.1.0"
 dependencies = [
+ "bevy_app",
  "bevy_ecs",
  "bevy_reflect",
  "cdda_core",
@@ -2038,13 +2039,28 @@ dependencies = [
  "bevy_egui",
  "bevy_state",
  "cdda_actor",
+ "cdda_assets",
  "cdda_core",
  "cdda_input",
  "cdda_item",
  "cdda_render",
  "cdda_replay",
+ "cdda_screen",
  "cdda_sim",
- "cdda_ui",
+ "tracing",
+]
+
+[[package]]
+name = "cdda_assets"
+version = "0.1.0"
+dependencies = [
+ "bevy_app",
+ "bevy_asset",
+ "bevy_reflect",
+ "cdda_data",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
  "tracing",
 ]
 
@@ -2103,6 +2119,7 @@ dependencies = [
 name = "cdda_item"
 version = "0.1.0"
 dependencies = [
+ "bevy_app",
  "bevy_ecs",
  "bevy_reflect",
  "cdda_core",
@@ -2144,8 +2161,8 @@ dependencies = [
  "cdda_input",
  "cdda_item",
  "cdda_map",
+ "cdda_screen",
  "cdda_sim",
- "cdda_ui",
  "serde_json",
 ]
 
@@ -2161,7 +2178,20 @@ dependencies = [
  "postcard",
  "rustc-hash 2.1.2",
  "serde",
+ "tempfile",
  "zstd",
+]
+
+[[package]]
+name = "cdda_screen"
+version = "0.1.0"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_state",
+ "cdda_core",
+ "cdda_input",
+ "tracing",
 ]
 
 [[package]]
@@ -2178,23 +2208,10 @@ dependencies = [
  "cdda_item",
  "cdda_map",
  "cdda_mod",
- "cdda_ui",
  "rand",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
- "tracing",
-]
-
-[[package]]
-name = "cdda_ui"
-version = "0.1.0"
-dependencies = [
- "bevy_app",
- "bevy_ecs",
- "bevy_state",
- "cdda_core",
- "cdda_input",
  "tracing",
 ]
 
@@ -5492,6 +5509,19 @@ dependencies = [
  "grid",
  "serde",
  "slotmap",
+]
+
+[[package]]
+name = "tempfile"
+version = "3.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
+dependencies = [
+ "fastrand",
+ "getrandom 0.4.2",
+ "once_cell",
+ "rustix 1.1.4",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

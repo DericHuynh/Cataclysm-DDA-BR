@@ -9,9 +9,9 @@ use bevy_state::state_scoped::DespawnOnExit;
 use cdda_input::{
     ContextBindings, GameAction, InputContextId, KeyChord, RebindCapture, RebindCaptureInner,
 };
-use cdda_ui::config::GameSettings;
-use cdda_ui::screen::Screen;
-use cdda_ui::screen_nav::{screen_def, FocusedCommandIndex};
+use cdda_screen::config::GameSettings;
+use cdda_screen::screen::Screen;
+use cdda_screen::screen_nav::{screen_def, FocusedCommandIndex};
 
 // ---------------------------------------------------------------------------
 // Settings tab

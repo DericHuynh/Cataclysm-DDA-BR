@@ -1012,8 +1012,4 @@ pub fn worldgen_system(world: &mut World) {
     world
         .resource_mut::<NextState<AppState>>()
         .set(AppState::InGame);
-    // Transition UI screen to Gameplay so the ASCII renderer spawns
-    world
-        .resource_mut::<NextState<cdda_ui::screen::Screen>>()
-        .set(cdda_ui::screen::Screen::Gameplay);
 }

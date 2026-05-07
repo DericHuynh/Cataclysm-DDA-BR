@@ -8,3 +8,4 @@
 //! Depends only on `cdda_core` and `bevy_ecs`.  No item, map, or sim deps.
 
 pub mod components;
+pub mod plugin;
