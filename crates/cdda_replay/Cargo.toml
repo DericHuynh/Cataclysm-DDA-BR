@@ -1,0 +1,20 @@
+[package]
+name = "cdda_replay"
+version = "0.1.0"
+edition = "2021"
+description = "Deterministic session recording & replay for bug reports and regression testing."
+
+[features]
+default = []
+devtools = []
+
+[dependencies]
+cdda_core = { path = "../cdda_core" }
+cdda_input = { path = "../cdda_input" }
+cdda_sim = { path = "../cdda_sim" }
+bevy_ecs.workspace = true
+bevy_app.workspace = true
+serde.workspace = true
+postcard.workspace = true
+zstd = "0.13"
+rustc-hash = "2"

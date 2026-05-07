@@ -1,0 +1,12 @@
+[package]
+name = "cdda_actor"
+version = "0.1.0"
+edition = "2021"
+description = "Creatures, player, NPCs, stats, effects, mutations, bionics — domain components."
+
+[dependencies]
+cdda_core = { path = "../cdda_core" }
+bevy_ecs = "0.18"
+
+[dev-dependencies]
+cdda_sim = { path = "../cdda_sim" }
