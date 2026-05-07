@@ -3,8 +3,10 @@
 //! The game's domain layer: value objects (Volume, Weight, WorldPos),
 //! pure component templates, and numeric ID types.
 //!
-//! No IO, no Bevy, no serde. This is the lowest crate in the dependency graph.
-//! Everything flows upward from here.
+//! Thin `bevy_ecs` dependency for `SystemSet` labels, common `Message`
+//! types, `SimId`, and `WyRand`. Serde is allowed — domain types must
+//! be serializable for save/load.
+//! This is the lowest crate in the dependency graph.
 
 pub mod coords;
 pub mod damage;
@@ -14,25 +16,30 @@ pub mod flags;
 pub mod id;
 pub mod id_slab;
 pub mod id_str;
+pub mod messages;
 pub mod registry;
 pub mod rng;
+pub mod schedule;
+pub mod sim_id;
 pub mod stats;
 pub mod units;
+pub mod wyrand;
 
-// Re-export key types for ergonomic access.
-// -- Coords and geometry
+// Re-export key types
 pub use coords::{BubblePos, OmPos, OmtPos, Pos, SubmapLocal, SubmapPos, WorldPos};
 pub use coords::{Direction, Facing, ZLevel};
 pub use coords::{VehicleMapPos, VehicleMountPos};
-
-// -- Pure utilities
 pub use damage::Damage;
 pub use error::CoreError;
 pub use flags::FlagSet;
+pub use messages::TurnAdvanced;
+pub use schedule::GameSet;
+pub use sim_id::SimId;
 pub use stats::Stats;
 pub use units::{Energy, Length, Time, Volume, Weight};
+pub use wyrand::WyRand;
 
-// -- ID types
+// ID types
 pub use id::{AmmoTypeId, BodyPartId, DamageTypeId, MaterialId, SpeciesId, VitaminId};
 pub use id::{BionicId, EffectId, FactionId, SkillId};
 pub use id::{DefCategory, DefIdx, GenId};

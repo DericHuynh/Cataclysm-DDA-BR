@@ -971,7 +971,6 @@ impl Loader {
             "skill",
             "trap",
             "start_location",
-            "mapgen",
             "json_flag",
             "ascii_art",
             "construction_group",
@@ -1069,14 +1068,85 @@ impl Loader {
     }
 
     /// Resolve mapgen definitions (special: multiple per OMT).
-    fn resolve_mapgen(&self, _registry: &mut DefRegistry, _errors: &mut Vec<LoaderError>) {
-        // TODO: Mapgen defs need special handling because they key by `om_terrain`
-        //       which can be a single ID, a list of IDs, or absent.
-        //       This will be implemented when the mapgen pipeline is active.
-        if self.raw_by_type.contains_key("mapgen") {
-            let count = self.raw_by_type["mapgen"].len();
-            debug!("Mapgen resolution deferred ({} defs, Stage 2)", count);
+    fn resolve_mapgen(&self, registry: &mut DefRegistry, errors: &mut Vec<LoaderError>) {
+        let type_name = "mapgen";
+        let raw_map = self.build_raw_map(type_name);
+
+        if raw_map.is_empty() {
+            return;
         }
+
+        // Topological sort by copy-from
+        let sorted_ids = match resolve::topological_sort(&raw_map) {
+            Ok(ids) => ids,
+            Err(cycles) => {
+                for cycle in &cycles {
+                    errors.push(LoaderError::CircularCopyFrom {
+                        chain: cycle.clone(),
+                    });
+                }
+                raw_map.keys().map(|k| k.as_str()).collect::<Vec<_>>()
+            }
+        };
+
+        let mut loaded_omt = 0;
+        let mut loaded_nested = 0;
+
+        for &def_key in &sorted_ids {
+            let mut chain = Vec::new();
+
+            let resolved_value = match resolve::resolve_copy_from(def_key, &raw_map, &mut chain) {
+                Ok(v) => v,
+                Err(msg) => {
+                    errors.push(LoaderError::MissingCopyFromTarget {
+                        target: msg,
+                        source_path: def_key.to_string(),
+                    });
+                    continue;
+                }
+            };
+
+            match serde_json::from_value::<MapgenDef>(resolved_value) {
+                Ok(def) => {
+                    if let Some(ref omt) = def.om_terrain {
+                        match omt {
+                            MapgenTarget::Single(omt_id) => {
+                                let vec: &mut Vec<Arc<MapgenDef>> =
+                                    registry.mapgen.entry(omt_id.to_string()).or_default();
+                                vec.push(Arc::new(def));
+                                loaded_omt += 1;
+                            }
+                            MapgenTarget::Multi(omt_ids) => {
+                                for omt_id in omt_ids {
+                                    let vec: &mut Vec<Arc<MapgenDef>> =
+                                        registry.mapgen.entry(omt_id.to_string()).or_default();
+                                    vec.push(Arc::new(def.clone()));
+                                }
+                                loaded_omt += 1;
+                            }
+                        }
+                    } else if let Some(ref nested_id) = def.nested_mapgen_id {
+                        registry
+                            .nested_mapgen
+                            .insert(nested_id.clone(), Arc::new(def));
+                        loaded_nested += 1;
+                    }
+                }
+                Err(e) => {
+                    errors.push(LoaderError::JsonParse {
+                        path: PathBuf::from(type_name),
+                        detail: format!("Failed to deserialize {} '{}': {}", type_name, def_key, e),
+                    });
+                }
+            }
+        }
+
+        info!(
+            "Loaded {} OMT mapgen + {} nested mapgen ({} total)",
+            loaded_omt,
+            loaded_nested,
+            loaded_omt + loaded_nested
+        );
     }
 }
 

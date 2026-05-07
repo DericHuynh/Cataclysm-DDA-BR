@@ -6,9 +6,11 @@
 pub mod components;
 pub mod def_components;
 pub mod def_world;
+pub mod dev_worldgen;
 pub mod events;
 pub mod logic;
 pub mod spatial;
 pub mod state;
 pub mod systems;
+pub mod test_utils;
 pub mod world_setup;

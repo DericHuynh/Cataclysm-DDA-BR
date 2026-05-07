@@ -6,7 +6,7 @@
 >
 > **Target Bevy version: 0.18** (released 2026-01-13).
 >
-> This document is the canonical forward-looking reference. It should be updated
+> This document is the canonical forward-looking reference. Updated to reflect the March 2025 refactor (composable def components, entity-based body parts, EntityCloner spawning, deleted templates). It should be updated
 > whenever a structural decision changes. When a section of this document is fully
 > implemented, it should be reflected in `CURRENT_ARCHITECTURE.md` and this document
 > updated accordingly.
@@ -192,203 +192,100 @@ impl DefRegistry {
 
 ---
 
-## 2. Component-Based Templates (Not Monolithic Defs)
+## 2. Composable Definition Components (Not Monolithic Templates)
 
-CDDA's `ItemDef` is 12+ archetypes crammed into one struct through sparsity.
-In the target architecture, item definitions decompose into composable behaviors:
-
-```rust
-// cdda_core/src/templates/item.rs
-
-/// Every item has a base. Non-optional.
-pub struct ItemBase {
-    pub name: String,
-    pub description: String,
-    pub volume: Volume,
-    pub weight: Weight,
-    pub material: Vec<MaterialId>,
-    pub symbol: char,
-    pub color: Color,
-    pub flags: FlagSet,
-    pub phase: Phase,
-    pub category: ItemCategoryId,
-}
-
-/// Behaviors are OPTIONAL and composable. Each maps to ECS components
-/// stamped onto items at spawn time.
-
-pub struct WeaponBehavior {
-    pub damage: Damage,
-    pub to_hit: i32,
-    pub techniques: Vec<TechniqueId>,
-    pub reach: u32,
-}
-
-pub struct ArmorBehavior {
-    pub coverage: HashMap<BodyPart, f64>,
-    pub encumbrance: u32,
-    pub protection: Damage,
-    pub material_thickness: f64,
-    pub warmth: i32,
-    pub environmental_protection: u32,
-}
-
-pub struct ContainerBehavior {
-    pub max_volume: Volume,
-    pub max_weight: Weight,
-    pub max_item_length: Length,
-    pub sealed: bool,
-    pub rigid: bool,
-    pub pocket_type: PocketType,
-}
-
-pub struct FoodBehavior {
-    pub calories: u32,
-    pub quench: i32,
-    pub fun: i32,
-    pub spoils_in: Time,
-    pub vitamins: Vec<(VitaminId, u32)>,
-    pub comestible_type: ComestibleType,
-}
-
-pub struct ToolBehavior {
-    pub max_charges: u32,
-    pub charges_per_use: u32,
-    pub qualities: Vec<ToolQuality>,
-    pub revert_to: Option<ItemId>,
-}
-
-pub struct AmmoBehavior {
-    pub ammo_type: AmmoTypeId,
-    pub damage: Damage,
-    pub count: u32,
-    pub effects: Vec<AmmoEffectId>,
-}
-
-pub struct MagazineBehavior {
-    pub ammo_type: Vec<AmmoTypeId>,
-    pub capacity: u32,
-    pub reload_time: u32,
-    pub compatible_weapons: Vec<ItemId>,
-}
-
-pub struct BookBehavior {
-    pub intelligence_required: u32,
-    pub skill: SkillId,
-    pub max_level: u32,
-    pub fun: i32,
-    pub time: Time,
-    pub chapters: u32,
-}
-
-pub struct GunModBehavior {
-    pub install_time: Time,
-    pub modifies: Vec<GunModSlot>,
-}
-
-pub struct DrugBehavior {
-    pub effects: Vec<DrugEffect>,
-    pub duration: Time,
-    pub addiction_potential: u32,
-}
-
-/// A complete item template. Only populated behaviors exist.
-pub struct ItemTemplate {
-    pub base: ItemBase,
-    pub weapon: Option<WeaponBehavior>,
-    pub armor: Option<ArmorBehavior>,
-    pub container: Option<ContainerBehavior>,
-    pub food: Option<FoodBehavior>,
-    pub tool: Option<ToolBehavior>,
-    pub ammo: Option<AmmoBehavior>,
-    pub magazine: Option<MagazineBehavior>,
-    pub book: Option<BookBehavior>,
-    pub gun_mod: Option<GunModBehavior>,
-    pub drug: Option<DrugBehavior>,
-}
-```
-
-### 2.1 Spawning Items as ECS Entities
+In the current architecture, `cdda_core::templates` was **deleted**. Templates
+like `ItemTemplate { weapon: Option<WeaponBehavior>, ... }` with 12 optional
+behavior fields were dead code never read by `build_def_world`. The new approach
+uses composable ECS components on definition entities:
 
 ```rust
-// cdda_sim/src/systems/spawning.rs
+// cdda_sim/src/def_components.rs
 
-fn spawn_item(
-    commands: &mut Commands,
-    template: &ItemTemplate,
-    pos: WorldPos,
-    count: u32,
-) -> Entity {
-    let mut entity = commands.spawn((
-        template.base.clone(),
-        WorldPosition(pos),
-        StackCount(count),
-    ));
+/// Every def entity gets these
+#[derive(Component, Debug, Clone)]
+pub struct IsDef;  // marker — excluded from gameplay queries by DefaultQueryFilters
 
-    if let Some(w) = &template.weapon { entity.insert(w.clone()); }
-    if let Some(a) = &template.armor   { entity.insert(a.clone()); }
-    if let Some(c) = &template.container { entity.insert(c.clone()); }
-    if let Some(f) = &template.food    { entity.insert(f.clone()); }
-    if let Some(t) = &template.tool    { entity.insert(t.clone()); }
-    if let Some(a) = &template.ammo    { entity.insert(a.clone()); }
-    if let Some(m) = &template.magazine { entity.insert(m.clone()); }
-    if let Some(b) = &template.book    { entity.insert(b.clone()); }
-    if let Some(g) = &template.gun_mod { entity.insert(g.clone()); }
-    if let Some(d) = &template.drug    { entity.insert(d.clone()); }
+#[derive(Component, Debug, Clone)]
+pub struct DefStrId(pub String);  // e.g. "glock_17"
 
-    entity.id()
-}
+/// Universal item components — every item def gets these
+#[derive(Component, Debug, Clone)]
+pub struct ItemName(pub String);
+#[derive(Component, Debug, Clone, Copy)]
+pub struct ItemWeight(pub u32);
+#[derive(Component, Debug, Clone, Copy)]
+pub struct ItemVolume(pub u32);
+// ... ItemSymbol, ItemColor, ItemMaterials, ItemPhase, etc.
+
+/// Subtype-specific — only items with matching CDDA subtypes get these
+#[derive(Component, Debug, Clone)]
+pub struct WeaponData { pub damage_bash: i32, pub damage_cut: i32, /* ... */ }
+#[derive(Component, Debug, Clone)]
+pub struct GunData { pub ammo_type: String, pub clip_size: i32, /* ... */ }
+#[derive(Component, Debug, Clone)]
+pub struct AmmoData { pub ammo_type: String, pub count: i32, /* ... */ }
+#[derive(Component, Debug, Clone)]
+pub struct ArmourData { pub parts: Vec<ArmourPart>, /* ... */ }
+#[derive(Component, Debug, Clone)]
+pub struct FoodData { pub calories: i32, pub spoils_in: u32, /* ... */ }
+// ... ToolData, BookData, MagazineData, GunModData, ContainerData, DrugData
 ```
 
-Systems query for exactly what they need:
+`build_def_world` reads CDDA's `subtypes` array to decide which components to add:
+```rust
+let subtypes: Vec<String> = item.subtypes.iter().map(|s| s.to_uppercase()).collect();
+if subtypes.iter().any(|s| s == "AMMO")  { world.entity_mut(e).insert(AmmoData { ... }); }
+if subtypes.iter().any(|s| s == "GUN")   { world.entity_mut(e).insert(GunData { ... }); }
+if subtypes.iter().any(|s| s == "ARMOR") { world.entity_mut(e).insert(ArmourData { ... }); }
+```
+
+### 2.1 Entity-Based Body Parts
+
+Body parts are ECS entities, not a hardcoded enum. This enables non-humanoid
+configurations from day one:
+
+- **Def entities** get capability markers: `IsVital`, `CanGrasp`, `CanWalk`,
+  `CanSee`, `CanBite`, `CanFly`
+- **Sub-part relationships** via Bevy Relationships: `ParentPart`/`SubParts`
+- **Per-creature instances** spawned via `EntityCloner`, with `BodyPartHp`,
+  `BodyPartBroken`, `BodyPartSevered`
+- **Slot naming**: generated as `"{body_part_id}_{counter}"` (e.g. "head_1", "arm_l_2")
+- Armour coverage uses `BodyPartDefId` strings, matching the body part entity IDs
+
+### 2.2 Spawning via EntityCloner
+
+Gameplay entities are created by cloning definition entities with `EntityCloner`:
 
 ```rust
-// Only entities with Weapon get melee capability
-fn melee_damage_system(
-    weapons: Query<(&WeaponBehavior, &ItemBase)>,
-) { /* ... */ }
-
-// Only entities with Container can hold items
-fn container_insert_system(
-    containers: Query<(&mut ContainerBehavior, &Children)>,
-) { /* ... */ }
+let mut builder = EntityCloner::build_opt_out(world);
+builder.deny::<IsDef>();
+builder.deny::<DefStrId>();
+builder.linked_cloning(true);  // recursively clones linked-spawn children
+let mut cloner = builder.finish();
+let new_entity = cloner.spawn_clone(world, def_entity);
 ```
 
-Bevy's archetype-based storage means entities with `(ItemBase, WeaponBehavior, ToolBehavior)`
-live in a different archetype from `(ItemBase, FoodBehavior)`, and systems only iterate
-over matching archetypes. No branching on optional fields in hot loops.
-
-### 2.2 Monsters as Templates (Same Pattern)
-
+Cloning copies all `Clone`-deriving components automatically. Then:
 ```rust
-pub struct MonsterTemplate {
-    pub base: MonsterBase,
-    pub stats: Stats,
-    pub combat_stats: MonsterCombatStats,
-    pub body_type: BodyType,
-    pub species: SpeciesId,
-    pub vision: Vision,
-    pub armor: ArmorSet,
-    pub special_attacks: Vec<SpecialAttackId>,
-    pub death_drops: ItemGroupId,
-    pub upgrade_path: Option<(MonsterId, Time)>,
-    pub flags: FlagSet,
-    pub factions: Vec<FactionId>,
-}
+world.entity_mut(new_entity)
+    .insert(StackCount::new(count))
+    .insert(CurrentCharges(0))
+    .insert(WorldPosition(pos));
 ```
 
-### 2.3 Bevy Relationships for Inventory Trees
+No manual component enumeration — any component with `#[derive(Clone)]` on a
+def entity automatically propagates to spawns.
 
-Bevy 0.16 shipped first-class entity relationships (ChildOf, Children,
-Relationship trait). Consider modeling inventory pockets as entities linked
-via relationships rather than hand-rolling recursive trees inside a single
-Inventory component. Benefits: free change detection on pocket contents, free
-despawn propagation, and free bevy-inspector-egui visibility. Tradeoff: more
-entities equals more archetype fragmentation. Measure with realistic inventory
-loads before committing.
+### 2.3 Flag-to-Tag Promotion (Planned)
 
----
-
+CDDA's JSON flags (e.g. `"flags": ["SEALED", "RIGID"]`) should be promoted to
+ECS tag components at spawn time. This turns string-based branching into
+archetype-level filtering:
+```rust
+// Instead of: if item.flags.contains("SEALED") { ... }
+// Use: Query<&Container, With<Sealed>>
+```
 ## 3. Map Storage: Struct-of-Arrays
 
 The `Tile` struct is replaced with SoA layout for cache efficiency:
@@ -518,6 +415,7 @@ pub struct SpawnEvent {
     pub position: WorldPos,
     pub faction: FactionId,
 }
+// Status: Implemented in cdda_sim/src/events.rs
 
 #[derive(Event)]
 pub struct ItemMoveEvent {
@@ -1172,10 +1070,10 @@ The migration is ordered by dependency — each step unlocks the next:
 | 2 | Move `defs/` from cdda_core to cdda_data::raw_defs | Rename module, fix imports | ~100 lines |
 | 3 | Create numeric ID types in cdda_core | DefIdx, per-category newtypes | ~150 lines |
 | 4 | Build string↔numeric maps in cdda_data::registry_builder | Populated during load | ~200 lines |
-| 5 | Create component templates in cdda_core::templates | ItemTemplate, MonsterTemplate, etc. | ~500 lines |
-| 6 | Build ACL in cdda_data::translate | RawItemDef → ItemTemplate translation | ~600 lines |
-| 7 | Switch DefRegistry to Vec<T> + numeric IDs | Replace HashMap<String, T> with Vec<T> | ~300 lines |
-| 8 | Update cdda_sim systems to use numeric IDs | Replace string lookups with index access | ~400 lines |
+| 5 | Create composable def components in cdda_sim::def_components | WeaponData, GunData, etc. — subtype-based composition | Implemented |
+| 6 | Build ACL in cdda_data::translate | RawItemDef → def component translation | Planned |
+| 7 | DefinitionWorld as HashMap<String, Entity> index | Def entities live in main ECS World with IsDef | Implemented |
+| 8 | EntityCloner-based spawning | Clone def entities → gameplay entities with thin mutable state | Implemented |
 | 9 | Implement event-driven system communication | DamageEvent, DeathEvent, etc. | ~400 lines |
 | 10 | Implement BubbleGrid (SoA tile storage) | Replace Vec<Tile> with SoA arrays | ~500 lines |
 | 11 | Implement ModShard ID allocation | Sharded ID space for mods | ~300 lines |
@@ -1225,23 +1123,27 @@ These are added to the principles in `CURRENT_ARCHITECTURE.md`:
 
 ---
 
-## 15. Decision Table: Current → Target
+## 15. Decision Table: Current → Target (UPDATED)
 
-| Current Architecture | Target Architecture |
-|---|---|
-| `DefId<T> { id: String }` | `ItemId(DefIdx(u32))`, concrete per-category types |
-| `HashMap<String, Arc<T>>` in DefRegistry | `Vec<T>` indexed by `DefIdx.0` |
-| `cdda_core::defs/` has serde, schemars, CDDA JSON shapes | `cdda_data::raw_defs/` owns those; `cdda_core` is pure |
-| `cdda_types.rs` in cdda_core resolving CDDA JSON quirks | `cdda_data::raw_defs::cdda_types.rs` — isolated |
-| Monolithic `ItemDef` with 60+ optional fields | `ItemTemplate` with composable `Option<Behavior>` |
-| Copy-from machinery in `cdda_core::types` | Copy-from in `cdda_data::resolve` where it belongs |
-| Unit types have custom CDDA serde in cdda_core | Custom serde in `cdda_data::cdda_serde`; pure newtypes in cdda_core |
-| Tiles as `Vec<Tile>` (AoS, per-tile allocations) | `BubbleGrid` (SoA, dense arrays, zero per-tile allocs) |
-| Direct `system.run()` serial tick (only option) | Phase-parallel with Bevy schedules (future) |
-| No hot reload strategy | Three-tier: T1 data ACL, T2 mapgen replay, T3 subsecond |
-| No save strategy beyond "serialize everything" | Incremental saves via `Changed<T>`, WAL, atomic writes |
-| No spatial index for entities | `EntitySpatialIndex` (4×4 cell grid) |
-| Mods merge into core namespace | Sharded ID space: core 0x0000, mods 0x8000 |
-| No fuzzing | cargo-fuzz targets for copy-from, translation, item groups |
-| No profiling infrastructure | tracing spans on every tick phase |
-| cdda_mod is separate crate | cdda_mod integrated into cdda_data (mod_shard, mod_layer) |
+| Current Architecture | Target Architecture | Status |
+|---|---|---|
+| `DefId<T> { id: String }` | `ItemId(DefIdx(u32))`, concrete per-category types | Implemented |
+| `HashMap<String, Arc<T>>` in cdda_data DefRegistry | `HashMap<DefId<T>, Arc<T>>` | Implemented |
+| Monolithic `ItemDef` with 60+ optional fields | Composable def components (WeaponData, GunData, etc.) | Implemented |
+| `ItemTemplate` with `Option<Behavior>` in cdda_core | DELETED — dead code; entities get only needed components | Implemented |
+| Hardcoded `BodyPartSlot` enum | Entity-based body parts with capability markers | Implemented |
+| Manual component enumeration at spawn | `EntityCloner` with opt-out (deny IsDef/DefStrId) | Implemented |
+| Old `Events<T>` resource registration | Bevy 0.18 trigger-based Events | Implemented |
+| `DefinitionWorld` wrapping a separate `World` | `HashMap<String, Entity>` index, entities in main World | Implemented |
+| `DefaultQueryFilters` excludes IsDef from queries | Add `Without<IsDef>` automatically | Implemented |
+| App state as flags | State machine: DataLoading → WorldGen → InGame | Implemented |
+| Turn system with MovePoints/Speed | `tick_move_points` + `TurnQueue` priority queue | Implemented |
+| `TestBed` for isolated system testing | Lightweight World wrapper | Implemented |
+| Copy-from machinery in cdda_core | Copy-from in `cdda_data::resolve` | Implemented |
+| Tiles as `Vec<Tile>` (AoS) | `BubbleGrid` (SoA, dense arrays) | Planned |
+| Direct `system.run()` serial tick | Phase-parallel with Bevy schedules | Deferred |
+| No hot reload strategy | Three-tier: T1 data ACL, T2 mapgen, T3 subsecond | Planned |
+| No save strategy | Incremental saves via `Changed<T>`, WAL, atomic writes | Planned |
+| No spatial index | `EntitySpatialIndex` (16x16 cell grid) | Implemented |
+| Mods merge into core namespace | Sharded ID space: core 0x0000, mods 0x8000 | Planned |
+| No profiling infrastructure | tracing spans on every tick phase | Planned |

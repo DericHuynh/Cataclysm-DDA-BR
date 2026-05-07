@@ -3,7 +3,7 @@
 > A clean-room reimplementation of Cataclysm: Dark Days Ahead in Rust + Bevy ECS.
 > Designed for maintainability, onboarding clarity, and comprehensive testability.
 >
-> This document is the canonical architecture reference. It lives in the repo and
+> This document is the canonical architecture reference. Updated to reflect the March 2025 refactor (templates removed, composable def components, entity-based body parts, EntityCloner spawning, DefaultQueryFilters). It lives in the repo and
 > should be updated whenever a structural decision changes.
 >
 > **Target Bevy version: 0.18** (released 2026-01-13).
@@ -373,236 +373,155 @@ no game-domain logic.
 crates/cdda_core/
 ├── Cargo.toml
 ├── src/
-│   ├── lib.rs
+│   ├── lib.rs              # Re-exports all public types
 │   │
-│   ├── coords/
+│   ├── coords/             # Typed coordinate system
 │   │   ├── mod.rs
-│   │   ├── scales.rs       # Scale marker types: Ms, Sm, Omt, Om
-│   │   ├── origins.rs      # Origin marker types: Abs, Bubble, Rel
 │   │   ├── pos.rs          # Pos<Scale, Origin> { x: i32, y: i32, z: ZLevel }
-│   │   │                   # Type aliases:
-│   │   │                   #   WorldPos       = Pos<Ms, Abs>
-│   │   │                   #   SubmapPos      = Pos<Sm, Abs>
-│   │   │                   #   SubmapLocal    = Pos<Ms, Rel>   (offset 0..=11)
-│   │   │                   #   BubblePos      = Pos<Ms, Bubble>
-│   │   │                   #   OmtPos         = Pos<Omt, Abs>
-│   │   │                   #   OmPos          = Pos<Om, Abs>
-│   │   │                   #   VehicleMountPos = Pos<Ms, Rel>
-│   │   │                   #   VehicleMapPos   = Pos<Ms, Rel>
-│   │   ├── z_level.rs      # ZLevel(i8) newtype with checked_add/sub
-│   │   │                   # Range [-10, 10] enforced on construction.
-│   │   │                   # CDDA docs confirm: "z-coordinates do not scale
-│   │   │                   # along with the horizontal dimensions."
-│   │   └── direction.rs    # Direction (N/S/E/W/NE/…), rotation helpers
+│   │   ├── z_level.rs      # ZLevel(i8) newtype with checked arithmetic
+│   │   └── direction.rs    # Direction, Facing, rotation helpers
 │   │
-│   ├── units/
-│   │   ├── mod.rs
-│   │   ├── volume.rs
-│   │   ├── weight.rs
-│   │   ├── time.rs
-│   │   └── energy.rs
+│   ├── units/              # Pure newtypes — NO serde
+│   │   ├── volume.rs       # Volume (milliliters)
+│   │   ├── weight.rs       # Weight (grams)
+│   │   ├── time.rs         # Time (turns)
+│   │   ├── energy.rs       # Energy (kJ)
+│   │   └── length.rs       # Length (millimeters)
 │   │
-│   ├── damage.rs
-│   ├── flags.rs
-│   ├── stats.rs
-│   ├── rng.rs              # Seeded deterministic RNG — reproducible tests and replays
+│   ├── id.rs               # DefIdx, GenId, per-category ID newtypes
+│   ├── id_slab.rs          # IdSlab<T> — dense generational storage
+│   ├── id_str.rs           # String ID helpers
+│   ├── registry.rs         # PLACEHOLDER — old Vec-based DefRegistry removed
+│   ├── damage.rs           # Damage struct (bash, cut, pierce, etc.)
+│   ├── stats.rs            # Stats struct (strength, dex, etc.)
+│   ├── flags.rs            # FlagSet
+│   ├── rng.rs              # Seeded deterministic RNG
+│   ├── def_kinds.rs        # DefCategory enum
 │   └── error.rs
 │
 └── tests/
-    ├── coords.rs           # round-trips, distance, direction math, negative-coord cases,
-    │                       # ZLevel checked arithmetic, scale/origin type mismatch (compile-fail)
-    ├── units.rs
-    ├── calendar.rs
-    └── damage.rs
+    ├── coords.rs
+    ├── units/
+    ├── id.rs
+    └── id_slab.rs
 ```
 
-> **Known issue:** The current `cdda_core` also contains `defs/` (game definition
-> structs with `serde` and `schemars` derives) and `types/` (including `copy-from`
-> machinery). This violates the "pure types, no IO" principle. The
-> `TARGET_ARCHITECTURE.md` addresses this by moving `defs/` to
-> `cdda_data::raw_defs/` and stripping all IO dependencies from `cdda_core`.
+> **Note on former templates:** The `cdda_core::templates` module (which held
+> ItemTemplate, MonsterTemplate, etc.) was **deleted**. These templates were dead
+> code — `build_def_world` never read them. Definition data is now loaded from
+> `cdda_data::DefRegistry` (JSON-backed) and spawned directly as ECS entities
+> into the main game World. The `cdda_core::registry` module (which held the
+> old Vec-based `DefRegistry`) was emptied — it is now a placeholder.
 
-#### Coordinate design: two axes of typing
+#### Coordinate design
 
-Every coordinate has two independent type parameters:
-
-- **Scale** — what one unit represents: `Ms` (map square), `Sm` (submap = 12×12 tiles),
-  `Omt` (overmap terrain = 2×2 submaps = 24×24 tiles), `Om` (overmap = 180×180 omts).
-- **Origin** — what position (0, 0) means: `Abs` (global, never shifts),
-  `Bubble` (relative to reality-bubble top-left corner), `Rel` (generic relative —
-  used for vehicle-relative coordinates, submap-local offsets, and delta calculations).
-
-CDDA's own coordinate documentation defines the same axes. Issue #71852 documents
-surviving bugs where two coordinates with the same scale but different semantic
-origins were mixed. We encode both axes from day one. Functions that accept a
-position declare exactly which `Pos<Scale, Origin>` they need; the types do not
-coerce to each other.
+Every coordinate has two independent type parameters — Scale (Ms/Sm/Omt/Om) and
+Origin (Abs/Bubble/Rel). Types with different scale or origin do not coerce.
+Z is always absolute and stored as `ZLevel(i8)`.
 
 ```rust
-// Type aliases defined in cdda_core::coords
-pub type WorldPos        = Pos<Ms,  Abs>;     // absolute map-square position
-pub type SubmapPos       = Pos<Sm,  Abs>;     // which 12×12 submap
-pub type SubmapLocal     = Pos<Ms,  Rel>;     // offset within submap, 0..=11 on x and y
-pub type BubblePos       = Pos<Ms,  Bubble>;  // position within the reality bubble
-pub type OmtPos          = Pos<Omt, Abs>;     // overmap terrain position (1 unit = 24×24 tiles)
-pub type OmPos           = Pos<Om,  Abs>;     // overmap position (1 unit = 180×180 omts)
+pub type WorldPos   = Pos<Ms, Abs>;     // absolute map-square position
+pub type SubmapPos  = Pos<Sm, Abs>;     // which 12×12 submap
+pub type SubmapLocal = Pos<Ms, Rel>;    // offset within submap, 0..=11
+pub type BubblePos  = Pos<Ms, Bubble>;  // position within reality bubble
+pub type OmtPos     = Pos<Omt, Abs>;    // overmap terrain position
+pub type OmPos      = Pos<Om, Abs>;     // overmap position
 
 // Vehicle coordinates
-pub type VehicleMountPos = Pos<Ms, Rel>;      // mount coords (facing east, relative to origin)
-pub type VehicleMapPos   = Pos<Ms, Rel>;      // map square coords (accounting for facing)
+pub type VehicleMountPos = Pos<Ms, Rel>;
+pub type VehicleMapPos   = Pos<Ms, Rel>;
 ```
 
-#### Coordinate arithmetic rules
+All coordinate division uses `div_euclid`/`rem_euclid` to correctly handle
+negative coordinates. Z does not participate in horizontal scale conversions.
 
-All horizontal coordinate division uses **`div_euclid` and `rem_euclid`**, never
-`/` and `%`. Rust's `/` truncates toward zero: `-1 / 12 = 0`, which would assign
-world position (-1, 0) to submap (0, 0) — the same submap as (0, 0). Euclidean
-division gives `-1 / 12 = -1` (submap -1), which is correct. This is a real bug
-class in CDDA and we must never introduce it.
+#### ID types
 
-The z-coordinate **does not participate in horizontal scale conversions.**
-CDDA's POINTS_COORDINATES.md confirms: "z-coordinates do not scale along with the
-horizontal dimensions, so z values are unchanged by project_to and project_remain."
-
-> **Note on `SubmapLocal` and z:** `SubmapLocal` stores `z: ZLevel` alongside `x`
-> and `y`. Since z does not participate in horizontal scaling, this is a convenience
-> copy of the same absolute z-value already present in the `SubmapPos`/`WorldPos`.
-> It is stored here so that conversion back to `WorldPos` does not require fetching
-> z from an external source.
+Per-category numeric ID types wrap `DefIdx(u32)`:
 
 ```rust
-impl WorldPos {
-    /// Returns the containing submap and the offset within it.
-    pub fn to_submap(self) -> (SubmapPos, SubmapLocal) {
-        let sx = self.x.div_euclid(12);
-        let sy = self.y.div_euclid(12);
-        let lx = self.x.rem_euclid(12);
-        let ly = self.y.rem_euclid(12);
-        (
-            SubmapPos { x: sx, y: sy, z: self.z },
-            SubmapLocal { x: lx, y: ly, z: self.z },
-        )
-    }
-
-    pub fn from_submap(sm: SubmapPos, local: SubmapLocal) -> Self {
-        WorldPos {
-            x: sm.x * 12 + local.x,
-            y: sm.y * 12 + local.y,
-            z: sm.z,  // z passes through unchanged
-        }
-    }
-
-    /// 1 OmtPos = 2×2 submaps = 24×24 world tiles.
-    pub fn to_omt(self) -> OmtPos {
-        OmtPos {
-            x: self.x.div_euclid(24),
-            y: self.y.div_euclid(24),
-            z: self.z,  // z unchanged
-        }
-    }
-}
+pub struct ItemId(pub DefIdx);
+pub struct MonsterId(pub DefIdx);
+pub struct TerrainId(pub DefIdx);
+pub struct FurnitureId(pub DefIdx);
+pub struct BionicId(pub DefIdx);
+pub struct EffectId(pub DefIdx);
+pub struct FactionId(pub DefIdx);
+pub struct SkillId(pub DefIdx);
+pub struct SpeciesId(pub DefIdx);
+pub struct BodyPartId(pub DefIdx);
+pub struct ProfessionId(pub DefIdx);
+pub struct ProficiencyId(pub DefIdx);
+// ... 34 total category ID types
 ```
 
----
-
+`IdSlab<T>` provides dense generational storage with O(1) lookup via `GenId`.
 ### `cdda_data` — JSON loading and def registry
 
 **Job:** Parse CDDA JSON files into typed Rust structs. Resolve `copy-from`
-inheritance (including `extend`/`delete`/`relative`/`proportional` operations).
-Expose `DefRegistry` as the single authoritative read-only store of all game
-definitions.
+inheritance (including `extend`/`delete`/`relative`/`proportional`). Expose
+`DefRegistry` as the single authoritative read-only store of all game definitions.
 
-Two-pass explicit loader instead of CDDA's repeated-scan strategy. Pass 1 ingests
-all raw `serde_json::Value`s keyed by `"type"` field. Pass 2 topologically sorts by
-`copy-from` dependency and resolves in order, applying field operations in sequence.
-Circular references are caught in pass 2 and reported with the full chain. Abstract
-base types (those with `"abstract": true`) are resolved but not inserted into the
-final registry.
-
-`DefId<T>` typed IDs instead of bare `String`. `DefId<ItemDef>` and
-`DefId<MonsterDef>` are incompatible at compile time.
-
-`CountMode` enum addresses the `charges` duality explicitly. (CDDA has open issues
-documenting incorrect weight/volume calculations from charges-count confusion.)
+> This crate has **zero Bevy dependencies**. It exposes a **HashMap-based**
+> `DefRegistry` (not Vec-based), keyed by `DefId<T>` with `Arc`-wrapped values.
 
 ```
 crates/cdda_data/
 ├── Cargo.toml
 ├── src/
 │   ├── lib.rs
-│   ├── registry.rs
-│   ├── loader.rs
-│   ├── resolve.rs          # Two-pass copy-from: handles extend/delete/relative/proportional
-│   ├── mod_layer.rs
+│   ├── registry.rs         # DefRegistry: HashMap<DefId<T>, Arc<T>> for all categories
+│   ├── loader.rs           # Two-pass loader: ingest raw → resolve copy-from
+│   ├── resolve.rs          # copy-from: extend/delete/relative/proportional operations
+│   ├── mod_layer.rs        # Mod loading, layering, conflict detection
+│   ├── schema.rs           # JSON schema generation and validation
+│   ├── def_kinds.rs        # DefCategory mappings
 │   │
-│   ├── defs/
-│   │   ├── mod.rs
-│   │   ├── item.rs
-│   │   ├── monster.rs
-│   │   ├── terrain.rs
-│   │   ├── furniture.rs
+│   ├── raw_defs/           # Raw CDDA JSON types (serde-annotated)
+│   │   ├── item.rs         # ItemDef — matches CDDA JSON shape
+│   │   ├── monster.rs      # MonsterDef
+│   │   ├── terrain.rs      # TerrainDef
+│   │   ├── furniture.rs    # FurnitureDef
+│   │   ├── body_part.rs    # BodyPartDef
 │   │   ├── recipe.rs
 │   │   ├── item_group.rs
-│   │   ├── mapgen.rs       # MapgenDef, MapgenPalette — see mapgen pipeline below
-│   │   ├── overmap_terrain.rs
-│   │   ├── field.rs
-│   │   ├── vehicle_part.rs
-│   │   ├── mutation.rs
-│   │   ├── bionic.rs
-│   │   ├── effect.rs
-│   │   ├── faction.rs
-│   │   └── scenario.rs
+│   │   └── ...             # ~50+ raw def types
 │   │
-│   └── types/
-│       ├── mod.rs
-│       ├── localized.rs
-│       ├── id.rs
-│       └── flags.rs
+│   └── raw_types/          # Shared raw types (DefId, LocalizedString, etc.)
 │
 └── tests/
-    ├── item_parsing.rs
+    ├── loading.rs
     ├── copy_from.rs
-    ├── extend_delete.rs    # extend/delete/relative/proportional field operations
-    ├── abstract_types.rs   # abstract bases not in final registry
-    ├── item_groups.rs
-    ├── charge_duality.rs
-    ├── mapgen_palette.rs
+    ├── mod_loading.rs
     └── fixtures/
 ```
 
 **Key types:**
 
 ```rust
+/// HashMap-based registry. Each field is HashMap<DefId<T>, Arc<T>>.
 pub struct DefRegistry {
-    pub items:       HashMap<DefId<ItemDef>,          Arc<ItemDef>>,
-    pub monsters:    HashMap<DefId<MonsterDef>,        Arc<MonsterDef>>,
-    pub terrain:     HashMap<DefId<TerrainDef>,        Arc<TerrainDef>>,
-    pub furniture:   HashMap<DefId<FurnitureDef>,      Arc<FurnitureDef>>,
-    pub recipes:     HashMap<DefId<RecipeDef>,         Arc<RecipeDef>>,
-    pub item_groups: HashMap<DefId<ItemGroupDef>,      Arc<ItemGroupDef>>,
-    pub mapgen:      HashMap<DefId<OmtDef>,            Vec<Arc<MapgenDef>>>,
-    pub palettes:    HashMap<DefId<MapgenPaletteDef>,  Arc<MapgenPaletteDef>>,
+    pub items: HashMap<DefId<ItemDef>, Arc<ItemDef>>,
+    pub monsters: HashMap<DefId<MonsterDef>, Arc<MonsterDef>>,
+    pub terrain: HashMap<DefId<TerrainDef>, Arc<TerrainDef>>,
+    pub furniture: HashMap<DefId<FurnitureDef>, Arc<FurnitureDef>>,
+    pub body_parts: HashMap<DefId<BodyPartDef>, Arc<BodyPartDef>>,
+    pub recipes: HashMap<DefId<RecipeDef>, Arc<RecipeDef>>,
+    pub item_groups: HashMap<DefId<ItemGroupDef>, Arc<ItemGroupDef>>,
+    // ... 50+ categories total
 }
 
+/// CDDA's charges duality made explicit
 pub enum CountMode {
     Single,
-    ByCount  { default: u32, max: Option<u32> },
-    Charges  { default: u32, max: Option<u32> },
-}
-
-pub struct ItemDef {
-    pub id:         DefId<ItemDef>,
-    pub name:       LocalizedString,
-    pub volume:     Volume,
-    pub weight:     Weight,
-    pub count_mode: CountMode,
-    pub flags:      FlagSet,
-    // ...
+    ByCount { default: u32, max: Option<u32> },
+    Charges { default: u32, max: Option<u32> },
 }
 ```
 
----
-
+> **Note on ACL:** The Anti-Corruption Layer (translation from raw CDDA types to
+> pure domain types) is planned but NOT YET IMPLEMENTED. Currently, `cdda_sim`
+> reads raw types from `cdda_data::raw_defs` directly in `build_def_world`.
 ### `cdda_mod` — Mod loading and layering
 
 **Job:** Load mods, resolve their dependency order, apply their definitions on
@@ -631,321 +550,183 @@ crates/cdda_mod/
 ### `cdda_sim` — Simulation logic
 
 **Job:** Turn engine, combat, crafting, AI, needs, status effects, mutations,
-bionics, vehicles, inventory. Three sub-layers: `components` (EC-entity data structs),
-`systems` (ECS systems that query and mutate the `World`), `logic` (pure functions —
-the testable core that never touches ECS types).
+bionics, vehicles, inventory, spawning. Depends on `bevy_ecs` and `bevy_reflect`
+(not full Bevy).
 
-> **This crate depends on `bevy_ecs` and `bevy_reflect`.** It uses `World`, `Entity`,
-> `Component`, `Query`, `Commands`, `Resource`, `MessageReader`, `MessageWriter`,
-> `Observer`, `Relationship`, component hooks, change detection, and all other
-> `bevy_ecs` features. It does **NOT** depend on `bevy` (the full crate), `App`,
-> `Schedule`, `winit`, or rendering. Systems are run manually in a fixed, explicit
-> order. This gives us the full power of archetypal ECS while preserving
-> determinism, decoupling from the frame lifecycle, and keeping the simulation
-> headless-testable.
-
-#### The ECS design rationale
-
-CDDA's simulation is an archetypal ECS problem: thousands of entities (creatures,
-items, vehicles, fields) with heterogeneous components that need to be efficiently
-queried. Building a hand-rolled component storage with HashMaps would be slower,
-harder to maintain, and would require implementing change detection, hooks, and
-relationships from scratch. `bevy_ecs` provides all of this as a pure data library
-with no rendering or threading dependency.
-
-The key insight is that **determinism comes from how you schedule execution, not
-from what data structure you use.** `bevy_ecs` queries are deterministic when you
-own the `World` exclusively and iterate in order. Bevy's parallel scheduler is what
-introduces non-determinism — and `cdda_sim` does not use it.
-
-All simulation components use `#[derive(Component, Reflect, Serialize, Deserialize)]`
-with `#[reflect(Component)]`. They are registered in the world during tick setup.
-
-#### Turn scheduling — deterministic, single-threaded
-
-The simulation tick runs inside a single Bevy system in `cdda_app` that calls
-`cdda_sim::tick()` once per game turn. Inside `tick()`, each simulation system
-is executed sequentially via `system.run(&mut world)` — a plain Rust call with
-no Bevy `Schedule` involved. An alternative worth considering is `Schedule` with
-`SingleThreadedExecutor` for better API ergonomics. The order is fixed and documented.
-
-```rust
-// cdda_sim/src/tick.rs
-pub fn tick(world: &mut World, rng: &mut Rng) {
-    // Systems run in this exact order, every tick. No parallelism.
-    turn_order::system.run(world);
-    ai::system.run(world);
-    movement::system.run(world);
-    combat::system.run(world);
-    crafting::system.run(world);
-    needs::system.run(world);
-    effects::system.run(world);
-    vehicles::system.run(world);
-    spawning::system.run(world);
-    // ... any additional systems
-}
-```
-
-Systems are thin orchestrators:
-
-```rust
-// cdda_sim/src/systems/combat.rs
-pub fn system(world: &mut World) {
-    let mut combat_pairs: Vec<(Entity, Entity, MeleeIntent)> = Vec::new();
-    
-    // Archetypal ECS query — iterates contiguous archetype memory efficiently
-    let mut query = world.query::<(Entity, &MeleeIntent, &Position)>();
-    for (attacker, intent, pos) in query.iter(world) {
-        if let Some(target) = find_target(world, pos, intent.target_pos) {
-            combat_pairs.push((attacker, target, intent.clone()));
-        }
-    }
-    
-    // All computation delegated to pure functions — no World access
-    for (attacker, target, intent) in combat_pairs {
-        let attacker_stats = build_actor_state(world, attacker);
-        let defender_stats = build_actor_state(world, target);
-        let result = logic::combat::melee::resolve(&attacker_stats, &defender_stats, &intent);
-        apply_combat_result(world, attacker, target, &result);
-    }
-}
-```
-
-The logic functions are pure, tested without any ECS:
-
-```rust
-// cdda_sim/src/logic/combat/melee.rs
-/// Pure function — unit-testable with cargo test, no World or Query needed.
-pub fn resolve(attacker: &ActorState, defender: &ActorState, intent: &MeleeIntent) -> CombatResult {
-    let hit_chance = hit_chance(attacker.melee_skill, defender.dodge_skill);
-    let damage = if roll_hit(hit_chance, intent.rng_roll) {
-        let base = base_damage(attacker.strength, intent.weapon_damage);
-        let mitigated = armor::mitigate(base, defender.armor);
-        critical_roll(mitigated, attacker.melee_skill, intent.rng_crit)
-    } else {
-        0
-    };
-    CombatResult { damage, hit: damage > 0 }
-}
-```
-
-#### AI architecture
-
-Monster and NPC behavior uses a **utility AI** module implemented in
-`cdda_sim/logic/ai/`. Rather than depending on an external crate, the AI layer
-is a small, purpose-built module: a `Scorer` trait, an `Action` enum, and a
-`Thinker` struct that selects actions based on numeric scores. This is approximately
-200 lines of pure Rust and has no Bevy dependency, making it independently testable.
-
-> **Why not `big-brain`?** `big-brain` was archived by its maintainer in October 2025
-> and is no longer maintained. Additionally, its design runs Scorer/Action evaluation
-> every frame — a real-time pattern mismatched with a turn-based simulation where
-> off-screen creatures should evaluate AI on a turn tick, not at 60 Hz.
-
-The same AI systems run over all entity types without `is_player()` branching — a
-monster, an NPC companion, and a wild animal all use the same Thinker mechanism.
-
-#### Finite State Machine — pure-Rust implementation
-
-Player and NPC **state** (climbing, swimming, driving, crafting, stunned) uses a
-**pure-Rust finite state machine** implemented in `cdda_sim/logic/fsm/`. This
-provides states, transitions, entry/exit callbacks in ~150 lines of pure Rust.
-
-> **Why a custom FSM instead of `seldom_state`?** `seldom_state` is a Bevy plugin
-> with a full Bevy dependency (it operates on Bevy entities with Bevy components
-> and Bevy system schedules). Its state machine logic would work inside `cdda_sim`
-> only if we used it as a component-storage library without the scheduler — which
-> is essentially what the custom FSM does with less code and no dependency.
-> `seldom_state` remains available for UI-level state management inside
-> `cdda_render` if needed.
-
-```rust
-// cdda_sim/src/logic/fsm/mod.rs (sketch)
-pub struct StateMachine<S: State> {
-    current: S,
-    transitions: Vec<Transition<S>>,
-}
-
-pub trait State: Clone + PartialEq {
-    fn on_enter(&self, entity: &mut EntityState) {}
-    fn on_exit(&self, entity: &mut EntityState) {}
-}
-
-impl<S: State> StateMachine<S> {
-    pub fn tick(&mut self, entity: &mut EntityState) {
-        for transition in &self.transitions {
-            if transition.trigger.evaluate(entity) && transition.from == self.current {
-                self.current.on_exit(entity);
-                self.current = transition.to.clone();
-                self.current.on_enter(entity);
-                break;
-            }
-        }
-    }
-}
-```
+> This crate uses `World`, `Entity`, `Component`, `Query`, `Commands`, `Resource`,
+> `Relationships`, component hooks, change detection, and all other `bevy_ecs`
+> features. Systems are run manually in a fixed, explicit order for determinism.
 
 ```
 crates/cdda_sim/
-├── Cargo.toml              # bevy_ecs = "0.18", bevy_reflect = "0.18"
-│                           # serde, thiserror, tracing
-│                           # DOES NOT DEPEND ON bevy (full)
+├── Cargo.toml
 ├── src/
 │   ├── lib.rs
 │   │
-│   ├── components/             # ECS component structs — #[derive(Component, Reflect)]
+│   ├── components/         # Gameplay ECS components (mutable runtime state)
+│   │   └── mod.rs          # StackCount, CurrentCharges, LoadedAmmo, Spoilable,
+│   │                       # Creature, Health, Faction, CombatStats, Vision,
+│   │                       # SkillSet, Mutations, ProficiencySet,
+│   │                       # BodyPartOf, CreatureBodyParts, BodyPartSlot, BodyPartHp,
+│   │                       # Bionic, MoraleBonus, StatusEffect, PlayerData, NpcData,
+│   │                       # Relationships: InsideContainer, WornOn, WieldedBy, etc.
+│   │                       # Tags: IsAlive, Sealed, Rigid, Watertight, etc.
+│   │                       # Turn: MovePoints, Speed
+│   │
+│   ├── def_components.rs   # Composable ECS components for definition entities
+│   │                       # IsDef, DefStrId — on every def entity
+│   │                       # ItemName, ItemWeight, ItemVolume, ItemSymbol, etc. — universal
+│   │                       # WeaponData, GunData, AmmoData, MagazineData — subtype-specific
+│   │                       # ArmourData, FoodData, ToolData, BookData, DrugData — composable
+│   │                       # MonsterName, MonsterStats, MonsterMelee, etc. — monster defs
+│   │                       # BodyPartDefId, BodyPartName, IsVital, CanGrasp, etc. — body parts
+│   │                       # TerrainName, FurnitureName, etc. — map defs
+│   │
+│   ├── def_world.rs        # DefinitionWorld resource + builder
+│   │                       # DefinitionWorld: HashMap<String, Entity> index
+│   │                       # build_def_world(world, registry) — spawns IsDef entities
+│   │                       #   Subtype-based component composition (AMMO→AmmoData, etc.)
+│   │                       #   Body part def spawning + sub-part relationship wiring
+│   │                       # load_data_system(world) — startup: JSON → DefRegistry → ECS
+│   │                       # worldgen_system(world) — placeholder: spawns player entity
+│   │
+│   ├── events.rs           # DamageEvent, DeathEvent, SoundEvent, SightEvent,
+│   │                       # SpawnEvent, DefChangedEvent, ItemMoveEvent,
+│   │                       # EquipEvent, UnequipEvent, UseItemEvent
+│   │                       # TurnState enum (Resource-based state machine)
+│   │
+│   ├── spatial.rs          # EntitySpatialIndex: grid-based O(1) radius queries
+│   │                       # 16×16 tile cells, HashMap-backed
+│   │
+│   ├── state.rs            # AppState enum, GameTime, LoadingStatus, StartupConfig
+│   │
+│   ├── world_setup.rs      # Component + resource registration (called by cdda_app)
+│   │
+│   ├── test_utils.rs       # TestBed: lightweight World wrapper for isolated system testing
+│   │
+│   ├── systems/
 │   │   ├── mod.rs
-│   │   ├── actor.rs            # Health, Stamina, ActionPoints, Speed
-│   │   ├── body.rs             # BodyParts — dynamic, not hardcoded humanoid
-│   │   ├── position.rs         # Position(WorldPos)
-│   │   ├── wounds.rs
-│   │   ├── inventory.rs        # Inventory tree: pockets, containers, nesting
-│   │   ├── skills.rs
-│   │   ├── needs.rs
-│   │   ├── effects.rs
-│   │   ├── mutations.rs
-│   │   ├── bionics.rs
-│   │   ├── faction.rs
-│   │   ├── vehicle.rs          # Vehicle state, part health, fuel, velocity
-│   │   ├── fsm.rs              # StateMachine<S> component (current state, transitions)
-│   │   └── tags.rs             # PlayerTag, NpcTag, MonsterTag — no is_player()
+│   │   ├── ai.rs           # AI phase (stub)
+│   │   ├── combat.rs       # Combat phase (stub)
+│   │   ├── movement.rs     # Movement phase (stub)
+│   │   ├── effects.rs      # Status effects tick (stub)
+│   │   ├── spawning.rs     # Spawning phase (stub)
+│   │   ├── spawning_impl.rs # EntityCloner-based spawn_item/spawn_creature/spawn_body_parts
+│   │   ├── inventory.rs    # Item query helpers
+│   │   ├── spatial.rs      # Spatial index update system
+│   │   └── turn.rs         # TurnQueue, tick_move_points, MovePoints/Speed
 │   │
-│   ├── systems/                # ECS systems — thin orchestrators, run via system.run(&mut world)
-│   │   ├── mod.rs
-│   │   ├── turn_order.rs
-│   │   ├── ai.rs               # calls logic::ai
-│   │   ├── movement.rs
-│   │   ├── combat.rs           # Query → logic::combat → write results. Z-aware.
-│   │   ├── crafting.rs
-│   │   ├── needs.rs
-│   │   ├── effects.rs
-│   │   ├── mutations.rs
-│   │   ├── vehicles.rs         # Vehicle movement, collisions, part damage
-│   │   ├── inventory.rs        # Pickup, drop, container insert/remove
-│   │   └── spawning.rs
-│   │
-│   ├── tick.rs                 # THE DETERMINISTIC LOOP:
-│   │                           # pub fn tick(world: &mut World, rng: &mut Rng) {
-│   │                           #     turn_order::system.run(world);
-│   │                           #     ai::system.run(world);
-│   │                           #     movement::system.run(world);
-│   │                           #     combat::system.run(world);
-│   │                           #     // ... all systems in explicit order
-│   │                           # }
-│   │
-│   ├── logic/                  # Pure functions — NO World, NO Query, NO ECS
-│   │   ├── mod.rs
-│   │   ├── combat/
-│   │   │   ├── mod.rs
-│   │   │   ├── melee.rs        # hit_chance(), melee_damage(), critical_roll()
-│   │   │   │                   # range check: same z OR explicit floor opening
-│   │   │   │                   # (TFLAG_NO_FLOOR on intervening tile)
-│   │   │   ├── ranged.rs
-│   │   │   └── armor.rs
-│   │   ├── crafting.rs
-│   │   ├── needs.rs
-│   │   ├── effects.rs
-│   │   ├── mutations.rs
-│   │   ├── inventory.rs        # pocket insertion, weight/volume validation
-│   │   ├── skills.rs
-│   │   ├── fsm/
-│   │   │   ├── mod.rs          # Pure-Rust state machine, ~150 lines
-│   │   │   ├── types.rs        # State trait, Transition, Trigger
-│   │   │   └── machine.rs      # StateMachine<S> implementation
-│   │   └── ai/
-│   │       ├── mod.rs
-│   │       ├── scorer.rs       # Scorer trait + built-ins: ThirstScore, ThreatScore…
-│   │       ├── action.rs       # Action enum + built-ins: Flee, Attack, Wander…
-│   │       ├── thinker.rs      # Thinker: selects highest-scoring Action each turn
-│   │       └── pathfind.rs     # A* adapter over cdda_map, z-aware neighbors
-│   │
-│   └── world_setup.rs          # Registration: world.register_component::<T>() for all components
+│   └── logic/              # Pure functions — NO ECS (planned, mostly stubs)
+│       └── mod.rs
 │
 └── tests/
-    ├── tick_ordering.rs        # verify systems run in declared order
-    ├── combat_melee.rs         # pure logic tests — no World
-    ├── combat_ranged.rs
-    ├── combat_armor.rs
-    ├── combat_z_level.rs       # cross-z attacks blocked by solid floor
-    ├── combat_integration.rs   # ECS integration test — spawn world, run combat system
-    ├── crafting.rs
-    ├── needs_tick.rs
-    ├── effects.rs
-    ├── inventory_weight.rs
-    ├── inventory_nesting.rs    # nested container insertion/extraction
-    ├── fsm_transition.rs       # state machine transitions
-    └── ai_behaviour.rs
+    └── def_world_load.rs   # 19 tests: unit tests + full integration load
 ```
 
-#### Inventory architecture
+#### Definition architecture
 
-CDDA's inventory is a tree of pockets, not a flat list. Each worn or carried
-container (backpack, holster, pot, magazine) has one or more pockets with
-independent constraints: maximum volume, maximum weight, minimum/maximum item
-volume, pocket type (`CONTAINER`, `MAGAZINE`, `HOLSTER`), and flag-based
-restrictions.
+Definitions live as **ECS entities in the main game World**, marked with `IsDef`.
+The `DefinitionWorld` resource is just a `HashMap<String, Entity>` index — it is
+`Send + Sync` and stores no World reference.
 
-Our `Inventory` component models this directly:
+Systems query definition data directly from the main World:
+```rust
+fn gun_stats_system(query: Query<&GunData, With<IsDef>>) { }
+fn gameplay_system(query: Query<&Health, Without<IsDef>>) { }
+```
+
+`DefaultQueryFilters` is configured in `cdda_app` to automatically add
+`Without<IsDef>` to all queries.
+
+#### Composable def components
+
+Instead of a monolithic `ItemDef` with 60+ optional fields, each definition is an
+entity that gets **exactly** the components its subtypes require:
+
+- A carrot: `IsDef` + `DefStrId("carrot")` + `ItemName("carrot")` + `FoodData { ... }`
+- A glock: `IsDef` + `DefStrId("glock_17")` + `ItemName("Glock 17")` + `GunData { ... }` + `WeaponData { ... }`
+
+`build_def_world` uses CDDA's `subtypes` array to determine which components to add:
 
 ```rust
-// cdda_sim/src/components/inventory.rs
-
-/// A pocket within a container or worn item.
-pub struct Pocket {
-    pub pocket_type: PocketType,
-    pub max_volume: Volume,
-    pub max_weight: Weight,
-    pub min_item_volume: Option<Volume>,
-    pub max_item_length: Option<Millimeters>,
-    pub contents: Vec<ItemInstance>,
-    pub sealed: bool,
-}
-
-pub enum PocketType {
-    Container,     // general-purpose storage
-    Magazine,      // ammunition magazine
-    Holster,       // sized for specific weapon types
-    Special,       // special-purpose (e.g. canteen)
-}
-
-/// The root inventory component attached to every actor.
-pub struct Inventory {
-    pub worn: HashMap<BodyPartSlot, Vec<WornContainer>>,
-    pub wielded: Option<ItemInstance>,
-    pub carried: Option<ItemInstance>,
-}
+let subtypes: Vec<String> = item.subtypes.iter().map(|s| s.to_uppercase()).collect();
+if subtypes.iter().any(|s| s == "AMMO")    { world.entity_mut(e).insert(AmmoData { ... }); }
+if subtypes.iter().any(|s| s == "GUN")     { world.entity_mut(e).insert(GunData { ... }); }
+if subtypes.iter().any(|s| s == "ARMOR")   { world.entity_mut(e).insert(ArmourData { ... }); }
+// etc.
 ```
 
-The inventory logic in `cdda_sim/logic/inventory.rs` handles insertion into
-compatible pockets (by volume, weight, type constraints), extraction from nested
-containers with cascade updates, and wield/unwield operations. This is purely
-computational — no ECS, no UI — and fully unit-testable.
+#### Entity-based body parts
 
-#### Z-level combat rule
+Body parts are **ECS entities**, just like items and monsters. Definition entities
+(for body part types like "head", "arm_l") get capability markers (`IsVital`,
+`CanGrasp`, `CanWalk`, `CanSee`, `CanBite`, `CanFly`). Sub-part relationships
+are wired via `ParentPart`/`SubParts` (Bevy Relationships).
 
-CDDA's most persistent z-level bug class is "z-level view violation" — entities
-attacking across z-levels when no floor opening exists. Our combat logic enforces
-this as a single, centralized runtime check:
+Body part instances are per-creature, spawned via `EntityCloner` from def entities,
+with mutable `BodyPartHp` and transient state markers (`BodyPartBroken`,
+`BodyPartSevered`). The old `BodyPartSlot` enum was **deleted** — replaced by
+`BodyPartSlot(String)` (e.g. "head_1", "arm_l_2").
+
+#### Spawning via EntityCloner
+
+Gameplay entities are created by cloning definition entities:
+```rust
+let mut builder = EntityCloner::build_opt_out(world);
+builder.deny::<IsDef>();
+builder.deny::<DefStrId>();
+builder.linked_cloning(true);
+let mut cloner = builder.finish();
+let new_entity = cloner.spawn_clone(world, def_entity);
+```
+
+Cloning copies all `Clone`-deriving components automatically. Per-instance mutable
+state (`CurrentCharges`, `StackCount`, `WorldPosition`, `Health`) is added after cloning.
+
+#### Gameplay components (thin mutable state)
+
+Static data (name, weight, weapon stats, food calories, etc.) comes from def
+components cloned at spawn. The gameplay components module only contains **runtime
+mutable** state:
+
+- `StackCount(u32)` — always >= 1; despawn on zero
+- `CurrentCharges(i32)` — tools, batteries, magazines
+- `LoadedAmmo(i32)` — rounds in a magazine
+- `Spoilable` — food spoilage tracking
+- `Health`, `Faction`, `MovePoints`, `Speed` — classic mutable state
+
+#### Turn scheduling
+
+Actors have `Speed` (base 100) and `MovePoints`. Each turn, `tick_move_points`
+grants MP and rebuilds the `TurnQueue` (priority queue sorted by MP descending).
+The queue is available for per-actor processing when the game loop is refactored
+(currently batch-processed in serial phases).
+
+#### App state machine
+
+```
+DataLoading → WorldGen → InGame ↔ Paused
+                              ↓
+                         GameOver
+```
+
+`DataLoading` runs `load_data_system` which loads JSON via `cdda_data`, builds
+def entities, and inserts the `DefinitionWorld` resource.
+`WorldGen` runs `worldgen_system` which spawns a placeholder player entity.
+`InGame` runs the game tick loop (AI → Movement → Combat → Effects → Spawning).
+
+#### TestBed
+
+`test_utils.rs` provides a lightweight `World` wrapper for testing systems in
+isolation without a full Bevy app:
 
 ```rust
-// logic/combat/melee.rs
-pub fn can_reach(map: &WorldMap, attacker: WorldPos, target: WorldPos) -> bool {
-    if attacker.z == target.z {
-        return horizontal_dist(attacker, target) <= MELEE_REACH;
-    }
-    let floor_pos = WorldPos { z: attacker.z.min(target.z), ..attacker };
-    map.tile(floor_pos)
-       .map(|t| t.terrain.has_flag(TerFlag::NO_FLOOR))
-       .unwrap_or(false)
-}
+let mut tb = TestBed::new();
+tb.register::<Health>();
+let e = tb.spawn(Health { current: 100, max: 100 });
+tb.run_system(my_system);
+assert_eq!(tb.get::<Health>(e).unwrap().current, 90);
 ```
-
-The improvement over CDDA: exactly **one** `can_reach` function in the codebase,
-called from every attack path. In CDDA this logic is scattered, allowing paths
-to bypass it.
-
----
-
 ### `cdda_map` — Map storage, coordinates, generation
 
 **Job:** Spatial layer. Stores tiles in typed submap structs. Manages the reality
@@ -1510,36 +1291,35 @@ registration) because forgetting any one causes silent save failures.
 
 ---
 
-## Decision Table: Original CDDA → This Architecture
+## Decision Table: Original CDDA → This Architecture (UPDATED)
 
-| Original CDDA pain | This architecture |
-|---|---|
-| `g->` global singleton | No singleton — `Resource`s and `Component`s |
-| `character.cpp` ~13,000 lines | ECS archetypal components, no god class |
-| `is_player()` / `is_npc()` branches | Marker components, query by tag |
-| Adding monster attack needs 4 file edits | Fully data-driven from JSON |
-| `charges` duality | `CountMode` enum — explicit |
-| `player::` → `avatar::` migration half-done | No `Player` class ever created |
-| Low test coverage, tests need game startup | Pure logic functions tested with `cargo test`; no World needed |
-| Flat `src/` with 400+ files | 9 crates, domain obvious from name |
-| Untyped `point`/`tripoint` — scale confusion | `Pos<Scale, Origin>` — both axes typed |
-| Scale typed but origin still ambiguous (#71852) | Both scale AND origin in type params |
-| `/` and `%` on signed coords → wrong submap | `div_euclid`/`rem_euclid` enforced |
-| Z-level retrofitted 2015, bugs still open 2024 | Z first-class in every system from day 1 |
-| "Z-level view violation" debug spam | Single `can_reach()` function, all attack paths use it |
-| 3D FOV broken in 2023 | Unified FOV; cross-z visibility via NO_FLOOR flag |
-| NPCs stopping on different z-level | Simulation systems operate on WorldPos, z-agnostic |
-| Deferred loader re-scans until resolved | Explicit two-pass, handles extend/delete/relative |
-| Non-humanoid bodies retrofitted mid-dev | Dynamic `BodyParts` from day one |
-| Modding bolted on | `cdda_mod` is its own crate |
-| Save/load not designed in | Custom serde, atomic writes, versioned format |
-| Save unit is submap (12×12), not OMT (24×24) | `Submap` vs. `MapgenCanvas` split preserved |
-| Architecture doc "approximate and outdated" | This file, reviewed on structural PRs |
-| Hand-rolled component storage, no query engine | `bevy_ecs` archetypal storage, `Query`, change detection |
-| Simulation non-deterministic when parallel | Manual `system.run()` in fixed order, single-threaded |
-| Flat inventory → per-tile item piles only | Tree-based inventory with pockets, nesting, type constraints |
-| Vehicle coords mixed with world coords | Vehicle uses `Pos<Ms, Rel>`; type prevents world-vehicle mixing |
-| AI (big-brain) archived; real-time eval | Custom utility AI, runs on turn tick |
-| UI entities persist across state transitions | `StateScoped<S>` for automatic cleanup |
-| z stored as bare int, silent overflow | `ZLevel(i8)` newtype with checked arithmetic |
-| Rendering re-uploads entire map on any change | `Submap::dirty` flag; only changed submaps re-uploaded |
+| Original CDDA pain | This architecture | Status |
+|---|---|---|
+| `g->` global singleton | No singleton — `Resource`s and `Component`s | Implemented |
+| `character.cpp` ~13,000 lines | ECS archetypal components, no god class | Implemented |
+| `is_player()` / `is_npc()` branches | Marker components, query by tag | Implemented |
+| Adding monster attack needs 4 file edits | Fully data-driven from JSON | Implemented |
+| `charges` duality | `CountMode` enum in cdda_data | Implemented |
+| `player::` → `avatar::` migration half-done | No `Player` class ever created | Implemented |
+| Low test coverage, tests need game startup | Pure logic + TestBed + isolated World tests | Implemented |
+| Flat `src/` with 400+ files | 9 crates, domain obvious from name | Implemented |
+| Untyped `point`/`tripoint` — scale confusion | `Pos<Scale, Origin>` — both axes typed | Implemented |
+| `/` and `%` on signed coords → wrong submap | `div_euclid`/`rem_euclid` enforced | Implemented |
+| Z-level retrofitted, bugs still open 2024 | Z first-class from day 1 | Implemented |
+| Deferred loader re-scans until resolved | Explicit two-pass, handles extend/delete/relative | Implemented |
+| Non-humanoid bodies retrofitted mid-dev | Entity-based `BodyParts` from day one | Implemented |
+| Monolithic `ItemDef` with 60+ optional fields | Composable def components (WeaponData, GunData, etc.) | Implemented |
+| `ItemTemplate` structs with Option<Behavior> | Deleted — dead code; entities carry only needed components | Implemented |
+| Separate `DefinitionWorld` World | Single main World with IsDef marker + HashMap index | Implemented |
+| Hardcoded `BodyPartSlot` enum | Entity-based body parts with capability markers | Implemented |
+| Manual component enumeration at spawn | `EntityCloner` with opt-out (deny IsDef/DefStrId) | Implemented |
+| `Vec<StatusEffect>` inside component | Per-effect entities with relationships | Implemented |
+| No automatic def exclusion from queries | `DefaultQueryFilters` with `Without<IsDef>` | Implemented |
+| Modding bolted on | `cdda_mod` is its own crate | Partially implemented |
+| Save/load not designed in | Custom serde, atomic writes, versioned format | Planned |
+| Architecture doc "approximate and outdated" | This file, updated on structural changes | Implemented |
+| Hand-rolled component storage | `bevy_ecs` archetypal storage, `Query`, change detection | Implemented |
+| Simulation non-deterministic when parallel | Manual `system.run()` in fixed order, single-threaded | Implemented |
+| Events via message passing | Bevy 0.18 trigger-based Events (World::trigger + Observers) | Implemented |
+| App state as bool flags | State machine: DataLoading → WorldGen → InGame ↔ Paused | Implemented |
+| No test isolation framework | `TestBed` wrapper for isolated system testing | Implemented |

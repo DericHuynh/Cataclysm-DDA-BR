@@ -31,7 +31,12 @@ pub fn spawn_item_from_def(
 
     let new_entity = cloner.spawn_clone(world, def_entity);
 
-    world.entity_mut(new_entity)
+    // Store def origin for fast numeric identity checks (merge_or_stack, etc.)
+    let origin = def_entity.index().index();
+
+    world
+        .entity_mut(new_entity)
+        .insert(DefOrigin(origin))
         .insert(StackCount::new(count))
         .insert(CurrentCharges(0))
         .insert(WorldPosition(pos));
@@ -55,35 +60,60 @@ pub fn spawn_creature_from_def(
     let new_entity = cloner.spawn_clone(world, def_entity);
 
     // Get hp from cloned MonsterStats to seed Health
-    let hp = world.get::<MonsterStats>(new_entity)
+    let hp = world
+        .get::<MonsterStats>(new_entity)
         .map(|s| s.hp)
         .unwrap_or(100);
 
-    world.entity_mut(new_entity)
+    world
+        .entity_mut(new_entity)
         .insert(IsAlive)
         .insert(Solid)
         .insert(WorldPosition(pos))
-        .insert(Health { current: hp, max: hp })
+        .insert(Health {
+            current: hp,
+            max: hp,
+        })
         .insert(Faction { id: faction });
 
     new_entity
 }
 
-/// Convert a definition-level `BodyPartId` to the ECS `BodyPartSlot`.
-pub fn body_part_id_to_slot(id: cdda_core::BodyPartId) -> BodyPartSlot {
-    match (id.0).0 {
-        0 => BodyPartSlot::Head,
-        1 => BodyPartSlot::Eyes,
-        2 => BodyPartSlot::Mouth,
-        3 => BodyPartSlot::Torso,
-        4 => BodyPartSlot::ArmLeft,
-        5 => BodyPartSlot::ArmRight,
-        6 => BodyPartSlot::HandLeft,
-        7 => BodyPartSlot::HandRight,
-        8 => BodyPartSlot::LegLeft,
-        9 => BodyPartSlot::LegRight,
-        10 => BodyPartSlot::FootLeft,
-        11 => BodyPartSlot::FootRight,
-        _ => BodyPartSlot::Torso,
+/// Spawn body part instances for a creature by cloning body part defs.
+pub fn spawn_body_parts_for_creature(
+    world: &mut World,
+    def_world: &crate::def_world::DefinitionWorld,
+    body_part_ids: &[&str],
+) -> Vec<Entity> {
+    use std::collections::HashMap;
+    let mut instances = Vec::new();
+    let mut counters: HashMap<String, u32> = HashMap::new();
+
+    for &def_id_str in body_part_ids {
+        let def_entity = match def_world.entity_by_str(def_id_str) {
+            Some(e) => e,
+            None => continue,
+        };
+
+        // Increment counter for slot naming
+        let count = counters.entry(def_id_str.to_string()).or_insert(0);
+        *count += 1;
+        let slot = format!("{}_{}", def_id_str, count);
+
+        // Clone the def entity into a body part instance
+        let mut builder = EntityCloner::build_opt_out(world);
+        builder.deny::<crate::def_components::IsDef>();
+        builder.deny::<crate::def_components::DefStrId>();
+        builder.linked_cloning(true);
+        let mut cloner = builder.finish();
+        let instance = cloner.spawn_clone(world, def_entity);
+
+        world
+            .entity_mut(instance)
+            .insert(BodyPartSlot(slot))
+            .insert(BodyPartDef(def_entity));
+        instances.push(instance);
     }
+
+    instances
 }

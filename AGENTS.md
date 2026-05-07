@@ -19,6 +19,7 @@ the patterns that are easy to get wrong. Read it before touching any ECS code.
 9. [Error Handling in Systems](#9-error-handling-in-systems)
 10. [Entity Cloning](#10-entity-cloning)
 11. [Common Pitfalls](#11-common-pitfalls)
+12. [bevy_lunex UI](#12-bevy_lunex-ui)
 
 ---
 
@@ -621,3 +622,207 @@ relationship-based designs so change detection is granular.
 Any component wrapping a count or quantity should document its valid range and
 what happens at the boundary. A `StackCount(0)` is meaningless — the entity
 should be despawned. Enforce this with a private field and a constructor.
+
+---
+
+## 12. bevy_lunex UI
+
+`bevy_lunex` is a retained-mode ECS UI library. Every UI node is a real Bevy
+entity. Layout is controlled by `UiLayout` components. Read this section before
+writing any UI code.
+
+### Root setup
+
+Every UI tree needs a root entity with `UiLayoutRoot::new_2d()` and
+`UiFetchFromCamera::<0>` (or whichever camera index your UI camera uses).
+Always use `with_children` to build the tree — it is cleaner and avoids the
+`ChildOf(root)` pattern which requires manually tracking the root entity id.
+
+```rust
+commands.spawn((
+    UiLayoutRoot::new_2d(),
+    UiFetchFromCamera::<0>,
+    MySceneMarker,
+)).with_children(|ui| {
+    // all UI nodes go here
+});
+```
+
+### Layout types
+
+`bevy_lunex` has three layout types. Pick the right one or nothing will render
+where you expect.
+
+| Layout | When to use |
+|---|---|
+| `UiLayout::window()` | Free positioning inside a parent. Most UI nodes. |
+| `UiLayout::solid()` | Aspect-ratio-locked container. Use for backgrounds and panels that must not stretch. |
+| `UiLayout::boundary()` | Two-point layout (top-left + bottom-right corners). Useful for overlay regions. |
+
+### Units
+
+| Unit | Meaning |
+|---|---|
+| `Rl(v)` | `v`% of the **parent node's** width or height |
+| `Rh(v)` | `v`% of the **node's own height** — use for `UiTextSize` |
+| `Rw(v)` | `v`% of the **node's own width` |
+| `Ab(v)` | Absolute pixels |
+
+`Rh` is the correct unit for `UiTextSize`. It scales text relative to the
+height of the node the text lives in.
+
+### Text rendering — critical rules
+
+`Text2d` is a **world-space** Bevy component. Without correct setup it renders
+at world scale and appears enormous or off-screen. Follow these rules exactly:
+
+**1. Never set `Transform::from_scale` on text entities managed by lunex.**
+Lunex manages the transform. Adding your own scale fights it.
+
+**2. Always give text an `Anchor` via the layout.**
+`UiLayout::window().pos(...).anchor(Anchor::CenterLeft)` or
+`anchor(Anchor::TopCenter)` etc. Without an anchor, the node's origin is its
+top-left corner and text appears offset from where you intend.
+
+**3. Text must live inside a sized container.**
+`UiTextSize::from(Rh(60.0))` measures against the node's own height. If the
+node has no size, the text has nothing to measure against and may render at
+zero or enormous size. Always give the parent container an explicit
+`.size(Rl((w, h)))`.
+
+**4. Use `font_size` only as a hint, not for sizing.**
+Set `TextFont { font_size: 64.0, ..default() }` as the rasterisation resolution.
+The actual rendered size is controlled entirely by `UiTextSize`. A higher
+`font_size` gives sharper glyphs at large sizes; it does not make text bigger.
+
+```rust
+// CORRECT — text inside a sized boundary node, anchored, sized via UiTextSize
+ui.spawn((
+    UiLayout::window()
+        .pos(Rl((50.0, 10.0)))
+        .anchor(Anchor::TopCenter)   // <-- required
+        .pack(),
+    UiColor::from(Color::srgb(0.9, 0.2, 0.2)),
+    UiTextSize::from(Rh(6.0)),       // 6% of this node's height
+    Text2d::new("MY TITLE"),
+    TextFont { font_size: 64.0, ..default() },
+));
+
+// WRONG — no anchor, text appears offset; no container size, Rh is unmeasured
+ui.spawn((
+    UiLayout::window().pos(Rl((50.0, 10.0))).pack(),  // missing anchor
+    UiTextSize::from(Rh(6.0)),
+    Text2d::new("MY TITLE"),
+    Transform::from_scale(Vec3::splat(0.02)),  // fighting lunex — remove this
+));
+```
+
+### Positioning and centering
+
+`UiLayout::window().pos(Rl((x, y)))` places the node's **anchor point** at
+`(x%, y%)` of the parent. The anchor defaults to top-left, so a node at
+`pos(Rl((50.0, 10.0)))` without `.anchor(Anchor::TopCenter)` will have its
+top-left corner at 50% — not its center.
+
+To center a node horizontally:
+```rust
+// Option A — use anchor (preferred for text)
+UiLayout::window()
+    .pos(Rl((50.0, y)))
+    .anchor(Anchor::TopCenter)
+    .pack()
+
+// Option B — offset by half the width (for background panels)
+UiLayout::window()
+    .pos(Rl((30.0, y)))   // 50 - (width/2) = 50 - 20 = 30 for a 40%-wide node
+    .size(Rl((40.0, h)))
+    .pack()
+```
+
+### Hierarchy and sizing
+
+Use `with_children` to nest nodes. A parent with `UiLayout::solid()` or an
+explicit `.size()` gives children a concrete space to measure `Rl`/`Rh` against.
+A root-level node with no size has the full viewport as its reference.
+
+```rust
+// Solid boundary — locks aspect ratio, children measure against 1920×1080
+ui.spawn((
+    UiLayout::solid().size((1920.0, 1080.0)).scaling(Scaling::Fill).pack(),
+)).with_children(|ui| {
+    // Rl(50.0) here means 50% of 1920px wide
+    ui.spawn((
+        UiLayout::window().pos(Rl((50.0, 10.0))).anchor(Anchor::TopCenter).pack(),
+        UiTextSize::from(Rh(6.0)),
+        Text2d::new("TITLE"),
+        TextFont { font_size: 64.0, ..default() },
+    ));
+});
+```
+
+### Hover states
+
+`bevy_lunex` supports multi-state layouts and colors via `UiHover` and
+`UiLayout::new(vec![...])`. Wire hover on/off with observers:
+
+```rust
+ui.spawn((
+    Name::new("MyButton"),
+    UiLayout::window().y(Rl(offset)).size(Rl((100.0, size))).pack(),
+)).with_children(|ui| {
+    ui.spawn((
+        UiLayout::new(vec![
+            (UiBase::id(), UiLayout::window().full()),
+            (UiHover::id(), UiLayout::window().x(Rl(5.0)).full()),
+        ]),
+        UiHover::new().forward_speed(20.0).backward_speed(4.0),
+        UiColor::new(vec![
+            (UiBase::id(), Color::srgb(0.8, 0.1, 0.1).with_alpha(0.15)),
+            (UiHover::id(), Color::srgb(1.0, 0.9, 0.0)),
+        ]),
+        Sprite { .. },
+        Pickable::IGNORE,
+    ));
+}).observe(hover_set::<Pointer<Over>, true>)
+  .observe(hover_set::<Pointer<Out>, false>);
+```
+
+### Picking / hit testing
+
+Nodes participate in picking by default. Add `Pickable::IGNORE` to visual-only
+child nodes (backgrounds, labels) so they do not steal click events from the
+logical button parent.
+
+### Scene lifecycle
+
+Mark the root entity with a scene component and despawn by querying for it:
+
+```rust
+#[derive(Component)]
+pub struct MyScene;
+
+// Spawn
+commands.spawn((UiLayoutRoot::new_2d(), UiFetchFromCamera::<0>, MyScene))
+    .with_children(|ui| { /* ... */ });
+
+// Despawn (on state exit or screen change)
+fn despawn_my_scene(mut commands: Commands, q: Query<Entity, With<MyScene>>) {
+    for e in &q { commands.entity(e).despawn(); }
+}
+```
+
+### Common bevy_lunex pitfalls
+
+- **Text is world-scale** — if text appears enormous, you are missing `UiTextSize`
+  or have added a manual `Transform::from_scale`. Remove the scale; add
+  `UiTextSize`.
+- **Everything renders off-screen to the right** — you used `pos(Rl((50.0, y)))`
+  without `.anchor(Anchor::TopCenter)`. The node's top-left is at 50%, so it
+  extends rightward off-screen.
+- **`Rh` resolves to zero** — the node has no explicit height. Give the node or
+  its parent an explicit `.size(...)`.
+- **Clicks not registering** — a child visual node is covering the parent's
+  pickable area. Add `Pickable::IGNORE` to all visual-only children.
+- **`ChildOf(root)` vs `with_children`** — both work, but `with_children` is
+  preferred. If you use `ChildOf(root)` you must track the root entity id
+  manually and it is easy to attach nodes to the wrong parent.

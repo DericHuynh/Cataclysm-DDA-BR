@@ -5,12 +5,17 @@ edition = "2021"
 description = "Simulation: components, systems, logic, tick loop. Depends on bevy_ecs/bevy_reflect (not full bevy)."
 
 [dependencies]
+cdda_actor = { path = "../cdda_actor" }
+cdda_item = { path = "../cdda_item" }
 cdda_map.workspace = true
 cdda_mod.workspace = true
 cdda_data.workspace = true
 cdda_core.workspace = true
+cdda_input = { path = "../cdda_input" }
+cdda_ui = { path = "../cdda_ui" }
 bevy_ecs.workspace = true
 bevy_reflect.workspace = true
+bevy_state = "0.18"
 serde.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

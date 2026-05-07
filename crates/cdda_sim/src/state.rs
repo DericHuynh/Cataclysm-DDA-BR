@@ -1,25 +1,29 @@
 //! # Game state machine
 //!
-//! `AppState` drives the lifecycle: DataLoading → WorldGen → InGame.
-//! `GameTime` tracks in-game elapsed time.
-//! `LoadingStatus` reports progress during the loading state.
+//! `AppState` drives the lifecycle. The app starts in `MainMenu` (no data
+//! loaded, no systems wired). After character creation and world setup the
+//! player confirms, which transitions to `DataLoading` → `WorldGen` → `InGame`.
 //!
-//! ## Design note
-//! We use a custom `Resource`-based state instead of `bevy::state::States`
-//! because `cdda_sim` depends only on `bevy_ecs`/`bevy_reflect`, not the
-//! full `bevy` crate (which is required for `States`).
+//! This mirrors CDDA's flow: you create a world, customize it with mods,
+//! create a character, and only THEN does the engine load JSON and generate
+//! the world.
 
 use bevy_ecs::prelude::*;
+use bevy_state::prelude::*;
 
 // ---------------------------------------------------------------------------
 // AppState — lifecycle
 // ---------------------------------------------------------------------------
 
 /// Top-level lifecycle state for the game.
-#[derive(Resource, Default, Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(States, Default, Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum AppState {
-    /// Loading JSON files and building the definition registry.
+    /// Main menu and all pre-game UI (world creation, character creation).
+    /// No JSON loaded, no simulation systems active.
     #[default]
+    MainMenu,
+    /// Loading JSON files and building the definition registry.
+    /// Triggered when the player confirms "Start Game" after character creation.
     DataLoading,
     /// Generating the overmap, placing the player's starting position.
     WorldGen,
@@ -35,9 +39,6 @@ pub enum AppState {
 // GameTime — in-game clock
 // ---------------------------------------------------------------------------
 
-/// How many game turns have elapsed since the start of the session.
-///
-/// Each turn = ~6 real-time seconds in CDDA convention.
 #[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GameTime {
     pub turn: u64,
@@ -50,21 +51,19 @@ impl Default for GameTime {
 }
 
 impl GameTime {
-    /// Advance by one turn.
     pub fn advance(&mut self) {
         self.turn += 1;
     }
-
-    /// Approximate hours elapsed (1 turn = 6 seconds).
     pub fn hours_elapsed(&self) -> u64 {
         (self.turn * 6) / 3600
     }
-
-    /// Approximate turns per day (24h / 6s).
     pub const TURNS_PER_DAY: u64 = 14400;
 }
 
-/// Reports the progress of the JSON loading phase.
+// ---------------------------------------------------------------------------
+// LoadingStatus
+// ---------------------------------------------------------------------------
+
 #[derive(Resource, Debug, Clone)]
 pub struct LoadingStatus {
     pub total_files: usize,
@@ -94,23 +93,29 @@ impl LoadingStatus {
     }
 }
 
-/// Configuration passed to the loading and world-gen systems.
+// ---------------------------------------------------------------------------
+// StartupConfig — built during pre-game UI, consumed by data loading
+// ---------------------------------------------------------------------------
+
 #[derive(Resource, Debug, Clone)]
 pub struct StartupConfig {
-    /// Paths to directories containing CDDA JSON data.
     pub data_dirs: Vec<std::path::PathBuf>,
-    /// Which scenario to start with.
+    pub mod_ids: Vec<String>,
     pub scenario_id: String,
-    /// Which profession to start with.
     pub profession_id: String,
+    pub world_name: String,
+    pub world_seed: u64,
 }
 
 impl Default for StartupConfig {
     fn default() -> Self {
         Self {
             data_dirs: vec![std::path::PathBuf::from("data/core")],
+            mod_ids: Vec::new(),
             scenario_id: "evacuee".into(),
             profession_id: "unemployed".into(),
+            world_name: "New World".into(),
+            world_seed: 0,
         }
     }
 }

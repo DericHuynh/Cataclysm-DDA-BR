@@ -1,193 +1,180 @@
 //! # cdda_app — Application binary + plugin registration.
 //!
-//! Brings together cdda_sim, cdda_render, cdda_input, cdda_audio
-//! and wires them into a Bevy application.
-//!
-//! ## Lifecycle (reference Section 11)
-//!
-//! ```text
-//! AppStart
-//!   │
-//!   ▼
-//! DataLoading ──► WorldGen ──► InGame ◄──► Paused
-//!                                    │
-//!                                    ▼
-//!                               GameOver
-//! ```
+//! Wires all CDDA subsystems into a Bevy application using `GameSet`
+//! ordering (Input → Sim → Render).
 
-use bevy::app::{App, Plugin, Update};
+use bevy::app::{App, Plugin, PluginGroup, Update};
+use bevy::ecs::message::MessageReader;
 use bevy::prelude::*;
-use cdda_sim::events::TurnState;
+use bevy::render::settings::{RenderCreation, WgpuSettings};
+use bevy::render::RenderPlugin;
+use bevy::window::PresentMode;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use bevy_state::app::AppExtStates;
+use bevy_state::state::{NextState, State};
+
+use cdda_core::GameSet;
+use cdda_input::{GameAction, InputAction};
+
+use cdda_sim::def_world::load_data_system;
 use cdda_sim::state::AppState;
+use cdda_sim::systems::ai::ai_phase;
+use cdda_sim::systems::combat::combat_phase;
+use cdda_sim::systems::effects::effects_phase;
+use cdda_sim::systems::movement::movement_phase;
+use cdda_sim::systems::spatial::update_spatial_index;
+use cdda_sim::systems::spawning::spawning_phase;
 use cdda_sim::systems::turn::{debug_turn_queue, tick_move_points};
 use cdda_sim::world_setup;
+
+// ---------------------------------------------------------------------------
+// Startup config
+// ---------------------------------------------------------------------------
+
+/// Passed from CLI args to configure the app.
+#[derive(Resource, Clone)]
+pub struct CddaStartupConfig {
+    pub world_seed: u64,
+    pub replay_file: Option<String>,
+    pub record_session: bool,
+}
+
+impl Default for CddaStartupConfig {
+    fn default() -> Self {
+        Self {
+            world_seed: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+            replay_file: None,
+            record_session: false,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Run condition functions
+// ---------------------------------------------------------------------------
+
+fn in_main_menu(state: Res<State<AppState>>) -> bool {
+    *state.get() == AppState::MainMenu
+}
+fn in_data_loading(state: Res<State<AppState>>) -> bool {
+    *state.get() == AppState::DataLoading
+}
+fn in_world_gen(state: Res<State<AppState>>) -> bool {
+    *state.get() == AppState::WorldGen
+}
+fn in_ingame(state: Res<State<AppState>>) -> bool {
+    *state.get() == AppState::InGame
+}
+
+// ---------------------------------------------------------------------------
+// StartGame transition system
+// ---------------------------------------------------------------------------
+
+/// Listens for `GameEvent::StartNewGame` and transitions `AppState`
+/// from `MainMenu` → `Gameplay`, kicking off JSON loading + worldgen.
+pub fn start_game_on_event(
+    mut reader: MessageReader<cdda_ui::GameEvent>,
+    mut next: ResMut<NextState<AppState>>,
+) {
+    for event in reader.read() {
+        if *event == cdda_ui::GameEvent::StartNewGame {
+            info!("Player confirmed start game — transitioning to DataLoading");
+            next.set(AppState::DataLoading);
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Root plugin
 // ---------------------------------------------------------------------------
 
-/// Root plugin that wires all CDDA subsystems.
 pub struct CddaPlugin;
 
 impl Plugin for CddaPlugin {
     fn build(&self, app: &mut App) {
-        // ── Register all simulation components, events, and resources ──
         world_setup::setup_world(app.world_mut());
 
-        // ── TurnState and AppState resources ───────────────────────────
-        app.insert_resource(TurnState::WaitingForInput);
-        app.insert_resource(AppState::DataLoading); // start in DataLoading
+        app.init_state::<AppState>();
 
-        // Exclude IsDef entities from all queries by default.
-        // Systems that need definition data explicitly add `With<IsDef>`.
-        app.insert_resource(
-            bevy_ecs::query::DefaultQueryFilters::new()
-                .with::<Without<cdda_sim::def_components::IsDef>>(),
+        app.configure_sets(
+            Update,
+            (GameSet::Input, GameSet::Sim, GameSet::Render).chain(),
         );
 
-        // ── All-in-one startup/game system ─────────────────────────────
-        // Checks AppState each frame and dispatches accordingly.
-        // This acts as a simple state machine without requiring bevy_state.
-        app.add_systems(Update, app_state_dispatch);
+        app.add_plugins(cdda_render::CddaRenderPlugin);
+        app.add_plugins(cdda_input::CddaInputPlugin);
+        app.add_plugins(cdda_ui::ScreenNavigationPlugin);
 
-        // ── Render systems ─────────────────────────────────────────────
-        // (no-op for now — render crate is a stub)
-    }
-}
+        // Replay: record or replay based on startup config
+        let config = app
+            .world()
+            .get_resource::<CddaStartupConfig>()
+            .cloned()
+            .unwrap_or_default();
 
-// ---------------------------------------------------------------------------
-// Main tick system
-// ---------------------------------------------------------------------------
-
-/// App-state dispatch system — runs every Update frame.
-///
-/// Checks `AppState` and runs the appropriate logic:
-/// - `DataLoading`: runs `load_data_system` directly (takes `&mut World`)
-/// - `WorldGen`: runs `worldgen_system` directly (takes `&mut World`)
-/// - `InGame`: runs the game tick loop
-/// - `Paused`/`GameOver`: idle (no-op)
-fn app_state_dispatch(world: &mut bevy::prelude::World) {
-    let state = *world.resource::<AppState>();
-
-    match state {
-        AppState::DataLoading => {
-            cdda_sim::def_world::load_data_system(world);
+        if let Some(ref replay_path) = config.replay_file {
+            match cdda_replay::session_log::SessionLog::load_compressed(std::path::Path::new(
+                replay_path,
+            )) {
+                Ok(log) => {
+                    info!("Replay loaded: {} actions", log.len());
+                    app.insert_resource(log);
+                    app.add_plugins(cdda_replay::CddaReplayModePlugin);
+                }
+                Err(e) => {
+                    error!("Failed to load replay: {e}");
+                }
+            }
+        } else if config.record_session {
+            app.add_plugins(cdda_replay::CddaReplayPlugin {
+                world_seed: config.world_seed,
+            });
         }
-        AppState::WorldGen => {
-            cdda_sim::def_world::worldgen_system(world);
-        }
-        AppState::InGame => {
-            game_tick_system(world);
-        }
-        AppState::Paused | AppState::GameOver => {
-            // Idle — no simulation while paused or game over
-        }
-    }
-}
 
-/// Main game tick — runs once per Bevy Update (frame) while in InGame state.
-///
-/// ## Turn Queue Architecture
-///
-/// `tick_move_points` (Phase 0) rebuilds the `TurnQueue` resource — a
-/// priority queue of all living actors sorted by MP descending.  Currently
-/// all actors are processed in batch phases (AI-Movement-Combat-Effects-
-/// Spawning).  When the game loop is refactored for proper per-actor turn
-/// processing, the queue's `pop_highest()` method will drive actor-by-actor
-/// iteration, allowing multiple actions per actor per turn until their MP
-/// drops below `MP_MIN_FLOOR`.
-///
-/// ## Frame-rate behavior
-///
-/// In the current dead-reckoning loop, each frame advances one full tick
-/// (WaitingForInput -> auto-advance -> PlayerActed -> tick ->
-/// WaitingForInput).  This is intentional for testing: it makes the
-/// simulation observable in real-time.  In production, the transition from
-/// `WaitingForInput` to `PlayerActed` should be gated on actual player
-/// input, so the game only advances when the player commits an action.
-///
-/// Flow:
-/// 1. All actors gain move points (`tick_move_points`)
-/// 2. Actors act in order (AI, movement, combat)
-/// 3. Effects tick
-/// 4. Spatial index updated
-/// 5. Next turn
-///
-/// For now this is a serial dead-reckoning loop. In the full implementation,
-/// the player input runs on demand and only when they commit an action do we
-/// advance the simulation by several ticks.
-fn game_tick_system(world: &mut bevy::prelude::World) {
-    let turn_state = *world.resource::<TurnState>();
+        app.add_systems(Update, load_data_system.run_if(in_data_loading));
+        app.add_systems(Update, start_game_on_event.run_if(in_main_menu));
+        app.add_systems(
+            Update,
+            cdda_sim::def_world::worldgen_system.run_if(in_world_gen),
+        );
 
-    match turn_state {
-        TurnState::WaitingForInput => {
-            // No input system yet — auto-advance for testing.
-            // In production: only transition when the player commits an action.
-            *world.resource_mut::<TurnState>() = TurnState::PlayerActed;
-        }
-        TurnState::PlayerActed => {
-            // Run a single simulation tick.
-            // Phase order (matching reference Section 10 + Section 8):
-            // 0. Tick move points (all actors gain MP)
-            // 1. AI — entities decide actions
-            // 2. Movement — resolve movement intents
-            // 3. Combat — resolve combat actions
-            // 4. Effects — status effect tick, needs decay
-            // 5. Spawning — spawn new entities from events
-
-            // Phase 0: Grant MP to all actors and rebuild the TurnQueue.
-            // The queue is available as a Resource for per-actor iteration
-            // when the game loop is refactored.
-            let mut sys = IntoSystem::into_system(tick_move_points);
-            let _ = sys.run((), world);
-            sys.apply_deferred(world);
-
-            // Phase 1: AI
-            let mut sys = IntoSystem::into_system(cdda_sim::systems::ai::ai_phase);
-            let _ = sys.run((), world);
-            sys.apply_deferred(world);
-
-            // Phase 2: Movement
-            let mut sys = IntoSystem::into_system(cdda_sim::systems::movement::movement_phase);
-            let _ = sys.run((), world);
-            sys.apply_deferred(world);
-
-            // Phase 3: Combat
-            let mut sys = IntoSystem::into_system(cdda_sim::systems::combat::combat_phase);
-            let _ = sys.run((), world);
-            sys.apply_deferred(world);
-
-            // Phase 4: Effects
-            let mut sys = IntoSystem::into_system(cdda_sim::systems::effects::effects_phase);
-            let _ = sys.run((), world);
-            sys.apply_deferred(world);
-
-            // Phase 5: Spawning
-            let mut sys = IntoSystem::into_system(cdda_sim::systems::spawning::spawning_phase);
-            let _ = sys.run((), world);
-            sys.apply_deferred(world);
-
-            // Update spatial index after all movements
-            let mut sys = IntoSystem::into_system(cdda_sim::systems::spatial::update_spatial_index);
-            let _ = sys.run((), world);
-            sys.apply_deferred(world);
-
-            // Debug logging every 10 turns
-            let mut sys = IntoSystem::into_system(debug_turn_queue);
-            let _ = sys.run((), world);
-            // No defer needed — debug is read-only
-
-            // Go back to waiting for input
-            *world.resource_mut::<TurnState>() = TurnState::WaitingForInput;
-        }
-        TurnState::Simulating => {
-            // Used in async simulation mode (deferred). For now, skip.
-            *world.resource_mut::<TurnState>() = TurnState::WaitingForInput;
-        }
-        TurnState::Animating => {
-            // No animation system yet — skip to waiting.
-            *world.resource_mut::<TurnState>() = TurnState::WaitingForInput;
-        }
+        app.add_systems(
+            Update,
+            (
+                tick_move_points.run_if(in_ingame).in_set(GameSet::Sim),
+                ai_phase
+                    .run_if(in_ingame)
+                    .after(tick_move_points)
+                    .in_set(GameSet::Sim),
+                movement_phase
+                    .run_if(in_ingame)
+                    .after(ai_phase)
+                    .in_set(GameSet::Sim),
+                combat_phase
+                    .run_if(in_ingame)
+                    .after(movement_phase)
+                    .in_set(GameSet::Sim),
+                effects_phase
+                    .run_if(in_ingame)
+                    .after(combat_phase)
+                    .in_set(GameSet::Sim),
+                spawning_phase
+                    .run_if(in_ingame)
+                    .after(effects_phase)
+                    .in_set(GameSet::Sim),
+                update_spatial_index
+                    .run_if(in_ingame)
+                    .after(spawning_phase)
+                    .in_set(GameSet::Sim),
+                debug_turn_queue
+                    .run_if(in_ingame)
+                    .after(update_spatial_index)
+                    .in_set(GameSet::Sim),
+            ),
+        );
     }
 }
 
@@ -195,10 +182,31 @@ fn game_tick_system(world: &mut bevy::prelude::World) {
 // Entry point
 // ---------------------------------------------------------------------------
 
-/// Launch the CDDA application.
 pub fn run() {
+    let config = CddaStartupConfig::default();
+    info!("World seed: {}", config.world_seed);
+
     let mut app = App::new();
-    app.add_plugins(DefaultPlugins);
+    app.insert_resource(config);
+    app.add_plugins(
+        DefaultPlugins
+            .build()
+            .set(RenderPlugin {
+                render_creation: RenderCreation::Automatic(WgpuSettings { ..default() }),
+                ..default()
+            })
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "Cataclysm: Dark Days Ahead".into(),
+                    present_mode: PresentMode::AutoNoVsync,
+                    ..default()
+                }),
+                ..default()
+            }),
+    );
+    // Debug: inspector panel (toggle with F3 in windowed mode)
+    app.add_plugins((bevy_egui::EguiPlugin::default(), WorldInspectorPlugin::new()));
+
     app.add_plugins(CddaPlugin);
     app.run();
 }

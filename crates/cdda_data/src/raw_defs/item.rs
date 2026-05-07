@@ -289,6 +289,29 @@ pub struct ItemDef {
     /// copy-from parent ID
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub copy_from: Option<String>,
+
+    // ── Ammo-specific fields ───────────────────────────────────────
+    /// Ammo damage — number, structured object `{"damage_type": "bullet",
+    /// "amount": 25}`, or typed array.  Uses `RawValue` because CDDA ammo
+    /// damage objects mix string and numeric values (unlike `MeleeDamage`).
+    #[serde(default)]
+    pub damage: Option<RawValue>,
+
+    /// Armor penetration for ammunition.
+    #[serde(default)]
+    pub pierce: Option<i32>,
+
+    /// Effective range of the ammunition (in tiles).
+    #[serde(default)]
+    pub range: Option<i32>,
+
+    /// Inherent dispersion (accuracy penalty) of the ammunition.
+    #[serde(default)]
+    pub dispersion: Option<i32>,
+
+    /// Recoil contributed by firing this ammunition.
+    #[serde(default)]
+    pub recoil: Option<i32>,
 }
 
 fn default_volume() -> Volume {

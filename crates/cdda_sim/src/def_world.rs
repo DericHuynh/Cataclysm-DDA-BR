@@ -14,6 +14,7 @@
 use crate::def_components::*;
 use crate::state::{AppState, GameTime, LoadingStatus, StartupConfig};
 use bevy_ecs::prelude::*;
+use bevy_state::state::NextState;
 use cdda_core::coords::WorldPos;
 use std::collections::HashMap;
 
@@ -62,6 +63,72 @@ impl DefinitionWorld {
 // ===========================================================================
 // Helper functions
 // ===========================================================================
+
+/// Parse a CDDA volume string like "250 ml" or "1 L" into milliliters.
+fn parse_volume_string_to_ml(s: &str) -> Option<u32> {
+    let s = s.trim();
+    let split_idx = s
+        .find(|c: char| c == ' ' || (!c.is_ascii_digit() && c != '.' && c != '-' && c != '+'))
+        .unwrap_or(s.len());
+    if split_idx == 0 || split_idx == s.len() {
+        return None;
+    }
+    let value_str = s[..split_idx].trim();
+    let unit_str = s[split_idx..].trim().to_lowercase();
+    let value: f64 = value_str.parse().ok()?;
+
+    match unit_str.as_str() {
+        "ml" | "milliliter" | "milliliters" => Some(value as u32),
+        "l" | "liter" | "liters" => Some((value * 1000.0) as u32),
+        _ => None,
+    }
+}
+
+/// Parse a CDDA weight string like "100 g" or "1 kg" into grams.
+fn parse_weight_string_to_grams(s: &str) -> Option<u32> {
+    let s = s.trim();
+    let split_idx = s
+        .find(|c: char| c == ' ' || (!c.is_ascii_digit() && c != '.' && c != '-' && c != '+'))
+        .unwrap_or(s.len());
+    if split_idx == 0 || split_idx == s.len() {
+        return None;
+    }
+    let value_str = s[..split_idx].trim();
+    let unit_str = s[split_idx..].trim().to_lowercase();
+    let value: f64 = value_str.parse().ok()?;
+
+    match unit_str.as_str() {
+        "g" | "gram" | "grams" => Some(value as u32),
+        "kg" | "kilogram" | "kilograms" => Some((value * 1000.0) as u32),
+        "mg" | "milligram" | "milligrams" => Some((value / 1000.0) as u32),
+        _ => None,
+    }
+}
+
+/// Extract numeric ammo damage from a RawValue.
+/// Handles: bare number, {"amount": 25}, [{"amount": 25}]
+fn extract_ammo_damage(raw: &cdda_data::raw_defs::RawValue) -> Option<i32> {
+    use cdda_data::raw_defs::RawValue;
+    match raw {
+        RawValue::Number(n) => Some(*n as i32),
+        RawValue::String(s) => s.parse::<i32>().ok(),
+        RawValue::Object(map) => map.get("amount").and_then(|v| match v {
+            RawValue::Number(n) => Some(*n as i32),
+            RawValue::String(s) => s.parse::<i32>().ok(),
+            _ => None,
+        }),
+        RawValue::Array(arr) => arr.first().and_then(|v| match v {
+            RawValue::Object(map) => map.get("amount").and_then(|v| match v {
+                RawValue::Number(n) => Some(*n as i32),
+                RawValue::String(s) => s.parse::<i32>().ok(),
+                _ => None,
+            }),
+            RawValue::Number(n) => Some(*n as i32),
+            _ => None,
+        }),
+        _ => None,
+    }
+}
 
 fn extract_price(p: &cdda_data::raw_defs::CddaPrice) -> u64 {
     match p {
@@ -199,6 +266,15 @@ pub fn build_def_world(
 
         // ── AMMO subtype ────────────────────────────────────────────
         if subtypes.iter().any(|s| s == "AMMO") {
+            // Extract damage from the ammo `damage` field (RawValue).
+            // CDDA formats: a bare number, {"damage_type":"bullet", "amount":25},
+            // or [{"damage_type":"bullet", "amount":25}].
+            let ammo_damage = item
+                .damage
+                .as_ref()
+                .and_then(|raw| extract_ammo_damage(raw))
+                .unwrap_or(0);
+
             world.entity_mut(entity).insert(AmmoData {
                 ammo_type: item
                     .ammo_type
@@ -210,22 +286,11 @@ pub fn build_def_world(
                         }
                     })
                     .unwrap_or_default(),
-                damage: item
-                    .melee_damage
-                    .as_ref()
-                    .and_then(|md| match md {
-                        cdda_data::raw_defs::MeleeDamage::ByType(map) => map
-                            .get("bullet")
-                            .or_else(|| map.get("stab"))
-                            .or_else(|| map.get("bash"))
-                            .copied(),
-                        _ => None,
-                    })
-                    .unwrap_or(0),
-                pierce: 0,
-                range: item.charges.unwrap_or(0) as i32,
-                dispersion: item.price.as_ref().map(|_| 0).unwrap_or(0) as i32,
-                recoil: 0,
+                damage: ammo_damage,
+                pierce: item.pierce.unwrap_or(0),
+                range: item.range.unwrap_or(0),
+                dispersion: item.dispersion.unwrap_or(0),
+                recoil: item.recoil.unwrap_or(0),
                 count: item.charges.unwrap_or(1) as i32,
                 // CDDA uses `container` for the casing item ID on ammo
                 casing: item.container.clone(),
@@ -410,18 +475,61 @@ pub fn build_def_world(
                 }
                 None => (0, 0),
             };
+            let to_hit_val = item
+                .to_hit
+                .as_ref()
+                .map(|t| match t {
+                    cdda_data::raw_defs::ToHit::Number(n) => *n,
+                    cdda_data::raw_defs::ToHit::Struct {
+                        grip,
+                        length,
+                        surface,
+                        balance,
+                    } => {
+                        // Rough approximation of CDDA's to-hit calculation
+                        // from structured weapon properties.
+                        let mut total = 0i32;
+                        if let Some(g) = grip.as_deref() {
+                            total += match g {
+                                "weapon" => 0,
+                                "solid" => 20,
+                                "none" => -20,
+                                _ => 0,
+                            };
+                        }
+                        if let Some(l) = length.as_deref() {
+                            total += match l {
+                                "hand" => 0,
+                                "short" => -10,
+                                "long" => 10,
+                                _ => 0,
+                            };
+                        }
+                        if let Some(s) = surface.as_deref() {
+                            total += match s {
+                                "any" | "regular" | "every" => 0,
+                                "point" | "line" => -20,
+                                _ => 0,
+                            };
+                        }
+                        if let Some(b) = balance.as_deref() {
+                            total += match b {
+                                "neutral" => 3,
+                                "good" => 6,
+                                "clumsy" => -2,
+                                _ => 0,
+                            };
+                        }
+                        total
+                    }
+                })
+                .unwrap_or(0);
+
             world.entity_mut(entity).insert(WeaponData {
                 damage_bash: dmg_bash,
                 damage_cut: dmg_cut,
                 damage_stab: 0,
-                to_hit: item
-                    .to_hit
-                    .as_ref()
-                    .and_then(|t| match t {
-                        cdda_data::raw_defs::ToHit::Number(n) => Some(*n),
-                        _ => None,
-                    })
-                    .unwrap_or(0),
+                to_hit: to_hit_val,
                 moves_per_attack: 100,
                 reach: 1,
                 techniques: item.techniques.as_ref().cloned().unwrap_or_default(),
@@ -438,15 +546,37 @@ pub fn build_def_world(
                 .as_ref()
                 .map(|pd| {
                     pd.iter()
-                        .map(|p| PocketTemplate {
-                            pocket_type: format!("{:?}", p.pocket_type),
-                            max_volume: p
+                        .map(|p| {
+                            // max_volume can come from two CDDA fields:
+                            //   - max_volume (a Volume, already deserialized)
+                            //   - max_contains_volume (a string like "2 L")
+                            // Try max_volume first, fall back to parsing the
+                            // max_contains_volume string.
+                            let max_vol = p
                                 .max_volume
                                 .map(|v| cdda_core::Volume::as_milliliters(&v) as u32)
-                                .unwrap_or(0),
-                            max_weight: p.max_weight.map(|w| w.as_grams() as u32).unwrap_or(0),
-                            sealed: p.sealed.unwrap_or(false),
-                            rigid: p.rigid.unwrap_or(false),
+                                .or_else(|| {
+                                    p.max_contains_volume
+                                        .as_ref()
+                                        .and_then(|s| parse_volume_string_to_ml(s))
+                                })
+                                .unwrap_or(0);
+
+                            PocketTemplate {
+                                pocket_type: format!("{:?}", p.pocket_type),
+                                max_volume: max_vol,
+                                max_weight: p
+                                    .max_weight
+                                    .map(|w| w.as_grams() as u32)
+                                    .or_else(|| {
+                                        p.max_contains_weight
+                                            .as_ref()
+                                            .and_then(|s| parse_weight_string_to_grams(s))
+                                    })
+                                    .unwrap_or(0),
+                                sealed: p.sealed.unwrap_or(false),
+                                rigid: p.rigid.unwrap_or(false),
+                            }
                         })
                         .collect()
                 })
@@ -614,8 +744,132 @@ pub fn build_def_world(
         def_world.register(id_str, e);
     }
 
+    // ── Body part definitions ─────────────────────────────────────────
+    for (def_id, bp) in &def_registry.body_parts {
+        let id_str = def_id.as_str().to_string();
+
+        // Extract numeric values from serde_json::Value
+        let hit_size: f32 = bp
+            .hit_size
+            .as_ref()
+            .and_then(|v| {
+                v.as_f64()
+                    .map(|f| f as f32)
+                    .or_else(|| v.as_u64().map(|u| u as f32))
+            })
+            .unwrap_or(1.0);
+        let hit_difficulty: f32 = bp
+            .hit_difficulty
+            .as_ref()
+            .and_then(|v| {
+                v.as_f64()
+                    .map(|f| f as f32)
+                    .or_else(|| v.as_u64().map(|u| u as f32))
+            })
+            .unwrap_or(0.0);
+
+        let entity = world
+            .spawn((
+                IsDef,
+                DefStrId(id_str.clone()),
+                BodyPartDefId(id_str.clone()),
+                BodyPartName(
+                    bp.name
+                        .as_ref()
+                        .map(|n| n.singular().to_string())
+                        .unwrap_or_default(),
+                ),
+                BodyPartHitSize(hit_size),
+                BodyPartHitDifficulty(hit_difficulty),
+                BodyPartBaseHp(bp.base_hp.unwrap_or(60) as f32),
+                BodyPartDrenchCapacity(bp.drench_capacity.unwrap_or(100)),
+                BodyPartSide(bp.side.clone().unwrap_or_else(|| "both".to_string())),
+            ))
+            .id();
+
+        // Legacy ID
+        if let Some(legacy) = &bp.legacy_id {
+            world
+                .entity_mut(entity)
+                .insert(BodyPartLegacyId(legacy.clone()));
+        }
+
+        // Vital marker
+        if bp.is_vital.unwrap_or(false) {
+            world.entity_mut(entity).insert(IsVital);
+        }
+
+        // Limb type → capability markers
+        if let Some(limb_type) = &bp.limb_type {
+            match limb_type.as_str() {
+                "hand" | "arm" | "tentacle" => {
+                    world.entity_mut(entity).insert(CanGrasp);
+                }
+                "leg" | "foot" | "fin" => {
+                    world.entity_mut(entity).insert(CanWalk);
+                }
+                "sensor" | "eye" => {
+                    world.entity_mut(entity).insert(CanSee);
+                }
+                "mouth" | "beak" => {
+                    world.entity_mut(entity).insert(CanBite);
+                }
+                "wing" => {
+                    world.entity_mut(entity).insert(CanFly);
+                }
+                _ => {}
+            }
+        }
+
+        def_world.register(id_str, entity);
+    }
+
+    // Second pass: wire up parent-child relationships.
+    // sub_parts (explicit children in JSON) and main_part (parent reference).
+    for (def_id, bp) in &def_registry.body_parts {
+        let child = def_world.entity_by_str(def_id.as_str());
+
+        // 1. Wire sub_parts → ParentPart on children
+        if let Some(sub_ids) = &bp.sub_parts {
+            if let Some(parent) = def_world.entity_by_str(def_id.as_str()) {
+                for child_id in sub_ids {
+                    if let Some(child_entity) = def_world.entity_by_str(child_id) {
+                        if world.get::<ParentPart>(child_entity).is_none() {
+                            world.entity_mut(child_entity).insert(ParentPart(parent));
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Wire main_part → ParentPart (for parts not in sub_parts, e.g. eyes → head)
+        if let Some(child_entity) = child {
+            if let Some(main_part_id) = &bp.main_part {
+                if let Some(parent) = def_world.entity_by_str(main_part_id) {
+                    if world.get::<ParentPart>(child_entity).is_none() {
+                        world.entity_mut(child_entity).insert(ParentPart(parent));
+                    }
+                }
+            }
+        }
+    }
+
     def_world
 }
+
+// ===========================================================================
+// CityBuildings — resource wrapper for worldgen access
+// ===========================================================================
+
+/// Thin wrapper to store city_building definitions as a Bevy resource.
+/// Extracted from `DefRegistry` after loading so worldgen can access them.
+#[derive(Resource, Debug, Clone)]
+pub struct CityBuildings(
+    pub  std::collections::HashMap<
+        cdda_data::raw_types::DefId<cdda_data::raw_defs::city_building::CityBuildingDef>,
+        std::sync::Arc<cdda_data::raw_defs::city_building::CityBuildingDef>,
+    >,
+);
 
 // ===========================================================================
 // Startup system — load JSON data and build DefinitionWorld
@@ -624,6 +878,8 @@ pub fn build_def_world(
 pub fn load_data_system(world: &mut World) {
     use cdda_data::loader::Loader;
     use tracing::info;
+
+    info!("Data loading deferred until player starts game");
 
     let data_dirs = world.resource::<StartupConfig>().data_dirs.clone();
 
@@ -656,12 +912,17 @@ pub fn load_data_system(world: &mut World) {
                 registry.monsters.len(),
             );
 
+            // Store the city_buildings for dev-worldgen access
+            world.insert_resource(CityBuildings(registry.city_buildings.clone()));
+
             world.insert_resource(def_world);
             world.insert_resource(GameTime::default());
 
             world.resource_mut::<LoadingStatus>().current_phase = "Complete".into();
             world.resource_mut::<LoadingStatus>().total_defs = count;
-            *world.resource_mut::<AppState>() = AppState::WorldGen;
+            world
+                .resource_mut::<NextState<AppState>>()
+                .set(AppState::WorldGen);
         }
         Err(errors) => {
             for err in &errors {
@@ -671,20 +932,47 @@ pub fn load_data_system(world: &mut World) {
                 "Data loading finished with {} non-fatal errors, continuing...",
                 errors.len()
             );
-            *world.resource_mut::<AppState>() = AppState::WorldGen;
+            world
+                .resource_mut::<NextState<AppState>>()
+                .set(AppState::WorldGen);
         }
     }
 }
 
 // ===========================================================================
-// Worldgen system (placeholder stub)
+// Worldgen system - dev-worldgen: one of every building
 // ===========================================================================
 
 pub fn worldgen_system(world: &mut World) {
     use tracing::info;
-    info!("World generation stub — skipping to InGame");
 
     let has_defs = world.get_resource::<DefinitionWorld>().is_some();
+
+    // --- Dev-worldgen: populate WorldMap with one of every city building ---
+    if has_defs {
+        let city_buildings = world.remove_resource::<CityBuildings>();
+        let config = world
+            .get_resource::<crate::dev_worldgen::DevWorldgenConfig>()
+            .cloned()
+            .unwrap_or_default();
+
+        if let Some(cb) = city_buildings {
+            let building_count = cb.0.len();
+            info!(
+                "Dev-worldgen: generating showcase with {} city buildings...",
+                building_count
+            );
+
+            let mut world_map = world.resource_mut::<crate::world_setup::WorldMapResource>();
+            let placed =
+                crate::dev_worldgen::generate_dev_worldmap(&mut world_map.0, &cb.0, &config);
+            info!(
+                "Dev-worldgen complete: {} buildings placed, {} bubbles created",
+                placed,
+                world_map.0.bubble_count(),
+            );
+        }
+    }
 
     if has_defs {
         let pos = WorldPos::new(0, 0, cdda_core::ZLevel::new(0));
@@ -717,7 +1005,13 @@ pub fn worldgen_system(world: &mut World) {
             crate::components::MovePoints(100),
             crate::components::Speed(100),
         ));
-        info!("Spawned placeholder player entity");
+        info!("Spawned player at origin (0,0). Use the map to explore all buildings.");
     }
-    world.insert_resource(AppState::InGame);
+    world
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::InGame);
+    // Transition UI screen to Gameplay so the ASCII renderer spawns
+    world
+        .resource_mut::<NextState<cdda_ui::screen::Screen>>()
+        .set(cdda_ui::screen::Screen::Gameplay);
 }

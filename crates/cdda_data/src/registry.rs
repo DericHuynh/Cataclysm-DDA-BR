@@ -19,7 +19,8 @@ pub struct DefRegistry {
     pub furniture: HashMap<DefId<FurnitureDef>, Arc<FurnitureDef>>,
     pub recipes: HashMap<DefId<RecipeDef>, Arc<RecipeDef>>,
     pub item_groups: HashMap<DefId<ItemGroupDef>, Arc<ItemGroupDef>>,
-    pub mapgen: HashMap<DefId<OvermapTerrainDef>, Vec<Arc<MapgenDef>>>,
+    pub mapgen: HashMap<String, Vec<Arc<MapgenDef>>>,
+    pub nested_mapgen: HashMap<String, Arc<MapgenDef>>,
     pub palettes: HashMap<DefId<MapgenPaletteDef>, Arc<MapgenPaletteDef>>,
     pub overmap_terrains: HashMap<DefId<OvermapTerrainDef>, Arc<OvermapTerrainDef>>,
     pub overmap_specials: HashMap<DefId<OvermapSpecialDef>, Arc<OvermapSpecialDef>>,
@@ -137,6 +138,7 @@ impl DefRegistry {
             recipes: HashMap::new(),
             item_groups: HashMap::new(),
             mapgen: HashMap::new(),
+            nested_mapgen: HashMap::new(),
             palettes: HashMap::new(),
             overmap_terrains: HashMap::new(),
             overmap_specials: HashMap::new(),
@@ -249,6 +251,7 @@ impl DefRegistry {
             + self.recipes.len()
             + self.item_groups.len()
             + self.mapgen.values().map(|v| v.len()).sum::<usize>()
+            + self.nested_mapgen.len()
             + self.palettes.len()
             + self.overmap_terrains.len()
             + self.overmap_specials.len()

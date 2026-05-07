@@ -1,9 +1,18 @@
-//! Event types for decoupled system communication.
+//! Message types for decoupled system communication.
 //!
-//! Systems communicate through Bevy events, not direct mutation.
-//! Adding a new reaction is a new event reader — no existing code changes.
+//! Systems communicate through Bevy Messages (buffered, broadcast), not
+//! direct mutation.  Adding a new reaction is a new message reader — no
+//! existing code changes.
+//!
+//! In Bevy 0.17+, there is a split:
+//! - `#[derive(Message)]` — buffered, broadcast (replaces old `Event`)
+//! - `#[derive(Event)]` — observer-based, triggered on specific entities
+//!
+//! All types in this module are globally broadcast → they derive `Message`.
 
-use bevy_ecs::{entity::Entity, event::Event};
+use bevy_ecs::entity::Entity;
+use bevy_ecs::message::Message;
+use bevy_ecs::prelude::Resource;
 use cdda_core::coords::WorldPos;
 use cdda_core::id::*;
 
@@ -12,8 +21,8 @@ use cdda_core::id::*;
 // ---------------------------------------------------------------------------
 
 /// The phase of the game tick loop.
-/// Not an Event — a Resource checked by the main tick system.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Not a Message — a Resource checked by the main tick system.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Resource)]
 pub enum TurnState {
     WaitingForInput,
     PlayerActed,
@@ -25,7 +34,7 @@ pub enum TurnState {
 // Damage / Death
 // ---------------------------------------------------------------------------
 
-#[derive(Event, Debug, Clone)]
+#[derive(Message, Debug, Clone)]
 pub struct DamageEvent {
     pub target: Entity,
     pub amount: i32,
@@ -33,7 +42,7 @@ pub struct DamageEvent {
     pub source: Option<Entity>,
 }
 
-#[derive(Event, Debug, Clone)]
+#[derive(Message, Debug, Clone)]
 pub struct DeathEvent {
     pub entity: Entity,
     pub cause: DeathCause,
@@ -44,14 +53,14 @@ pub struct DeathEvent {
 // Sensory events — AI reacts to these
 // ---------------------------------------------------------------------------
 
-#[derive(Event, Debug, Clone)]
+#[derive(Message, Debug, Clone)]
 pub struct SoundEvent {
     pub position: WorldPos,
     pub volume: u32,
     pub description: String,
 }
 
-#[derive(Event, Debug, Clone)]
+#[derive(Message, Debug, Clone)]
 pub struct SightEvent {
     pub observer: Entity,
     pub seen: Entity,
@@ -62,7 +71,7 @@ pub struct SightEvent {
 // Spawning
 // ---------------------------------------------------------------------------
 
-#[derive(Event, Debug, Clone)]
+#[derive(Message, Debug, Clone)]
 pub struct SpawnEvent {
     pub template_id: MonsterId,
     pub position: WorldPos,
@@ -73,7 +82,7 @@ pub struct SpawnEvent {
 // Definition hot-reload (T1)
 // ---------------------------------------------------------------------------
 
-#[derive(Event, Debug, Clone)]
+#[derive(Message, Debug, Clone)]
 pub struct DefChangedEvent {
     pub category: DefCategory,
     /// Numeric indices of changed definitions.
@@ -100,7 +109,7 @@ pub enum DamageKind {
 // Trade / Inventory
 // ---------------------------------------------------------------------------
 
-#[derive(Event, Debug, Clone)]
+#[derive(Message, Debug, Clone)]
 pub struct ItemMoveEvent {
     /// The item entity being moved.
     pub item: Entity,
@@ -124,19 +133,19 @@ pub enum MoveLocation {
     Worn(Entity),
 }
 
-#[derive(Event, Debug, Clone)]
+#[derive(Message, Debug, Clone)]
 pub struct EquipEvent {
     pub wielder: Entity,
     pub item: Entity,
 }
 
-#[derive(Event, Debug, Clone)]
+#[derive(Message, Debug, Clone)]
 pub struct UnequipEvent {
     pub wielder: Entity,
     pub item: Entity,
 }
 
-#[derive(Event, Debug, Clone)]
+#[derive(Message, Debug, Clone)]
 pub struct UseItemEvent {
     pub user: Entity,
     pub item: Entity,

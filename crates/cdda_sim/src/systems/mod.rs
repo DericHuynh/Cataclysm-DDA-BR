@@ -1,9 +1,17 @@
 pub mod ai;
+pub mod dev_move;
+pub mod bionics;
 pub mod combat;
+pub mod crafting;
 pub mod effects;
+pub mod equipment;
+pub mod healing;
 pub mod inventory;
+pub mod morale;
 pub mod movement;
 pub mod spatial;
 pub mod spawning;
 pub mod spawning_impl;
+pub mod temperature;
 pub mod turn;
+pub mod vision;

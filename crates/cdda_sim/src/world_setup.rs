@@ -1,11 +1,26 @@
 //! World initialisation — register components and resources.
 
+use bevy_ecs::prelude::Resource;
 use bevy_ecs::world::World;
 
 use crate::components::*;
+use crate::dev_worldgen::DevWorldgenConfig;
 use crate::spatial::EntitySpatialIndex;
 use crate::state::*;
 use crate::systems::turn::TurnQueue;
+
+
+/// Wrapper to store `cdda_map::WorldMap` as a Bevy resource.
+/// `WorldMap` lives in the zero-bevy `cdda_map` crate, so it cannot
+/// derive `Resource` directly.
+#[derive(Resource, Debug, Clone)]
+pub struct WorldMapResource(pub cdda_map::WorldMap);
+
+impl Default for WorldMapResource {
+    fn default() -> Self {
+        Self(cdda_map::WorldMap::new())
+    }
+}
 
 /// Register all ECS component types and initial resources.
 ///
@@ -21,6 +36,9 @@ pub fn setup_world(world: &mut World) {
     world.insert_resource(LoadingStatus::default());
     world.insert_resource(StartupConfig::default());
     world.insert_resource(TurnQueue::default());
+    world.insert_resource(WorldMapResource::default());
+    world.insert_resource(DevWorldgenConfig::default());
+    world.insert_resource(crate::systems::dev_move::DevCamera::default());
 
     // --- Spatial ---
     world.register_component::<WorldPosition>();
@@ -102,5 +120,32 @@ pub fn setup_world(world: &mut World) {
     world.register_component::<Stunned>();
     world.register_component::<Bleeding>();
     world.register_component::<OnFire>();
+
+    // --- Body part def components ---
+    world.register_component::<crate::def_components::BodyPartDefId>();
+    world.register_component::<crate::def_components::BodyPartName>();
+    world.register_component::<crate::def_components::BodyPartHitSize>();
+    world.register_component::<crate::def_components::BodyPartHitDifficulty>();
+    world.register_component::<crate::def_components::BodyPartBaseHp>();
+    world.register_component::<crate::def_components::BodyPartDrenchCapacity>();
+    world.register_component::<crate::def_components::BodyPartSide>();
+    world.register_component::<crate::def_components::BodyPartLegacyId>();
+    world.register_component::<crate::def_components::IsVital>();
+    world.register_component::<crate::def_components::CanGrasp>();
+    world.register_component::<crate::def_components::CanWalk>();
+    world.register_component::<crate::def_components::CanSee>();
+    world.register_component::<crate::def_components::CanBite>();
+    world.register_component::<crate::def_components::CanFly>();
+    world.register_component::<crate::def_components::SubParts>();
+    world.register_component::<crate::def_components::ParentPart>();
+
+    // --- Body part instance components ---
+    world.register_component::<BodyPartOf>();
+    world.register_component::<CreatureBodyParts>();
+    world.register_component::<BodyPartDef>();
+    world.register_component::<BodyPartSlot>();
+    world.register_component::<BodyPartHp>();
+    world.register_component::<BodyPartBroken>();
+    world.register_component::<BodyPartSevered>();
     world.register_component::<InFlight>();
 }

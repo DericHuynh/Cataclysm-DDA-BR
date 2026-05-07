@@ -486,3 +486,174 @@ pub struct FurnitureExamineAction(pub String);
 /// Mass of this furniture in grams.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct FurnitureMass(pub u32);
+
+// ===========================================================================
+// BODY PART DEFINITION COMPONENTS
+// ===========================================================================
+
+/// String ID of a body part type (e.g. "head", "arm_l", "torso").
+/// Present on body part DEF entities.
+#[derive(Component, Debug, Clone)]
+pub struct BodyPartDefId(pub String);
+
+/// Display name (e.g. "head", "left arm").
+#[derive(Component, Debug, Clone)]
+pub struct BodyPartName(pub String);
+
+/// Hit size modifier — larger = easier to hit.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct BodyPartHitSize(pub f32);
+
+/// Hit difficulty modifier — higher = harder to hit.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct BodyPartHitDifficulty(pub f32);
+
+/// Base HP for this body part.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct BodyPartBaseHp(pub f32);
+
+/// Drench capacity in ml.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct BodyPartDrenchCapacity(pub u32);
+
+/// Side: "left", "right", or "both".
+#[derive(Component, Debug, Clone)]
+pub struct BodyPartSide(pub String);
+
+/// Legacy ID for save compatibility (e.g. "HEAD", "TORSO").
+#[derive(Component, Debug, Clone)]
+pub struct BodyPartLegacyId(pub String);
+
+/// Capability markers — zero-sized, composable, Clone.
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct IsVital;
+
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct CanGrasp;
+
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct CanWalk;
+
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct CanSee;
+
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct CanBite;
+
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct CanFly;
+
+/// Sub-parts of this body part def.
+/// Relationship: body part def -> child body part defs.
+#[derive(Component, Debug, Clone)]
+#[relationship_target(relationship = ParentPart)]
+pub struct SubParts(Vec<Entity>);
+
+impl SubParts {
+    pub fn iter(&self) -> impl Iterator<Item = Entity> + '_ {
+        self.0.iter().copied()
+    }
+}
+
+/// Points to the parent body part def.
+#[derive(Component, Debug, Clone)]
+#[relationship(relationship_target = SubParts)]
+pub struct ParentPart(pub Entity);
+
+// ===========================================================================
+// RECIPE DEFINITION COMPONENTS
+// ===========================================================================
+
+/// Primary skill used for this recipe (e.g. "fabrication", "cooking").
+#[derive(Component, Debug, Clone)]
+pub struct RecipeSkillUsed(pub String);
+
+/// Skill difficulty rating (1-10).
+#[derive(Component, Debug, Clone, Copy)]
+pub struct RecipeDifficulty(pub u32);
+
+/// Required skill level (possibly optional, for recipes with requirements).
+#[derive(Component, Debug, Clone, Copy)]
+pub struct RecipeRequiredLevel(pub u32);
+
+/// Base crafting time in turns.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct RecipeTime(pub u32);
+
+/// Whether this recipe is automatically learned when skill is high enough.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct RecipeAutolearn(pub bool);
+
+/// Whether this recipe can be reversed (uncrafted).
+#[derive(Component, Debug, Clone, Copy)]
+pub struct RecipeReversible(pub bool);
+
+/// Result item ID.
+#[derive(Component, Debug, Clone)]
+pub struct RecipeResult(pub String);
+
+/// Number of result items produced per craft.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct RecipeResultCount(pub u32);
+
+/// Charges on the result (for items that use charges).
+#[derive(Component, Debug, Clone, Copy)]
+pub struct RecipeResultCharges(pub u32);
+
+/// One component requirement — a specific item and quantity.
+#[derive(Debug, Clone)]
+pub struct RecipeComponentEntry {
+    pub item_id: String,
+    pub count: u32,
+    pub recovered: bool,
+}
+
+/// Component requirements: outer Vec is alternatives, inner Vec is all required.
+#[derive(Component, Debug, Clone)]
+pub struct RecipeComponents(pub Vec<Vec<RecipeComponentEntry>>);
+
+/// A tool requirement.
+#[derive(Debug, Clone)]
+pub struct RecipeToolEntry {
+    pub item_id: String,
+    pub amount: u32,
+}
+
+/// Tool requirements: outer Vec is alternatives, inner Vec is required tools.
+#[derive(Component, Debug, Clone)]
+pub struct RecipeTools(pub Vec<Vec<RecipeToolEntry>>);
+
+/// A required tool quality.
+#[derive(Component, Debug, Clone)]
+pub struct RecipeQuality(pub String, pub u32);
+
+/// Required qualities for the recipe.
+#[derive(Component, Debug, Clone)]
+pub struct RecipeQualities(pub Vec<(String, u32)>);
+
+/// Recipe category (e.g. "CC_WEAPON", "CC_FOOD").
+#[derive(Component, Debug, Clone)]
+pub struct RecipeCategory(pub String);
+
+/// Recipe flags (e.g. "BLIND_EASY", "SECRET").
+#[derive(Component, Debug, Clone)]
+pub struct RecipeFlags(pub Vec<String>);
+
+/// Byproducts produced alongside the result.
+#[derive(Debug, Clone)]
+pub struct RecipeByproduct {
+    pub item_id: String,
+    pub count: u32,
+}
+
+/// Byproducts produced by this recipe.
+#[derive(Component, Debug, Clone)]
+pub struct RecipeByproducts(pub Vec<RecipeByproduct>);
+
+/// Container item for the result (e.g. a jar for jam).
+#[derive(Component, Debug, Clone)]
+pub struct RecipeContainer(pub String);
+
+/// Batch time factors: time reduction per additional unit.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct RecipeBatchTime(pub f32);

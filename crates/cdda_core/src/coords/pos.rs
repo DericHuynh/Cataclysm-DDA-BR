@@ -122,26 +122,44 @@ impl<Scale, Origin> Sub for Pos<Scale, Origin> {
 // ---------------------------------------------------------------------------
 
 impl<Scale, Origin> Pos<Scale, Origin> {
-    /// Manhattan distance (ignoring z — use `dist_3d` to include z).
+    /// 3D Manhattan distance (includes z).
+    /// Sum of absolute differences on all three axes.
     pub fn dist_manhattan(self, other: Self) -> u32 {
+        (self.x.abs_diff(other.x) + self.y.abs_diff(other.y) + self.z.0.abs_diff(other.z.0) as u32)
+            as u32
+    }
+
+    /// 2D Manhattan distance (horizontal only, ignores z).
+    /// Use this when z-level differences are irrelevant (e.g. pathfinding on one floor).
+    pub fn dist_manhattan_2d(self, other: Self) -> u32 {
         (self.x.abs_diff(other.x) + self.y.abs_diff(other.y)) as u32
     }
 
-    /// Chebyshev (max-axis) distance, ignoring z.
+    /// 3D Chebyshev (max-axis) distance including z.
+    /// The maximum of |dx|, |dy|, |dz|.
     pub fn dist_chebyshev(self, other: Self) -> u32 {
-        self.x.abs_diff(other.x).max(self.y.abs_diff(other.y)) as u32
-    }
-
-    /// 3D Chebyshev distance including z.
-    pub fn dist_3d(self, other: Self) -> u32 {
         self.x
             .abs_diff(other.x)
             .max(self.y.abs_diff(other.y))
             .max(self.z.0.abs_diff(other.z.0) as u32) as u32
     }
 
-    /// Squared Euclidean distance (useful for range comparisons without sqrt).
+    /// 2D Chebyshev distance (horizontal only, ignores z).
+    pub fn dist_chebyshev_2d(self, other: Self) -> u32 {
+        self.x.abs_diff(other.x).max(self.y.abs_diff(other.y)) as u32
+    }
+
+    /// 3D squared Euclidean distance (includes z).
+    /// Useful for range comparisons without sqrt.
     pub fn dist_sq(self, other: Self) -> u64 {
+        let dx = self.x as i64 - other.x as i64;
+        let dy = self.y as i64 - other.y as i64;
+        let dz = self.z.0 as i64 - other.z.0 as i64;
+        (dx * dx + dy * dy + dz * dz) as u64
+    }
+
+    /// 2D squared Euclidean distance (horizontal only, ignores z).
+    pub fn dist_sq_2d(self, other: Self) -> u64 {
         let dx = self.x as i64 - other.x as i64;
         let dy = self.y as i64 - other.y as i64;
         (dx * dx + dy * dy) as u64
@@ -233,6 +251,6 @@ mod tests {
     fn test_3d_distance() {
         let a = WorldPos::new(0, 0, ZLevel::new(0));
         let b = WorldPos::new(3, 4, ZLevel::new(5));
-        assert_eq!(a.dist_3d(b), 5);
+        assert_eq!(a.dist_chebyshev(b), 5);
     }
 }

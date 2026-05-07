@@ -175,3 +175,37 @@ pub fn debug_turn_queue(queue: Res<TurnQueue>) {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Master tick
+// ---------------------------------------------------------------------------
+
+/// The main game tick — run once per turn after all actors have acted.
+///
+/// Calls each phase in dependency order:
+/// 1. Movement     — resolve movement intents
+/// 2. Combat       — resolve melee and ranged attacks
+/// 3. Effects      — tick status effects
+/// 4. Healing      — natural HP recovery
+/// 5. Morale       — decay morale bonuses
+/// 6. Bionics      — process bionic power
+/// 7. Temperature  — body temp regulation
+/// 8. Spoilage     — item decay
+/// 9. Vision       — update line-of-sight
+/// 10. Spawning    — process SpawnEvent buffer
+///
+/// Note: `tick_move_points` runs as a Bevy system (not called here)
+/// and is scheduled separately via the Bevy app. `spatial` index
+/// updates are reactive on `Changed<WorldPosition>`.
+pub fn game_tick(world: &mut World) {
+    super::movement::movement_phase(world);
+    super::combat::combat_phase(world);
+    super::effects::effects_phase(world);
+    super::healing::healing_phase(world);
+    super::morale::tick_morale_decay(world);
+    super::bionics::tick_bionics(world);
+    super::temperature::tick_temperature(world);
+    super::temperature::tick_spoilage(world);
+    super::vision::update_vision(world);
+    super::spawning::spawning_phase(world);
+}

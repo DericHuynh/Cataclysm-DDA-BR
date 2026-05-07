@@ -200,7 +200,11 @@ pub use json_flag::JsonFlagDef;
 pub use limb_score::LimbScoreDef;
 pub use map_extra::MapExtraDef;
 pub use map_extra_collection::MapExtraCollectionDef;
-pub use mapgen::{MapgenDef, MapgenPaletteDef};
+pub use mapgen::{
+    MapgenDef, MapgenObject, MapgenPaletteDef, MapgenTarget, PaletteRef, PlaceField,
+    PlaceFurniture, PlaceItem, PlaceLoot, PlaceMonster, PlaceNested, PlaceNpc, PlaceTerrain,
+    PlaceTrap, PlaceVehicle, PlaceZone, PosOrRange, SetDirective,
+};
 pub use martial_art::{MartialArtBuff, MartialArtDef};
 pub use material::MaterialDef;
 pub use mission_definition::MissionDefinitionDef;
