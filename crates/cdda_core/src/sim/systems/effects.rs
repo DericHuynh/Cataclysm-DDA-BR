@@ -7,8 +7,9 @@
 //! applied by other systems reading the `StatusEffect` components.
 
 use bevy_ecs::prelude::*;
-use crate::actor::components::*;
 use crate::{EffectId, Time};
+use crate::actor::components::*;
+
 
 // ---------------------------------------------------------------------------
 // Public API

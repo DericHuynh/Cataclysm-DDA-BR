@@ -9,31 +9,22 @@
 //! entities atomically before the new state's `OnEnter` runs, preventing
 //! overlay glitches.
 
-use bevy::input_focus::{
-    directional_navigation::DirectionalNavigationPlugin, InputDispatchPlugin, InputFocus,
-    InputFocusVisible,
-};
+use crate::screen::screen::Screen;
 use bevy::prelude::*;
 use bevy_state::state::OnEnter;
-use crate::screen::screen::Screen;
 
 pub mod dev_spawn;
 pub mod dev_worldgen;
 pub mod inventory;
-pub mod tiles;
 pub mod main_menu;
 pub mod settings;
+pub mod tiles;
 
 /// Plugin that registers all CDDA render systems and components.
 pub struct CddaRenderPlugin;
 
 impl Plugin for CddaRenderPlugin {
     fn build(&self, app: &mut App) {
-        // Bevy input focus + directional navigation
-        app.add_plugins((InputDispatchPlugin, DirectionalNavigationPlugin));
-
-        app.init_resource::<InputFocus>();
-        app.insert_resource(InputFocusVisible(true));
         app.init_resource::<settings::SettingsState>();
 
         app.add_systems(Startup, (render_setup, tiles::load_tiles));
@@ -72,14 +63,20 @@ impl Plugin for CddaRenderPlugin {
         );
 
         // ── Debug spawn panel ─────────────────────────────────────────────
-        app.add_systems(OnEnter(Screen::DevSpawnPanel), dev_spawn::spawn_dev_spawn_panel);
+        app.add_systems(
+            OnEnter(Screen::DevSpawnPanel),
+            dev_spawn::spawn_dev_spawn_panel,
+        );
         app.add_systems(
             Update,
             dev_spawn::update_dev_spawn_panel.run_if(in_state(Screen::DevSpawnPanel)),
         );
 
         // ── Inventory screen ──────────────────────────────────────────────
-        app.add_systems(OnEnter(Screen::Inventory), inventory::spawn_inventory_screen);
+        app.add_systems(
+            OnEnter(Screen::Inventory),
+            inventory::spawn_inventory_screen,
+        );
         app.add_systems(
             Update,
             inventory::update_inventory_screen.run_if(in_state(Screen::Inventory)),

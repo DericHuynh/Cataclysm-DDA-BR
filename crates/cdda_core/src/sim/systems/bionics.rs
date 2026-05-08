@@ -7,7 +7,6 @@
 //! creature.
 
 use bevy_ecs::prelude::*;
-use crate::actor::components::*;
 use crate::Energy;
 
 // ---------------------------------------------------------------------------

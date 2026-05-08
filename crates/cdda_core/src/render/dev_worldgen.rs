@@ -4,14 +4,11 @@
 //! pattern as the Bevy 0.18 Text2d example. Spawned on OnEnter(Gameplay),
 //! updated on move.
 
-use crate::render::tiles::TileRegistry;
-use bevy::prelude::*;
-use bevy::text::LineBreak;
-use bevy_state::state_scoped::DespawnOnExit;
 use crate::actor::components::HandCount;
 use crate::item::components::ItemTypeId;
 use crate::item::components::WieldedItems;
 use crate::map::WorldMap;
+use crate::render::tiles::TileRegistry;
 use crate::screen::screen::Screen;
 use crate::screen::screen_nav::{screen_def, FocusedCommandIndex};
 use crate::sim::components::WorldPosition;
@@ -20,6 +17,10 @@ use crate::sim::def_components::ItemVolume;
 use crate::sim::systems::dev_move::DevCamera;
 use crate::sim::systems::inventory::{DevGroundItemName, DevPlayer, Inventory, FLOOR_CAP_ML};
 use crate::sim::world_setup::WorldMapResource;
+use bevy::prelude::*;
+use bevy::text::LineBreak;
+use bevy_state::state_scoped::DespawnOnExit;
+use tracing::info;
 
 // ---------------------------------------------------------------------------
 // Colours
@@ -34,8 +35,6 @@ const TEXT_DIM: Color = Color::srgb(0.6, 0.6, 0.6);
 const FOCUSED_BORDER: Color = Color::srgb(0.95, 0.95, 0.95);
 
 // Viewport size in OMT tiles
-const VIEW_COLS: usize = 40;
-const VIEW_ROWS: usize = 24;
 
 // ---------------------------------------------------------------------------
 // Markers
@@ -46,6 +45,9 @@ pub(crate) struct DevCmdButton(usize);
 
 #[derive(Component)]
 pub(crate) struct DevStatusBar;
+
+pub const VIEW_COLS: usize = 40;
+pub const VIEW_ROWS: usize = 24;
 
 // ---------------------------------------------------------------------------
 // DevWorldgen menu screen
@@ -118,7 +120,7 @@ pub fn spawn_dev_menu(mut commands: Commands, focused: Res<FocusedCommandIndex>)
         });
 }
 
-pub fn sync_dev_menu_focus(
+pub(crate) fn sync_dev_menu_focus(
     focused: Res<FocusedCommandIndex>,
     mut buttons: Query<(&DevCmdButton, &mut BackgroundColor, &mut BorderColor)>,
 ) {
@@ -204,7 +206,6 @@ pub fn spawn_ascii_view(
 }
 
 // Grass-green for empty loaded bubbles; building tiles use their real image.
-const COLOR_EMPTY: Color = Color::srgb(0.13, 0.30, 0.09);
 // Cursor cross-hair tint.
 const COLOR_CURSOR: Color = Color::srgb(1.0, 0.3, 0.3);
 /// Dark grey background for OMT tiles that have no tileset sprite.
@@ -375,7 +376,7 @@ fn spawn_ground_items(
     }
 }
 
-pub fn update_ascii_view(
+pub(crate) fn update_ascii_view(
     camera: Res<DevCamera>,
     world_map: Res<WorldMapResource>,
     registry: Res<TileRegistry>,
@@ -426,7 +427,7 @@ pub fn update_ascii_view(
     }
 }
 
-fn render_viewport(wm: &WorldMap, cx: i32, cy: i32, cz: i32) -> String {
+fn _render_viewport(wm: &WorldMap, cx: i32, cy: i32, cz: i32) -> String {
     let half_cols = (VIEW_COLS / 2) as i32;
     let half_rows = (VIEW_ROWS / 2) as i32;
     let start_x = cx - half_cols;

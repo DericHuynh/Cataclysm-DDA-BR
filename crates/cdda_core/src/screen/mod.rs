@@ -45,7 +45,7 @@ impl Plugin for ScreenNavigationPlugin {
         // Resources
         app.insert_resource(ScreenStack::default());
         app.insert_resource(FocusedCommandIndex::default());
-        app.insert_resource(bevy::input_focus::InputFocus::default());
+        app.insert_resource(InputFocus::default());
         app.insert_resource(crate::screen::cursor::ExamineCursor::default());
         app.insert_resource(crate::screen::config::GameSettings::default());
         app.insert_resource(crate::screen::config::CharacterCreationState::default());

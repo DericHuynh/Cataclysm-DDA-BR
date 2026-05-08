@@ -11,13 +11,15 @@
 //! Systems that need definition data query directly:
 //! `Query<&GunData, With<IsDef>>` — the entities are in the main World.
 
+use crate::actor::components::{
+    Creature, Faction, Gender, Health, IsAlive, MovePoints, PlayerData, Speed,
+};
+use crate::coords::WorldPos;
 use crate::sim::components::{Solid, WorldPosition};
-use  crate::sim::def_components::*;
+use crate::sim::def_components::*;
 use crate::sim::state::{AppState, GameTime, LoadingStatus, StartupConfig};
 use bevy_ecs::prelude::*;
 use bevy_state::state::NextState;
-use crate::actor::components::{Creature, Faction, Gender, Health, IsAlive, MovePoints, PlayerData, Speed};
-use crate::coords::WorldPos;
 use std::collections::HashMap;
 
 // ===========================================================================
@@ -80,8 +82,8 @@ fn parse_volume_string_to_ml(s: &str) -> Option<u32> {
     let value: f64 = value_str.parse().ok()?;
 
     match unit_str.as_str() {
-        "ml" | "milliliter" | "milliliters" => Some(value as u32),
-        "l" | "liter" | "liters" => Some((value * 1000.0) as u32),
+        "ml" | "milliliter" | "milliliters" => Some(value.round() as u32),
+        "l" | "liter" | "liters" => Some((value * 1000.0).round() as u32),
         _ => None,
     }
 }
@@ -100,9 +102,9 @@ fn parse_weight_string_to_grams(s: &str) -> Option<u32> {
     let value: f64 = value_str.parse().ok()?;
 
     match unit_str.as_str() {
-        "g" | "gram" | "grams" => Some(value as u32),
-        "kg" | "kilogram" | "kilograms" => Some((value * 1000.0) as u32),
-        "mg" | "milligram" | "milligrams" => Some((value / 1000.0) as u32),
+        "g" | "gram" | "grams" => Some(value.round() as u32),
+        "kg" | "kilogram" | "kilograms" => Some((value * 1000.0).round() as u32),
+        "mg" | "milligram" | "milligrams" => Some((value / 1000.0).round() as u32),
         _ => None,
     }
 }
@@ -139,7 +141,7 @@ fn extract_price(p: &crate::data::raw_defs::CddaPrice) -> u64 {
             .split_whitespace()
             .next()
             .and_then(|w| w.parse::<f64>().ok())
-            .map(|v| (v * 100.0) as u64)
+            .map(|v| (v * 100.0).round() as u64)
             .unwrap_or(0),
     }
 }
@@ -153,16 +155,11 @@ fn color_to_string(c: &crate::data::raw_defs::CddaColor) -> String {
 }
 
 pub fn flags_to_vec(f: &crate::data::raw_defs::StringOrArray) -> Vec<String> {
-    match f {
-        crate::data::raw_defs::StringOrArray::Single(s) => {
-            if s.is_empty() {
-                Vec::new()
-            } else {
-                vec![s.clone()]
-            }
-        }
-        crate::data::raw_defs::StringOrArray::Multi(v) => v.clone(),
-    }
+    f.all_strings()
+        .into_iter()
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .collect()
 }
 
 fn materials_to_vec(m: &crate::data::raw_defs::MaterialList) -> Vec<String> {
@@ -215,539 +212,534 @@ pub fn build_def_world(
     let mut def_world = DefinitionWorld::empty();
 
     if spawn_all {
-
-    // ── Item definitions ──────────────────────────────────────────────
-    for (def_id, item) in &def_registry.items {
-        let id_str = def_id.as_str().to_string();
-        let subtypes: Vec<String> = item
-            .subtypes
-            .as_ref()
-            .map(|v| v.iter().map(|s| s.to_uppercase()).collect())
-            .unwrap_or_default();
-
-        // ── Build component list based on subtypes ──────────────────
-
-        // Every item gets: IsDef + DefStrId + base data + item-specific base
-        let entity = world
-            .spawn((
-                IsDef,
-                DefStrId(id_str.clone()),
-                ItemName(
-                    item.name
-                        .as_ref()
-                        .map(|n| n.singular().to_string())
-                        .unwrap_or_default(),
-                ),
-                ItemDescription(
-                    item.description
-                        .as_ref()
-                        .map(|d| d.singular().to_string())
-                        .unwrap_or_default(),
-                ),
-                ItemWeight(item.weight.map(|w| w.as_grams() as u32).unwrap_or(0)),
-                ItemVolume(crate::Volume::as_milliliters(&item.volume) as u32),
-                ItemSymbol(item.symbol.chars().next().unwrap_or('#')),
-                ItemColor(item.color.as_ref().map(color_to_string).unwrap_or_default()),
-                ItemMaterials(materials_to_vec(&item.material)),
-                crate::sim::flags::ItemFlags::new(),
-                ItemPrice {
-                    price: item.price.as_ref().map(extract_price).unwrap_or(0),
-                    price_postapoc: item.price_postapoc.as_ref().map(extract_price).unwrap_or(0),
-                },
-                ItemPhase(match item.phase {
-                    crate::data::raw_defs::item::Phase::Solid =>  crate::sim::def_components::Phase::Solid,
-                    crate::data::raw_defs::item::Phase::Liquid => {
-                         crate::sim::def_components::Phase::Liquid
-                    }
-                    crate::data::raw_defs::item::Phase::Gas =>  crate::sim::def_components::Phase::Gas,
-                    crate::data::raw_defs::item::Phase::Plasma => {
-                         crate::sim::def_components::Phase::Plasma
-                    }
-                }),
-                ItemStackSize(item.stack_size.unwrap_or(1)),
-                ItemCategory(item.category.clone().unwrap_or_default()),
-            ))
-            .id();
-
-        // ── AMMO subtype ────────────────────────────────────────────
-        if subtypes.iter().any(|s| s == "AMMO") {
-            // Extract damage from the ammo `damage` field (RawValue).
-            // CDDA formats: a bare number, {"damage_type":"bullet", "amount":25},
-            // or [{"damage_type":"bullet", "amount":25}].
-            let ammo_damage = item
-                .damage
+        // ── Item definitions ──────────────────────────────────────────────
+        for (def_id, item) in &def_registry.items {
+            let id_str = def_id.as_str().to_string();
+            let subtypes: Vec<String> = item
+                .subtypes
                 .as_ref()
-                .and_then(|raw| extract_ammo_damage(raw))
-                .unwrap_or(0);
-
-            world.entity_mut(entity).insert(AmmoData {
-                ammo_type: item
-                    .ammo_type
-                    .as_ref()
-                    .map(|sa| match sa {
-                        crate::data::raw_defs::StringOrArray::Single(s) => s.clone(),
-                        crate::data::raw_defs::StringOrArray::Multi(v) => {
-                            v.first().cloned().unwrap_or_default()
-                        }
-                    })
-                    .unwrap_or_default(),
-                damage: ammo_damage,
-                pierce: item.pierce.unwrap_or(0),
-                range: item.range.unwrap_or(0),
-                dispersion: item.dispersion.unwrap_or(0),
-                recoil: item.recoil.unwrap_or(0),
-                count: item.charges.unwrap_or(1) as i32,
-                // CDDA uses `container` for the casing item ID on ammo
-                casing: item.container.clone(),
-                effects: Vec::new(),
-                stack_size: item.stack_size.unwrap_or(1) as u32,
-            });
-        }
-
-        // ── GUN subtype ─────────────────────────────────────────────
-        if subtypes.iter().any(|s| s == "GUN") {
-            world.entity_mut(entity).insert(GunData {
-                skill: String::new(),
-                ammo_type: item
-                    .ammo_type
-                    .as_ref()
-                    .map(|sa| match sa {
-                        crate::data::raw_defs::StringOrArray::Single(s) => s.clone(),
-                        crate::data::raw_defs::StringOrArray::Multi(v) => {
-                            v.first().cloned().unwrap_or_default()
-                        }
-                    })
-                    .unwrap_or_default(),
-                dispersion: item.charges.unwrap_or(0) as i32,
-                recoil: item.charges_per_use.unwrap_or(0) as i32,
-                reload_time: item.charges.unwrap_or(0) as i32,
-                clip_size: item.max_charges.unwrap_or(0) as i32,
-                // CDDA uses charges_per_use for burst size
-                burst: item.charges_per_use.unwrap_or(0) as u32,
-                ammo_effects: Vec::new(),
-            });
-        }
-
-        // ── ARMOR / PET_ARMOR subtype ───────────────────────────────
-        if subtypes.iter().any(|s| s == "ARMOR") || subtypes.iter().any(|s| s == "PET_ARMOR") {
-            let parts = item
-                .armor
-                .as_ref()
-                .map(|armor_vec| {
-                    armor_vec
-                        .iter()
-                        .map(|bp| {
-                            let enc = bp
-                                .encumbrance
-                                .as_ref()
-                                .map(|e| match e {
-                                    crate::data::raw_defs::EncumbranceOrRange::Single(v) => *v as i32,
-                                    crate::data::raw_defs::EncumbranceOrRange::Range(v) => {
-                                        v.first().copied().unwrap_or(0) as i32
-                                    }
-                                })
-                                .unwrap_or(0);
-                            ArmourPart {
-                                body_part: bp
-                                    .covers
-                                    .as_ref()
-                                    .map(|c| match c {
-                                        crate::data::raw_defs::StringOrArray::Single(s) => s.clone(),
-                                        crate::data::raw_defs::StringOrArray::Multi(v) => v.join(","),
-                                    })
-                                    .unwrap_or_default(),
-                                coverage: bp.coverage.unwrap_or(0) as u8,
-                                encumbrance: enc,
-                                warmth: 0,
-                                material: Vec::new(),
-                            }
-                        })
-                        .collect()
-                })
+                .map(|v| v.iter().map(|s| s.to_uppercase()).collect())
                 .unwrap_or_default();
 
-            world.entity_mut(entity).insert(ArmourData {
-                parts,
-                material_thickness: item.material_thickness.unwrap_or(0.0) as f32,
-                env_protection: [0; 5],
-            });
-        }
+            // ── Build component list based on subtypes ──────────────────
 
-        // ── COMESTIBLE subtype ──────────────────────────────────────
-        if subtypes.iter().any(|s| s == "COMESTIBLE") {
-            world.entity_mut(entity).insert(FoodData {
-                calories: item.calories.unwrap_or(0) as i32,
-                quench: item.quench.unwrap_or(0),
-                fun: item.fun.unwrap_or(0),
-                healthy: 0,
-                stim: 0,
-                spoils_in: item
-                    .spoils_in
-                    .as_ref()
-                    .map(|d| match d {
-                        crate::data::raw_defs::CddaDuration::Number(n) => *n,
-                        crate::data::raw_defs::CddaDuration::Text(s) => s
-                            .split_whitespace()
-                            .next()
-                            .and_then(|w| w.parse::<u32>().ok())
+            // Every item gets: IsDef + DefStrId + base data + item-specific base
+            let entity = world
+                .spawn((
+                    IsDef,
+                    DefStrId(id_str.clone()),
+                    ItemName(
+                        item.name
+                            .as_ref()
+                            .map(|n| n.singular().to_string())
+                            .unwrap_or_default(),
+                    ),
+                    ItemDescription(
+                        item.description
+                            .as_ref()
+                            .map(|d| d.singular().to_string())
+                            .unwrap_or_default(),
+                    ),
+                    ItemWeight(item.weight.map(|w| w.as_grams() as u32).unwrap_or(0)),
+                    ItemVolume(crate::Volume::as_milliliters(&item.volume) as u32),
+                    ItemSymbol(item.symbol.chars().next().unwrap_or('#')),
+                    ItemColor(item.color.as_ref().map(color_to_string).unwrap_or_default()),
+                    ItemMaterials(materials_to_vec(&item.material)),
+                    crate::sim::flags::ItemFlags::new(),
+                    ItemPrice {
+                        price: item.price.as_ref().map(extract_price).unwrap_or(0),
+                        price_postapoc: item
+                            .price_postapoc
+                            .as_ref()
+                            .map(extract_price)
                             .unwrap_or(0),
-                    })
-                    .unwrap_or(0),
-                comestible_type: item
-                    .comestible_type
-                    .as_ref()
-                    .map(|ct| format!("{:?}", ct))
-                    .unwrap_or_else(|| "INVALID".to_string()),
-            });
-        }
-
-        // ── TOOL subtype ────────────────────────────────────────────
-        if subtypes.iter().any(|s| s == "TOOL") {
-            world.entity_mut(entity).insert(ToolData {
-                max_charges: item.max_charges.unwrap_or(0) as i32,
-                charges_per_use: item.charges_per_use.unwrap_or(0) as i32,
-                turns_per_charge: 1,
-                ammo_type: item.tool_ammo.as_ref().map(|sa| match sa {
-                    crate::data::raw_defs::StringOrArray::Single(s) => s.clone(),
-                    crate::data::raw_defs::StringOrArray::Multi(v) => {
-                        v.first().cloned().unwrap_or_default()
-                    }
-                }),
-                revert_to: None,
-                power_draw: None,
-            });
-        }
-
-        // ── BOOK subtype ────────────────────────────────────────────
-        if subtypes.iter().any(|s| s == "BOOK") {
-            world.entity_mut(entity).insert(BookData {
-                skill: String::new(),
-                required_level: 0,
-                max_level: item.max_charges.unwrap_or(0) as u8,
-                fun: item.fun.unwrap_or(0),
-                intelligence: item.charges.unwrap_or(0) as u8,
-                time: item.charges.unwrap_or(0),
-                chapters: 0,
-            });
-        }
-
-        // ── MAGAZINE subtype ────────────────────────────────────────
-        if subtypes.iter().any(|s| s == "MAGAZINE") {
-            world.entity_mut(entity).insert(MagazineData {
-                ammo_type: item
-                    .ammo_type
-                    .as_ref()
-                    .map(|sa| match sa {
-                        crate::data::raw_defs::StringOrArray::Single(s) => s.clone(),
-                        crate::data::raw_defs::StringOrArray::Multi(v) => {
-                            v.first().cloned().unwrap_or_default()
-                        }
-                    })
-                    .unwrap_or_default(),
-                capacity: item.max_charges.unwrap_or(0) as i32,
-                reload_time: item.charges.unwrap_or(0) as i32,
-                linkage: None,
-                default_ammo: String::new(),
-            });
-        }
-
-        // ── GUNMOD subtype ──────────────────────────────────────────
-        if subtypes.iter().any(|s| s == "GUNMOD") {
-            world.entity_mut(entity).insert(GunModData {
-                install_time: item.charges.unwrap_or(0),
-            });
-        }
-
-        // ── Melee weapon (any item with melee_damage) ───────────────
-        if item.melee_damage.is_some() {
-            let (dmg_bash, dmg_cut) = match &item.melee_damage {
-                Some(crate::data::raw_defs::MeleeDamage::BashOnly(b)) => (*b, 0),
-                Some(crate::data::raw_defs::MeleeDamage::ByType(map)) => (
-                    map.get("bash").copied().unwrap_or(0),
-                    map.get("cut").copied().unwrap_or(0),
-                ),
-                Some(crate::data::raw_defs::MeleeDamage::TypedArray(arr)) => {
-                    let mut b = 0;
-                    let mut c = 0;
-                    for td in arr {
-                        match td.damage_type.as_str() {
-                            "bash" => b = td.amount,
-                            "cut" => c = td.amount,
-                            _ => {}
-                        }
-                    }
-                    (b, c)
-                }
-                None => (0, 0),
-            };
-            let to_hit_val = item
-                .to_hit
-                .as_ref()
-                .map(|t| match t {
-                    crate::data::raw_defs::ToHit::Number(n) => *n,
-                    crate::data::raw_defs::ToHit::Struct {
-                        grip,
-                        length,
-                        surface,
-                        balance,
-                    } => {
-                        // Rough approximation of CDDA's to-hit calculation
-                        // from structured weapon properties.
-                        let mut total = 0i32;
-                        if let Some(g) = grip.as_deref() {
-                            total += match g {
-                                "weapon" => 0,
-                                "solid" => 20,
-                                "none" => -20,
-                                _ => 0,
-                            };
-                        }
-                        if let Some(l) = length.as_deref() {
-                            total += match l {
-                                "hand" => 0,
-                                "short" => -10,
-                                "long" => 10,
-                                _ => 0,
-                            };
-                        }
-                        if let Some(s) = surface.as_deref() {
-                            total += match s {
-                                "any" | "regular" | "every" => 0,
-                                "point" | "line" => -20,
-                                _ => 0,
-                            };
-                        }
-                        if let Some(b) = balance.as_deref() {
-                            total += match b {
-                                "neutral" => 3,
-                                "good" => 6,
-                                "clumsy" => -2,
-                                _ => 0,
-                            };
-                        }
-                        total
-                    }
-                })
-                .unwrap_or(0);
-
-            world.entity_mut(entity).insert(WeaponData {
-                damage_bash: dmg_bash,
-                damage_cut: dmg_cut,
-                damage_stab: 0,
-                to_hit: to_hit_val,
-                moves_per_attack: 100,
-                reach: 1,
-                techniques: item.techniques.as_ref().cloned().unwrap_or_default(),
-                dice: 0,
-                dice_sides: 0,
-                skill: String::new(),
-            });
-        }
-
-        // ── Container (any item with pocket_data) ──────────────────
-        if item.pocket_data.is_some() {
-            let pockets: Vec<PocketTemplate> = item
-                .pocket_data
-                .as_ref()
-                .map(|pd| {
-                    pd.iter()
-                        .map(|p| {
-                            // max_volume can come from two CDDA fields:
-                            //   - max_volume (a Volume, already deserialized)
-                            //   - max_contains_volume (a string like "2 L")
-                            // Try max_volume first, fall back to parsing the
-                            // max_contains_volume string.
-                            let max_vol = p
-                                .max_volume
-                                .map(|v| crate::Volume::as_milliliters(&v) as u32)
-                                .or_else(|| {
-                                    p.max_contains_volume
-                                        .as_ref()
-                                        .and_then(|s| parse_volume_string_to_ml(s))
-                                })
-                                .unwrap_or(0);
-
-                            PocketTemplate {
-                                pocket_type: format!("{:?}", p.pocket_type),
-                                max_volume: max_vol,
-                                max_weight: p
-                                    .max_weight
-                                    .map(|w| w.as_grams() as u32)
-                                    .or_else(|| {
-                                        p.max_contains_weight
-                                            .as_ref()
-                                            .and_then(|s| parse_weight_string_to_grams(s))
-                                    })
-                                    .unwrap_or(0),
-                                sealed: p.sealed.unwrap_or(false),
-                                rigid: p.rigid.unwrap_or(false),
-                            }
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-
-            let total_volume: u32 = pockets.iter().map(|p| p.max_volume).sum();
-            let total_weight: u32 = pockets.iter().map(|p| p.max_weight).sum();
-
-            world.entity_mut(entity).insert(ContainerData {
-                pockets,
-                max_volume: total_volume,
-                max_weight: total_weight,
-            });
-        }
-
-        def_world.register(id_str, entity);
-    }
-
-    // ── Monster definitions ───────────────────────────────────────────
-    for (def_id, monster) in &def_registry.monsters {
-        let id_str = def_id.as_str().to_string();
-
-        let species_list = match &monster.species {
-            crate::data::raw_defs::StringOrArray::Single(s) => {
-                if s.is_empty() {
-                    Vec::new()
-                } else {
-                    vec![s.clone()]
-                }
-            }
-            crate::data::raw_defs::StringOrArray::Multi(v) => v.clone(),
-        };
-
-        let monster_entity = world
-            .spawn((
-                IsDef,
-                DefStrId(id_str.clone()),
-                MonsterName(
-                    monster
-                        .name
-                        .as_ref()
-                        .map(|n| n.singular().to_string())
-                        .unwrap_or_default(),
-                ),
-                MonsterDescription(
-                    monster
-                        .description
-                        .as_ref()
-                        .map(|d| d.singular().to_string())
-                        .unwrap_or_default(),
-                ),
-                MonsterStats {
-                    hp: monster.hp.max(1),
-                    speed: if monster.speed > 0 {
-                        monster.speed
-                    } else {
-                        100
                     },
-                    attack_cost: 100,
-                    dodge: monster.melee_dice as i32,
-                    morale: monster.morale,
-                    aggression: monster.aggression,
-                    melee_skill: monster.melee_skill,
-                    melee_dice: monster.melee_dice as i32,
-                    melee_dice_sides: monster.melee_dice_sides as i32,
-                    grab_strength: monster.grab_strength.unwrap_or(0),
-                    bleed_rate: monster.bleed_rate.unwrap_or(0),
-                    diff: monster.diff.unwrap_or(0),
-                },
-                MonsterMelee {
-                    dice: monster.melee_dice as u32,
-                    dice_sides: monster.melee_dice_sides as u32,
-                    damage_bash: extract_monster_melee_damage(&monster.melee_damage, "bash"),
-                    damage_cut: extract_monster_melee_damage(&monster.melee_damage, "cut"),
-                    damage_stab: extract_monster_melee_damage(&monster.melee_damage, "stab"),
-                    to_hit: 0,
-                },
-                MonsterVision {
-                    day: monster.vision_day as u32,
-                    night: monster.vision_night as u32,
-                },
-                crate::sim::flags::MonsterFlags::new(),
-                MonsterSpecies(species_list),
-                MonsterDefaultFaction(monster.default_faction.clone().unwrap_or_default()),
-                MonsterBodyType(monster.bodytype.clone().unwrap_or_default()),
-            ))
-            .id();
+                    ItemPhase(match item.phase {
+                        crate::data::raw_defs::item::Phase::Solid => {
+                            crate::sim::def_components::Phase::Solid
+                        }
+                        crate::data::raw_defs::item::Phase::Liquid => {
+                            crate::sim::def_components::Phase::Liquid
+                        }
+                        crate::data::raw_defs::item::Phase::Gas => {
+                            crate::sim::def_components::Phase::Gas
+                        }
+                        crate::data::raw_defs::item::Phase::Plasma => {
+                            crate::sim::def_components::Phase::Plasma
+                        }
+                    }),
+                    ItemStackSize(item.stack_size.unwrap_or(1)),
+                    ItemCategory(item.category.clone().unwrap_or_default()),
+                ))
+                .id();
 
-        if let Some(armor) = &monster.armor {
-            world.entity_mut(monster_entity).insert(MonsterArmour {
-                bash: armor.bash,
-                cut: armor.cut,
-                bullet: armor.bullet,
-                stab: armor.stab,
-                fire: armor.heat,
-                acid: armor.acid,
-                electric: armor.electric,
-                cold: armor.cold,
-            });
+            // ── AMMO subtype ────────────────────────────────────────────
+            if subtypes.iter().any(|s| s == "AMMO") {
+                // Extract damage from the ammo `damage` field (RawValue).
+                // CDDA formats: a bare number, {"damage_type":"bullet", "amount":25},
+                // or [{"damage_type":"bullet", "amount":25}].
+                let ammo_damage = item
+                    .damage
+                    .as_ref()
+                    .and_then(|raw| extract_ammo_damage(raw))
+                    .unwrap_or(0);
+
+                world.entity_mut(entity).insert(AmmoData {
+                    ammo_type: item
+                        .ammo_type
+                        .as_ref()
+                        .map(|sa| sa.first_or_default().to_string())
+                        .unwrap_or_default(),
+                    damage: ammo_damage,
+                    pierce: item.pierce.unwrap_or(0),
+                    range: item.range.unwrap_or(0),
+                    dispersion: item.dispersion.unwrap_or(0),
+                    recoil: item.recoil.unwrap_or(0),
+                    count: i32::try_from(item.charges.unwrap_or(1)).expect("ammo count overflow"),
+                    // CDDA uses `container` for the casing item ID on ammo
+                    casing: item.container.clone(),
+                    effects: Vec::new(),
+                    stack_size: item.stack_size.unwrap_or(1) as u32,
+                });
+            }
+
+            // ── GUN subtype ─────────────────────────────────────────────
+            if subtypes.iter().any(|s| s == "GUN") {
+                world.entity_mut(entity).insert(GunData {
+                    skill: String::new(),
+                    ammo_type: item
+                        .ammo_type
+                        .as_ref()
+                        .map(|sa| sa.first_or_default().to_string())
+                        .unwrap_or_default(),
+                    dispersion: i32::try_from(item.charges.unwrap_or(0))
+                        .expect("gun dispersion overflow"),
+                    recoil: i32::try_from(item.charges_per_use.unwrap_or(0))
+                        .expect("gun recoil overflow"),
+                    reload_time: i32::try_from(item.charges.unwrap_or(0))
+                        .expect("reload time overflow"),
+                    clip_size: i32::try_from(item.max_charges.unwrap_or(0))
+                        .expect("clip size overflow"),
+                    // CDDA uses charges_per_use for burst size
+                    burst: item.charges_per_use.unwrap_or(0) as u32,
+                    ammo_effects: Vec::new(),
+                });
+            }
+
+            // ── ARMOR / PET_ARMOR subtype ───────────────────────────────
+            if subtypes.iter().any(|s| s == "ARMOR") || subtypes.iter().any(|s| s == "PET_ARMOR") {
+                let parts = item
+                    .armor
+                    .as_ref()
+                    .map(|armor_vec| {
+                        armor_vec
+                            .iter()
+                            .map(|bp| {
+                                let enc = bp
+                                    .encumbrance
+                                    .as_ref()
+                                    .map(|e| match e {
+                                        crate::data::raw_defs::EncumbranceOrRange::Single(v) => {
+                                            *v as i32
+                                        }
+                                        crate::data::raw_defs::EncumbranceOrRange::Range(v) => {
+                                            v.first().copied().unwrap_or(0) as i32
+                                        }
+                                    })
+                                    .unwrap_or(0);
+                                ArmourPart {
+                                    body_part: bp
+                                        .covers
+                                        .as_ref()
+                                        .map(|c| match c {
+                                            crate::data::raw_defs::StringOrArray::Single(s) => {
+                                                s.clone()
+                                            }
+                                            crate::data::raw_defs::StringOrArray::Multi(v) => {
+                                                v.join(",")
+                                            }
+                                        })
+                                        .unwrap_or_default(),
+                                    coverage: bp.coverage.unwrap_or(0) as u8,
+                                    encumbrance: enc,
+                                    warmth: 0,
+                                    material: Vec::new(),
+                                }
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                world.entity_mut(entity).insert(ArmourData {
+                    parts,
+                    material_thickness: item.material_thickness.unwrap_or(0.0) as f32,
+                    env_protection: [0; 5],
+                });
+            }
+
+            // ── COMESTIBLE subtype ──────────────────────────────────────
+            if subtypes.iter().any(|s| s == "COMESTIBLE") {
+                world.entity_mut(entity).insert(FoodData {
+                    calories: i32::try_from(item.calories.unwrap_or(0)).expect("calories overflow"),
+                    quench: item.quench.unwrap_or(0),
+                    fun: item.fun.unwrap_or(0),
+                    healthy: 0,
+                    stim: 0,
+                    spoils_in: item
+                        .spoils_in
+                        .as_ref()
+                        .map(|d| match d {
+                            crate::data::raw_defs::CddaDuration::Number(n) => *n,
+                            crate::data::raw_defs::CddaDuration::Text(s) => s
+                                .split_whitespace()
+                                .next()
+                                .and_then(|w| w.parse::<u32>().ok())
+                                .unwrap_or(0),
+                        })
+                        .unwrap_or(0),
+                    comestible_type: item
+                        .comestible_type
+                        .as_ref()
+                        .map(|ct| format!("{:?}", ct))
+                        .unwrap_or_else(|| "INVALID".to_string()),
+                });
+            }
+
+            // ── TOOL subtype ────────────────────────────────────────────
+            if subtypes.iter().any(|s| s == "TOOL") {
+                world.entity_mut(entity).insert(ToolData {
+                    max_charges: i32::try_from(item.max_charges.unwrap_or(0))
+                        .expect("tool max_charges overflow"),
+                    charges_per_use: i32::try_from(item.charges_per_use.unwrap_or(0))
+                        .expect("tool charges_per_use overflow"),
+                    turns_per_charge: 1,
+                    ammo_type: item
+                        .tool_ammo
+                        .as_ref()
+                        .map(|sa| sa.first_or_default().to_string()),
+                    revert_to: None,
+                    power_draw: None,
+                });
+            }
+
+            // ── BOOK subtype ────────────────────────────────────────────
+            if subtypes.iter().any(|s| s == "BOOK") {
+                world.entity_mut(entity).insert(BookData {
+                    skill: String::new(),
+                    required_level: 0,
+                    max_level: item.max_charges.unwrap_or(0) as u8,
+                    fun: item.fun.unwrap_or(0),
+                    intelligence: item.charges.unwrap_or(0) as u8,
+                    time: item.charges.unwrap_or(0),
+                    chapters: 0,
+                });
+            }
+
+            // ── MAGAZINE subtype ────────────────────────────────────────
+            if subtypes.iter().any(|s| s == "MAGAZINE") {
+                world.entity_mut(entity).insert(MagazineData {
+                    ammo_type: item
+                        .ammo_type
+                        .as_ref()
+                        .map(|sa| sa.first_or_default().to_string())
+                        .unwrap_or_default(),
+                    capacity: i32::try_from(item.max_charges.unwrap_or(0))
+                        .expect("mag capacity overflow"),
+                    reload_time: i32::try_from(item.charges.unwrap_or(0))
+                        .expect("mag reload_time overflow"),
+                    linkage: None,
+                    default_ammo: String::new(),
+                });
+            }
+
+            // ── GUNMOD subtype ──────────────────────────────────────────
+            if subtypes.iter().any(|s| s == "GUNMOD") {
+                world.entity_mut(entity).insert(GunModData {
+                    install_time: item.charges.unwrap_or(0),
+                });
+            }
+
+            // ── Melee weapon (any item with melee_damage) ───────────────
+            if item.melee_damage.is_some() {
+                let (dmg_bash, dmg_cut) = match &item.melee_damage {
+                    Some(crate::data::raw_defs::MeleeDamage::BashOnly(b)) => (*b, 0),
+                    Some(crate::data::raw_defs::MeleeDamage::ByType(map)) => (
+                        map.get("bash").copied().unwrap_or(0),
+                        map.get("cut").copied().unwrap_or(0),
+                    ),
+                    Some(crate::data::raw_defs::MeleeDamage::TypedArray(arr)) => {
+                        let mut b = 0;
+                        let mut c = 0;
+                        for td in arr {
+                            match td.damage_type.as_str() {
+                                "bash" => b = td.amount,
+                                "cut" => c = td.amount,
+                                _ => {}
+                            }
+                        }
+                        (b, c)
+                    }
+                    None => (0, 0),
+                };
+                let to_hit_val = item
+                    .to_hit
+                    .as_ref()
+                    .map(|t| match t {
+                        crate::data::raw_defs::ToHit::Number(n) => *n,
+                        crate::data::raw_defs::ToHit::Struct {
+                            grip,
+                            length,
+                            surface,
+                            balance,
+                        } => {
+                            // Rough approximation of CDDA's to-hit calculation
+                            // from structured weapon properties.
+                            let mut total = 0i32;
+                            if let Some(g) = grip.as_deref() {
+                                total += match g {
+                                    "weapon" => 0,
+                                    "solid" => 20,
+                                    "none" => -20,
+                                    _ => 0,
+                                };
+                            }
+                            if let Some(l) = length.as_deref() {
+                                total += match l {
+                                    "hand" => 0,
+                                    "short" => -10,
+                                    "long" => 10,
+                                    _ => 0,
+                                };
+                            }
+                            if let Some(s) = surface.as_deref() {
+                                total += match s {
+                                    "any" | "regular" | "every" => 0,
+                                    "point" | "line" => -20,
+                                    _ => 0,
+                                };
+                            }
+                            if let Some(b) = balance.as_deref() {
+                                total += match b {
+                                    "neutral" => 3,
+                                    "good" => 6,
+                                    "clumsy" => -2,
+                                    _ => 0,
+                                };
+                            }
+                            total
+                        }
+                    })
+                    .unwrap_or(0);
+
+                world.entity_mut(entity).insert(WeaponData {
+                    damage_bash: dmg_bash,
+                    damage_cut: dmg_cut,
+                    damage_stab: 0,
+                    to_hit: to_hit_val,
+                    moves_per_attack: 100,
+                    reach: 1,
+                    techniques: item.techniques.as_ref().cloned().unwrap_or_default(),
+                    dice: 0,
+                    dice_sides: 0,
+                    skill: String::new(),
+                });
+            }
+
+            // ── Container (any item with pocket_data) ──────────────────
+            if item.pocket_data.is_some() {
+                let pockets: Vec<PocketTemplate> = item
+                    .pocket_data
+                    .as_ref()
+                    .map(|pd| {
+                        pd.iter()
+                            .map(|p| {
+                                // max_volume can come from two CDDA fields:
+                                //   - max_volume (a Volume, already deserialized)
+                                //   - max_contains_volume (a string like "2 L")
+                                // Try max_volume first, fall back to parsing the
+                                // max_contains_volume string.
+                                let max_vol = p
+                                    .max_volume
+                                    .map(|v| crate::Volume::as_milliliters(&v) as u32)
+                                    .or_else(|| {
+                                        p.max_contains_volume
+                                            .as_ref()
+                                            .and_then(|s| parse_volume_string_to_ml(s))
+                                    })
+                                    .unwrap_or(0);
+
+                                PocketTemplate {
+                                    pocket_type: format!("{:?}", p.pocket_type),
+                                    max_volume: max_vol,
+                                    max_weight: p
+                                        .max_weight
+                                        .map(|w| w.as_grams() as u32)
+                                        .or_else(|| {
+                                            p.max_contains_weight
+                                                .as_ref()
+                                                .and_then(|s| parse_weight_string_to_grams(s))
+                                        })
+                                        .unwrap_or(0),
+                                    sealed: p.sealed.unwrap_or(false),
+                                    rigid: p.rigid.unwrap_or(false),
+                                }
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                let total_volume: u32 = pockets.iter().map(|p| p.max_volume).sum();
+                let total_weight: u32 = pockets.iter().map(|p| p.max_weight).sum();
+
+                world.entity_mut(entity).insert(ContainerData {
+                    pockets,
+                    max_volume: total_volume,
+                    max_weight: total_weight,
+                });
+            }
+
+            def_world.register(id_str, entity);
         }
 
-        def_world.register(id_str, monster_entity);
-    }
+        // ── Monster definitions ───────────────────────────────────────────
+        for (def_id, monster) in &def_registry.monsters {
+            let id_str = def_id.as_str().to_string();
 
-    // ── Terrain definitions ───────────────────────────────────────────
-    for (def_id, terrain) in &def_registry.terrain {
-        let id_str = def_id.as_str().to_string();
-        let e = world
-            .spawn((
-                IsDef,
-                DefStrId(id_str.clone()),
-                TerrainName(id_str.clone()),
-                TerrainSymbol(terrain.symbol.chars().next().unwrap_or('#')),
-                TerrainColor(
-                    terrain
-                        .color
-                        .as_ref()
-                        .map(color_to_string)
-                        .unwrap_or_default(),
-                ),
-                TerrainMoveCost(terrain.move_cost.max(0)),
-                crate::sim::flags::TerrainFlags::new(),
-                TerrainLightEmitted(terrain.light_emitted.unwrap_or(0)),
-                TerrainHasCeiling(terrain.has_ceiling.unwrap_or(false)),
-                TerrainConnectsTo(flags_to_vec(&terrain.connects_to)),
-            ))
-            .id();
-        def_world.register(id_str, e);
-    }
+            let species_list = flags_to_vec(&monster.species);
 
-    // ── Furniture definitions ─────────────────────────────────────────
-    for (def_id, furniture) in &def_registry.furniture {
-        let id_str = def_id.as_str().to_string();
-        let e = world
-            .spawn((
-                IsDef,
-                DefStrId(id_str.clone()),
-                FurnitureName(
-                    furniture
-                        .name
-                        .as_ref()
-                        .map(|n| n.singular().to_string())
-                        .unwrap_or_default(),
-                ),
-                FurnitureSymbol(furniture.symbol.chars().next().unwrap_or('#')),
-                FurnitureColor(
-                    furniture
-                        .color
-                        .as_ref()
-                        .map(color_to_string)
-                        .unwrap_or_default(),
-                ),
-                crate::sim::flags::FurnitureFlags::new(),
-                FurnitureMoveCostMod(furniture.move_cost_mod.unwrap_or(0)),
-                FurnitureCoverage(furniture.coverage.unwrap_or(0)),
-                FurnitureLightEmitted(furniture.light_emitted.unwrap_or(0)),
-                FurnitureMaxVolume(
-                    furniture
-                        .max_volume
-                        .map(|v| crate::Volume::as_milliliters(&v) as u32)
-                        .unwrap_or(0),
-                ),
-            ))
-            .id();
-        def_world.register(id_str, e);
-    }
+            let monster_entity = world
+                .spawn((
+                    IsDef,
+                    DefStrId(id_str.clone()),
+                    MonsterName(
+                        monster
+                            .name
+                            .as_ref()
+                            .map(|n| n.singular().to_string())
+                            .unwrap_or_default(),
+                    ),
+                    MonsterDescription(
+                        monster
+                            .description
+                            .as_ref()
+                            .map(|d| d.singular().to_string())
+                            .unwrap_or_default(),
+                    ),
+                    MonsterStats {
+                        hp: monster.hp.max(1),
+                        speed: if monster.speed > 0 {
+                            monster.speed
+                        } else {
+                            100
+                        },
+                        attack_cost: 100,
+                        dodge: monster.melee_dice as i32,
+                        morale: monster.morale,
+                        aggression: monster.aggression,
+                        melee_skill: monster.melee_skill,
+                        melee_dice: monster.melee_dice as i32,
+                        melee_dice_sides: monster.melee_dice_sides as i32,
+                        grab_strength: monster.grab_strength.unwrap_or(0),
+                        bleed_rate: monster.bleed_rate.unwrap_or(0),
+                        diff: monster.diff.unwrap_or(0),
+                    },
+                    MonsterMelee {
+                        dice: monster.melee_dice as u32,
+                        dice_sides: monster.melee_dice_sides as u32,
+                        damage_bash: extract_monster_melee_damage(&monster.melee_damage, "bash"),
+                        damage_cut: extract_monster_melee_damage(&monster.melee_damage, "cut"),
+                        damage_stab: extract_monster_melee_damage(&monster.melee_damage, "stab"),
+                        to_hit: 0,
+                    },
+                    MonsterVision {
+                        day: monster.vision_day as u32,
+                        night: monster.vision_night as u32,
+                    },
+                    crate::sim::flags::MonsterFlags::new(),
+                    MonsterSpecies(species_list),
+                    MonsterDefaultFaction(monster.default_faction.clone().unwrap_or_default()),
+                    MonsterBodyType(monster.bodytype.clone().unwrap_or_default()),
+                ))
+                .id();
+
+            if let Some(armor) = &monster.armor {
+                world.entity_mut(monster_entity).insert(MonsterArmour {
+                    bash: armor.bash,
+                    cut: armor.cut,
+                    bullet: armor.bullet,
+                    stab: armor.stab,
+                    fire: armor.heat,
+                    acid: armor.acid,
+                    electric: armor.electric,
+                    cold: armor.cold,
+                });
+            }
+
+            def_world.register(id_str, monster_entity);
+        }
+
+        // ── Terrain definitions ───────────────────────────────────────────
+        for (def_id, terrain) in &def_registry.terrain {
+            let id_str = def_id.as_str().to_string();
+            let e = world
+                .spawn((
+                    IsDef,
+                    DefStrId(id_str.clone()),
+                    TerrainName(id_str.clone()),
+                    TerrainSymbol(terrain.symbol.chars().next().unwrap_or('#')),
+                    TerrainColor(
+                        terrain
+                            .color
+                            .as_ref()
+                            .map(color_to_string)
+                            .unwrap_or_default(),
+                    ),
+                    TerrainMoveCost(terrain.move_cost.max(0)),
+                    crate::sim::flags::TerrainFlags::new(),
+                    TerrainLightEmitted(terrain.light_emitted.unwrap_or(0)),
+                    TerrainHasCeiling(terrain.has_ceiling.unwrap_or(false)),
+                    TerrainConnectsTo(flags_to_vec(&terrain.connects_to)),
+                ))
+                .id();
+            def_world.register(id_str, e);
+        }
+
+        // ── Furniture definitions ─────────────────────────────────────────
+        for (def_id, furniture) in &def_registry.furniture {
+            let id_str = def_id.as_str().to_string();
+            let e = world
+                .spawn((
+                    IsDef,
+                    DefStrId(id_str.clone()),
+                    FurnitureName(
+                        furniture
+                            .name
+                            .as_ref()
+                            .map(|n| n.singular().to_string())
+                            .unwrap_or_default(),
+                    ),
+                    FurnitureSymbol(furniture.symbol.chars().next().unwrap_or('#')),
+                    FurnitureColor(
+                        furniture
+                            .color
+                            .as_ref()
+                            .map(color_to_string)
+                            .unwrap_or_default(),
+                    ),
+                    crate::sim::flags::FurnitureFlags::new(),
+                    FurnitureMoveCostMod(furniture.move_cost_mod.unwrap_or(0)),
+                    FurnitureCoverage(furniture.coverage.unwrap_or(0)),
+                    FurnitureLightEmitted(furniture.light_emitted.unwrap_or(0)),
+                    FurnitureMaxVolume(
+                        furniture
+                            .max_volume
+                            .map(|v| crate::Volume::as_milliliters(&v) as u32)
+                            .unwrap_or(0),
+                    ),
+                ))
+                .id();
+            def_world.register(id_str, e);
+        }
     }
     // ── Body part definitions ─────────────────────────────────────────
     for (def_id, bp) in &def_registry.body_parts {
@@ -839,7 +831,8 @@ pub fn build_def_world(
             if let Some(parent) = def_world.entity_by_str(def_id.as_str()) {
                 for child_id in sub_ids {
                     if let Some(child_entity) = def_world.entity_by_str(child_id) {
-                        if world.get::<ParentPart>(child_entity).is_none() {
+                        if child_entity != parent && world.get::<ParentPart>(child_entity).is_none()
+                        {
                             world.entity_mut(child_entity).insert(ParentPart(parent));
                         }
                     }
@@ -851,7 +844,7 @@ pub fn build_def_world(
         if let Some(child_entity) = child {
             if let Some(main_part_id) = &bp.main_part {
                 if let Some(parent) = def_world.entity_by_str(main_part_id) {
-                    if world.get::<ParentPart>(child_entity).is_none() {
+                    if child_entity != parent && world.get::<ParentPart>(child_entity).is_none() {
                         world.entity_mut(child_entity).insert(ParentPart(parent));
                     }
                 }
@@ -909,6 +902,8 @@ pub fn load_data_system(world: &mut World) {
             world.resource_mut::<LoadingStatus>().current_phase =
                 "Building definition entities...".into();
             let def_world = build_def_world(world, &registry, false);
+            crate::sim::populate_flags::populate_def_flags(world, &registry, &def_world);
+            crate::data::schema_gen::collect_and_generate_schemas(world);
             info!(
                 "DefinitionWorld: {} items, {} terrain, {} furniture, {} monsters",
                 registry.items.len(),

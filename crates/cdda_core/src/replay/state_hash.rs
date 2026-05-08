@@ -7,8 +7,6 @@ use bevy_ecs::message::Message;
 use bevy_ecs::prelude::*;
 use crate::SimId;
 use crate::sim::state::GameTime;
-use rustc_hash::FxHasher;
-use std::hash::{Hash, Hasher};
 
 use crate::replay::session_log::SessionLog;
 
@@ -29,8 +27,8 @@ pub struct StateHashLog {
 /// Stores hash in `StateHashLog` + `SessionLog.state_hashes`.
 pub fn hash_simulation_state(
     entities: Query<&SimId>,
-    mut hash_log: ResMut<StateHashLog>,
-    mut session_log: ResMut<SessionLog>,
+    hash_log: ResMut<StateHashLog>,
+    session_log: ResMut<SessionLog>,
     game_time: Res<GameTime>,
 ) {
     if cfg!(not(feature = "devtools")) {

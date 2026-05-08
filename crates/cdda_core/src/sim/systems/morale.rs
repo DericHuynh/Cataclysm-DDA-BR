@@ -7,7 +7,6 @@
 //! accuracy) and other gameplay systems.
 
 use bevy_ecs::prelude::*;
-use crate::actor::components::*;
 use crate::Time;
 
 // ---------------------------------------------------------------------------

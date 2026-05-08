@@ -4,6 +4,7 @@ use bevy_ecs::prelude::Resource;
 use bevy_ecs::world::World;
 
 use crate::sim::components::{InFlight, Solid, Velocity, WorldPosition};
+use crate::actor::components::*;
 use crate::sim::dev_worldgen::DevWorldgenConfig;
 use crate::sim::spatial::EntitySpatialIndex;
 use crate::sim::state::*;
@@ -12,7 +13,6 @@ use crate::sim::systems::inventory::{
     DevGroundItemName, DevPlayer, Inventory, InventoryBin, InventoryFocus, Invlet, InvletFavorites,
 };
 use crate::sim::systems::turn::TurnQueue;
-use crate::actor::components::*;
 use crate::item::components::*;
 
 /// Wrapper to store `crate::map::WorldMap` as a Bevy resource.

@@ -93,8 +93,7 @@ pub struct ModManager {
     /// The base core registry (loaded before any mods).
     pub core_registry: DefRegistry,
     /// The core loader instance (used as base for mod loaders).
-    #[allow(dead_code)]
-    core_loader: Loader,
+    _core_loader: Loader,
 }
 
 impl ModManager {
@@ -103,7 +102,7 @@ impl ModManager {
         ModManager {
             available: Vec::new(),
             core_registry,
-            core_loader,
+            _core_loader: core_loader,
         }
     }
 

@@ -132,7 +132,7 @@ pub fn spawn_inventory_screen(mut commands: Commands) {
 // Update — rebuild item rows each frame
 // ---------------------------------------------------------------------------
 
-pub fn update_inventory_screen(
+pub(crate) fn update_inventory_screen(
     mut commands: Commands,
     focus: Res<InventoryFocus>,
     registry: Res<TileRegistry>,

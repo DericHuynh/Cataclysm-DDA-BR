@@ -113,7 +113,7 @@ pub fn spawn_dev_spawn_panel(mut commands: Commands) {
 // Update — rebuild visible rows each frame
 // ---------------------------------------------------------------------------
 
-pub fn update_dev_spawn_panel(
+pub(crate) fn update_dev_spawn_panel(
     mut commands: Commands,
     focus: Res<DevSpawnFocus>,
     container: Query<Entity, With<SpawnListContainer>>,

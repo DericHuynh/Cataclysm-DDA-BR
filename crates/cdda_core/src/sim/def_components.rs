@@ -18,7 +18,6 @@
 //! reference definition entities via a single component.
 
 use bevy_ecs::prelude::*;
-use crate::units::*;
 
 // ===========================================================================
 // MARKER — on every definition entity

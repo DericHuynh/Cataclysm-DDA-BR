@@ -11,7 +11,7 @@ use crate::input::{
 };
 use crate::screen::config::GameSettings;
 use crate::screen::screen::Screen;
-use crate::screen::screen_nav::{screen_def, FocusedCommandIndex};
+use crate::screen::screen_nav::screen_def;
 
 // ---------------------------------------------------------------------------
 // Settings tab
@@ -108,7 +108,7 @@ const REBIND_PROMPT: Color = Color::srgb(0.9, 0.7, 0.1);
 
 pub fn spawn(
     mut commands: Commands,
-    settings: Res<GameSettings>,
+    __settings: Res<GameSettings>,
     state: Res<SettingsState>,
     bindings: Res<ContextBindings>,
 ) {
@@ -415,7 +415,7 @@ fn row(
 pub fn rebuild_content_panel(
     mut commands: Commands,
     mut state: ResMut<SettingsState>,
-    settings: Res<GameSettings>,
+    __settings: Res<GameSettings>,
     bindings: Res<ContextBindings>,
     panel: Query<Entity, With<ContentPanel>>,
 ) {
@@ -570,7 +570,7 @@ pub fn sync_item_highlight(
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn yn(b: bool) -> String {
+fn _yn(b: bool) -> String {
     if b {
         "Yes".into()
     } else {

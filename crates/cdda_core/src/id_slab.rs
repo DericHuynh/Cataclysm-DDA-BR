@@ -29,7 +29,7 @@ impl<T> IdSlab<T> {
                 generation: gen,
             }
         } else {
-            let idx = self.entries.len() as u32;
+            let idx = u32::try_from(self.entries.len()).expect("slab overflow");
             let gen = 0;
             self.entries.push(Some((gen, value)));
             GenId {

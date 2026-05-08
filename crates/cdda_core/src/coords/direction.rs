@@ -45,7 +45,7 @@ impl Facing {
     /// Returns the cardinal `Direction` closest to this facing.
     pub fn to_cardinal(self) -> Direction {
         // 0° = N, 90° = E, 180° = S, 270° = W
-        match (self.0 + 22).rem_euclid(360) / 45 {
+        match (self.0 + 23).rem_euclid(360) / 45 {
             0 => Direction::N,
             1 => Direction::NE,
             2 => Direction::E,

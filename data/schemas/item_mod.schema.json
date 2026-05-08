@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "DeletePatch": {
+      "properties": {
+        "flags": {
+          "default": null,
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "description": "A CDDA item definition, as modders write it in JSON.",
+  "properties": {
+    "copy-from": {
+      "enum": [],
+      "type": "string"
+    },
+    "delete": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DeletePatch"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "flags": {
+      "default": null,
+      "items": {
+        "enum": [],
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "id": {
+      "enum": [],
+      "type": "string"
+    }
+  },
+  "required": [
+    "id"
+  ],
+  "title": "ItemModSchema",
+  "type": "object"
+}

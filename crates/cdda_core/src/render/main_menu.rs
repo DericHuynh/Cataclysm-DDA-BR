@@ -3,7 +3,7 @@
 //! Spawned on `OnEnter(Screen::MainMenu)`, auto-despawned on `OnExit`
 //! via `DespawnOnExit(Screen::MainMenu)`.
 
-use bevy::input_focus::InputFocus;
+use crate::screen::InputFocus;
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
 use crate::screen::screen::Screen;
@@ -141,7 +141,7 @@ pub fn sync_focus(
             border.right = FOCUSED_BORDER;
             border.bottom = FOCUSED_BORDER;
             border.left = FOCUSED_BORDER;
-            input_focus.0 = Some(entity);
+            input_focus.entity = Some(entity);
         } else {
             bg.0 = ITEM_BG;
             border.top = Color::NONE;

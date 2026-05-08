@@ -758,6 +758,14 @@ impl StringOrArray {
             StringOrArray::Multi(v) => v.iter().map(|s| s.as_str()).collect(),
         }
     }
+
+    /// Returns the first string, or an empty string if empty.
+    pub fn first_or_default(&self) -> &str {
+        match self {
+            StringOrArray::Single(s) => s.as_str(),
+            StringOrArray::Multi(v) => v.first().map(|s| s.as_str()).unwrap_or(""),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

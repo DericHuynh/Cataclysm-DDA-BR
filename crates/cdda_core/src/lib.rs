@@ -8,26 +8,28 @@
 //! be serializable for save/load.
 //! This is the lowest crate in the dependency graph.
 
-pub mod screen;
-pub mod render;
-pub mod input;
-pub mod sim;
-pub mod map;
+#![allow(unexpected_cfgs)]
+
 pub mod actor;
-pub mod item;
-pub mod data;
-pub mod replay;
 pub mod coords;
 pub mod damage;
+pub mod data;
 pub mod def_kinds;
 pub mod error;
 pub mod flags;
 pub mod id;
 pub mod id_slab;
 pub mod id_str;
+pub mod input;
+pub mod item;
+pub mod map;
 pub mod messages;
+pub mod render;
+pub mod replay;
 pub mod rng;
 pub mod schedule;
+pub mod screen;
+pub mod sim;
 pub mod sim_id;
 pub mod stats;
 pub mod units;

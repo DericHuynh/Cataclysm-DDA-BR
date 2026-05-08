@@ -687,5 +687,4 @@ impl DefRegistry {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 }

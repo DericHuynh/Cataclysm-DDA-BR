@@ -2,12 +2,11 @@
 //!
 //! Emits DamageEvent, DeathEvent, and SoundEvent.
 
-use crate::sim::def_components::{AmmoData, GunData, WeaponData};
-use crate::sim::events::*;
-use bevy_ecs::prelude::*;
 use crate::actor::components::*;
 use crate::coords::WorldPos;
+use crate::sim::def_components::{AmmoData, GunData, WeaponData};
 use crate::{Damage, Stats};
+use bevy_ecs::prelude::*;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -193,14 +192,14 @@ pub fn resolve_ranged_attack(
 /// Iterates queued `MeleeIntent`s, calls `resolve_melee_attack` for
 /// each, deducts action costs.
 pub fn melee_combat_phase(world: &mut World) {
-    // STUB: no-op until combat implemented
     let _ = world;
+    todo!("melee combat phase not yet implemented")
 }
 
 /// Process all ranged attack intents for this tick.
 pub fn ranged_combat_phase(world: &mut World) {
-    // STUB: no-op until combat implemented
     let _ = world;
+    todo!("ranged combat phase not yet implemented")
 }
 
 /// Run both melee and ranged combat sub-phases.

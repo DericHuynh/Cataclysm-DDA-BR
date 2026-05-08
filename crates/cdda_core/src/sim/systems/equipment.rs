@@ -6,8 +6,6 @@
 //! target in sync — never query as `&mut` and modify the entity field.
 
 use bevy_ecs::prelude::*;
-use crate::actor::components::*;
-use crate::item::components::*;
 
 // ---------------------------------------------------------------------------
 // Error type

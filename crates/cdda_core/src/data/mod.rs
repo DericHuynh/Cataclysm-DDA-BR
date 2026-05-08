@@ -18,16 +18,19 @@
 //!
 //! This crate has **zero Bevy dependencies**.
 
-pub mod def_kinds;
-pub mod loader;
 pub mod assets;
+pub mod def_kinds;
+pub mod interner;
+pub mod loader;
 pub mod mod_info;
 pub mod mod_layer;
+pub mod patch;
 pub mod raw_defs;
 pub mod raw_types;
 pub mod registry;
 pub mod resolve;
 pub mod schema;
+pub mod schema_gen;
 
 // Re-export raw CDDA types for backward compat during migration
 pub use raw_defs::*;

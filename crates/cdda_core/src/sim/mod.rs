@@ -9,6 +9,7 @@ pub mod def_world;
 pub mod dev_worldgen;
 pub mod events;
 pub mod flags;
+pub mod populate_flags;
 pub mod spatial;
 pub mod state;
 pub mod systems;

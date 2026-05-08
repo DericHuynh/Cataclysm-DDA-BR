@@ -2,7 +2,8 @@
 //!
 //! ## Commands
 //!
-//! - `schema`         — Generate JSON Schema files for all definition types
+//! - `schema`         — Generate static JSON Schema files for all definition types
+//! - `gen-schemas`    — Generate dynamic schemas for core + mods (with autocomplete)
 //! - `validate <dir>` — Validate all JSON files in a directory against schemas
 //! - `stats <dir>`    — Print definition statistics for a data directory
 //! - `check <dir>`    — Full load check: load + resolve + validate all definitions
@@ -22,8 +23,18 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Generate JSON Schema files for all definition types
+    /// Generate static JSON Schema files for all definition types (no dynamic enums).
     Schema,
+    /// Generate dynamic schemas for core and mods with autocomplete enums.
+    /// Outputs to `schemas/<name>/` for each mod.
+    GenSchemas {
+        /// Path to the core data directory (e.g. data/core).
+        #[arg(long, default_value = "data/core")]
+        core: PathBuf,
+        /// Mod directories as NAME=PATH pairs (e.g. Magiclysm=data/mods/Magiclysm).
+        #[arg(short, long = "mod", value_parser = parse_mod_pair)]
+        mods: Vec<ModEntry>,
+    },
     /// Validate all JSON files in a directory against schemas
     Validate {
         /// Path to directory containing CDDA JSON data
@@ -48,9 +59,28 @@ enum Command {
     },
 }
 
+/// A mod entry parsed from NAME=PATH CLI arguments.
+#[derive(Clone, Debug)]
+struct ModEntry {
+    name: String,
+    path: PathBuf,
+}
+
+fn parse_mod_pair(s: &str) -> Result<ModEntry, String> {
+    let (name, path) = s
+        .split_once('=')
+        .ok_or_else(|| format!("expected NAME=PATH, got: {s}"))?;
+    let p = PathBuf::from(path);
+    if !p.exists() {
+        return Err(format!("mod directory not found: {path}"));
+    }
+    Ok(ModEntry {
+        name: name.to_string(),
+        path: p,
+    })
+}
+
 fn main() {
-    // Initialize a minimal tracing subscriber so that cdda_data's internal
-    // tracing (info!, debug!, warn!) is visible during CLI usage.
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::builder()
@@ -65,6 +95,7 @@ fn main() {
 
     match cli.command {
         Command::Schema => cmd_schema(),
+        Command::GenSchemas { core, mods } => cmd_gen_schemas(&core, &mods),
         Command::Validate { path } => cmd_validate(&path),
         Command::Stats { path } => cmd_stats(&path),
         Command::Check { path } => cmd_check(&path),
@@ -74,7 +105,45 @@ fn main() {
     eprintln!("Elapsed: {:.2}s", start.elapsed().as_secs_f64());
 }
 
-// ── Schema generation ────────────────────────────────────────────────
+// ── Dynamic schema generation (multi-mod) ────────────────────────────
+
+fn cmd_gen_schemas(core: &PathBuf, mods: &[ModEntry]) {
+    let out_base = get_default_schema_dir();
+    eprintln!("Generating dynamic schemas in {:?}", out_base);
+
+    // Generate core schema first (flags/IDs from core data only).
+    eprintln!("  core ({:?}) ...", core);
+    match cdda_core::data::schema_gen::generate_schemas_for_mod("core", &[core.clone()], &out_base)
+    {
+        Ok(()) => eprintln!("    -> schemas/core/"),
+        Err(errors) => {
+            for e in &errors {
+                eprintln!("    ERROR: {e}");
+            }
+        }
+    }
+
+    // Generate one schema per mod (core + mod data so modders get full autocomplete).
+    for entry in mods {
+        eprintln!("  {} ({:?}) ...", entry.name, entry.path);
+        match cdda_core::data::schema_gen::generate_schemas_for_mod(
+            &entry.name,
+            &[core.clone(), entry.path.clone()],
+            &out_base,
+        ) {
+            Ok(()) => eprintln!("    -> schemas/{}/", entry.name),
+            Err(errors) => {
+                for e in &errors {
+                    eprintln!("    ERROR: {e}");
+                }
+            }
+        }
+    }
+
+    eprintln!("Done.");
+}
+
+// ── Static schema generation ─────────────────────────────────────────
 
 fn cmd_schema() {
     let out_dir = get_default_schema_dir();
@@ -96,8 +165,6 @@ fn cmd_schema() {
 }
 
 fn get_default_schema_dir() -> PathBuf {
-    // When run from the workspace root via `cargo run -p cdda_cli -- schema`
-    // CARGO_MANIFEST_DIR = crates/cdda_cli/ → we want workspace_root/data/schemas
     let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     p.pop(); // crates/
     p.pop(); // workspace root
@@ -126,7 +193,6 @@ fn cmd_stats(path: &PathBuf) {
     eprintln!("  {:20} {}", "TOTAL", total);
     eprintln!();
 
-    // Now try to fully load and resolve
     match loader.load() {
         Ok(registry) => {
             eprintln!("Resolved definitions: {}", registry.total_count());
@@ -165,18 +231,17 @@ fn cmd_validate(path: &PathBuf) {
         raw_map.len()
     );
 
-    // Load and resolve — errors during deserialization ARE schema errors
     match loader.load() {
         Ok(_registry) => {
             eprintln!("  All definitions loaded without errors.");
-            eprintln!("  Schema validation: ✅ PASSED");
+            eprintln!("  Schema validation: PASSED");
         }
         Err(errors) => {
             total_errors = errors.len();
             for (i, err) in errors.iter().enumerate() {
                 eprintln!("  {:>3}. {:?}", i + 1, err);
             }
-            eprintln!("  Schema validation: ❌ {} error(s)", total_errors);
+            eprintln!("  Schema validation: {} error(s)", total_errors);
         }
     }
 
@@ -200,11 +265,11 @@ fn cmd_check(path: &PathBuf) {
         Ok(registry) => {
             let total = registry.total_count();
             let categories = registry.category_count();
-            eprintln!("✅ {} definitions across {} categories", total, categories);
+            eprintln!("{} definitions across {} categories", total, categories);
         }
         Err(errors) => {
             eprintln!();
-            eprintln!("❌ LOAD FAILED with {} errors:", errors.len());
+            eprintln!("LOAD FAILED with {} errors:", errors.len());
             for (i, err) in errors.iter().enumerate() {
                 eprintln!("  {:>3}. {:?}", i + 1, err);
             }
@@ -221,7 +286,6 @@ fn cmd_ablation(baseline: &PathBuf, mod_dirs: &[PathBuf]) {
         std::process::exit(1);
     }
 
-    // Step 1: Load baseline alone
     eprintln!("=== Ablation Test ===");
     eprintln!("Baseline: {:?}", baseline);
     eprintln!();
@@ -231,7 +295,6 @@ fn cmd_ablation(baseline: &PathBuf, mod_dirs: &[PathBuf]) {
     let mut errors: std::collections::HashMap<String, Vec<String>> =
         std::collections::HashMap::new();
 
-    // Try loading all mods together first
     for mod_dir in mod_dirs {
         if !mod_dir.exists() {
             eprintln!("Warning: mod directory not found: {:?}", mod_dir);
@@ -243,10 +306,10 @@ fn cmd_ablation(baseline: &PathBuf, mod_dirs: &[PathBuf]) {
     let mut loader = cdda_core::data::loader::Loader::new(dirs.clone());
     match loader.load() {
         Ok(registry) => {
-            eprintln!("✅ {} definitions", registry.total_count());
+            eprintln!("{} definitions", registry.total_count());
         }
         Err(load_errors) => {
-            eprintln!("❌ {} errors:", load_errors.len());
+            eprintln!("{} errors:", load_errors.len());
             for e in &load_errors {
                 eprintln!("  {:?}", e);
             }
@@ -255,7 +318,6 @@ fn cmd_ablation(baseline: &PathBuf, mod_dirs: &[PathBuf]) {
 
     eprintln!();
 
-    // Ablation: try loading without each mod
     if mod_dirs.len() > 1 {
         eprintln!("=== Ablation: removing one mod at a time ===");
         for mod_dir in mod_dirs {
@@ -267,10 +329,10 @@ fn cmd_ablation(baseline: &PathBuf, mod_dirs: &[PathBuf]) {
             let mut l = cdda_core::data::loader::Loader::new(without);
             match l.load() {
                 Ok(registry) => {
-                    eprintln!("✅ {} definitions", registry.total_count());
+                    eprintln!("{} definitions", registry.total_count());
                 }
                 Err(e) => {
-                    eprintln!("❌ {} error(s)", e.len());
+                    eprintln!("{} error(s)", e.len());
                     errors.insert(
                         format!(
                             "missing_{}",
@@ -283,19 +345,19 @@ fn cmd_ablation(baseline: &PathBuf, mod_dirs: &[PathBuf]) {
         }
     }
 
-    // Step 3: Try isolated mods
     if !mod_dirs.is_empty() {
         eprintln!();
         eprintln!("=== Isolated mods (with baseline) ===");
         for mod_dir in mod_dirs {
             eprint!("  {:?} ... ", mod_dir.file_name().unwrap_or_default());
-            let mut l = cdda_core::data::loader::Loader::new(vec![baseline.clone(), mod_dir.clone()]);
+            let mut l =
+                cdda_core::data::loader::Loader::new(vec![baseline.clone(), mod_dir.clone()]);
             match l.load() {
                 Ok(registry) => {
-                    eprintln!("✅ {} definitions", registry.total_count());
+                    eprintln!("{} definitions", registry.total_count());
                 }
                 Err(e) => {
-                    eprintln!("❌ {} error(s)", e.len());
+                    eprintln!("{} error(s)", e.len());
                     errors.insert(
                         format!(
                             "isolated_{}",
@@ -308,7 +370,6 @@ fn cmd_ablation(baseline: &PathBuf, mod_dirs: &[PathBuf]) {
         }
     }
 
-    // Summary
     if !errors.is_empty() {
         eprintln!();
         eprintln!("=== Error Summary ===");

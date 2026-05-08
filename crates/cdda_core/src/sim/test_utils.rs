@@ -4,9 +4,9 @@
 //! for testing systems and entities in isolation.  No full `bevy` dependency needed.
 
 use crate::sim::components::{InFlight, Solid, Velocity, WorldPosition};
+use crate::actor::components::*;
 use crate::sim::def_components::*;
 use bevy_ecs::prelude::*;
-use crate::actor::components::*;
 use crate::item::components::*;
 use bevy_ecs::system::IntoSystem;
 use bevy_ecs::world::World;
@@ -37,7 +37,7 @@ impl TestBed {
     pub fn resource<T: Resource>(&self) -> &T {
         self.world.resource::<T>()
     }
-    pub fn resource_mut<T: Resource>(&mut self) -> Mut<T> {
+    pub fn resource_mut<T: Resource>(&mut self) -> Mut<'_, T> {
         self.world.resource_mut::<T>()
     }
     pub fn insert_resource<T: Resource>(&mut self, r: T) {

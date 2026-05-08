@@ -4,9 +4,7 @@
 //! sequentially to prevent collision conflicts. Each movement costs
 //! `MovePoints` based on terrain, furniture, and creature state.
 
-use crate::sim::components::{Solid, WorldPosition};
 use bevy_ecs::prelude::*;
-use crate::actor::components::*;
 use crate::coords::WorldPos;
 
 // ---------------------------------------------------------------------------

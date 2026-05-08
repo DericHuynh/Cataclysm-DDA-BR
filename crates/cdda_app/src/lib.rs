@@ -110,7 +110,7 @@ pub struct CddaPlugin;
 
 impl Plugin for CddaPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((ActorPlugin, ItemPlugin, CddaAssetsPlugin));
+        app.add_plugins((ActorPlugin, ItemPlugin, CddaAssetsPlugin, cdda_core::sim::flags::CddaDataPlugin));
         world_setup::setup_world(app.world_mut());
         register_reflect_types(app);
 

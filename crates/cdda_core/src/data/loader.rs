@@ -11,9 +11,6 @@ use tracing::{debug, info, warn};
 /// A raw, unprocessed JSON definition with its source file tracking.
 #[derive(Debug, Clone)]
 pub struct RawDef {
-    /// The `"type"` field value (e.g. "ITEM", "MONSTER", "terrain").
-    #[allow(dead_code)]
-    pub type_name: String,
     /// The `"id"` or identifying field, extracted from the JSON.
     pub id: Option<String>,
     /// The raw JSON value (the full object).
@@ -292,7 +289,6 @@ impl Loader {
             .and_then(|v| v.as_str().map(|s| s.to_string()));
 
         let raw = RawDef {
-            type_name: type_name.clone(),
             id,
             value: Value::Object(obj.clone()),
             source: path.to_path_buf(),
@@ -1216,13 +1212,11 @@ mod tests {
         // Arrange
         let mut loader = Loader::new(vec![]);
         let raw_gun = RawDef {
-            type_name: "GUN".into(),
             id: Some("glock".into()),
             value: json!({"type": "GUN", "id": "glock"}),
             source: PathBuf::from("guns.json"),
         };
         let raw_item = RawDef {
-            type_name: "ITEM".into(),
             id: Some("rock".into()),
             value: json!({"type": "ITEM", "id": "rock"}),
             source: PathBuf::from("misc.json"),
@@ -1318,13 +1312,11 @@ mod tests {
             "test_type".into(),
             vec![
                 RawDef {
-                    type_name: "test_type".into(),
                     id: Some("alpha".into()),
                     value: json!({"id": "alpha", "volume": "250 ml"}),
                     source: PathBuf::new(),
                 },
                 RawDef {
-                    type_name: "test_type".into(),
                     id: Some("beta".into()),
                     value: json!({"id": "beta", "volume": "500 ml"}),
                     source: PathBuf::new(),
@@ -1349,7 +1341,6 @@ mod tests {
         loader.raw_by_type.insert(
             "recipe".into(),
             vec![RawDef {
-                type_name: "recipe".into(),
                 id: None,
                 value: json!({"result": "soup", "difficulty": 1}),
                 source: PathBuf::new(),
@@ -1373,13 +1364,11 @@ mod tests {
             "test_type".into(),
             vec![
                 RawDef {
-                    type_name: "test_type".into(),
                     id: Some("dupe".into()),
                     value: json!({"id": "dupe", "volume": "100 ml"}),
                     source: PathBuf::from("first.json"),
                 },
                 RawDef {
-                    type_name: "test_type".into(),
                     id: Some("dupe".into()),
                     value: json!({"id": "dupe", "volume": "200 ml"}),
                     source: PathBuf::from("second.json"),
