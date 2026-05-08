@@ -86,8 +86,8 @@ pub struct Health {
 }
 
 /// Character attributes (strength, dexterity, intelligence, perception).
-#[derive(Component, Debug, Clone, Copy, Reflect)]
-pub struct Stats(pub crate::Stats);
+/// Re-exported from `crate::Stats`, which derives `Component` directly.
+pub use crate::Stats;
 
 /// Faction affiliation.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Reflect)]

@@ -4,15 +4,16 @@
 //! `DespawnOnExit`. Item rows are rebuilt every frame from the live
 //! `Inventory` component so drops are reflected immediately.
 
-use crate::render::tiles::TileRegistry;
-use bevy::prelude::*;
-use bevy_state::state_scoped::DespawnOnExit;
 use crate::item::components::ItemTypeId;
 use crate::item::components::StackCount;
 use crate::item::components::WieldedBy;
+use crate::item::components::{Inventory, InventoryFocus};
+use crate::render::tiles::TileRegistry;
 use crate::screen::screen::Screen;
 use crate::sim::def_components::ItemSymbol;
-use crate::sim::systems::inventory::{DevGroundItemName, DevPlayer, Inventory, InventoryFocus};
+use crate::sim::dev_worldgen::{DevGroundItemName, DevPlayer};
+use bevy::prelude::*;
+use bevy_state::state_scoped::DespawnOnExit;
 
 // ---------------------------------------------------------------------------
 // Colours (match dev_worldgen palette)

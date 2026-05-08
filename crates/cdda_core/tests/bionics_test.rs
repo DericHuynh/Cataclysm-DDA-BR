@@ -259,7 +259,9 @@ fn creature_has_playerdata() {
         profession: None,
         scenario: None,
     },));
-    let pd = test.get::<cdda_core::actor::components::PlayerData>(e).unwrap();
+    let pd = test
+        .get::<cdda_core::actor::components::PlayerData>(e)
+        .unwrap();
     assert_eq!(pd.name, "Alice");
     assert_eq!(pd.gender, cdda_core::actor::components::Gender::Female);
     assert_eq!(pd.age, 25);
@@ -270,12 +272,10 @@ fn creature_stats_initialized() {
     let mut test = TestBed::new();
     test.register::<cdda_core::actor::components::Stats>();
 
-    let e = test.spawn((cdda_core::actor::components::Stats(cdda_core::Stats::new(
-        8, 8, 8, 8,
-    )),));
+    let e = test.spawn((cdda_core::Stats::new(8, 8, 8, 8),));
     let s = test.get::<cdda_core::actor::components::Stats>(e).unwrap();
-    assert_eq!(s.0.strength, 8);
-    assert_eq!(s.0.dexterity, 8);
-    assert_eq!(s.0.intelligence, 8);
-    assert_eq!(s.0.perception, 8);
+    assert_eq!(s.strength, 8);
+    assert_eq!(s.dexterity, 8);
+    assert_eq!(s.intelligence, 8);
+    assert_eq!(s.perception, 8);
 }

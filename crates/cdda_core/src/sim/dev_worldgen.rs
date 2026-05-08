@@ -6,11 +6,25 @@
 //!
 //! The player spawns at the top-left of the grid.
 
-use bevy_ecs::prelude::Resource;
 use crate::data::raw_defs::city_building::{CityBuildingDef, CityBuildingOvermap};
 use crate::map::WorldMap;
+use bevy_ecs::component::Component;
+use bevy_ecs::prelude::Resource;
+use bevy_reflect::Reflect;
 
 use std::collections::HashMap;
+
+// ---------------------------------------------------------------------------
+// Dev world markers
+// ---------------------------------------------------------------------------
+
+/// Marker for the dev-world player entity that carries the test `Inventory`.
+#[derive(Component, Debug, Default, Clone, Copy, Reflect)]
+pub struct DevPlayer;
+
+/// Display name for an item spawned on the ground in the dev world.
+#[derive(Component, Debug, Clone, Reflect)]
+pub struct DevGroundItemName(pub String);
 
 // ---------------------------------------------------------------------------
 // DevWorldgenConfig

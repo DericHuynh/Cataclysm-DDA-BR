@@ -21,238 +21,25 @@
 //!
 //! Reference: CDDA-master `inventory.h` / `inventory.cpp`.
 
-use crate::sim::components::WorldPosition;
-use  crate::sim::def_components::ItemSymbol;
-use  crate::sim::def_components::ItemVolume;
-use crate::sim::events::{ItemMoveEvent, MoveLocation};
-use crate::sim::systems::dev_move::DevCamera;
-use bevy_ecs::message::MessageReader;
-use bevy_ecs::prelude::*;
-use bevy_reflect::Reflect;
 use crate::actor::components::HandCount;
 use crate::coords::WorldPos;
-use crate::units::*;
-use crate::ZLevel;
 use crate::input::{GameAction, InputAction};
 use crate::item::components::{
-    Container, ContainerContents, CurrentCharges, DefOrigin, InsideContainer, ItemDamage,
-    ItemTypeId, Pocket, StackCount, WieldedBy, WieldedItems,
+    Container, ContainerContents, CurrentCharges, DefOrigin, InsideContainer, Inventory,
+    InventoryBin, InventoryFocus, Invlet, InvletFavorites, ItemDamage, ItemTypeId, Pocket,
+    StackCount, WieldedBy, WieldedItems, FLOOR_CAP_ML,
 };
-use std::collections::{HashMap, HashSet};
+use crate::sim::components::WorldPosition;
+use crate::sim::def_components::ItemSymbol;
+use crate::sim::def_components::ItemVolume;
+use crate::sim::dev_worldgen::{DevGroundItemName, DevPlayer};
+use crate::sim::events::{ItemMoveEvent, MoveLocation};
+use crate::sim::systems::dev_move::DevCamera;
+use crate::units::*;
+use crate::ZLevel;
+use bevy_ecs::message::MessageReader;
+use bevy_ecs::prelude::*;
 use tracing::warn;
-
-// ===========================================================================
-// Dev world markers
-// ===========================================================================
-
-/// Marker for the dev-world player entity that carries the test `Inventory`.
-#[derive(Component, Debug, Default, Clone, Copy, Reflect)]
-pub struct DevPlayer;
-
-/// Display name for an item spawned on the ground in the dev world.
-#[derive(Component, Debug, Clone, Reflect)]
-pub struct DevGroundItemName(pub String);
-
-// ===========================================================================
-// Inventory letters (invlets)
-// ===========================================================================
-
-/// Hard cap on total item volume (mL) that may rest on one floor tile.
-pub const FLOOR_CAP_ML: u32 = 400_000;
-
-/// The set of characters available for inventory-letter assignment.
-/// 62 chars: a-z, A-Z, 0-9.
-const INVLET_CHARS: &[char; 62] = &[
-    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
-    't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L',
-    'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3', '4',
-    '5', '6', '7', '8', '9',
-];
-
-/// Assigned inventory letter on an item entity.
-///
-/// Present only while the item is in a creature's inventory.
-/// Removed on drop / transfer out of inventory.
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
-pub struct Invlet(pub char);
-
-// ===========================================================================
-// InvletFavorites — per-def-origin invlet preferences
-// ===========================================================================
-
-/// Stores the player's preferred inventory letters per item type.
-///
-/// When an item of a given `DefOrigin` is picked up, the system tries
-/// to assign one of the favourite invlets for that type.
-#[derive(Component, Debug, Clone, Reflect)]
-pub struct InvletFavorites {
-    favorites: HashMap<u32, HashSet<char>>,
-}
-
-impl Default for InvletFavorites {
-    fn default() -> Self {
-        Self {
-            favorites: HashMap::new(),
-        }
-    }
-}
-
-impl InvletFavorites {
-    /// Record that `invlet` is a preferred letter for items of `def_origin`.
-    pub fn set(&mut self, def_origin: u32, invlet: char) {
-        self.favorites.entry(def_origin).or_default().insert(invlet);
-    }
-
-    /// Forget `invlet` as a preferred letter for items of `def_origin`.
-    pub fn erase(&mut self, def_origin: u32, invlet: char) {
-        if let Some(set) = self.favorites.get_mut(&def_origin) {
-            set.remove(&invlet);
-        }
-    }
-
-    /// All favourite invlet characters for this definition.
-    pub fn invlets_for(&self, def_origin: u32) -> Vec<char> {
-        self.favorites
-            .get(&def_origin)
-            .map(|s| s.iter().copied().collect())
-            .unwrap_or_default()
-    }
-}
-
-// ===========================================================================
-// Inventory component
-// ===========================================================================
-
-/// Per-creature inventory state.
-///
-/// Tracks invlet → entity mappings and pending invlet assignments.
-/// **Item ownership** is expressed via the `InsideContainer(creature)`
-/// relationship, not through the `items` Vec.
-///
-/// # Query patterns
-///
-/// To iterate all items in a creature's inventory:
-/// ```ignore
-/// fn system(
-///     creature: Entity,
-///     contents: Query<&ContainerContents>,
-///     items: Query<&StackCount>,
-/// ) {
-///     if let Ok(cc) = contents.get(creature) {
-///         for item_entity in cc.iter() {
-///             let count = items.get(item_entity).map(|s| s.get()).unwrap_or(1);
-///         }
-///     }
-/// }
-/// ```
-#[derive(Component, Debug, Clone, Reflect)]
-pub struct Inventory {
-    /// invlet character → item entity in this inventory.
-    pub invlets: HashMap<char, Entity>,
-    /// Entities that have been added but not yet assigned an invlet.
-    needs_invlet: HashSet<Entity>,
-}
-
-impl Default for Inventory {
-    fn default() -> Self {
-        Self {
-            invlets: HashMap::new(),
-            needs_invlet: HashSet::new(),
-        }
-    }
-}
-
-impl Inventory {
-    /// Number of items tracked in this inventory.
-    pub fn len(&self) -> usize {
-        self.invlets.len() + self.needs_invlet.len()
-    }
-
-    /// True when no items are in the inventory.
-    pub fn is_empty(&self) -> bool {
-        self.invlets.is_empty() && self.needs_invlet.is_empty()
-    }
-
-    /// All item entities currently in this inventory.
-    pub fn item_entities(&self) -> Vec<Entity> {
-        let mut v: Vec<Entity> = self.invlets.values().copied().collect();
-        v.extend(self.needs_invlet.iter().copied());
-        v
-    }
-
-    /// Queue `item` for invlet assignment on the next `assign_invlets_system` run.
-    pub fn mark_needs_invlet(&mut self, item: Entity) {
-        self.needs_invlet.insert(item);
-    }
-
-    /// Find an unassigned invlet character, or None if all are taken.
-    fn allocate_invlet(&self) -> Option<char> {
-        INVLET_CHARS
-            .iter()
-            .copied()
-            .find(|c| !self.invlets.contains_key(c))
-    }
-}
-
-// ===========================================================================
-// InventoryBin — cached item-type lookup
-// ===========================================================================
-
-/// Cached bins of inventory items keyed by `DefOrigin`.
-///
-/// Built by `build_inventory_bins` each frame. Provides fast `count_of`
-/// and `charges_of` queries without iterating the entire inventory.
-///
-/// In CDDA-master this is the `itype_bin` inside `inventory`.
-#[derive(Debug, Clone, Default, Resource)]
-pub struct InventoryBin {
-    /// `DefOrigin.0` → list of item entities of that type.
-    pub bins: HashMap<u32, Vec<Entity>>,
-}
-
-impl InventoryBin {
-    /// Total stack count for items of this definition origin.
-    pub fn count_of(&self, def_origin: u32, counts: &Query<&StackCount>) -> u32 {
-        self.bins.get(&def_origin).map_or(0, |entities| {
-            entities
-                .iter()
-                .map(|e| counts.get(*e).map(|s| s.get()).unwrap_or(1))
-                .sum()
-        })
-    }
-
-    /// Total charges across all items of this definition origin.
-    pub fn charges_of(&self, def_origin: u32, charges: &Query<&CurrentCharges>) -> i32 {
-        self.bins.get(&def_origin).map_or(0, |entities| {
-            entities
-                .iter()
-                .map(|e| charges.get(*e).map(|c| c.0).unwrap_or(0))
-                .sum()
-        })
-    }
-
-    /// Checks whether the inventory has at least `qty` items of the given origin.
-    pub fn has_amount(&self, def_origin: u32, qty: u32, counts: &Query<&StackCount>) -> bool {
-        self.count_of(def_origin, counts) >= qty
-    }
-
-    /// Checks whether the inventory has at least `qty` charges of the given origin.
-    pub fn has_charges(&self, def_origin: u32, qty: i32, charges: &Query<&CurrentCharges>) -> bool {
-        self.charges_of(def_origin, charges) >= qty
-    }
-}
-
-// ===========================================================================
-// InventoryFocus — focused row in the inventory screen
-// ===========================================================================
-
-/// Tracks which item row (by sorted position) is focused in the inventory screen.
-///
-/// Written by `inventory_screen_input`, read by `cdda_render` to highlight rows.
-#[derive(Resource, Debug, Clone, Default)]
-pub struct InventoryFocus {
-    pub index: usize,
-}
 
 // ===========================================================================
 // Systems
@@ -706,7 +493,7 @@ pub fn items_in_container(container: Entity, world: &World) -> Vec<Entity> {
 /// Check whether `item` can fit into `container` based on pocket/container
 /// volume, weight, and length constraints.
 pub fn can_fit_in_container(world: &World, container: Entity, item: Entity) -> bool {
-    use  crate::sim::def_components::{ItemLongestSide, ItemVolume, ItemWeight};
+    use crate::sim::def_components::{ItemLongestSide, ItemVolume, ItemWeight};
 
     let item_vol = match world.get::<ItemVolume>(item) {
         Some(v) => Volume::from_milliliters(v.0 as u64),
@@ -747,7 +534,7 @@ pub fn can_fit_in_container(world: &World, container: Entity, item: Entity) -> b
 
 /// Total volume occupied by all items inside `container`.
 pub fn total_container_volume(world: &World, container: Entity) -> Volume {
-    use  crate::sim::def_components::ItemVolume;
+    use crate::sim::def_components::ItemVolume;
     let mut total = Volume::ZERO;
     if let Some(contents) = world.get::<ContainerContents>(container) {
         for child in contents.iter() {
@@ -764,7 +551,7 @@ pub fn total_container_volume(world: &World, container: Entity) -> Volume {
 
 /// Total weight of all items inside `container`.
 pub fn total_container_weight(world: &World, container: Entity) -> Weight {
-    use  crate::sim::def_components::ItemWeight;
+    use crate::sim::def_components::ItemWeight;
     let mut total = Weight::ZERO;
     if let Some(contents) = world.get::<ContainerContents>(container) {
         for child in contents.iter() {
@@ -792,7 +579,7 @@ pub fn total_container_weight(world: &World, container: Entity) -> Weight {
 /// Both entities must be of the same `DefOrigin` (or same `DefStrId`).
 /// Different damage levels or charge states prevent merging.
 pub fn merge_or_stack(world: &mut World, target: Entity, incoming: Entity) -> bool {
-    use  crate::sim::def_components::DefStrId;
+    use crate::sim::def_components::DefStrId;
 
     let same_type = match (
         world.get::<DefOrigin>(target),
@@ -1003,7 +790,8 @@ pub fn transfer_item(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use  crate::sim::def_components::{DefStrId, ItemName, ItemVolume, ItemWeight};
+    use crate::item::components::INVLET_CHARS;
+    use crate::sim::def_components::{DefStrId, ItemName, ItemVolume, ItemWeight};
     use crate::sim::test_utils::TestBed;
 
     fn setup(t: &mut TestBed) {

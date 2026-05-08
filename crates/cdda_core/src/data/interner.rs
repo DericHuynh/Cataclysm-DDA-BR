@@ -46,25 +46,3 @@ impl StringInterner {
         self.map.get_by_right(&id).map(|s| s.as_str())
     }
 }
-
-// ── Typed ID wrappers ─────────────────────────────────────────────────────
-
-macro_rules! typed_id {
-    ($name:ident) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-        pub struct $name(pub u32);
-        impl $name {
-            pub fn index(self) -> usize {
-                self.0 as usize
-            }
-        }
-    };
-}
-
-typed_id!(ItemId);
-typed_id!(MonsterId);
-typed_id!(TerrainId);
-typed_id!(FurnitureId);
-typed_id!(FlagId);
-typed_id!(RecipeId);
-typed_id!(BodyPartId);

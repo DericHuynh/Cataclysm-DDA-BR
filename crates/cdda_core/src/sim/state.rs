@@ -36,6 +36,20 @@ pub enum AppState {
 }
 
 // ---------------------------------------------------------------------------
+// TurnState — phase of the game tick loop
+// ---------------------------------------------------------------------------
+
+/// The phase of the game tick loop.
+/// Checked by the main tick system to decide which sub-systems run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Resource)]
+pub enum TurnState {
+    WaitingForInput,
+    PlayerActed,
+    Simulating,
+    Animating,
+}
+
+// ---------------------------------------------------------------------------
 // GameTime — in-game clock
 // ---------------------------------------------------------------------------
 

@@ -10,25 +10,11 @@
 //!
 //! All types in this module are globally broadcast → they derive `Message`.
 
-use bevy_ecs::entity::Entity;
-use bevy_ecs::message::Message;
-use bevy_ecs::prelude::Resource;
 use crate::coords::WorldPos;
 use crate::id::*;
-
-// ---------------------------------------------------------------------------
-// Turn state resource
-// ---------------------------------------------------------------------------
-
-/// The phase of the game tick loop.
-/// Not a Message — a Resource checked by the main tick system.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Resource)]
-pub enum TurnState {
-    WaitingForInput,
-    PlayerActed,
-    Simulating,
-    Animating,
-}
+use crate::Damage;
+use bevy_ecs::entity::Entity;
+use bevy_ecs::message::Message;
 
 // ---------------------------------------------------------------------------
 // Damage / Death
@@ -37,8 +23,7 @@ pub enum TurnState {
 #[derive(Message, Debug, Clone)]
 pub struct DamageEvent {
     pub target: Entity,
-    pub amount: i32,
-    pub kind: DamageKind,
+    pub damage: Damage,
     pub source: Option<Entity>,
 }
 
@@ -87,22 +72,6 @@ pub struct DefChangedEvent {
     pub category: DefCategory,
     /// Numeric indices of changed definitions.
     pub ids: Vec<u32>,
-}
-
-// ---------------------------------------------------------------------------
-// Supporting enums
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DamageKind {
-    Bash,
-    Cut,
-    Stab,
-    Bullet,
-    Fire,
-    Acid,
-    Electric,
-    Cold,
 }
 
 // ---------------------------------------------------------------------------

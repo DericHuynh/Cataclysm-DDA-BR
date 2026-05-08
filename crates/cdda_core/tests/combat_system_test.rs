@@ -9,11 +9,11 @@
 
 use bevy_ecs::prelude::*;
 use cdda_core::actor::components::*;
-use cdda_core::{Damage, DamageTypeId, DefIdx};
 use cdda_core::sim::components::*;
 use cdda_core::sim::def_components::*;
 use cdda_core::sim::systems::combat::*;
 use cdda_core::sim::test_utils::TestBed;
+use cdda_core::{Damage, DamageTypeId, DefIdx};
 
 // ---------------------------------------------------------------------------
 // Hit chance tests
@@ -100,7 +100,16 @@ fn hit_chance_skilled_vs_unskilled() {
             melee_dice: 3,
             melee_dice_sides: 6,
             dodge: 0,
-            armor: DamageReduction { bash: 0, cut: 0, pierce: 0, bullet: 0, fire: 0, acid: 0, electric: 0, cold: 0 },
+            armor: DamageReduction {
+                bash: 0,
+                cut: 0,
+                pierce: 0,
+                bullet: 0,
+                fire: 0,
+                acid: 0,
+                electric: 0,
+                cold: 0,
+            },
         },
         Health {
             current: 100,
@@ -114,7 +123,16 @@ fn hit_chance_skilled_vs_unskilled() {
             melee_dice: 1,
             melee_dice_sides: 1,
             dodge: 0,
-            armor: DamageReduction { bash: 0, cut: 0, pierce: 0, bullet: 0, fire: 0, acid: 0, electric: 0, cold: 0 },
+            armor: DamageReduction {
+                bash: 0,
+                cut: 0,
+                pierce: 0,
+                bullet: 0,
+                fire: 0,
+                acid: 0,
+                electric: 0,
+                cold: 0,
+            },
         },
         Health {
             current: 100,
@@ -148,7 +166,16 @@ fn hit_chance_dodge_reduces() {
             melee_dice: 2,
             melee_dice_sides: 6,
             dodge: 0,
-            armor: DamageReduction { bash: 0, cut: 0, pierce: 0, bullet: 0, fire: 0, acid: 0, electric: 0, cold: 0 },
+            armor: DamageReduction {
+                bash: 0,
+                cut: 0,
+                pierce: 0,
+                bullet: 0,
+                fire: 0,
+                acid: 0,
+                electric: 0,
+                cold: 0,
+            },
         },
         Health {
             current: 100,
@@ -162,7 +189,16 @@ fn hit_chance_dodge_reduces() {
             melee_dice: 1,
             melee_dice_sides: 1,
             dodge: 5,
-            armor: DamageReduction { bash: 0, cut: 0, pierce: 0, bullet: 0, fire: 0, acid: 0, electric: 0, cold: 0 },
+            armor: DamageReduction {
+                bash: 0,
+                cut: 0,
+                pierce: 0,
+                bullet: 0,
+                fire: 0,
+                acid: 0,
+                electric: 0,
+                cold: 0,
+            },
         },
         Health {
             current: 100,
@@ -209,7 +245,16 @@ fn hit_chance_weapon_bonus() {
             melee_dice: 2,
             melee_dice_sides: 6,
             dodge: 0,
-            armor: DamageReduction { bash: 0, cut: 0, pierce: 0, bullet: 0, fire: 0, acid: 0, electric: 0, cold: 0 },
+            armor: DamageReduction {
+                bash: 0,
+                cut: 0,
+                pierce: 0,
+                bullet: 0,
+                fire: 0,
+                acid: 0,
+                electric: 0,
+                cold: 0,
+            },
         },
         Health {
             current: 100,
@@ -223,7 +268,16 @@ fn hit_chance_weapon_bonus() {
             melee_dice: 1,
             melee_dice_sides: 1,
             dodge: 5,
-            armor: DamageReduction { bash: 0, cut: 0, pierce: 0, bullet: 0, fire: 0, acid: 0, electric: 0, cold: 0 },
+            armor: DamageReduction {
+                bash: 0,
+                cut: 0,
+                pierce: 0,
+                bullet: 0,
+                fire: 0,
+                acid: 0,
+                electric: 0,
+                cold: 0,
+            },
         },
         Health {
             current: 100,
@@ -256,13 +310,22 @@ fn melee_damage_bare_hands() {
     test.register::<CombatStats>();
 
     let attacker = test.spawn((
-        Stats(cdda_core::Stats::new(8, 8, 8, 8)),
+        Stats::new(8, 8, 8, 8),
         CombatStats {
             melee_skill: 0,
             melee_dice: 1,
             melee_dice_sides: 1,
             dodge: 0,
-            armor: DamageReduction { bash: 0, cut: 0, pierce: 0, bullet: 0, fire: 0, acid: 0, electric: 0, cold: 0 },
+            armor: DamageReduction {
+                bash: 0,
+                cut: 0,
+                pierce: 0,
+                bullet: 0,
+                fire: 0,
+                acid: 0,
+                electric: 0,
+                cold: 0,
+            },
         },
         Health {
             current: 100,
@@ -276,7 +339,16 @@ fn melee_damage_bare_hands() {
             melee_dice: 1,
             melee_dice_sides: 1,
             dodge: 0,
-            armor: DamageReduction { bash: 0, cut: 0, pierce: 0, bullet: 0, fire: 0, acid: 0, electric: 0, cold: 0 },
+            armor: DamageReduction {
+                bash: 0,
+                cut: 0,
+                pierce: 0,
+                bullet: 0,
+                fire: 0,
+                acid: 0,
+                electric: 0,
+                cold: 0,
+            },
         },
         Health {
             current: 100,
@@ -318,13 +390,22 @@ fn melee_damage_with_weapon() {
         skill: "bashing".to_string(),
     });
     let attacker = test.spawn((
-        Stats(cdda_core::Stats::new(10, 8, 8, 8)),
+        Stats::new(10, 8, 8, 8),
         CombatStats {
             melee_skill: 5,
             melee_dice: 2,
             melee_dice_sides: 6,
             dodge: 0,
-            armor: DamageReduction { bash: 0, cut: 0, pierce: 0, bullet: 0, fire: 0, acid: 0, electric: 0, cold: 0 },
+            armor: DamageReduction {
+                bash: 0,
+                cut: 0,
+                pierce: 0,
+                bullet: 0,
+                fire: 0,
+                acid: 0,
+                electric: 0,
+                cold: 0,
+            },
         },
         Health {
             current: 100,
@@ -338,7 +419,16 @@ fn melee_damage_with_weapon() {
             melee_dice: 1,
             melee_dice_sides: 1,
             dodge: 0,
-            armor: DamageReduction { bash: 0, cut: 0, pierce: 0, bullet: 0, fire: 0, acid: 0, electric: 0, cold: 0 },
+            armor: DamageReduction {
+                bash: 0,
+                cut: 0,
+                pierce: 0,
+                bullet: 0,
+                fire: 0,
+                acid: 0,
+                electric: 0,
+                cold: 0,
+            },
         },
         Health {
             current: 100,
@@ -367,13 +457,22 @@ fn melee_damage_skill_bonus() {
     test.register::<CombatStats>();
 
     let high_skill = test.spawn((
-        Stats(cdda_core::Stats::new(8, 8, 8, 8)),
+        Stats::new(8, 8, 8, 8),
         CombatStats {
             melee_skill: 10,
             melee_dice: 3,
             melee_dice_sides: 8,
             dodge: 0,
-            armor: DamageReduction { bash: 0, cut: 0, pierce: 0, bullet: 0, fire: 0, acid: 0, electric: 0, cold: 0 },
+            armor: DamageReduction {
+                bash: 0,
+                cut: 0,
+                pierce: 0,
+                bullet: 0,
+                fire: 0,
+                acid: 0,
+                electric: 0,
+                cold: 0,
+            },
         },
         Health {
             current: 100,
@@ -382,13 +481,22 @@ fn melee_damage_skill_bonus() {
         IsAlive,
     ));
     let low_skill = test.spawn((
-        Stats(cdda_core::Stats::new(8, 8, 8, 8)),
+        Stats::new(8, 8, 8, 8),
         CombatStats {
             melee_skill: 0,
             melee_dice: 1,
             melee_dice_sides: 1,
             dodge: 0,
-            armor: DamageReduction { bash: 0, cut: 0, pierce: 0, bullet: 0, fire: 0, acid: 0, electric: 0, cold: 0 },
+            armor: DamageReduction {
+                bash: 0,
+                cut: 0,
+                pierce: 0,
+                bullet: 0,
+                fire: 0,
+                acid: 0,
+                electric: 0,
+                cold: 0,
+            },
         },
         Health {
             current: 100,
@@ -402,7 +510,16 @@ fn melee_damage_skill_bonus() {
             melee_dice: 1,
             melee_dice_sides: 1,
             dodge: 0,
-            armor: DamageReduction { bash: 0, cut: 0, pierce: 0, bullet: 0, fire: 0, acid: 0, electric: 0, cold: 0 },
+            armor: DamageReduction {
+                bash: 0,
+                cut: 0,
+                pierce: 0,
+                bullet: 0,
+                fire: 0,
+                acid: 0,
+                electric: 0,
+                cold: 0,
+            },
         },
         Health {
             current: 100,
@@ -488,7 +605,16 @@ fn apply_damage_armor_reduces() {
             melee_dice: 2,
             melee_dice_sides: 6,
             dodge: 0,
-            armor: DamageReduction { bash: 0, cut: 0, pierce: 0, bullet: 0, fire: 0, acid: 0, electric: 0, cold: 0 },
+            armor: DamageReduction {
+                bash: 0,
+                cut: 0,
+                pierce: 0,
+                bullet: 0,
+                fire: 0,
+                acid: 0,
+                electric: 0,
+                cold: 0,
+            },
         },
         Health {
             current: 100,
@@ -599,7 +725,16 @@ fn ranged_hit_short_range() {
             melee_dice: 1,
             melee_dice_sides: 1,
             dodge: 0,
-            armor: DamageReduction { bash: 0, cut: 0, pierce: 0, bullet: 0, fire: 0, acid: 0, electric: 0, cold: 0 },
+            armor: DamageReduction {
+                bash: 0,
+                cut: 0,
+                pierce: 0,
+                bullet: 0,
+                fire: 0,
+                acid: 0,
+                electric: 0,
+                cold: 0,
+            },
         },
         Health {
             current: 100,
@@ -613,7 +748,16 @@ fn ranged_hit_short_range() {
             melee_dice: 1,
             melee_dice_sides: 1,
             dodge: 0,
-            armor: DamageReduction { bash: 0, cut: 0, pierce: 0, bullet: 0, fire: 0, acid: 0, electric: 0, cold: 0 },
+            armor: DamageReduction {
+                bash: 0,
+                cut: 0,
+                pierce: 0,
+                bullet: 0,
+                fire: 0,
+                acid: 0,
+                electric: 0,
+                cold: 0,
+            },
         },
         Health {
             current: 100,
@@ -671,7 +815,16 @@ fn ranged_hit_long_range() {
             melee_dice: 1,
             melee_dice_sides: 1,
             dodge: 0,
-            armor: DamageReduction { bash: 0, cut: 0, pierce: 0, bullet: 0, fire: 0, acid: 0, electric: 0, cold: 0 },
+            armor: DamageReduction {
+                bash: 0,
+                cut: 0,
+                pierce: 0,
+                bullet: 0,
+                fire: 0,
+                acid: 0,
+                electric: 0,
+                cold: 0,
+            },
         },
         Health {
             current: 100,
@@ -685,7 +838,16 @@ fn ranged_hit_long_range() {
             melee_dice: 1,
             melee_dice_sides: 1,
             dodge: 0,
-            armor: DamageReduction { bash: 0, cut: 0, pierce: 0, bullet: 0, fire: 0, acid: 0, electric: 0, cold: 0 },
+            armor: DamageReduction {
+                bash: 0,
+                cut: 0,
+                pierce: 0,
+                bullet: 0,
+                fire: 0,
+                acid: 0,
+                electric: 0,
+                cold: 0,
+            },
         },
         Health {
             current: 100,
@@ -743,7 +905,16 @@ fn ranged_hit_high_dispersion() {
             melee_dice: 1,
             melee_dice_sides: 1,
             dodge: 0,
-            armor: DamageReduction { bash: 0, cut: 0, pierce: 0, bullet: 0, fire: 0, acid: 0, electric: 0, cold: 0 },
+            armor: DamageReduction {
+                bash: 0,
+                cut: 0,
+                pierce: 0,
+                bullet: 0,
+                fire: 0,
+                acid: 0,
+                electric: 0,
+                cold: 0,
+            },
         },
         Health {
             current: 100,
@@ -757,7 +928,16 @@ fn ranged_hit_high_dispersion() {
             melee_dice: 1,
             melee_dice_sides: 1,
             dodge: 0,
-            armor: DamageReduction { bash: 0, cut: 0, pierce: 0, bullet: 0, fire: 0, acid: 0, electric: 0, cold: 0 },
+            armor: DamageReduction {
+                bash: 0,
+                cut: 0,
+                pierce: 0,
+                bullet: 0,
+                fire: 0,
+                acid: 0,
+                electric: 0,
+                cold: 0,
+            },
         },
         Health {
             current: 100,
@@ -797,7 +977,16 @@ fn melee_combat_phase_processes_all() {
                 melee_dice: 2,
                 melee_dice_sides: 6,
                 dodge: 2,
-                armor: DamageReduction { bash: 0, cut: 0, pierce: 0, bullet: 0, fire: 0, acid: 0, electric: 0, cold: 0 },
+                armor: DamageReduction {
+                    bash: 0,
+                    cut: 0,
+                    pierce: 0,
+                    bullet: 0,
+                    fire: 0,
+                    acid: 0,
+                    electric: 0,
+                    cold: 0,
+                },
             },
             Health {
                 current: 100,

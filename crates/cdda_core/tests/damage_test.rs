@@ -4,8 +4,8 @@
 //! Tests damage calculations, health tracking, and creature state.
 
 use bevy_ecs::prelude::*;
-use cdda_core::Damage;
 use cdda_core::sim::test_utils::TestBed;
+use cdda_core::Damage;
 
 // ---------------------------------------------------------------------------
 // Damage profile
@@ -136,14 +136,12 @@ fn creature_has_default_stats() {
     let mut test = TestBed::new();
     test.register::<cdda_core::actor::components::Stats>();
 
-    let e = test.spawn((cdda_core::actor::components::Stats(cdda_core::Stats::new(
-        8, 8, 8, 8,
-    )),));
+    let e = test.spawn((cdda_core::Stats::new(8, 8, 8, 8),));
     let stats = test.get::<cdda_core::actor::components::Stats>(e).unwrap();
-    assert_eq!(stats.0.strength, 8);
-    assert_eq!(stats.0.dexterity, 8);
-    assert_eq!(stats.0.intelligence, 8);
-    assert_eq!(stats.0.perception, 8);
+    assert_eq!(stats.strength, 8);
+    assert_eq!(stats.dexterity, 8);
+    assert_eq!(stats.intelligence, 8);
+    assert_eq!(stats.perception, 8);
 }
 
 // ---------------------------------------------------------------------------
@@ -166,7 +164,9 @@ fn move_points_default_is_zero() {
     test.register::<cdda_core::actor::components::MovePoints>();
 
     let e = test.spawn((cdda_core::actor::components::MovePoints(0),));
-    let mp = test.get::<cdda_core::actor::components::MovePoints>(e).unwrap();
+    let mp = test
+        .get::<cdda_core::actor::components::MovePoints>(e)
+        .unwrap();
     assert_eq!(mp.0, 0);
 }
 

@@ -7,6 +7,7 @@
 use crate::actor::components::HandCount;
 use crate::item::components::ItemTypeId;
 use crate::item::components::WieldedItems;
+use crate::item::components::{Inventory, FLOOR_CAP_ML};
 use crate::map::WorldMap;
 use crate::render::tiles::TileRegistry;
 use crate::screen::screen::Screen;
@@ -14,8 +15,8 @@ use crate::screen::screen_nav::{screen_def, FocusedCommandIndex};
 use crate::sim::components::WorldPosition;
 use crate::sim::def_components::ItemSymbol;
 use crate::sim::def_components::ItemVolume;
+use crate::sim::dev_worldgen::{DevGroundItemName, DevPlayer};
 use crate::sim::systems::dev_move::DevCamera;
-use crate::sim::systems::inventory::{DevGroundItemName, DevPlayer, Inventory, FLOOR_CAP_ML};
 use crate::sim::world_setup::WorldMapResource;
 use bevy::prelude::*;
 use bevy::text::LineBreak;

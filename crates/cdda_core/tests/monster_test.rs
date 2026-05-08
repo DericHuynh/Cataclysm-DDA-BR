@@ -227,17 +227,24 @@ fn monster_armour_all_types() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn monster_flags_vec() {
-    let mut test = TestBed::new();
-    test.register::<MonsterFlags>();
-    let e = test.spawn((MonsterFlags(vec![
+fn monster_flags_bitset() {
+    use cdda_core::sim::flags::{MonsterFlagRegistry, MonsterFlags};
+
+    let mut reg = MonsterFlagRegistry::default();
+    let bitset = reg.0.register_all(&[
         "SEES".to_string(),
         "HEARS".to_string(),
         "POISON".to_string(),
-    ]),));
-    let f = test.get::<MonsterFlags>(e).unwrap();
-    assert!(f.0.contains(&"SEES".to_string()));
-    assert!(f.0.contains(&"POISON".to_string()));
+    ]);
+    let flags = MonsterFlags(bitset);
+
+    let sees_idx = reg.0.try_idx("SEES").unwrap();
+    let poison_idx = reg.0.try_idx("POISON").unwrap();
+    let hears_idx = reg.0.try_idx("HEARS").unwrap();
+
+    assert!(flags.has_idx(sees_idx));
+    assert!(flags.has_idx(poison_idx));
+    assert!(flags.has_idx(hears_idx));
 }
 
 // ---------------------------------------------------------------------------

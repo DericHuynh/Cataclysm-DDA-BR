@@ -356,9 +356,6 @@ pub struct MonsterArmour {
     pub stab: i32,
 }
 
-#[derive(Component, Debug, Clone)]
-pub struct MonsterFlags(pub Vec<String>);
-
 /// Monster upgrade / evolution path.
 #[derive(Component, Debug, Clone)]
 pub struct MonsterUpgrade {
@@ -414,8 +411,6 @@ pub struct TerrainColor(pub String);
 pub struct TerrainMoveCost(pub i32); // 100 = normal, 0 = impassable
 #[derive(Component, Debug, Clone)]
 pub struct TerrainOpacity(pub i32); // 0 = transparent
-#[derive(Component, Debug, Clone)]
-pub struct TerrainFlags(pub Vec<String>);
 
 /// Light emitted by this terrain tile per turn (for glow-in-the-dark tiles).
 #[derive(Component, Debug, Clone, Copy)]
@@ -453,8 +448,6 @@ pub struct FurnitureSymbol(pub char);
 pub struct FurnitureColor(pub String);
 #[derive(Component, Debug, Clone)]
 pub struct FurnitureMoveCostMod(pub i32); // added to terrain move cost (negative = faster)
-#[derive(Component, Debug, Clone)]
-pub struct FurnitureFlags(pub Vec<String>);
 
 /// Coverage percentage this furniture provides (e.g. 75 for a counter).
 #[derive(Component, Debug, Clone, Copy)]

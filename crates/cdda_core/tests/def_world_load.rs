@@ -8,10 +8,10 @@
 //! 5. No gameplay components leak into definitions
 
 use bevy_ecs::world::World;
+use cdda_core::actor::components::Health;
 use cdda_core::data::loader::Loader;
 use cdda_core::data::raw_defs::{FurnitureDef, ItemDef, MonsterDef, StringOrArray, TerrainDef};
 use cdda_core::data::raw_types::DefId;
-use cdda_core::actor::components::Health;
 use cdda_core::sim::def_components::*;
 use cdda_core::sim::def_world::build_def_world;
 use std::sync::Arc;
@@ -188,7 +188,7 @@ fn test_item_with_flags() {
     )]);
     let (world, def_world) = build_def_world_in_world(&reg);
     let entity = def_world.entity_by_str("flag_item").unwrap();
-        /* flag comparison disabled: now FixedBitSet */;
+    /* flag comparison disabled: now FixedBitSet */
 }
 
 #[test]
@@ -312,16 +312,35 @@ fn test_terrain_def_gets_correct_components() {
 }
 
 #[test]
-#[ignore]
 fn test_terrain_with_flags() {
+    use cdda_core::sim::flags::{
+        FurnitureFlagRegistry, ItemFlagRegistry, MonsterFlagRegistry, TerrainFlagRegistry,
+        TerrainFlags,
+    };
+    use cdda_core::sim::populate_flags::populate_def_flags;
+
     let reg = registry_from_terrain_json(vec![(
         "t_wall",
         r##""symbol": "#", "move_cost": 0, "flags": ["WALL", "NOITEM"]"##,
     )]);
-    let (world, def_world) = build_def_world_in_world(&reg);
+    let (mut world, def_world) = build_def_world_in_world(&reg);
+
+    // All four registries are required by populate_def_flags
+    world.insert_resource(ItemFlagRegistry::default());
+    world.insert_resource(MonsterFlagRegistry::default());
+    world.insert_resource(TerrainFlagRegistry::default());
+    world.insert_resource(FurnitureFlagRegistry::default());
+
+    populate_def_flags(&mut world, &reg, &def_world);
+
     let entity = def_world.entity_by_str("t_wall").unwrap();
+    let wall_idx = world
+        .resource::<TerrainFlagRegistry>()
+        .0
+        .try_idx("WALL")
+        .unwrap();
     let flags = world.get::<TerrainFlags>(entity).unwrap();
-    assert!(flags.0.contains(&"WALL".to_string()));
+    assert!(flags.has_idx(wall_idx));
 }
 
 #[test]

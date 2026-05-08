@@ -39,5 +39,10 @@ impl Plugin for ItemPlugin {
         app.register_type::<AttachmentSlot>();
         app.register_type::<AttachmentType>();
         app.register_type::<Container>();
+
+        // Inventory
+        app.register_type::<Invlet>();
+        app.register_type::<InvletFavorites>();
+        app.register_type::<Inventory>();
     }
 }
