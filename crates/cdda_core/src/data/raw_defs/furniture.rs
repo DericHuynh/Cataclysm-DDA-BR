@@ -1,6 +1,6 @@
 use crate::data::raw_defs::cdda_types::{CddaColor, ExamineAction, RawValue, StringOrArray};
 use crate::data::raw_types::{DefId, LocalizedString};
-use crate::units::Weight;
+use crate::core::units::Weight;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -121,7 +121,7 @@ pub struct FurnitureDef {
 
     /// Maximum volume (for containers)
     #[serde(default)]
-    pub max_volume: Option<crate::units::Volume>,
+    pub max_volume: Option<crate::core::units::Volume>,
 
     /// Connection group(s) this furniture connects to.
     /// Can be a single string or an array of strings.

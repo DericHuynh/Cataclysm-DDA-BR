@@ -3,7 +3,7 @@
 //! Tests move points, speed, terrain move cost, and CDDA-derived movement
 //! formulas.
 
-use cdda_core::actor::components::{MovePoints, Speed};
+use cdda_core::core::components::actor::{MovePoints, Speed};
 use cdda_core::sim::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------

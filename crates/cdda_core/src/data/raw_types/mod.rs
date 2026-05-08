@@ -2,10 +2,10 @@
 //!
 //! These are the building blocks that def structs reference.
 
-mod id;
 mod localized;
 pub mod copy_from;
 
-pub use id::DefId;
+// DefId now lives in crate::core::id — re-export for backward compat in raw defs
+pub use crate::core::id::DefId;
 pub use localized::LocalizedString;
 pub use copy_from::{CopyFromChain, CopyFromOp, CopyFromTarget};

@@ -8,7 +8,7 @@
 //! default empty state.
 
 use bevy_ecs::entity::Entity;
-use cdda_core::item::components::*;
+use cdda_core::core::components::item::*;
 use cdda_core::sim::test_utils::TestBed;
 
 fn empty_entity(test: &mut TestBed) -> Entity {

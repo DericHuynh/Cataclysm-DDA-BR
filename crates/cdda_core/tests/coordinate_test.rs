@@ -1,4 +1,4 @@
-use cdda_core::coords::{OmtPos, SubmapPos, WorldPos, ZLevel};
+use cdda_core::core::coords::{OmtPos, SubmapPos, WorldPos, ZLevel};
 
 #[test]
 fn worldpos_to_submap_positive() {

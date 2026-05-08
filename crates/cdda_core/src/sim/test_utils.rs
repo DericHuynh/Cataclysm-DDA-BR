@@ -3,11 +3,11 @@
 //! Provides `TestBed` — a lightweight, `bevy_ecs`-compatible wrapper around `World`
 //! for testing systems and entities in isolation.  No full `bevy` dependency needed.
 
-use crate::sim::components::{InFlight, Solid, Velocity, WorldPosition};
-use crate::actor::components::*;
-use crate::sim::def_components::*;
+use crate::core::components::sim::{InFlight, Solid, Velocity, WorldPosition};
+use crate::core::components::actor::*;
+use crate::core::components::def::*;
 use bevy_ecs::prelude::*;
-use crate::item::components::*;
+use crate::core::components::item::*;
 use bevy_ecs::system::IntoSystem;
 use bevy_ecs::world::World;
 

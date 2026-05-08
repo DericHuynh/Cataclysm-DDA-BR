@@ -6,7 +6,7 @@
 //! `WorldPos::new` for positions.
 
 use bevy_ecs::entity::Entity;
-use cdda_core::coords::{WorldPos, ZLevel};
+use cdda_core::core::coords::{WorldPos, ZLevel};
 use cdda_core::sim::spatial::EntitySpatialIndex;
 
 /// Helper: create an entity from a numeric id.

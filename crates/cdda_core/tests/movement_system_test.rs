@@ -8,10 +8,10 @@
 #![allow(unused_imports)]
 
 use bevy_ecs::prelude::*;
-use cdda_core::actor::components::{Bleeding, IsAlive, MovePoints, Speed, Stunned};
+use cdda_core::core::components::actor::{Bleeding, IsAlive, MovePoints, Speed, Stunned};
 use cdda_core::WorldPos;
-use cdda_core::sim::components::{Solid, WorldPosition};
-use cdda_core::sim::def_components::TerrainMoveCost;
+use cdda_core::core::components::sim::{Solid, WorldPosition};
+use cdda_core::core::components::def::TerrainMoveCost;
 use cdda_core::sim::systems::movement::*;
 use cdda_core::sim::test_utils::TestBed;
 

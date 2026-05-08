@@ -3,10 +3,10 @@
 use bevy_ecs::prelude::Resource;
 use bevy_ecs::world::World;
 
-use crate::actor::components::*;
-use crate::item::components::*;
-use crate::item::components::{Inventory, InventoryBin, InventoryFocus, Invlet, InvletFavorites};
-use crate::sim::components::{InFlight, Solid, Velocity, WorldPosition};
+use crate::core::components::actor::*;
+use crate::core::components::item::*;
+use crate::core::components::item::{Inventory, InventoryBin, InventoryFocus, Invlet, InvletFavorites};
+use crate::core::components::sim::{InFlight, Solid, Velocity, WorldPosition};
 use crate::sim::dev_worldgen::DevWorldgenConfig;
 use crate::sim::dev_worldgen::{DevGroundItemName, DevPlayer};
 use crate::sim::spatial::EntitySpatialIndex;
@@ -148,22 +148,22 @@ pub fn setup_world(world: &mut World) {
     world.register_component::<OnFire>();
 
     // --- Body part def components ---
-    world.register_component::<crate::sim::def_components::BodyPartDefId>();
-    world.register_component::<crate::sim::def_components::ItemName>();
-    world.register_component::<crate::sim::def_components::BodyPartHitSize>();
-    world.register_component::<crate::sim::def_components::BodyPartHitDifficulty>();
-    world.register_component::<crate::sim::def_components::BodyPartBaseHp>();
-    world.register_component::<crate::sim::def_components::BodyPartDrenchCapacity>();
-    world.register_component::<crate::sim::def_components::BodyPartSide>();
-    world.register_component::<crate::sim::def_components::BodyPartLegacyId>();
-    world.register_component::<crate::sim::def_components::IsVital>();
-    world.register_component::<crate::sim::def_components::CanGrasp>();
-    world.register_component::<crate::sim::def_components::CanWalk>();
-    world.register_component::<crate::sim::def_components::CanSee>();
-    world.register_component::<crate::sim::def_components::CanBite>();
-    world.register_component::<crate::sim::def_components::CanFly>();
-    world.register_component::<crate::sim::def_components::SubParts>();
-    world.register_component::<crate::sim::def_components::ParentPart>();
+    world.register_component::<crate::core::components::def::BodyPartDefId>();
+    world.register_component::<crate::core::components::def::ItemName>();
+    world.register_component::<crate::core::components::def::BodyPartHitSize>();
+    world.register_component::<crate::core::components::def::BodyPartHitDifficulty>();
+    world.register_component::<crate::core::components::def::BodyPartBaseHp>();
+    world.register_component::<crate::core::components::def::BodyPartDrenchCapacity>();
+    world.register_component::<crate::core::components::def::BodyPartSide>();
+    world.register_component::<crate::core::components::def::BodyPartLegacyId>();
+    world.register_component::<crate::core::components::def::IsVital>();
+    world.register_component::<crate::core::components::def::CanGrasp>();
+    world.register_component::<crate::core::components::def::CanWalk>();
+    world.register_component::<crate::core::components::def::CanSee>();
+    world.register_component::<crate::core::components::def::CanBite>();
+    world.register_component::<crate::core::components::def::CanFly>();
+    world.register_component::<crate::core::components::def::SubParts>();
+    world.register_component::<crate::core::components::def::ParentPart>();
 
     // --- Body part instance components ---
     world.register_component::<BodyPartOf>();

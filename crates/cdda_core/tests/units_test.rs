@@ -3,7 +3,7 @@
 //! These tests exercise the public API of each unit type: construction,
 //! arithmetic, ordering, and display formatting.
 
-use cdda_core::units::{Energy, Length, Time, Volume, Weight};
+use cdda_core::core::units::{Energy, Length, Time, Volume, Weight};
 
 // ─── Volume ─────────────────────────────────────────────────────────────────
 

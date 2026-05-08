@@ -13,7 +13,7 @@
 //! with manually constructed definition entities.
 
 use bevy_ecs::prelude::*;
-use crate::coords::WorldPos;
+use crate::core::coords::WorldPos;
 use crate::{FactionId, ItemGroupId};
 
 // ---------------------------------------------------------------------------

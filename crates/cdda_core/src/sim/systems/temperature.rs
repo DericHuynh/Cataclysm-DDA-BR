@@ -6,7 +6,7 @@
 //! - Spoilage rate for perishable items based on temperature
 //! - Tick processing for both temperature and spoilage
 
-use crate::sim::def_components::ArmourPart;
+use crate::core::components::def::ArmourPart;
 use bevy_ecs::prelude::*;
 
 /// Update body temperature for a creature based on ambient temperature and worn items.

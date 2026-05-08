@@ -2,8 +2,8 @@
 //!
 //! Updates the EntitySpatialIndex whenever entities change position.
 
-use crate::sim::components::WorldPosition;
-use crate::sim::def_components::IsDef;
+use crate::core::components::sim::WorldPosition;
+use crate::core::components::def::IsDef;
 use crate::sim::spatial::EntitySpatialIndex;
 use bevy_ecs::prelude::*;
 

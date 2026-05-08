@@ -130,7 +130,7 @@ fn compute_extent(overmaps: &[CityBuildingOvermap]) -> BuildingExtent {
 pub fn generate_dev_worldmap(
     world_map: &mut WorldMap,
     city_buildings: &HashMap<
-        crate::data::raw_types::DefId<CityBuildingDef>,
+        crate::core::id::DefId<CityBuildingDef>,
         std::sync::Arc<CityBuildingDef>,
     >,
     config: &DevWorldgenConfig,
@@ -216,7 +216,7 @@ pub fn generate_dev_worldmap(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::raw_types::DefId;
+    use crate::core::id::DefId;
 
     fn make_def_id(s: &str) -> DefId<CityBuildingDef> {
         DefId::new(s.to_string())

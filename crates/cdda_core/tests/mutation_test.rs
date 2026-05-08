@@ -5,7 +5,7 @@
 //! removal, and querying without touching the creature entity.
 
 use bevy_ecs::prelude::*;
-use cdda_core::actor::components::{CreatureMutations, MutationEntry, MutationOf};
+use cdda_core::core::components::actor::{CreatureMutations, MutationEntry, MutationOf};
 use cdda_core::sim::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------

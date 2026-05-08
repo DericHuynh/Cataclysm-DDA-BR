@@ -3,7 +3,7 @@
 //! Tests WeaponData component creation and pure-function formulas for
 //! melee damage, to-hit, moves, reach, and crit chance.
 
-use cdda_core::sim::def_components::{
+use cdda_core::core::components::def::{
     ItemCategory, ItemFlagList, ItemMaterials, ItemName, ItemPrice, ItemStackSize, ItemVolume,
     ItemWeight, WeaponData,
 };

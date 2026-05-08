@@ -1,12 +1,12 @@
 #![allow(unused_imports)]
 
 use bevy_ecs::prelude::Entity;
-use cdda_core::actor::components::*;
-use cdda_core::item::components::*;
+use cdda_core::core::components::actor::*;
+use cdda_core::core::components::item::*;
 use cdda_core::*;
-use cdda_core::coords::WorldPos;
-use cdda_core::sim::components::*;
-use cdda_core::sim::def_components::*;
+use cdda_core::core::coords::WorldPos;
+use cdda_core::core::components::sim::*;
+use cdda_core::core::components::def::*;
 use cdda_core::sim::events::SpawnEvent;
 use cdda_core::sim::systems::spawning::*;
 use cdda_core::sim::test_utils::TestBed;

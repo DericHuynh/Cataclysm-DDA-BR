@@ -6,7 +6,7 @@
 //! and terrain opacity data from `WorldMap` for line-of-sight blocking.
 
 use bevy_ecs::prelude::*;
-use crate::actor::components::*;
+use crate::core::components::actor::*;
 
 
 // ---------------------------------------------------------------------------

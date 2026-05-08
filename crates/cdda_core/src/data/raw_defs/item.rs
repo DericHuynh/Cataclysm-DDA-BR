@@ -3,7 +3,7 @@ use crate::data::raw_defs::cdda_types::{
     MeleeDamage, RawValue, SnippetCategory, StringOrArray, ToHit, UseAction, VitaminContents,
 };
 use crate::data::raw_types::{DefId, LocalizedString};
-use crate::units::{Length, Volume, Weight};
+use crate::core::units::{Length, Volume, Weight};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -164,7 +164,7 @@ pub struct ItemDef {
 
     /// Rechargeable / energy capacity if applicable.
     #[serde(default)]
-    pub capacity: Option<crate::units::Energy>,
+    pub capacity: Option<crate::core::units::Energy>,
 
     /// Catch-all for unknown fields
     #[serde(default)]

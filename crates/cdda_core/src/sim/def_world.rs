@@ -11,12 +11,12 @@
 //! Systems that need definition data query directly:
 //! `Query<&GunData, With<IsDef>>` — the entities are in the main World.
 
-use crate::actor::components::{
+use crate::core::components::actor::{
     Creature, Faction, Gender, Health, IsAlive, MovePoints, PlayerData, Speed,
 };
-use crate::coords::WorldPos;
-use crate::sim::components::{Solid, WorldPosition};
-use crate::sim::def_components::*;
+use crate::core::coords::WorldPos;
+use crate::core::components::sim::{Solid, WorldPosition};
+use crate::core::components::def::*;
 use crate::sim::state::{AppState, GameTime, LoadingStatus, StartupConfig};
 use bevy_ecs::prelude::*;
 use bevy_state::state::NextState;
@@ -256,16 +256,16 @@ pub fn build_def_world(
                     },
                     ItemPhase(match item.phase {
                         crate::data::raw_defs::item::Phase::Solid => {
-                            crate::sim::def_components::Phase::Solid
+                            crate::core::components::def::Phase::Solid
                         }
                         crate::data::raw_defs::item::Phase::Liquid => {
-                            crate::sim::def_components::Phase::Liquid
+                            crate::core::components::def::Phase::Liquid
                         }
                         crate::data::raw_defs::item::Phase::Gas => {
-                            crate::sim::def_components::Phase::Gas
+                            crate::core::components::def::Phase::Gas
                         }
                         crate::data::raw_defs::item::Phase::Plasma => {
-                            crate::sim::def_components::Phase::Plasma
+                            crate::core::components::def::Phase::Plasma
                         }
                     }),
                     ItemStackSize(item.stack_size.unwrap_or(1)),
@@ -864,7 +864,7 @@ pub fn build_def_world(
 #[derive(Resource, Debug, Clone)]
 pub struct CityBuildings(
     pub  std::collections::HashMap<
-        crate::data::raw_types::DefId<crate::data::raw_defs::city_building::CityBuildingDef>,
+        crate::core::id::DefId<crate::data::raw_defs::city_building::CityBuildingDef>,
         std::sync::Arc<crate::data::raw_defs::city_building::CityBuildingDef>,
     >,
 );

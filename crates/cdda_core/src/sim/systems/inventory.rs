@@ -21,21 +21,21 @@
 //!
 //! Reference: CDDA-master `inventory.h` / `inventory.cpp`.
 
-use crate::actor::components::HandCount;
-use crate::coords::WorldPos;
+use crate::core::components::actor::HandCount;
+use crate::core::coords::WorldPos;
 use crate::input::{GameAction, InputAction};
-use crate::item::components::{
+use crate::core::components::item::{
     Container, ContainerContents, CurrentCharges, DefOrigin, InsideContainer, Inventory,
     InventoryBin, InventoryFocus, Invlet, InvletFavorites, ItemDamage, ItemTypeId, Pocket,
     StackCount, WieldedBy, WieldedItems, FLOOR_CAP_ML,
 };
-use crate::sim::components::WorldPosition;
-use crate::sim::def_components::ItemSymbol;
-use crate::sim::def_components::ItemVolume;
+use crate::core::components::sim::WorldPosition;
+use crate::core::components::def::ItemSymbol;
+use crate::core::components::def::ItemVolume;
 use crate::sim::dev_worldgen::{DevGroundItemName, DevPlayer};
 use crate::sim::events::{ItemMoveEvent, MoveLocation};
 use crate::sim::systems::dev_move::DevCamera;
-use crate::units::*;
+use crate::core::units::*;
 use crate::ZLevel;
 use bevy_ecs::message::MessageReader;
 use bevy_ecs::prelude::*;
@@ -493,7 +493,7 @@ pub fn items_in_container(container: Entity, world: &World) -> Vec<Entity> {
 /// Check whether `item` can fit into `container` based on pocket/container
 /// volume, weight, and length constraints.
 pub fn can_fit_in_container(world: &World, container: Entity, item: Entity) -> bool {
-    use crate::sim::def_components::{ItemLongestSide, ItemVolume, ItemWeight};
+    use crate::core::components::def::{ItemLongestSide, ItemVolume, ItemWeight};
 
     let item_vol = match world.get::<ItemVolume>(item) {
         Some(v) => Volume::from_milliliters(v.0 as u64),
@@ -534,7 +534,7 @@ pub fn can_fit_in_container(world: &World, container: Entity, item: Entity) -> b
 
 /// Total volume occupied by all items inside `container`.
 pub fn total_container_volume(world: &World, container: Entity) -> Volume {
-    use crate::sim::def_components::ItemVolume;
+    use crate::core::components::def::ItemVolume;
     let mut total = Volume::ZERO;
     if let Some(contents) = world.get::<ContainerContents>(container) {
         for child in contents.iter() {
@@ -551,7 +551,7 @@ pub fn total_container_volume(world: &World, container: Entity) -> Volume {
 
 /// Total weight of all items inside `container`.
 pub fn total_container_weight(world: &World, container: Entity) -> Weight {
-    use crate::sim::def_components::ItemWeight;
+    use crate::core::components::def::ItemWeight;
     let mut total = Weight::ZERO;
     if let Some(contents) = world.get::<ContainerContents>(container) {
         for child in contents.iter() {
@@ -579,7 +579,7 @@ pub fn total_container_weight(world: &World, container: Entity) -> Weight {
 /// Both entities must be of the same `DefOrigin` (or same `DefStrId`).
 /// Different damage levels or charge states prevent merging.
 pub fn merge_or_stack(world: &mut World, target: Entity, incoming: Entity) -> bool {
-    use crate::sim::def_components::DefStrId;
+    use crate::core::components::def::DefStrId;
 
     let same_type = match (
         world.get::<DefOrigin>(target),
@@ -790,8 +790,8 @@ pub fn transfer_item(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::item::components::INVLET_CHARS;
-    use crate::sim::def_components::{DefStrId, ItemName, ItemVolume, ItemWeight};
+    use crate::core::components::item::INVLET_CHARS;
+    use crate::core::components::def::{DefStrId, ItemName, ItemVolume, ItemWeight};
     use crate::sim::test_utils::TestBed;
 
     fn setup(t: &mut TestBed) {

@@ -1,5 +1,5 @@
 use crate::data::raw_defs::*;
-use crate::data::raw_types::DefId;
+use crate::core::id::DefId;
 use crate::data::registry::DefRegistry;
 use crate::data::resolve;
 use serde_json::Value;

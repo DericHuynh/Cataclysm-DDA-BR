@@ -1,6 +1,6 @@
 use crate::data::raw_defs::cdda_types::{CddaColor, RawValue};
 use crate::data::raw_types::{DefId, LocalizedString};
-use crate::units::{Volume, Weight};
+use crate::core::units::{Volume, Weight};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

@@ -8,7 +8,7 @@
 
 use bevy_ecs::prelude::*;
 use crate::{EffectId, Time};
-use crate::actor::components::*;
+use crate::core::components::actor::*;
 
 
 // ---------------------------------------------------------------------------

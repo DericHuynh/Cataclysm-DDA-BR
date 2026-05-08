@@ -1,6 +1,6 @@
 use bevy_app::{App, Plugin};
 
-use crate::item::components::*;
+use crate::core::components::item::*;
 
 pub struct ItemPlugin;
 

@@ -5,7 +5,7 @@
 //! No `#[ignore]` — they should pass as soon as all types compile.
 
 use bevy_ecs::prelude::*;
-use cdda_core::actor::components::{IsAlive, MovePoints, Speed};
+use cdda_core::core::components::actor::{IsAlive, MovePoints, Speed};
 use cdda_core::sim::state::GameTime;
 use cdda_core::sim::systems::turn::*;
 use cdda_core::sim::test_utils::TestBed;

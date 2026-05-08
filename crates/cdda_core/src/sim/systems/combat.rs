@@ -2,9 +2,9 @@
 //!
 //! Emits DamageEvent, DeathEvent, and SoundEvent.
 
-use crate::actor::components::*;
-use crate::coords::WorldPos;
-use crate::sim::def_components::{AmmoData, GunData, WeaponData};
+use crate::core::components::actor::*;
+use crate::core::coords::WorldPos;
+use crate::core::components::def::{AmmoData, GunData, WeaponData};
 use crate::{Damage, Stats};
 use bevy_ecs::prelude::*;
 
@@ -65,7 +65,7 @@ pub fn calculate_melee_hit_chance(
 /// - Add stat bonus: strength * 0.5 as bash
 /// - Add skill bonus: skill_level * 0.25 as bash
 pub fn calculate_melee_damage(weapon: &WeaponData, stats: &Stats, skill_level: u32) -> Damage {
-    use crate::id::{DamageTypeId, DefIdx};
+    use crate::core::id::{DamageTypeId, DefIdx};
 
     let bash_type = DamageTypeId(DefIdx(0));
     let cut_type = DamageTypeId(DefIdx(1));

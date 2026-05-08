@@ -9,14 +9,14 @@
 //! enqueues a def-entity, and the exclusive `dev_spawn_flush` system drains the
 //! queue and calls `spawn_item` with full world access.
 
-use crate::coords::WorldPos;
+use crate::core::coords::WorldPos;
 use crate::input::{GameAction, InputAction};
 use crate::ZLevel;
 use bevy_ecs::message::MessageReader;
 use bevy_ecs::prelude::*;
 
-use crate::item::components::ItemTypeId;
-use crate::sim::def_components::{DefStrId, IsDef, ItemName};
+use crate::core::components::item::ItemTypeId;
+use crate::core::components::def::{DefStrId, IsDef, ItemName};
 use crate::sim::dev_worldgen::DevGroundItemName;
 use crate::sim::systems::dev_move::DevCamera;
 

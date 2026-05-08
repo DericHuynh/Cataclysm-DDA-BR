@@ -10,8 +10,8 @@
 //!
 //! All types in this module are globally broadcast → they derive `Message`.
 
-use crate::coords::WorldPos;
-use crate::id::*;
+use crate::core::coords::WorldPos;
+use crate::core::id::*;
 use crate::Damage;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::message::Message;
@@ -93,7 +93,7 @@ pub struct ItemMoveEvent {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MoveLocation {
     /// Item is on the ground at this world position.
-    Ground(crate::coords::WorldPos),
+    Ground(crate::core::coords::WorldPos),
     /// Item is inside a container entity.
     Container(Entity),
     /// Item is wielded by an entity.

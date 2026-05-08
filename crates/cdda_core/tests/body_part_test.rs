@@ -18,20 +18,20 @@ use cdda_core::sim::test_utils::TestBed;
 
 /// Spawn a definition entity for a body part (e.g. "torso_def").
 fn spawn_def(test: &mut TestBed, name: &str) -> Entity {
-    test.spawn((cdda_core::sim::def_components::ItemName(name.to_string()),))
+    test.spawn((cdda_core::core::components::def::ItemName(name.to_string()),))
 }
 
 /// Spawn a body part entity linked to a creature.
 fn spawn_body_part(test: &mut TestBed, creature: Entity, def_entity: Entity, slot: &str) -> Entity {
-    test.register::<cdda_core::actor::components::BodyPartOf>();
-    test.register::<cdda_core::actor::components::BodyPartDef>();
-    test.register::<cdda_core::actor::components::BodyPartSlot>();
-    test.register::<cdda_core::actor::components::BodyPartHp>();
+    test.register::<cdda_core::core::components::actor::BodyPartOf>();
+    test.register::<cdda_core::core::components::actor::BodyPartDef>();
+    test.register::<cdda_core::core::components::actor::BodyPartSlot>();
+    test.register::<cdda_core::core::components::actor::BodyPartHp>();
     test.spawn((
-        cdda_core::actor::components::BodyPartOf(creature),
-        cdda_core::actor::components::BodyPartDef(def_entity),
-        cdda_core::actor::components::BodyPartSlot(slot.to_string()),
-        cdda_core::actor::components::BodyPartHp {
+        cdda_core::core::components::actor::BodyPartOf(creature),
+        cdda_core::core::components::actor::BodyPartDef(def_entity),
+        cdda_core::core::components::actor::BodyPartSlot(slot.to_string()),
+        cdda_core::core::components::actor::BodyPartHp {
             max: 100.0,
             current: 100.0,
             damage_multiplier: 1.0,
@@ -46,16 +46,16 @@ fn spawn_body_part(test: &mut TestBed, creature: Entity, def_entity: Entity, slo
 #[test]
 fn body_part_has_slot_and_def() {
     let mut test = TestBed::new();
-    test.register::<cdda_core::actor::components::BodyPartSlot>();
-    test.register::<cdda_core::actor::components::BodyPartDef>();
+    test.register::<cdda_core::core::components::actor::BodyPartSlot>();
+    test.register::<cdda_core::core::components::actor::BodyPartDef>();
 
     let def_entity = test.spawn(());
     let e = test.spawn((
-        cdda_core::actor::components::BodyPartSlot("torso".to_string()),
-        cdda_core::actor::components::BodyPartDef(def_entity),
+        cdda_core::core::components::actor::BodyPartSlot("torso".to_string()),
+        cdda_core::core::components::actor::BodyPartDef(def_entity),
     ));
-    let slot = test.get::<cdda_core::actor::components::BodyPartSlot>(e).unwrap();
-    let def = test.get::<cdda_core::actor::components::BodyPartDef>(e).unwrap();
+    let slot = test.get::<cdda_core::core::components::actor::BodyPartSlot>(e).unwrap();
+    let def = test.get::<cdda_core::core::components::actor::BodyPartDef>(e).unwrap();
     assert_eq!(slot.0, "torso");
     assert_eq!(def.0, def_entity);
 }
@@ -63,17 +63,17 @@ fn body_part_has_slot_and_def() {
 #[test]
 fn body_part_of_creature() {
     let mut test = TestBed::new();
-    test.register::<cdda_core::actor::components::BodyPartOf>();
+    test.register::<cdda_core::core::components::actor::BodyPartOf>();
 
     let creature = test.spawn(());
     let def = test.spawn(());
     let part = test.spawn((
-        cdda_core::actor::components::BodyPartOf(creature),
-        cdda_core::actor::components::BodyPartDef(def),
-        cdda_core::actor::components::BodyPartSlot("arm_l".to_string()),
+        cdda_core::core::components::actor::BodyPartOf(creature),
+        cdda_core::core::components::actor::BodyPartDef(def),
+        cdda_core::core::components::actor::BodyPartSlot("arm_l".to_string()),
     ));
     let rel = test
-        .get::<cdda_core::actor::components::BodyPartOf>(part)
+        .get::<cdda_core::core::components::actor::BodyPartOf>(part)
         .unwrap();
     assert_eq!(rel.0, creature);
 }
@@ -90,7 +90,7 @@ fn creature_body_parts_auto_populated() {
     let def = spawn_def(&mut test, "torso_def");
     let part = spawn_body_part(&mut test, creature, def, "torso");
 
-    let parts = test.get::<cdda_core::actor::components::CreatureBodyParts>(creature);
+    let parts = test.get::<cdda_core::core::components::actor::CreatureBodyParts>(creature);
     assert!(parts.is_some());
     let ids: Vec<Entity> = parts.unwrap().iter().collect();
     assert_eq!(ids, vec![part]);
@@ -116,7 +116,7 @@ fn multiple_body_parts() {
     let head = spawn_body_part(&mut test, creature, def_head, "head");
 
     let parts = test
-        .get::<cdda_core::actor::components::CreatureBodyParts>(creature)
+        .get::<cdda_core::core::components::actor::CreatureBodyParts>(creature)
         .unwrap();
     let ids: Vec<Entity> = parts.iter().collect();
     assert_eq!(ids.len(), 6);
@@ -135,14 +135,14 @@ fn multiple_body_parts() {
 #[test]
 fn body_part_hp_initialized() {
     let mut test = TestBed::new();
-    test.register::<cdda_core::actor::components::BodyPartHp>();
+    test.register::<cdda_core::core::components::actor::BodyPartHp>();
 
-    let e = test.spawn((cdda_core::actor::components::BodyPartHp {
+    let e = test.spawn((cdda_core::core::components::actor::BodyPartHp {
         max: 100.0,
         current: 100.0,
         damage_multiplier: 1.0,
     },));
-    let hp = test.get::<cdda_core::actor::components::BodyPartHp>(e).unwrap();
+    let hp = test.get::<cdda_core::core::components::actor::BodyPartHp>(e).unwrap();
     assert_eq!(hp.max, 100.0);
     assert_eq!(hp.current, 100.0);
     assert_eq!(hp.damage_multiplier, 1.0);
@@ -151,9 +151,9 @@ fn body_part_hp_initialized() {
 #[test]
 fn body_part_hp_damage() {
     let mut test = TestBed::new();
-    test.register::<cdda_core::actor::components::BodyPartHp>();
+    test.register::<cdda_core::core::components::actor::BodyPartHp>();
 
-    let e = test.spawn((cdda_core::actor::components::BodyPartHp {
+    let e = test.spawn((cdda_core::core::components::actor::BodyPartHp {
         max: 100.0,
         current: 100.0,
         damage_multiplier: 1.0,
@@ -161,12 +161,12 @@ fn body_part_hp_damage() {
     // Reduce current HP from 100 to 60
     test.world_mut()
         .entity_mut(e)
-        .insert(cdda_core::actor::components::BodyPartHp {
+        .insert(cdda_core::core::components::actor::BodyPartHp {
             max: 100.0,
             current: 60.0,
             damage_multiplier: 1.0,
         });
-    let hp = test.get::<cdda_core::actor::components::BodyPartHp>(e).unwrap();
+    let hp = test.get::<cdda_core::core::components::actor::BodyPartHp>(e).unwrap();
     assert_eq!(hp.current, 60.0);
     assert!(hp.current < hp.max);
 }
@@ -174,7 +174,7 @@ fn body_part_hp_damage() {
 #[test]
 fn body_part_hp_damage_multiplier() {
     let mut test = TestBed::new();
-    test.register::<cdda_core::actor::components::BodyPartHp>();
+    test.register::<cdda_core::core::components::actor::BodyPartHp>();
 
     // damage_multiplier = 0.5 means only half damage is applied.
     // Simulate: take 40 raw damage → apply 20 after multiplier
@@ -182,7 +182,7 @@ fn body_part_hp_damage_multiplier() {
     let multiplier = 0.5;
     let effective_damage = raw_damage * multiplier;
 
-    let e = test.spawn((cdda_core::actor::components::BodyPartHp {
+    let e = test.spawn((cdda_core::core::components::actor::BodyPartHp {
         max: 100.0,
         current: 100.0,
         damage_multiplier: multiplier,
@@ -190,12 +190,12 @@ fn body_part_hp_damage_multiplier() {
     let new_current = 100.0 - effective_damage;
     test.world_mut()
         .entity_mut(e)
-        .insert(cdda_core::actor::components::BodyPartHp {
+        .insert(cdda_core::core::components::actor::BodyPartHp {
             max: 100.0,
             current: new_current,
             damage_multiplier: multiplier,
         });
-    let hp = test.get::<cdda_core::actor::components::BodyPartHp>(e).unwrap();
+    let hp = test.get::<cdda_core::core::components::actor::BodyPartHp>(e).unwrap();
     assert_eq!(hp.current, 80.0);
     assert_eq!(hp.damage_multiplier, 0.5);
 }
@@ -207,48 +207,48 @@ fn body_part_hp_damage_multiplier() {
 #[test]
 fn body_part_broken_marker() {
     let mut test = TestBed::new();
-    test.register::<cdda_core::actor::components::BodyPartBroken>();
+    test.register::<cdda_core::core::components::actor::BodyPartBroken>();
 
     let e = test.spawn((
-        cdda_core::actor::components::BodyPartSlot("arm_l".to_string()),
-        cdda_core::actor::components::BodyPartBroken,
+        cdda_core::core::components::actor::BodyPartSlot("arm_l".to_string()),
+        cdda_core::core::components::actor::BodyPartBroken,
     ));
     assert!(test
         .world()
         .entity(e)
-        .contains::<cdda_core::actor::components::BodyPartBroken>());
+        .contains::<cdda_core::core::components::actor::BodyPartBroken>());
 }
 
 #[test]
 fn body_part_severed_marker() {
     let mut test = TestBed::new();
-    test.register::<cdda_core::actor::components::BodyPartSevered>();
+    test.register::<cdda_core::core::components::actor::BodyPartSevered>();
 
     let e = test.spawn((
-        cdda_core::actor::components::BodyPartSlot("arm_l".to_string()),
-        cdda_core::actor::components::BodyPartSevered,
+        cdda_core::core::components::actor::BodyPartSlot("arm_l".to_string()),
+        cdda_core::core::components::actor::BodyPartSevered,
     ));
     assert!(test
         .world()
         .entity(e)
-        .contains::<cdda_core::actor::components::BodyPartSevered>());
+        .contains::<cdda_core::core::components::actor::BodyPartSevered>());
 }
 
 #[test]
 fn body_part_broken_and_not_severed() {
     let mut test = TestBed::new();
-    test.register::<cdda_core::actor::components::BodyPartBroken>();
-    test.register::<cdda_core::actor::components::BodyPartSevered>();
+    test.register::<cdda_core::core::components::actor::BodyPartBroken>();
+    test.register::<cdda_core::core::components::actor::BodyPartSevered>();
 
     // Broken without Severed
     let e = test.spawn((
-        cdda_core::actor::components::BodyPartSlot("arm_l".to_string()),
-        cdda_core::actor::components::BodyPartBroken,
+        cdda_core::core::components::actor::BodyPartSlot("arm_l".to_string()),
+        cdda_core::core::components::actor::BodyPartBroken,
         // BodyPartSevered deliberately NOT inserted
     ));
     let entity_ref = test.world().entity(e);
-    assert!(entity_ref.contains::<cdda_core::actor::components::BodyPartBroken>());
-    assert!(!entity_ref.contains::<cdda_core::actor::components::BodyPartSevered>());
+    assert!(entity_ref.contains::<cdda_core::core::components::actor::BodyPartBroken>());
+    assert!(!entity_ref.contains::<cdda_core::core::components::actor::BodyPartSevered>());
 }
 
 // ===========================================================================
@@ -266,7 +266,7 @@ fn body_part_removed() {
     // Verify it's present
     {
         let parts = test
-            .get::<cdda_core::actor::components::CreatureBodyParts>(creature)
+            .get::<cdda_core::core::components::actor::CreatureBodyParts>(creature)
             .unwrap();
         assert!(parts.iter().any(|e| e == part));
     }
@@ -276,7 +276,7 @@ fn body_part_removed() {
     // when the last part goes, the component may be removed entirely.
     test.world_mut().despawn(part);
 
-    let parts = test.get::<cdda_core::actor::components::CreatureBodyParts>(creature);
+    let parts = test.get::<cdda_core::core::components::actor::CreatureBodyParts>(creature);
     match parts {
         Some(cbp) => {
             assert!(!cbp.iter().any(|e| e == part));
@@ -298,7 +298,7 @@ fn no_body_parts_empty() {
     // (or present but empty; the relationship hook inserts a marker
     // component when the first BodyPartOf is added, but if none are
     // ever added the component never appears).
-    let parts = test.get::<cdda_core::actor::components::CreatureBodyParts>(creature);
+    let parts = test.get::<cdda_core::core::components::actor::CreatureBodyParts>(creature);
     assert!(
         parts.is_none(),
         "A creature with no body parts should not have a CreatureBodyParts component"

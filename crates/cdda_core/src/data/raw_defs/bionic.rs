@@ -1,6 +1,6 @@
 use crate::data::raw_defs::cdda_types::RawValue;
 use crate::data::raw_types::{DefId, LocalizedString};
-use crate::units::Energy;
+use crate::core::units::Energy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

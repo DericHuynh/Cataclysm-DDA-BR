@@ -2,7 +2,7 @@
 //!
 //! Tests vision components and CDDA-derived vision range formulas.
 
-use cdda_core::actor::components::{IsAlive, Vision};
+use cdda_core::core::components::actor::{IsAlive, Vision};
 use cdda_core::sim::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------

@@ -15,7 +15,7 @@ use bevy_ecs::message::MessageReader;
 use bevy_ecs::prelude::*;
 use bevy_state::prelude::*;
 
-use crate::coords::WorldPos;
+use crate::core::coords::WorldPos;
 use crate::input::{GameAction, InputAction};
 
 use crate::screen::cursor::ExamineCursor;
@@ -132,7 +132,7 @@ pub fn screen_and_cursor(
                 let current =
                     cursor
                         .tile
-                        .unwrap_or(WorldPos::new(0, 0, crate::coords::ZLevel::new(0)));
+                        .unwrap_or(WorldPos::new(0, 0, crate::core::coords::ZLevel::new(0)));
                 cursor.tile = Some(WorldPos::new(current.x + dx, current.y + dy, current.z));
             }
         }

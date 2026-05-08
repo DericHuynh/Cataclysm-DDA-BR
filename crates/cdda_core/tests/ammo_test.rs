@@ -3,7 +3,7 @@
 //!
 //! Translated from CDDA's ranged balance and ammo type tests.
 
-use cdda_core::sim::def_components::{AmmoData, GunData, MagazineData};
+use cdda_core::core::components::def::{AmmoData, GunData, MagazineData};
 use cdda_core::sim::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------

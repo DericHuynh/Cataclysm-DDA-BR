@@ -5,7 +5,7 @@
 //! `MovePoints` based on terrain, furniture, and creature state.
 
 use bevy_ecs::prelude::*;
-use crate::coords::WorldPos;
+use crate::core::coords::WorldPos;
 
 // ---------------------------------------------------------------------------
 // Types

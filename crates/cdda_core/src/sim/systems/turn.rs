@@ -13,9 +13,9 @@
 //! 3. Each action costs MP (walk=100, attack=100, etc.)
 //! 4. When all actors below threshold, next turn begins
 
-use crate::sim::def_components::IsDef;
+use crate::core::components::def::IsDef;
 use bevy_ecs::prelude::*;
-use crate::actor::components::{IsAlive, MovePoints, Speed};
+use crate::core::components::actor::{IsAlive, MovePoints, Speed};
 use std::cmp::Ordering;
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-use crate::data::raw_types::DefId;
+use crate::core::id::DefId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

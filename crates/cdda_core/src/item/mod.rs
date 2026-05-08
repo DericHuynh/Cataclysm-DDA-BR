@@ -6,5 +6,4 @@
 //!
 //! Depends only on `cdda_core` and `bevy_ecs`.
 
-pub mod components;
 pub mod plugin;

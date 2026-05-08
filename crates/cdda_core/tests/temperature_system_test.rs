@@ -8,10 +8,10 @@
 #![allow(unused_imports)]
 
 use bevy_ecs::prelude::*;
-use cdda_core::actor::components::{BodyTemperature, Health, IsAlive, Wetness};
+use cdda_core::core::components::actor::{BodyTemperature, Health, IsAlive, Wetness};
 use cdda_core::{ItemId, Time};
-use cdda_core::item::components::{PreservesTemp, Sealed, Spoilable};
-use cdda_core::sim::def_components::ArmourPart;
+use cdda_core::core::components::item::{PreservesTemp, Sealed, Spoilable};
+use cdda_core::core::components::def::ArmourPart;
 use cdda_core::sim::systems::temperature::*;
 use cdda_core::sim::test_utils::TestBed;
 

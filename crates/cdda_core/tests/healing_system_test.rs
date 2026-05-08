@@ -11,7 +11,7 @@
 use bevy_ecs::prelude::*;
 use cdda_core::sim::test_utils::TestBed;
 use cdda_core::sim::systems::healing::*;
-use cdda_core::actor::components::{Health, IsAlive, BodyPartHp, BodyPartOf, BodyPartDef, BodyPartSlot};
+use cdda_core::core::components::actor::{Health, IsAlive, BodyPartHp, BodyPartOf, BodyPartDef, BodyPartSlot};
 
 // ---------------------------------------------------------------------------
 // Healing rate

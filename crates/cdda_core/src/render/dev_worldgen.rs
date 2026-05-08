@@ -4,17 +4,17 @@
 //! pattern as the Bevy 0.18 Text2d example. Spawned on OnEnter(Gameplay),
 //! updated on move.
 
-use crate::actor::components::HandCount;
-use crate::item::components::ItemTypeId;
-use crate::item::components::WieldedItems;
-use crate::item::components::{Inventory, FLOOR_CAP_ML};
+use crate::core::components::actor::HandCount;
+use crate::core::components::item::ItemTypeId;
+use crate::core::components::item::WieldedItems;
+use crate::core::components::item::{Inventory, FLOOR_CAP_ML};
 use crate::map::WorldMap;
 use crate::render::tiles::TileRegistry;
 use crate::screen::screen::Screen;
 use crate::screen::screen_nav::{screen_def, FocusedCommandIndex};
-use crate::sim::components::WorldPosition;
-use crate::sim::def_components::ItemSymbol;
-use crate::sim::def_components::ItemVolume;
+use crate::core::components::sim::WorldPosition;
+use crate::core::components::def::ItemSymbol;
+use crate::core::components::def::ItemVolume;
 use crate::sim::dev_worldgen::{DevGroundItemName, DevPlayer};
 use crate::sim::systems::dev_move::DevCamera;
 use crate::sim::world_setup::WorldMapResource;

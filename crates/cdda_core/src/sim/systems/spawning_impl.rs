@@ -5,13 +5,13 @@
 //! operation. No manual component enumeration — any component with
 //! `#[derive(Clone)]` on a def entity automatically propagates to spawns.
 
-use crate::sim::components::{Solid, WorldPosition};
-use crate::sim::def_components::*;
+use crate::core::components::sim::{Solid, WorldPosition};
+use crate::core::components::def::*;
 use bevy_ecs::entity::EntityCloner;
 use bevy_ecs::prelude::*;
-use crate::actor::components::{BodyPartDef, BodyPartSlot, Faction, Health, IsAlive};
-use crate::coords::WorldPos;
-use crate::item::components::{CurrentCharges, DefOrigin, StackCount};
+use crate::core::components::actor::{BodyPartDef, BodyPartSlot, Faction, Health, IsAlive};
+use crate::core::coords::WorldPos;
+use crate::core::components::item::{CurrentCharges, DefOrigin, StackCount};
 
 /// Spawn a gameplay item entity by cloning a definition entity.
 ///
@@ -104,8 +104,8 @@ pub fn spawn_body_parts_for_creature(
 
         // Clone the def entity into a body part instance
         let mut builder = EntityCloner::build_opt_out(world);
-        builder.deny::<crate::sim::def_components::IsDef>();
-        builder.deny::<crate::sim::def_components::DefStrId>();
+        builder.deny::<crate::core::components::def::IsDef>();
+        builder.deny::<crate::core::components::def::DefStrId>();
         builder.linked_cloning(true);
         let mut cloner = builder.finish();
         let instance = cloner.spawn_clone(world, def_entity);

@@ -94,7 +94,7 @@ pub fn start_game_on_event(
 // ---------------------------------------------------------------------------
 
 fn register_reflect_types(app: &mut App) {
-    use cdda_core::sim::components::{InFlight, Solid, Velocity, WorldPosition};
+    use cdda_core::core::components::{InFlight, Solid, Velocity, WorldPosition};
 
     app.register_type::<WorldPosition>();
     app.register_type::<Solid>();

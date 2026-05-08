@@ -1,5 +1,5 @@
 use crate::data::raw_types::{DefId, LocalizedString};
-use crate::units::Time;
+use crate::core::units::Time;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

@@ -4,7 +4,7 @@
 //! effective coverage, encumbrance, warmth, damage reduction, and
 //! environmental protection.
 
-use cdda_core::sim::def_components::{
+use cdda_core::core::components::def::{
     ArmourData, ArmourPart, ItemFlagList, ItemInsulation, ItemMaterials, ItemName, ItemPrice,
     ItemStackSize, ItemVolume, ItemWeight,
 };

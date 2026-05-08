@@ -8,7 +8,7 @@
 //! entity despawn, and the default zero state.
 
 use bevy_ecs::entity::Entity;
-use cdda_core::actor::components::{Morale, MoraleBonus, MoraleBonusOf, MoraleBonuses};
+use cdda_core::core::components::actor::{Morale, MoraleBonus, MoraleBonusOf, MoraleBonuses};
 use cdda_core::Time;
 use cdda_core::sim::test_utils::TestBed;
 

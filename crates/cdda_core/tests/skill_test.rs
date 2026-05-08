@@ -5,7 +5,7 @@
 //! queried, modified, or deleted without touching the creature entity.
 
 use bevy_ecs::prelude::*;
-use cdda_core::actor::components::{CreatureSkills, SkillEntry, SkillOf};
+use cdda_core::core::components::actor::{CreatureSkills, SkillEntry, SkillOf};
 use cdda_core::sim::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------

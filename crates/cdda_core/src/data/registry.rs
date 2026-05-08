@@ -1,5 +1,5 @@
 use crate::data::raw_defs::*;
-use crate::data::raw_types::DefId;
+use crate::core::id::DefId;
 use std::collections::HashMap;
 use std::sync::Arc;
 

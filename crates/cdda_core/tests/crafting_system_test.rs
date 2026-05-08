@@ -1,9 +1,9 @@
 #![allow(unused_imports)]
 
 use bevy_ecs::prelude::Entity;
-use cdda_core::actor::components::*;
+use cdda_core::core::components::actor::*;
 use cdda_core::*;
-use cdda_core::sim::components::*;
+use cdda_core::core::components::sim::*;
 use cdda_core::sim::systems::crafting::*;
 use cdda_core::sim::test_utils::TestBed;
 
