@@ -9,20 +9,14 @@ name = "cdda"
 path = "src/main.rs"
 
 [dependencies]
+clap.workspace = true
 cdda_core.workspace = true
-cdda_render.workspace = true
-cdda_input.workspace = true
-cdda_sim.workspace = true
-cdda_screen.workspace = true
-cdda_replay  = { path = "../cdda_replay" }
-cdda_actor   = { path = "../cdda_actor" }
-cdda_item    = { path = "../cdda_item" }
-cdda_assets  = { path = "../cdda_assets" }
 bevy = { workspace = true, features = ["3d"] }
 bevy-inspector-egui.workspace = true
 bevy_egui = { version = "0.39" }
 bevy_state = "0.18"
 tracing.workspace = true
+bevy_mod_debugdump = "0.15.0"
 
 [features]
 default = ["dynamic"]

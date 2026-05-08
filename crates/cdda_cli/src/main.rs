@@ -81,7 +81,7 @@ fn cmd_schema() {
     eprintln!("Generating schemas in {:?}", out_dir);
     std::fs::create_dir_all(&out_dir).expect("Failed to create schema output directory");
 
-    match cdda_data::schema::write_all_schemas(&out_dir) {
+    match cdda_core::data::schema::write_all_schemas(&out_dir) {
         Ok(()) => {
             let count = out_dir.read_dir().map(|d| d.count()).unwrap_or(0);
             eprintln!("Done. {} schema files written.", count);
@@ -112,7 +112,7 @@ fn cmd_stats(path: &PathBuf) {
         std::process::exit(1);
     }
 
-    let mut loader = cdda_data::loader::Loader::new(vec![path.clone()]);
+    let mut loader = cdda_core::data::loader::Loader::new(vec![path.clone()]);
     let raw_map = loader.ingest_all();
 
     eprintln!("Raw definitions by type:");
@@ -149,7 +149,7 @@ fn cmd_validate(path: &PathBuf) {
         std::process::exit(1);
     }
 
-    let mut loader = cdda_data::loader::Loader::new(vec![path.clone()]);
+    let mut loader = cdda_core::data::loader::Loader::new(vec![path.clone()]);
     let raw_map = loader.ingest_all();
 
     let mut total_errors = 0;
@@ -194,7 +194,7 @@ fn cmd_check(path: &PathBuf) {
     }
 
     eprint!("Loading data from {:?} ... ", path);
-    let mut loader = cdda_data::loader::Loader::new(vec![path.clone()]);
+    let mut loader = cdda_core::data::loader::Loader::new(vec![path.clone()]);
 
     match loader.load() {
         Ok(registry) => {
@@ -240,7 +240,7 @@ fn cmd_ablation(baseline: &PathBuf, mod_dirs: &[PathBuf]) {
         dirs.push(mod_dir.clone());
     }
 
-    let mut loader = cdda_data::loader::Loader::new(dirs.clone());
+    let mut loader = cdda_core::data::loader::Loader::new(dirs.clone());
     match loader.load() {
         Ok(registry) => {
             eprintln!("✅ {} definitions", registry.total_count());
@@ -264,7 +264,7 @@ fn cmd_ablation(baseline: &PathBuf, mod_dirs: &[PathBuf]) {
                 "  Without {:?} ... ",
                 mod_dir.file_name().unwrap_or_default()
             );
-            let mut l = cdda_data::loader::Loader::new(without);
+            let mut l = cdda_core::data::loader::Loader::new(without);
             match l.load() {
                 Ok(registry) => {
                     eprintln!("✅ {} definitions", registry.total_count());
@@ -289,7 +289,7 @@ fn cmd_ablation(baseline: &PathBuf, mod_dirs: &[PathBuf]) {
         eprintln!("=== Isolated mods (with baseline) ===");
         for mod_dir in mod_dirs {
             eprint!("  {:?} ... ", mod_dir.file_name().unwrap_or_default());
-            let mut l = cdda_data::loader::Loader::new(vec![baseline.clone(), mod_dir.clone()]);
+            let mut l = cdda_core::data::loader::Loader::new(vec![baseline.clone(), mod_dir.clone()]);
             match l.load() {
                 Ok(registry) => {
                     eprintln!("✅ {} definitions", registry.total_count());

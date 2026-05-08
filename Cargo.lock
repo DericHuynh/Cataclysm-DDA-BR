@@ -897,6 +897,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_enhanced_input"
+version = "0.24.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c1352112be5fbb7ee04eb9fdc4c7d01e6cf1689080f242b7c014794ea5f46db"
+dependencies = [
+ "bevy",
+ "bevy_enhanced_input_macros",
+ "bitflags 2.11.1",
+ "log",
+ "smallvec",
+ "variadics_please",
+]
+
+[[package]]
+name = "bevy_enhanced_input_macros"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17ee73d4e362e2eb15ac58331c94e5076f6b5065761f008ca7dc930d446d205b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "bevy_feathers"
 version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1253,6 +1278,23 @@ name = "bevy_mikktspace"
 version = "0.17.0-dev"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ef8e4b7e61dfe7719bb03c884dc270cd46a82efb40f93e9933b990c5c190c59"
+
+[[package]]
+name = "bevy_mod_debugdump"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0615f61bef44aca7d094a261c4b65a9f8587f1d5d18091be77fbc0f6cd5846c8"
+dependencies = [
+ "bevy_app",
+ "bevy_color",
+ "bevy_ecs",
+ "bevy_log",
+ "bevy_platform",
+ "bevy_render",
+ "bevy_utils",
+ "disqualified",
+ "lexopt",
+]
 
 [[package]]
 name = "bevy_pbr"
@@ -1827,6 +1869,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "bidimap"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b26455fbcd1a3082993ab22fed1b956d8f1422fb414f2bf2178dfe37e2b47735"
+
+[[package]]
 name = "bindgen"
 version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2020,47 +2068,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "cdda_actor"
-version = "0.1.0"
-dependencies = [
- "bevy_app",
- "bevy_ecs",
- "bevy_reflect",
- "cdda_core",
- "cdda_sim",
-]
-
-[[package]]
 name = "cdda_app"
 version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy-inspector-egui",
  "bevy_egui",
+ "bevy_mod_debugdump",
  "bevy_state",
- "cdda_actor",
- "cdda_assets",
  "cdda_core",
- "cdda_input",
- "cdda_item",
- "cdda_render",
- "cdda_replay",
- "cdda_screen",
- "cdda_sim",
- "tracing",
-]
-
-[[package]]
-name = "cdda_assets"
-version = "0.1.0"
-dependencies = [
- "bevy_app",
- "bevy_asset",
- "bevy_reflect",
- "cdda_data",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
+ "clap",
  "tracing",
 ]
 
@@ -2069,7 +2086,6 @@ name = "cdda_cli"
 version = "0.1.0"
 dependencies = [
  "cdda_core",
- "cdda_data",
  "clap",
  "schemars",
  "serde_json",
@@ -2081,136 +2097,28 @@ dependencies = [
 name = "cdda_core"
 version = "0.1.0"
 dependencies = [
- "bevy_ecs",
- "bevy_reflect",
- "rand",
- "schemars",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "cdda_data"
-version = "0.1.0"
-dependencies = [
- "cdda_core",
- "indexmap",
- "schemars",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tracing",
-]
-
-[[package]]
-name = "cdda_input"
-version = "0.1.0"
-dependencies = [
- "bevy_app",
- "bevy_ecs",
- "bevy_input",
- "cdda_core",
- "serde",
- "tracing",
-]
-
-[[package]]
-name = "cdda_item"
-version = "0.1.0"
-dependencies = [
- "bevy_app",
- "bevy_ecs",
- "bevy_reflect",
- "cdda_core",
- "cdda_sim",
-]
-
-[[package]]
-name = "cdda_map"
-version = "0.1.0"
-dependencies = [
- "cdda_core",
- "pathfinding",
- "rstar",
- "serde",
- "thiserror 2.0.18",
- "tracing",
-]
-
-[[package]]
-name = "cdda_mod"
-version = "0.1.0"
-dependencies = [
- "cdda_data",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tracing",
-]
-
-[[package]]
-name = "cdda_render"
-version = "0.1.0"
-dependencies = [
  "bevy",
  "bevy-inspector-egui",
- "bevy_state",
- "cdda_actor",
- "cdda_core",
- "cdda_input",
- "cdda_item",
- "cdda_map",
- "cdda_screen",
- "cdda_sim",
- "serde_json",
-]
-
-[[package]]
-name = "cdda_replay"
-version = "0.1.0"
-dependencies = [
  "bevy_app",
+ "bevy_asset",
  "bevy_ecs",
- "cdda_core",
- "cdda_input",
- "cdda_sim",
- "postcard",
- "rustc-hash 2.1.2",
- "serde",
- "tempfile",
- "zstd",
-]
-
-[[package]]
-name = "cdda_screen"
-version = "0.1.0"
-dependencies = [
- "bevy_app",
- "bevy_ecs",
- "bevy_state",
- "cdda_core",
- "cdda_input",
- "tracing",
-]
-
-[[package]]
-name = "cdda_sim"
-version = "0.1.0"
-dependencies = [
- "bevy_ecs",
+ "bevy_enhanced_input",
+ "bevy_input",
  "bevy_reflect",
  "bevy_state",
- "cdda_actor",
- "cdda_core",
- "cdda_data",
- "cdda_input",
- "cdda_item",
- "cdda_map",
- "cdda_mod",
+ "bevy_ui",
+ "bidimap",
+ "dyn-clone",
+ "fixedbitset",
+ "indexmap",
+ "postcard",
  "rand",
+ "rustc-hash 2.1.2",
+ "schemars",
  "serde",
  "serde_json",
+ "smallvec",
+ "tempfile",
  "thiserror 2.0.18",
  "tracing",
 ]
@@ -2622,18 +2530,6 @@ name = "data-encoding"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
-
-[[package]]
-name = "deprecate-until"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d0795c0c5b2cab72b80d75b5cb08bde679e616c67e954669a2476668319ac3a"
-dependencies = [
- "proc-macro2",
- "quote",
- "semver",
- "syn",
-]
 
 [[package]]
 name = "derive_more"
@@ -3429,16 +3325,6 @@ dependencies = [
 
 [[package]]
 name = "heapless"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bfb9eb618601c89945a70e254898da93b13be0388091d42117462b265bb3fad"
-dependencies = [
- "hash32 0.3.1",
- "stable_deref_trait",
-]
-
-[[package]]
-name = "heapless"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25ba4bd83f9415b58b4ed8dc5714c76e626a105be4646c02630ad730ad3b5aa4"
@@ -3639,15 +3525,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "integer-sqrt"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "276ec31bcb4a9ee45f58bec6f9ec700ae4cf4f4f8f2fa7e06cb406bd5ffdd770"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
 name = "inventory"
 version = "0.3.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3830,6 +3707,12 @@ dependencies = [
  "ogg",
  "tinyvec",
 ]
+
+[[package]]
+name = "lexopt"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "803ec87c9cfb29b9d2633f20cba1f488db3fd53f2158b1024cbefb47ba05d413"
 
 [[package]]
 name = "libc"
@@ -4635,20 +4518,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
-name = "pathfinding"
-version = "4.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "835ad2773f8587ad2d90a0f7f0022ca743dfd5a6a24ea25062f3519c38d2fcfa"
-dependencies = [
- "deprecate-until",
- "indexmap",
- "integer-sqrt",
- "num-traits",
- "rustc-hash 2.1.2",
- "thiserror 2.0.18",
-]
-
-[[package]]
 name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5061,17 +4930,6 @@ name = "roxmltree"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
-
-[[package]]
-name = "rstar"
-version = "0.12.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "421400d13ccfd26dfa5858199c30a5d76f9c54e0dba7575273025b43c5175dbb"
-dependencies = [
- "heapless 0.8.0",
- "num-traits",
- "smallvec",
-]
 
 [[package]]
 name = "rustc-hash"
@@ -5531,19 +5389,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
 dependencies = [
  "winapi-util",
-]
-
-[[package]]
-name = "tests"
-version = "0.1.0"
-dependencies = [
- "bevy_ecs",
- "cdda_actor",
- "cdda_core",
- "cdda_data",
- "cdda_item",
- "cdda_sim",
- "serde_json",
 ]
 
 [[package]]
@@ -7246,34 +7091,6 @@ name = "zmij"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
-
-[[package]]
-name = "zstd"
-version = "0.13.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e91ee311a569c327171651566e07972200e76fcfe2242a4fa446149a3881c08a"
-dependencies = [
- "zstd-safe",
-]
-
-[[package]]
-name = "zstd-safe"
-version = "7.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f49c4d5f0abb602a93fb8736af2a4f4dd9512e36f7f570d66e65ff867ed3b9d"
-dependencies = [
- "zstd-sys",
-]
-
-[[package]]
-name = "zstd-sys"
-version = "2.0.16+zstd.1.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91e19ebc2adc8f83e43039e79776e3fda8ca919132d68a1fed6a5faca2683748"
-dependencies = [
- "cc",
- "pkg-config",
-]
 
 [[package]]
 name = "zune-core"

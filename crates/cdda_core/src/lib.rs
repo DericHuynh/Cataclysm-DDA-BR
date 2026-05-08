@@ -8,6 +8,15 @@
 //! be serializable for save/load.
 //! This is the lowest crate in the dependency graph.
 
+pub mod screen;
+pub mod render;
+pub mod input;
+pub mod sim;
+pub mod map;
+pub mod actor;
+pub mod item;
+pub mod data;
+pub mod replay;
 pub mod coords;
 pub mod damage;
 pub mod def_kinds;

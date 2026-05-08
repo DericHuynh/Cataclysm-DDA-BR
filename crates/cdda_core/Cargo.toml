@@ -2,15 +2,39 @@
 name = "cdda_core"
 version = "0.1.0"
 edition = "2021"
-description = "Domain types – units, coords, IDs, templates, SystemSet labels, common messages."
+description = "Merged CDDA crate — all features as sub-modules."
 
 [dependencies]
+rustc-hash = "2"
 rand.workspace = true
 serde.workspace = true
 schemars.workspace = true
 thiserror.workspace = true
+indexmap.workspace = true
+tracing.workspace = true
+smallvec.workspace = true
+serde_json.workspace = true
 bevy_ecs.workspace = true
 bevy_reflect.workspace = true
+bevy_app.workspace = true
+bevy_asset = "0.18"
+bevy_state = "0.18"
+bevy_input = { version = "0.18", features = ["keyboard"] }
+bevy_ui = "0.18"
+bevy_enhanced_input = "0.24.4"
+postcard.workspace = true
+bevy = { workspace = true, default-features = false, features = [
+    "bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_render",
+    "bevy_sprite", "bevy_text", "bevy_ui", "bevy_winit", "x11",
+] }
+bevy-inspector-egui = { workspace = true, optional = true }
+dyn-clone = "1.0.20"
+fixedbitset = "0.5.7"
+bidimap = "0.7.0"
+
+[features]
+default = ["inspector"]
+inspector = ["bevy-inspector-egui"]
 
 [dev-dependencies]
-serde_json.workspace = true
+tempfile = "3.27.0"

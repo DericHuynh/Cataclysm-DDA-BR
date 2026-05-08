@@ -3,19 +3,7 @@ resolver = "2"
 members = [
     "crates/cdda_cli",
     "crates/cdda_core",
-    "crates/cdda_data",
-    "crates/cdda_mod",
-    "crates/cdda_sim",
-    "crates/cdda_map",
-    "crates/cdda_render",
-    "crates/cdda_input",
-    "crates/cdda_actor",
     "crates/cdda_app",
-    "crates/cdda_item",
-    "crates/cdda_screen",
-    "crates/cdda_replay",
-    "crates/cdda_assets",
-    "tests",
 ]
 
 [workspace.dependencies]
@@ -48,17 +36,6 @@ bevy-inspector-egui = "0.36"
 # Internal workspace crates
 cdda_core   = { path = "crates/cdda_core" }
 cdda_cli = { path = "crates/cdda_cli" }
-cdda_data = { path = "crates/cdda_data" }
-cdda_mod  = { path = "crates/cdda_mod" }
-cdda_sim  = { path = "crates/cdda_sim" }
-cdda_map  = { path = "crates/cdda_map" }
-cdda_render = { path = "crates/cdda_render" }
-cdda_input  = { path = "crates/cdda_input" }
-cdda_actor  = { path = "crates/cdda_actor" }
-cdda_item   = { path = "crates/cdda_item" }
-cdda_screen = { path = "crates/cdda_screen" }
-cdda_replay  = { path = "crates/cdda_replay" }
-cdda_assets  = { path = "crates/cdda_assets" }
 cdda_app     = { path = "crates/cdda_app" }
 
 [profile.dev]

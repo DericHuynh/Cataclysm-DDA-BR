@@ -10,39 +10,41 @@ use bevy::render::settings::{RenderCreation, WgpuSettings};
 use bevy::render::RenderPlugin;
 use bevy::time::common_conditions::on_timer;
 use bevy::window::PresentMode;
-use std::time::Duration;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_state::app::AppExtStates;
 use bevy_state::prelude::OnEnter;
 use bevy_state::state::NextState;
+use std::time::Duration;
 
-use cdda_screen::Screen;
+use cdda_core::screen::Screen;
 use cdda_core::{GameSet, SimSet};
 
-use cdda_actor::plugin::ActorPlugin;
-use cdda_assets::CddaAssetsPlugin;
-use cdda_item::plugin::ItemPlugin;
-use cdda_sim::def_world::load_data_system;
-use cdda_sim::state::AppState;
-use cdda_sim::events::ItemMoveEvent;
-use cdda_sim::systems::ai::ai_phase;
-use cdda_sim::systems::bionics::tick_bionics;
-use cdda_sim::systems::combat::combat_phase;
-use cdda_sim::systems::effects::effects_phase;
-use cdda_sim::systems::healing::healing_phase;
-use cdda_sim::systems::dev_spawn::{build_dev_spawn_catalog, dev_spawn_flush, dev_spawn_panel_input};
-use cdda_sim::systems::inventory::{
+use cdda_core::actor::plugin::ActorPlugin;
+use cdda_core::data::assets::CddaAssetsPlugin;
+use cdda_core::item::plugin::ItemPlugin;
+use cdda_core::sim::def_world::load_data_system;
+use cdda_core::sim::events::ItemMoveEvent;
+use cdda_core::sim::state::AppState;
+use cdda_core::sim::systems::ai::ai_phase;
+use cdda_core::sim::systems::bionics::tick_bionics;
+use cdda_core::sim::systems::combat::combat_phase;
+use cdda_core::sim::systems::dev_spawn::{
+    build_dev_spawn_catalog, dev_spawn_flush, dev_spawn_panel_input,
+};
+use cdda_core::sim::systems::effects::effects_phase;
+use cdda_core::sim::systems::healing::healing_phase;
+use cdda_core::sim::systems::inventory::{
     assign_invlets_system, build_inventory_bins, dev_pickup_drop_system, inventory_screen_input,
     process_item_move_events, spawn_dev_world,
 };
-use cdda_sim::systems::morale::tick_morale_decay;
-use cdda_sim::systems::movement::movement_phase;
-use cdda_sim::systems::spatial::update_spatial_index;
-use cdda_sim::systems::spawning::spawning_phase;
-use cdda_sim::systems::temperature::temperature_phase;
-use cdda_sim::systems::turn::{debug_turn_queue, tick_move_points};
-use cdda_sim::systems::vision::update_vision;
-use cdda_sim::world_setup;
+use cdda_core::sim::systems::morale::tick_morale_decay;
+use cdda_core::sim::systems::movement::movement_phase;
+use cdda_core::sim::systems::spatial::update_spatial_index;
+use cdda_core::sim::systems::spawning::spawning_phase;
+use cdda_core::sim::systems::temperature::temperature_phase;
+use cdda_core::sim::systems::turn::{debug_turn_queue, tick_move_points};
+use cdda_core::sim::systems::vision::update_vision;
+use cdda_core::sim::world_setup;
 
 // ---------------------------------------------------------------------------
 // Startup config
@@ -76,11 +78,11 @@ impl Default for CddaStartupConfig {
 /// Listens for `GameEvent::StartNewGame` and transitions `AppState`
 /// from `MainMenu` → `Gameplay`, kicking off JSON loading + worldgen.
 pub fn start_game_on_event(
-    mut reader: MessageReader<cdda_screen::GameEvent>,
+    mut reader: MessageReader<cdda_core::screen::GameEvent>,
     mut next: ResMut<NextState<AppState>>,
 ) {
     for event in reader.read() {
-        if *event == cdda_screen::GameEvent::StartNewGame {
+        if *event == cdda_core::screen::GameEvent::StartNewGame {
             info!("Player confirmed start game — transitioning to DataLoading");
             next.set(AppState::DataLoading);
         }
@@ -92,7 +94,7 @@ pub fn start_game_on_event(
 // ---------------------------------------------------------------------------
 
 fn register_reflect_types(app: &mut App) {
-    use cdda_sim::components::{InFlight, Solid, Velocity, WorldPosition};
+    use cdda_core::sim::components::{InFlight, Solid, Velocity, WorldPosition};
 
     app.register_type::<WorldPosition>();
     app.register_type::<Solid>();
@@ -115,18 +117,30 @@ impl Plugin for CddaPlugin {
         app.init_state::<AppState>();
 
         // Fix #5: Drive Screen from AppState so sim and render never desync.
-        app.add_systems(OnEnter(AppState::MainMenu), |mut next: ResMut<NextState<Screen>>| {
-            next.set(Screen::MainMenu);
-        });
-        app.add_systems(OnEnter(AppState::DataLoading), |mut next: ResMut<NextState<Screen>>| {
-            next.set(Screen::DevWorldgen); // loading screen reuses devworldgen view
-        });
-        app.add_systems(OnEnter(AppState::WorldGen), |mut next: ResMut<NextState<Screen>>| {
-            next.set(Screen::DevWorldgen);
-        });
-        app.add_systems(OnEnter(AppState::InGame), |mut next: ResMut<NextState<Screen>>| {
-            next.set(Screen::Gameplay);
-        });
+        app.add_systems(
+            OnEnter(AppState::MainMenu),
+            |mut next: ResMut<NextState<Screen>>| {
+                next.set(Screen::MainMenu);
+            },
+        );
+        app.add_systems(
+            OnEnter(AppState::DataLoading),
+            |mut next: ResMut<NextState<Screen>>| {
+                next.set(Screen::DevWorldgen); // loading screen reuses devworldgen view
+            },
+        );
+        app.add_systems(
+            OnEnter(AppState::WorldGen),
+            |mut next: ResMut<NextState<Screen>>| {
+                next.set(Screen::DevWorldgen);
+            },
+        );
+        app.add_systems(
+            OnEnter(AppState::InGame),
+            |mut next: ResMut<NextState<Screen>>| {
+                next.set(Screen::Gameplay);
+            },
+        );
 
         app.configure_sets(
             Update,
@@ -155,9 +169,9 @@ impl Plugin for CddaPlugin {
 
         app.add_message::<ItemMoveEvent>();
 
-        app.add_plugins(cdda_render::CddaRenderPlugin);
-        app.add_plugins(cdda_input::CddaInputPlugin);
-        app.add_plugins(cdda_screen::ScreenNavigationPlugin);
+        app.add_plugins(cdda_core::render::CddaRenderPlugin);
+        app.add_plugins(cdda_core::input::CddaInputPlugin);
+        app.add_plugins(cdda_core::screen::ScreenNavigationPlugin);
 
         // Replay: record or replay based on startup config
         let config = app
@@ -167,20 +181,20 @@ impl Plugin for CddaPlugin {
             .unwrap_or_default();
 
         if let Some(ref replay_path) = config.replay_file {
-            match cdda_replay::session_log::SessionLog::load_compressed(std::path::Path::new(
+            match cdda_core::replay::session_log::SessionLog::load_compressed(std::path::Path::new(
                 replay_path,
             )) {
                 Ok(log) => {
                     info!("Replay loaded: {} actions", log.len());
                     app.insert_resource(log);
-                    app.add_plugins(cdda_replay::CddaReplayModePlugin);
+                    app.add_plugins(cdda_core::replay::CddaReplayModePlugin);
                 }
                 Err(e) => {
                     error!("Failed to load replay: {e}");
                 }
             }
         } else if config.record_session {
-            app.add_plugins(cdda_replay::CddaReplayPlugin {
+            app.add_plugins(cdda_core::replay::CddaReplayPlugin {
                 world_seed: config.world_seed,
             });
         }
@@ -188,11 +202,17 @@ impl Plugin for CddaPlugin {
         app.add_systems(OnEnter(AppState::InGame), spawn_dev_world);
         // Build spawn catalog the first time the debug panel is opened.
         app.add_systems(OnEnter(Screen::DevSpawnPanel), build_dev_spawn_catalog);
-        app.add_systems(Update, load_data_system.run_if(in_state(AppState::DataLoading)));
-        app.add_systems(Update, start_game_on_event.run_if(in_state(AppState::MainMenu)));
         app.add_systems(
             Update,
-            cdda_sim::def_world::worldgen_system.run_if(in_state(AppState::WorldGen)),
+            load_data_system.run_if(in_state(AppState::DataLoading)),
+        );
+        app.add_systems(
+            Update,
+            start_game_on_event.run_if(in_state(AppState::MainMenu)),
+        );
+        app.add_systems(
+            Update,
+            cdda_core::sim::def_world::worldgen_system.run_if(in_state(AppState::WorldGen)),
         );
 
         // Fix #6: Gate turn tick so MP isn't granted every frame.
@@ -280,7 +300,10 @@ pub fn run() {
             }),
     );
     // Debug: inspector panel (toggle with F3 in windowed mode)
-    app.add_plugins((bevy_egui::EguiPlugin::default(), WorldInspectorPlugin::new()));
+    app.add_plugins((
+        bevy_egui::EguiPlugin::default(),
+        WorldInspectorPlugin::new(),
+    ));
 
     app.add_plugins(CddaPlugin);
     app.run();
