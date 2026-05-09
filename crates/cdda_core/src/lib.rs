@@ -11,9 +11,14 @@
 #![allow(unexpected_cfgs)]
 
 pub mod actor;
+pub mod ai;
+pub mod combat;
 pub mod core;
+pub mod crafting;
 pub mod data;
+pub mod equipment;
 pub mod input;
+pub mod inventory;
 pub mod item;
 pub mod map;
 pub mod messages;
@@ -21,9 +26,10 @@ pub mod render;
 pub mod replay;
 pub mod rng;
 pub mod schedule;
-pub mod screen;
+pub mod context;
 pub mod sim;
 pub mod sim_id;
+pub mod worldgen;
 pub mod wyrand;
 
 // Re-export key types — all point to core:: for the canonical definitions

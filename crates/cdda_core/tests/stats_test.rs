@@ -1,4 +1,4 @@
-//! Integration tests for [`cdda_core::stats::Stats`].
+//! Integration tests for [`Stats`](cdda_core::Stats).
 //!
 //! Exercises construction, default values, equality, and field access.
 

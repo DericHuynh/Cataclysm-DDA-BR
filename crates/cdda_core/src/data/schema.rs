@@ -115,7 +115,7 @@ pub fn validate_all<T: schemars::JsonSchema + serde::de::DeserializeOwned>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::raw_defs::ItemDef;
+    use crate::core::raw_defs::ItemDef;
     use serde_json::json;
 
     // -----------------------------------------------------------------------

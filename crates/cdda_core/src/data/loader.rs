@@ -1,4 +1,4 @@
-use crate::data::raw_defs::*;
+use crate::core::raw_defs::*;
 use crate::core::id::DefId;
 use crate::data::registry::DefRegistry;
 use crate::data::resolve;

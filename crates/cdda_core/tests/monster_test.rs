@@ -228,7 +228,7 @@ fn monster_armour_all_types() {
 
 #[test]
 fn monster_flags_bitset() {
-    use cdda_core::sim::flags::{MonsterFlagRegistry, MonsterFlags};
+    use cdda_core::data::flags::{MonsterFlagRegistry, MonsterFlags};
 
     let mut reg = MonsterFlagRegistry::default();
     let bitset = reg.0.register_all(&[

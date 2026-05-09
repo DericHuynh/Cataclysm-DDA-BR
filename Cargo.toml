@@ -30,8 +30,9 @@ postcard        = { version = "1", features = ["alloc"] }
 # Bevy ecosystem
 bevy                = { version = "0.18", default-features = false, features = ["bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_render", "bevy_sprite", "bevy_text", "bevy_ui", "bevy_winit", "x11", "bevy_gilrs"] }
 bevy_lunex          = "0.6"
-bevy_fast_tilemap   = "0.18"
-bevy-inspector-egui = "0.36"
+bevy_fast_tilemap         = "0.18"
+bevy-inspector-egui       = "0.36"
+leafwing-input-manager    = "0.20"
 
 # Internal workspace crates
 cdda_core   = { path = "crates/cdda_core" }

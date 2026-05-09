@@ -1,6 +1,5 @@
-use bevy_app::{App, Plugin};
 use crate::core::components::actor::*;
-
+use bevy_app::{App, Plugin};
 
 pub struct ActorPlugin;
 
@@ -57,7 +56,7 @@ impl Plugin for ActorPlugin {
         app.register_type::<StatusEffect>();
 
         // Turn scheduling + status markers
-        app.register_type::<MovePoints>();
+        app.register_type::<ActionPoints>();
         app.register_type::<Speed>();
         app.register_type::<IsAlive>();
         app.register_type::<Stunned>();

@@ -7,7 +7,7 @@
 
 use bevy_ecs::prelude::*;
 use cdda_core::sim::test_utils::TestBed;
-use cdda_core::sim::systems::effects::*;
+use cdda_core::actor::effects::*;
 use cdda_core::core::components::sim::*;
 use cdda_core::core::components::actor::{StatusEffect, EffectOn, ActiveEffects, IsAlive, Health};
 use cdda_core::{EffectId, Time};

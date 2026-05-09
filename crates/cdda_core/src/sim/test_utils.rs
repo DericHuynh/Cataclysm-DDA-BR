@@ -3,11 +3,11 @@
 //! Provides `TestBed` — a lightweight, `bevy_ecs`-compatible wrapper around `World`
 //! for testing systems and entities in isolation.  No full `bevy` dependency needed.
 
-use crate::core::components::sim::{InFlight, Solid, Velocity, WorldPosition};
 use crate::core::components::actor::*;
 use crate::core::components::def::*;
-use bevy_ecs::prelude::*;
 use crate::core::components::item::*;
+use crate::core::components::sim::{InFlight, Solid, Velocity, WorldPosition};
+use bevy_ecs::prelude::*;
 use bevy_ecs::system::IntoSystem;
 use bevy_ecs::world::World;
 
@@ -59,9 +59,9 @@ impl TestBed {
     pub fn load_data(
         &mut self,
         registry: &crate::data::DefRegistry,
-    ) -> crate::sim::def_world::DefinitionWorld {
+    ) -> crate::data::def_world::DefinitionWorld {
         Self::register_all_def_components(&mut self.world);
-        crate::sim::def_world::build_def_world(&mut self.world, registry, true)
+        crate::data::def_world::build_def_world(&mut self.world, registry, true)
     }
 
     // ── Batch registration ────────────────────────────────────────
@@ -200,7 +200,7 @@ impl TestBed {
         world.register_component::<Bleeding>();
         world.register_component::<OnFire>();
         world.register_component::<InFlight>();
-        world.register_component::<MovePoints>();
+        world.register_component::<ActionPoints>();
         world.register_component::<Speed>();
     }
 }

@@ -1,55 +1,36 @@
-use cdda_core::screen::config::{CharacterCreationState, GameSettings, WorldCreationSettings};
-
-// ---------------------------------------------------------------------------
-// GameSettings defaults
-// ---------------------------------------------------------------------------
+use cdda_core::context::config::{CharacterCreationState, FullscreenMode, GameSettings, WorldCreationSettings};
 
 #[test]
-fn game_settings_default_auto_save_enabled() {
+fn game_settings_default_auto_save() {
     let s = GameSettings::default();
-    assert!(s.auto_save_enabled);
-}
-
-#[test]
-fn game_settings_default_auto_save_interval() {
-    let s = GameSettings::default();
-    assert_eq!(s.auto_save_interval_minutes, 5);
-}
-
-#[test]
-fn game_settings_default_debug_off() {
-    let s = GameSettings::default();
-    assert!(!s.debug_mode);
-    assert!(!s.show_fps);
+    assert!(s.auto_save);
 }
 
 #[test]
 fn game_settings_default_not_fullscreen() {
     let s = GameSettings::default();
-    assert!(!s.fullscreen);
+    assert_eq!(s.fullscreen, FullscreenMode::Windowed);
 }
 
 #[test]
-fn game_settings_default_volumes_are_nonzero() {
+fn game_settings_default_music_volume() {
     let s = GameSettings::default();
     assert!(s.music_volume > 0);
-    assert!(s.sfx_volume > 0);
 }
 
 #[test]
-fn game_settings_default_terminal_size() {
+fn game_settings_default_sfx_volume() {
     let s = GameSettings::default();
-    assert_eq!(s.terminal_width, 80);
-    assert_eq!(s.terminal_height, 25);
+    assert!(s.sfx_volume > 0);
 }
 
 #[test]
 fn game_settings_mutation_works() {
     let mut s = GameSettings::default();
-    s.debug_mode = true;
-    s.font_size = 24;
-    assert!(s.debug_mode);
-    assert_eq!(s.font_size, 24);
+    s.auto_save = false;
+    assert!(!s.auto_save);
+    s.music_volume = 50;
+    assert_eq!(s.music_volume, 50);
 }
 
 // ---------------------------------------------------------------------------

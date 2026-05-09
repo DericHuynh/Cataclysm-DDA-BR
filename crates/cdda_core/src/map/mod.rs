@@ -15,6 +15,10 @@
 //! - `EntitySpatialIndex` bridge — spatial lookup for dynamic entities
 //! - Pathfinding — A* over terrain graph
 
+pub mod plugin;
+pub mod spatial;
+pub mod spatial_systems;
+
 use std::collections::HashMap;
 
 // ---------------------------------------------------------------------------

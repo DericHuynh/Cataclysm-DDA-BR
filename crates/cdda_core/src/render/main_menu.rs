@@ -3,11 +3,11 @@
 //! Spawned on `OnEnter(Screen::MainMenu)`, auto-despawned on `OnExit`
 //! via `DespawnOnExit(Screen::MainMenu)`.
 
-use crate::screen::InputFocus;
+use crate::context::InputFocus;
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
-use crate::screen::screen::Screen;
-use crate::screen::screen_nav::{screen_def, FocusedCommandIndex};
+use crate::context::ctx::Screen;
+use crate::context::nav::{screen_def, FocusedCommandIndex};
 
 /// Marks a command button, storing its index into the screen_def command list.
 #[derive(Component)]

@@ -12,7 +12,7 @@ use cdda_core::core::components::actor::{BodyTemperature, Health, IsAlive, Wetne
 use cdda_core::{ItemId, Time};
 use cdda_core::core::components::item::{PreservesTemp, Sealed, Spoilable};
 use cdda_core::core::components::def::ArmourPart;
-use cdda_core::sim::systems::temperature::*;
+use cdda_core::actor::temperature::*;
 use cdda_core::sim::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------

@@ -8,7 +8,7 @@
 use cdda_core::data::interner::StringInterner;
 use cdda_core::data::loader::Loader;
 use cdda_core::data::patch::apply_cdda_patch;
-use cdda_core::sim::flags::ItemFlagRegistry;
+use cdda_core::data::flags::ItemFlagRegistry;
 use std::io::Write;
 use std::path::PathBuf;
 use tempfile::TempDir;

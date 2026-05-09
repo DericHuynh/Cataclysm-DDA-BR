@@ -9,12 +9,14 @@
 //! entities atomically before the new state's `OnEnter` runs, preventing
 //! overlay glitches.
 
-use crate::screen::screen::Screen;
+use crate::context::ctx::Ctx as Screen;
 use bevy::prelude::*;
+use bevy_state::condition::in_state;
 use bevy_state::state::OnEnter;
 
 pub mod dev_spawn;
 pub mod dev_worldgen;
+pub mod examine;
 pub mod inventory;
 pub mod main_menu;
 pub mod settings;
@@ -82,6 +84,9 @@ impl Plugin for CddaRenderPlugin {
             inventory::update_inventory_screen.run_if(in_state(Screen::Inventory)),
         );
 
+        // ── Item Examine overlay ──────────────────────────────────────────
+        app.add_systems(OnEnter(Screen::ItemExamine), examine::spawn_examine_overlay);
+
         // ── Dev worldgen ───────────────────────────────────────────────────
         app.add_systems(OnEnter(Screen::DevWorldgen), dev_worldgen::spawn_dev_menu);
         app.add_systems(
@@ -93,7 +98,7 @@ impl Plugin for CddaRenderPlugin {
             Update,
             (
                 dev_worldgen::update_ascii_view,
-                crate::sim::systems::dev_move::dev_camera_move,
+                crate::worldgen::dev_move::dev_camera_move,
             )
                 .run_if(in_state(Screen::Gameplay)),
         );

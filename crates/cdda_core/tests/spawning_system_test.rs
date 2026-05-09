@@ -8,7 +8,7 @@ use cdda_core::core::coords::WorldPos;
 use cdda_core::core::components::sim::*;
 use cdda_core::core::components::def::*;
 use cdda_core::sim::events::SpawnEvent;
-use cdda_core::sim::systems::spawning::*;
+use cdda_core::worldgen::spawning::*;
 use cdda_core::sim::test_utils::TestBed;
 
 // ===========================================================================

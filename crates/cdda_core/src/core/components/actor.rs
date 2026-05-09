@@ -358,9 +358,9 @@ pub struct OnFire;
 
 /// Current action points (move points) for this entity.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Reflect)]
-pub struct MovePoints(pub i32);
+pub struct ActionPoints(pub i32);
 
-impl Default for MovePoints {
+impl Default for ActionPoints {
     fn default() -> Self {
         Self(0)
     }

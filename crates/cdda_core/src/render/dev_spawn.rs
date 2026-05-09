@@ -9,8 +9,9 @@
 
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
-use crate::screen::screen::Screen;
-use crate::sim::systems::dev_spawn::DevSpawnFocus;
+use crate::context::ctx::Ctx as Screen;
+use crate::core::components::def::ContainerData;
+use crate::worldgen::dev_spawn::DevSpawnFocus;
 
 // ---------------------------------------------------------------------------
 // Colours
@@ -117,6 +118,7 @@ pub(crate) fn update_dev_spawn_panel(
     mut commands: Commands,
     focus: Res<DevSpawnFocus>,
     container: Query<Entity, With<SpawnListContainer>>,
+    world: &World,
 ) {
     let Ok(container_entity) = container.single() else {
         return;
@@ -202,6 +204,52 @@ pub(crate) fn update_dev_spawn_panel(
                     TextColor(TEXT_ID),
                 ));
             });
+
+            // Pocket detail panel below focused item
+            if is_focused {
+                if let Some(container) = world.get::<ContainerData>(entry.def_entity) {
+                    let pocket_count = container.pockets.len();
+                    p.spawn((
+                        Node {
+                            width: Val::Percent(100.0),
+                            flex_direction: FlexDirection::Column,
+                            padding: UiRect::axes(Val::Px(24.0), Val::Px(6.0)),
+                            ..default()
+                        },
+                        BackgroundColor(Color::srgb(0.08, 0.12, 0.18)),
+                    ))
+                    .with_children(|det| {
+                        det.spawn((
+                            Text::new(format!(
+                                "Pockets: {} total  |  max vol {} mL  |  max wt {} g",
+                                pocket_count, container.max_volume, container.max_weight
+                            )),
+                            TextFont { font_size: 13.0, ..default() },
+                            TextColor(ACCENT),
+                        ));
+                        if pocket_count > 0 {
+                            for (pi, pocket) in container.pockets.iter().enumerate() {
+                                let sealed = if pocket.sealed { " [sealed]" } else { "" };
+                                let rigid = if pocket.rigid { " [rigid]" } else { "" };
+                                det.spawn((
+                                    Text::new(format!(
+                                        "  {}: type={}  vol={} mL  wt={} g  max_len={}{}{}",
+                                        pi + 1,
+                                        pocket.pocket_type,
+                                        pocket.max_volume,
+                                        pocket.max_weight,
+                                        pocket.max_item_length,
+                                        sealed,
+                                        rigid,
+                                    )),
+                                    TextFont { font_size: 12.0, ..default() },
+                                    TextColor(TEXT_BRIGHT),
+                                ));
+                            }
+                        }
+                    });
+                }
+            }
         });
     }
 }

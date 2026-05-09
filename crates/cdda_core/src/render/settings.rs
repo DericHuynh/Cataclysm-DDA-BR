@@ -9,9 +9,9 @@ use bevy_state::state_scoped::DespawnOnExit;
 use crate::input::{
     ContextBindings, GameAction, InputContextId, KeyChord, RebindCapture, RebindCaptureInner,
 };
-use crate::screen::config::GameSettings;
-use crate::screen::screen::Screen;
-use crate::screen::screen_nav::screen_def;
+use crate::context::config::GameSettings;
+use crate::context::screen::Screen;
+use crate::context::screen_nav::screen_def;
 
 // ---------------------------------------------------------------------------
 // Settings tab

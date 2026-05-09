@@ -64,8 +64,8 @@ pub struct ItemColor(pub String);
 #[derive(Component, Debug, Clone)]
 pub struct ItemMaterials(pub Vec<String>);
 
-/// Bitflag component — see `crate::sim::flags::ItemFlagList`.
-pub type ItemFlagList = crate::sim::flags::ItemFlagList;
+/// Bitflag component — see `crate::data::flags::ItemFlagList`.
+pub type ItemFlagList = crate::data::flags::ItemFlagList;
 
 /// Phase of matter.
 #[derive(Component, Debug, Clone, Copy)]
@@ -259,6 +259,7 @@ pub struct PocketTemplate {
     pub pocket_type: String,
     pub max_volume: u32,
     pub max_weight: u32,
+    pub max_item_length: u32,
     pub sealed: bool,
     pub rigid: bool,
 }
@@ -550,6 +551,11 @@ impl SubParts {
 #[relationship(relationship_target = SubParts)]
 pub struct ParentPart(pub Entity);
 
+/// Marker present on every recipe definition entity.
+/// Used to distinguish recipe defs from item/monster defs in queries.
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct IsRecipeDef;
+
 // ===========================================================================
 // RECIPE DEFINITION COMPONENTS
 // ===========================================================================
@@ -624,6 +630,10 @@ pub struct RecipeQualities(pub Vec<(String, u32)>);
 /// Recipe category (e.g. "CC_WEAPON", "CC_FOOD").
 #[derive(Component, Debug, Clone)]
 pub struct RecipeCategory(pub String);
+
+/// Recipe subcategory (e.g. "CSC_FOOD_BREAD", parsed from the raw `subcategory` field).
+#[derive(Component, Debug, Clone)]
+pub struct RecipeSubcategory(pub String);
 
 /// Recipe flags (e.g. "BLIND_EASY", "SECRET").
 #[derive(Component, Debug, Clone)]

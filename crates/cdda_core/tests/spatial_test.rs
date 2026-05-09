@@ -7,7 +7,7 @@
 
 use bevy_ecs::entity::Entity;
 use cdda_core::core::coords::{WorldPos, ZLevel};
-use cdda_core::sim::spatial::EntitySpatialIndex;
+use cdda_core::map::spatial::EntitySpatialIndex;
 
 /// Helper: create an entity from a numeric id.
 fn ent(id: u64) -> Entity {

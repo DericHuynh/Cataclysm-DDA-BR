@@ -1,5 +1,5 @@
-use cdda_core::screen::screen::Screen;
-use cdda_core::screen::screen_nav::FocusedCommandIndex;
+use cdda_core::context::screen::Screen;
+use cdda_core::context::screen_nav::FocusedCommandIndex;
 
 // ---------------------------------------------------------------------------
 // Initial state

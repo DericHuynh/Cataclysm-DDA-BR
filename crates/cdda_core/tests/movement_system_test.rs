@@ -8,12 +8,12 @@
 #![allow(unused_imports)]
 
 use bevy_ecs::prelude::*;
-use cdda_core::core::components::actor::{Bleeding, IsAlive, MovePoints, Speed, Stunned};
-use cdda_core::WorldPos;
-use cdda_core::core::components::sim::{Solid, WorldPosition};
+use cdda_core::core::components::actor::{Bleeding, IsAlive, ActionPoints, Speed, Stunned};
 use cdda_core::core::components::def::TerrainMoveCost;
-use cdda_core::sim::systems::movement::*;
+use cdda_core::core::components::sim::{Solid, WorldPosition};
+use cdda_core::actor::movement::*;
 use cdda_core::sim::test_utils::TestBed;
+use cdda_core::WorldPos;
 
 // ---------------------------------------------------------------------------
 // Move cost
@@ -23,17 +23,17 @@ use cdda_core::sim::test_utils::TestBed;
 #[ignore = "movement system not yet implemented"]
 fn move_cost_flat_terrain() {
     let mut test = TestBed::new();
-    test.register::<MovePoints>();
+    test.register::<ActionPoints>();
     test.register::<Speed>();
     test.register::<IsAlive>();
 
-    let mover = test.spawn((MovePoints(100), Speed(100), IsAlive));
+    let mover = test.spawn((ActionPoints(100), Speed(100), IsAlive));
 
     test.run_system(movement_phase);
 
     // Moving onto flat terrain (cost 100) with speed 100 should consume
     // exactly 100 move points.  Stub does nothing → MP unchanged → fails.
-    let mp = test.get::<MovePoints>(mover).unwrap();
+    let mp = test.get::<ActionPoints>(mover).unwrap();
     assert_eq!(mp.0, 0, "moving onto flat terrain should consume 100 MP");
 }
 
@@ -41,17 +41,17 @@ fn move_cost_flat_terrain() {
 #[ignore = "movement system not yet implemented"]
 fn move_cost_rough_terrain() {
     let mut test = TestBed::new();
-    test.register::<MovePoints>();
+    test.register::<ActionPoints>();
     test.register::<Speed>();
     test.register::<IsAlive>();
 
-    let mover = test.spawn((MovePoints(200), Speed(100), IsAlive));
+    let mover = test.spawn((ActionPoints(200), Speed(100), IsAlive));
 
     test.run_system(movement_phase);
 
     // Rough terrain (cost 200) should consume 200 MP.
     // Stub does nothing → MP unchanged → fails.
-    let mp = test.get::<MovePoints>(mover).unwrap();
+    let mp = test.get::<ActionPoints>(mover).unwrap();
     assert_eq!(mp.0, 0, "moving onto rough terrain should consume 200 MP");
 }
 
@@ -59,11 +59,11 @@ fn move_cost_rough_terrain() {
 #[ignore = "movement system not yet implemented"]
 fn move_cost_impassable() {
     let mut test = TestBed::new();
-    test.register::<MovePoints>();
+    test.register::<ActionPoints>();
     test.register::<Speed>();
     test.register::<IsAlive>();
 
-    let mover = test.spawn((MovePoints(100), Speed(100), IsAlive));
+    let mover = test.spawn((ActionPoints(100), Speed(100), IsAlive));
 
     test.run_system(movement_phase);
 
@@ -74,7 +74,7 @@ fn move_cost_impassable() {
     // We assert the MP is still 100, which the stub trivially satisfies,
     // but the real implementation should keep it at 100 because the
     // movement is blocked.  This test is a canary.
-    let mp = test.get::<MovePoints>(mover).unwrap();
+    let mp = test.get::<ActionPoints>(mover).unwrap();
     assert_eq!(
         mp.0, 100,
         "impassable terrain should prevent MP consumption"
@@ -85,20 +85,20 @@ fn move_cost_impassable() {
 #[ignore = "movement system not yet implemented"]
 fn move_cost_speed_modifies() {
     let mut test = TestBed::new();
-    test.register::<MovePoints>();
+    test.register::<ActionPoints>();
     test.register::<Speed>();
     test.register::<IsAlive>();
 
-    let fast = test.spawn((MovePoints(200), Speed(200), IsAlive));
-    let slow = test.spawn((MovePoints(200), Speed(50), IsAlive));
+    let fast = test.spawn((ActionPoints(200), Speed(200), IsAlive));
+    let slow = test.spawn((ActionPoints(200), Speed(50), IsAlive));
 
     test.run_system(movement_phase);
 
     // Speed 200 halves move cost → fast entity should have more MP left
     // than slow entity after same movement.  Stub does nothing → both at
     // 200 → fails.
-    let fast_mp = test.get::<MovePoints>(fast).unwrap().0;
-    let slow_mp = test.get::<MovePoints>(slow).unwrap().0;
+    let fast_mp = test.get::<ActionPoints>(fast).unwrap().0;
+    let slow_mp = test.get::<ActionPoints>(slow).unwrap().0;
     assert!(
         fast_mp > slow_mp,
         "higher speed should reduce effective move cost"
@@ -113,21 +113,21 @@ fn move_cost_speed_modifies() {
 #[ignore = "movement system not yet implemented"]
 fn move_cost_bleeding_penalty() {
     let mut test = TestBed::new();
-    test.register::<MovePoints>();
+    test.register::<ActionPoints>();
     test.register::<Speed>();
     test.register::<IsAlive>();
     test.register::<Bleeding>();
 
-    let bleeding = test.spawn((MovePoints(125), Speed(100), IsAlive, Bleeding));
-    let healthy = test.spawn((MovePoints(100), Speed(100), IsAlive));
+    let bleeding = test.spawn((ActionPoints(125), Speed(100), IsAlive, Bleeding));
+    let healthy = test.spawn((ActionPoints(100), Speed(100), IsAlive));
 
     test.run_system(movement_phase);
 
     // Bleeding adds 25% cost → 100 base becomes 125 for the bleeding entity.
     // After moving, bleeding entity should have spent more MP.
     // Stub does nothing → both unchanged → fails.
-    let bleed_mp = test.get::<MovePoints>(bleeding).unwrap().0;
-    let healthy_mp = test.get::<MovePoints>(healthy).unwrap().0;
+    let bleed_mp = test.get::<ActionPoints>(bleeding).unwrap().0;
+    let healthy_mp = test.get::<ActionPoints>(healthy).unwrap().0;
     assert!(
         bleed_mp < healthy_mp,
         "bleeding should add 25% to movement cost"
@@ -138,17 +138,17 @@ fn move_cost_bleeding_penalty() {
 #[ignore = "movement system not yet implemented"]
 fn move_cost_swimming_penalty() {
     let mut test = TestBed::new();
-    test.register::<MovePoints>();
+    test.register::<ActionPoints>();
     test.register::<Speed>();
     test.register::<IsAlive>();
 
-    let swimmer = test.spawn((MovePoints(200), Speed(100), IsAlive));
+    let swimmer = test.spawn((ActionPoints(200), Speed(100), IsAlive));
 
     test.run_system(movement_phase);
 
     // Swimming doubles move cost.  100 base cost → 200.
     // Stub does nothing → MP stays at 200 → fails.
-    let mp = test.get::<MovePoints>(swimmer).unwrap();
+    let mp = test.get::<ActionPoints>(swimmer).unwrap();
     assert_eq!(
         mp.0, 0,
         "swimming should double the move cost, consuming all 200 MP"
@@ -163,15 +163,15 @@ fn move_cost_swimming_penalty() {
 #[ignore = "movement system not yet implemented"]
 fn spend_mp_reduces() {
     let mut test = TestBed::new();
-    test.register::<MovePoints>();
+    test.register::<ActionPoints>();
 
-    let e = test.spawn((MovePoints(100),));
+    let e = test.spawn((ActionPoints(100),));
 
     test.run_system(movement_phase);
 
     // Spending 30 MP should leave 70 MP.
     // Stub does nothing → stays at 100 → fails.
-    let mp = test.get::<MovePoints>(e).unwrap();
+    let mp = test.get::<ActionPoints>(e).unwrap();
     assert_eq!(mp.0, 70, "spending 30 MP should leave 70 remaining");
 }
 
@@ -179,9 +179,9 @@ fn spend_mp_reduces() {
 #[ignore = "movement system not yet implemented"]
 fn spend_mp_insufficient() {
     let mut test = TestBed::new();
-    test.register::<MovePoints>();
+    test.register::<ActionPoints>();
 
-    let e = test.spawn((MovePoints(20),));
+    let e = test.spawn((ActionPoints(20),));
 
     test.run_system(movement_phase);
 
@@ -189,7 +189,7 @@ fn spend_mp_insufficient() {
     // The system should return an InsufficientMP result.
     // Stub does nothing → stays at 20 → assertion passes trivially.
     // Real implementation should also keep MP at 20 when insufficient.
-    let mp = test.get::<MovePoints>(e).unwrap();
+    let mp = test.get::<ActionPoints>(e).unwrap();
     assert_eq!(mp.0, 20, "insufficient MP should prevent movement");
 }
 
@@ -197,17 +197,17 @@ fn spend_mp_insufficient() {
 #[ignore = "movement system not yet implemented"]
 fn gain_mp_at_start_of_turn() {
     let mut test = TestBed::new();
-    test.register::<MovePoints>();
+    test.register::<ActionPoints>();
     test.register::<Speed>();
     test.register::<IsAlive>();
 
-    let e = test.spawn((MovePoints(0), Speed(100), IsAlive));
+    let e = test.spawn((ActionPoints(0), Speed(100), IsAlive));
 
     test.run_system(movement_phase);
 
     // Start-of-turn: gain_move_points should add Speed (100) to MP (0) → 100.
     // Stub does nothing → stays at 0 → fails.
-    let mp = test.get::<MovePoints>(e).unwrap();
+    let mp = test.get::<ActionPoints>(e).unwrap();
     assert_eq!(mp.0, 100, "start-of-turn MP gain should add Speed value");
 }
 
@@ -267,7 +267,7 @@ fn is_passable_normal_terrain() {
 #[ignore = "movement system not yet implemented"]
 fn attempt_move_into_solid() {
     let mut test = TestBed::new();
-    test.register::<MovePoints>();
+    test.register::<ActionPoints>();
     test.register::<Speed>();
     test.register::<IsAlive>();
     test.register::<WorldPosition>();
@@ -280,7 +280,7 @@ fn attempt_move_into_solid() {
     ));
 
     let mover = test.spawn((
-        MovePoints(100),
+        ActionPoints(100),
         Speed(100),
         IsAlive,
         WorldPosition(WorldPos::new(0, 0, cdda_core::ZLevel::new(0))),
@@ -292,7 +292,7 @@ fn attempt_move_into_solid() {
     // and the mover should not move or spend MP.
     // Stub does nothing → MP stays at 100 → passes trivially.
     // Real implementation must check Solid component and block.
-    let mp = test.get::<MovePoints>(mover).unwrap();
+    let mp = test.get::<ActionPoints>(mover).unwrap();
     assert_eq!(
         mp.0, 100,
         "moving into a solid entity should be blocked, MP unspent"

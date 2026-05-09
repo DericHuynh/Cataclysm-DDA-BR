@@ -86,16 +86,16 @@ macro_rules! collect_flags {
 
 pub fn collect_mod_registry_v2(world: &mut World) {
     let mut flags = HashSet::new();
-    collect_flags!(world, flags, crate::sim::flags::ItemFlagRegistry);
-    collect_flags!(world, flags, crate::sim::flags::MonsterFlagRegistry);
-    collect_flags!(world, flags, crate::sim::flags::TerrainFlagRegistry);
-    collect_flags!(world, flags, crate::sim::flags::FurnitureFlagRegistry);
-    collect_flags!(world, flags, crate::sim::flags::MeleeFlagRegistry);
-    collect_flags!(world, flags, crate::sim::flags::ArmorFlagRegistry);
-    collect_flags!(world, flags, crate::sim::flags::GunFlagRegistry);
+    collect_flags!(world, flags, crate::data::flags::ItemFlagRegistry);
+    collect_flags!(world, flags, crate::data::flags::MonsterFlagRegistry);
+    collect_flags!(world, flags, crate::data::flags::TerrainFlagRegistry);
+    collect_flags!(world, flags, crate::data::flags::FurnitureFlagRegistry);
+    collect_flags!(world, flags, crate::data::flags::MeleeFlagRegistry);
+    collect_flags!(world, flags, crate::data::flags::ArmorFlagRegistry);
+    collect_flags!(world, flags, crate::data::flags::GunFlagRegistry);
 
     let mut ids = HashSet::new();
-    if let Some(def_world) = world.get_resource::<crate::sim::def_world::DefinitionWorld>() {
+    if let Some(def_world) = world.get_resource::<crate::data::def_world::DefinitionWorld>() {
         for (id, _) in def_world.iter() {
             ids.insert(id.to_string());
         }
@@ -253,13 +253,13 @@ pub fn generate_schemas_for_mod(
             }
             for (_def_id, terrain) in &def_registry.terrain {
                 ids.insert(terrain.id.as_str().to_string());
-                for flag in crate::sim::def_world::flags_to_vec(&terrain.flags) {
+                for flag in crate::data::def_world::flags_to_vec(&terrain.flags) {
                     flags.insert(flag);
                 }
             }
             for (_def_id, furniture) in &def_registry.furniture {
                 ids.insert(furniture.id.as_str().to_string());
-                for flag in crate::sim::def_world::flags_to_vec(&furniture.flags) {
+                for flag in crate::data::def_world::flags_to_vec(&furniture.flags) {
                     flags.insert(flag);
                 }
             }
@@ -392,7 +392,7 @@ mod tests {
     /// The real `ItemDef` struct must also tolerate `$schema`.
     #[test]
     fn dollar_schema_on_real_item_def() {
-        use crate::data::raw_defs::item::ItemDef;
+        use crate::core::raw_defs::item::ItemDef;
 
         let json = json!({
             "$schema": "../../schemas/item_mod.schema.json",

@@ -1,3 +1,6 @@
+# Cargo
+For running tests, use `cargo nextest run`.
+
 # Bevy ECS 0.18 — Agent Reference
 
 This document exists to prevent common mistakes when working with Bevy ECS 0.18.

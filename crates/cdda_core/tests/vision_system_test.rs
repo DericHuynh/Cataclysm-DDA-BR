@@ -5,7 +5,7 @@ use cdda_core::core::components::actor::*;
 use cdda_core::*;
 use cdda_core::core::coords::WorldPos;
 use cdda_core::core::components::sim::*;
-use cdda_core::sim::systems::vision::*;
+use cdda_core::actor::vision::*;
 use cdda_core::sim::test_utils::TestBed;
 
 // ===========================================================================
@@ -79,7 +79,7 @@ fn vision_range_nighttime() {
 #[test]
 #[ignore = "vision system not yet implemented"]
 fn vision_range_night_vision() {
-    let mut test = TestBed::new();
+    let _test = TestBed::new();
 
     // Creature with night vision trait has boosted night range
     // Night range of 5 + night vision boost = 20
@@ -157,8 +157,8 @@ fn can_see_too_far() {
 #[ignore = "vision system not yet implemented"]
 fn can_see_wall_blocks() {
     let mut test = TestBed::new();
-    let observer = spawn_creature_at(&mut test, 0, 0);
-    let target = spawn_creature_at(&mut test, 5, 0);
+    let _observer = spawn_creature_at(&mut test, 0, 0);
+    let _target = spawn_creature_at(&mut test, 5, 0);
 
     // Wall terrain between observer and target blocks line of sight
     // Even though both entities are in range, the wall blocks vision
@@ -181,7 +181,7 @@ fn can_see_wall_blocks() {
 #[ignore = "vision system not yet implemented"]
 fn can_see_low_light_penalizes() {
     let mut test = TestBed::new();
-    let observer = spawn_creature_with_vision(&mut test, 40, 5);
+    let _observer = spawn_creature_with_vision(&mut test, 40, 5);
 
     // Low light level (0) reduces effective range
     // Day range of 40 with light level 0 should be reduced
@@ -205,7 +205,7 @@ fn can_see_low_light_penalizes() {
 #[ignore = "vision system not yet implemented"]
 fn visible_entities_returns_seen() {
     let mut test = TestBed::new();
-    let observer = spawn_creature_at(&mut test, 0, 0);
+    let _observer = spawn_creature_at(&mut test, 0, 0);
     let nearby = spawn_creature_at(&mut test, 3, 0);
     let far_away = spawn_creature_at(&mut test, 100, 0);
 

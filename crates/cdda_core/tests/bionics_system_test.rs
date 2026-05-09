@@ -4,7 +4,7 @@ use bevy_ecs::prelude::Entity;
 use cdda_core::core::components::actor::*;
 use cdda_core::*;
 use cdda_core::core::components::sim::*;
-use cdda_core::sim::systems::bionics::*;
+use cdda_core::actor::bionics::*;
 use cdda_core::sim::test_utils::TestBed;
 
 // ===========================================================================
@@ -133,7 +133,7 @@ fn deactivate_bionic_sets_inactive() {
 #[ignore = "bionics system not yet implemented"]
 fn total_power_no_bionics() {
     let mut test = TestBed::new();
-    let creature = spawn_creature(&mut test);
+    let _creature = spawn_creature(&mut test);
 
     // No power bionics installed
     // total_power should be Energy(0)

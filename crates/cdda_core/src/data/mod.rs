@@ -20,21 +20,18 @@
 
 pub mod assets;
 pub mod def_kinds;
+pub mod def_world;
+pub mod flags;
 pub mod interner;
 pub mod loader;
 pub mod mod_info;
 pub mod mod_layer;
 pub mod patch;
-pub mod raw_defs;
-pub mod raw_types;
+pub mod populate_flags;
 pub mod registry;
 pub mod resolve;
 pub mod schema;
 pub mod schema_gen;
-
-// Re-export raw CDDA types for backward compat during migration
-pub use raw_defs::*;
-pub use raw_types::*;
 
 pub use loader::Loader;
 pub use registry::DefRegistry;

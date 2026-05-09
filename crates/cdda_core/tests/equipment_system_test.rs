@@ -6,7 +6,7 @@ use cdda_core::*;
 use cdda_core::core::components::item::*;
 use cdda_core::core::components::sim::*;
 use cdda_core::core::components::def::*;
-use cdda_core::sim::systems::equipment::*;
+use cdda_core::equipment::systems::*;
 use cdda_core::sim::test_utils::TestBed;
 
 // ===========================================================================
@@ -91,7 +91,7 @@ fn wield_already_wielding() {
     let mut test = TestBed::new();
     let creature = spawn_creature(&mut test);
     let weapon = spawn_item(&mut test);
-    let new_item = spawn_item(&mut test);
+    let _new_item = spawn_item(&mut test);
 
     // First, wield the weapon
     test.world_mut()
@@ -183,7 +183,7 @@ fn wear_slot_occupied() {
     let mut test = TestBed::new();
     let creature = spawn_creature(&mut test);
     let item_a = spawn_item(&mut test);
-    let item_b = spawn_item(&mut test);
+    let _item_b = spawn_item(&mut test);
 
     // First item occupies "torso"
     test.world_mut().entity_mut(item_a).insert(WornOn {
@@ -333,8 +333,8 @@ fn wear_on_same_slot_second_replaces() {
 #[ignore = "equipment system not yet implemented"]
 fn wield_item_too_heavy() {
     let mut test = TestBed::new();
-    let creature = spawn_creature(&mut test);
-    let heavy_item = test.spawn((
+    let _creature = spawn_creature(&mut test);
+    let _heavy_item = test.spawn((
         ItemName("heavy_rock".to_string()),
         ItemWeight(1_000_000),
         StackCount::new(1),

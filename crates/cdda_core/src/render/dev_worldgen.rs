@@ -4,23 +4,24 @@
 //! pattern as the Bevy 0.18 Text2d example. Spawned on OnEnter(Gameplay),
 //! updated on move.
 
+use crate::context::ctx::Ctx as Screen;
+use crate::context::nav::{ctx_def, FocusedCommandIndex};
 use crate::core::components::actor::HandCount;
+use crate::core::components::def::ItemSymbol;
+use crate::core::components::def::ItemVolume;
 use crate::core::components::item::ItemTypeId;
 use crate::core::components::item::WieldedItems;
 use crate::core::components::item::{Inventory, FLOOR_CAP_ML};
+use crate::core::components::sim::WorldPosition;
 use crate::map::WorldMap;
 use crate::render::tiles::TileRegistry;
-use crate::screen::screen::Screen;
-use crate::screen::screen_nav::{screen_def, FocusedCommandIndex};
-use crate::core::components::sim::WorldPosition;
-use crate::core::components::def::ItemSymbol;
-use crate::core::components::def::ItemVolume;
-use crate::sim::dev_worldgen::{DevGroundItemName, DevPlayer};
-use crate::sim::systems::dev_move::DevCamera;
-use crate::sim::world_setup::WorldMapResource;
+use crate::worldgen::dev::{DevGroundItemName, DevPlayer};
+use crate::worldgen::dev_move::DevCamera;
+use crate::worldgen::setup::WorldMapResource;
 use bevy::prelude::*;
 use bevy::text::LineBreak;
 use bevy_state::state_scoped::DespawnOnExit;
+use std::collections::HashMap;
 use tracing::info;
 
 // ---------------------------------------------------------------------------
@@ -55,7 +56,7 @@ pub const VIEW_ROWS: usize = 24;
 // ---------------------------------------------------------------------------
 
 pub fn spawn_dev_menu(mut commands: Commands, focused: Res<FocusedCommandIndex>) {
-    let def = screen_def(Screen::DevWorldgen);
+    let def = ctx_def(Screen::DevWorldgen);
 
     commands
         .spawn((
@@ -150,39 +151,26 @@ pub(crate) fn sync_dev_menu_focus(
 const VIEW_RADIUS: i32 = 15;
 const TILE_SIZE: f32 = 32.0;
 
+/// Tracks which viewport cell and z-level a terrain tile entity renders.
+#[derive(Component, Clone)]
+pub(crate) struct DevTileCell {
+    pub col: i32,
+    pub row: i32,
+    pub z: i32,
+}
+
+/// Links a ground-item visual entity back to its source ground-item entity.
 #[derive(Component)]
-pub(crate) struct DevTile;
+pub(crate) struct DevGroundItemVisual(Entity);
 
 pub fn spawn_ascii_view(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     camera: Res<DevCamera>,
     world_map: Res<WorldMapResource>,
-    registry: Res<TileRegistry>,
-    ground_items: Query<(
-        &WorldPosition,
-        Option<&ItemTypeId>,
-        Option<&ItemSymbol>,
-        Option<&ItemVolume>,
-        &DevGroundItemName,
-    )>,
 ) {
-    spawn_tiles(
-        &mut commands,
-        &registry,
-        &world_map.0,
-        camera.x,
-        camera.y,
-        camera.z,
-    );
-    spawn_ground_items(
-        &mut commands,
-        &registry,
-        &ground_items,
-        camera.x,
-        camera.y,
-        camera.z,
-    );
+    // Tiles and ground items are spawned on first update_ascii_view call,
+    // then updated in-place every frame.  No initial spawn here.
 
     info!(
         "Dev-worldgen sprites: bubbles={} placements={}",
@@ -216,163 +204,218 @@ const COLOR_ITEM_GLYPH: Color = Color::srgb(0.95, 0.85, 0.10);
 /// Light stone/concrete for empty floor tiles (all non-building positions).
 const COLOR_FLOOR: Color = Color::srgb(0.22, 0.22, 0.20);
 
-fn spawn_tiles(
+/// Spawn or update a single terrain tile entity for a viewport cell.
+///
+/// If `entity` is `Some`, the existing entity's components are updated in-place
+/// (children are despawned/recreated as needed for ASCII-fallback text).
+/// If `None`, a new entity is spawned.
+fn place_terrain_tile(
     commands: &mut Commands,
+    entity: Option<Entity>,
     registry: &TileRegistry,
     wm: &WorldMap,
     cx: i32,
     cy: i32,
     cz: i32,
-) {
-    for row in -VIEW_RADIUS..=VIEW_RADIUS {
-        for col in -VIEW_RADIUS..=VIEW_RADIUS {
-            let bx = cx + col;
-            let by = cy - row;
+    col: i32,
+    row: i32,
+) -> Entity {
+    let bx = cx + col;
+    let by = cy - row;
+    let is_cursor = bx == cx && by == cy;
+    let placement = wm.placements.get(&(bx, by, cz));
+    let base_x = col as f32 * TILE_SIZE;
+    let base_y = row as f32 * TILE_SIZE;
+    let cell = DevTileCell { col, row, z: cz };
 
-            let is_cursor = bx == cx && by == cy;
-            let placement = wm.placements.get(&(bx, by, cz));
+    if let Some(p) = placement {
+        if registry.has_tile(&p.omt_id) {
+            // Real tileset sprite
+            let info = registry.tile_info(&p.omt_id);
+            let color = if is_cursor {
+                COLOR_CURSOR
+            } else {
+                Color::WHITE
+            };
+            let sprite = Sprite {
+                image: info.image.clone(),
+                custom_size: Some(info.sprite_size()),
+                color,
+                ..default()
+            };
+            let transform = Transform::from_translation(Vec3::new(
+                base_x + info.bevy_offset().x,
+                base_y + info.bevy_offset().y,
+                0.0,
+            ));
+            if let Some(e) = entity {
+                commands
+                    .entity(e)
+                    .insert(cell)
+                    .insert(sprite)
+                    .insert(transform);
+                commands.entity(e).despawn_related::<Children>();
+                e
+            } else {
+                commands
+                    .spawn((cell, DespawnOnExit(Screen::Gameplay), sprite, transform))
+                    .id()
+            }
+        } else {
+            // ASCII fallback: coloured background sprite + child text glyph
+            let bg_color = if is_cursor {
+                COLOR_CURSOR
+            } else {
+                COLOR_NO_TILE
+            };
+            let sprite = Sprite {
+                custom_size: Some(Vec2::splat(TILE_SIZE)),
+                color: bg_color,
+                ..default()
+            };
+            let transform = Transform::from_translation(Vec3::new(base_x, base_y, 0.0));
+            let sym = omt_symbol(&p.omt_id);
 
-            let base_x = col as f32 * TILE_SIZE;
-            let base_y = row as f32 * TILE_SIZE;
-
-            if let Some(p) = placement {
-                if registry.has_tile(&p.omt_id) {
-                    // Real tileset sprite
-                    let info = registry.tile_info(&p.omt_id);
-                    let color = if is_cursor {
-                        COLOR_CURSOR
-                    } else {
-                        Color::WHITE
-                    };
-                    commands.spawn((
-                        DevTile,
-                        DespawnOnExit(Screen::Gameplay),
-                        Sprite {
-                            image: info.image.clone(),
-                            custom_size: Some(info.sprite_size()),
-                            color,
-                            ..default()
-                        },
-                        Transform::from_translation(Vec3::new(
-                            base_x + info.bevy_offset().x,
-                            base_y + info.bevy_offset().y,
-                            0.0,
-                        )),
-                    ));
-                } else {
-                    // ASCII fallback: coloured background + glyph
-                    let bg_color = if is_cursor {
-                        COLOR_CURSOR
-                    } else {
-                        COLOR_NO_TILE
-                    };
-                    commands.spawn((
-                        DevTile,
-                        DespawnOnExit(Screen::Gameplay),
-                        Sprite {
-                            custom_size: Some(Vec2::splat(TILE_SIZE)),
-                            color: bg_color,
-                            ..default()
-                        },
-                        Transform::from_translation(Vec3::new(base_x, base_y, 0.0)),
-                    ));
-                    let sym = omt_symbol(&p.omt_id);
-                    commands.spawn((
-                        DevTile,
-                        DespawnOnExit(Screen::Gameplay),
+            if let Some(e) = entity {
+                commands
+                    .entity(e)
+                    .insert(cell)
+                    .insert(sprite)
+                    .insert(transform);
+                commands.entity(e).despawn_related::<Children>();
+                commands.entity(e).with_children(|parent| {
+                    parent.spawn((
                         Text2d::new(sym.to_string()),
                         TextFont {
                             font_size: 22.0,
                             ..default()
                         },
                         TextColor(Color::WHITE),
-                        Transform::from_translation(Vec3::new(base_x, base_y, 0.5)),
+                        Transform::from_translation(Vec3::new(0.0, 0.0, 0.5)),
                     ));
-                }
+                });
+                e
             } else {
-                // Empty floor tile (no building here)
-                let color = if is_cursor { COLOR_CURSOR } else { COLOR_FLOOR };
-                commands.spawn((
-                    DevTile,
-                    DespawnOnExit(Screen::Gameplay),
-                    Sprite {
-                        custom_size: Some(Vec2::splat(TILE_SIZE)),
-                        color,
-                        ..default()
-                    },
-                    Transform::from_translation(Vec3::new(base_x, base_y, 0.0)),
-                ));
+                let e = commands
+                    .spawn((cell, DespawnOnExit(Screen::Gameplay), sprite, transform))
+                    .id();
+                commands.entity(e).with_children(|parent| {
+                    parent.spawn((
+                        Text2d::new(sym.to_string()),
+                        TextFont {
+                            font_size: 22.0,
+                            ..default()
+                        },
+                        TextColor(Color::WHITE),
+                        Transform::from_translation(Vec3::new(0.0, 0.0, 0.5)),
+                    ));
+                });
+                e
             }
+        }
+    } else {
+        // Empty floor tile
+        let color = if is_cursor { COLOR_CURSOR } else { COLOR_FLOOR };
+        let sprite = Sprite {
+            custom_size: Some(Vec2::splat(TILE_SIZE)),
+            color,
+            ..default()
+        };
+        let transform = Transform::from_translation(Vec3::new(base_x, base_y, 0.0));
+        if let Some(e) = entity {
+            commands
+                .entity(e)
+                .insert(cell)
+                .insert(sprite)
+                .insert(transform);
+            commands.entity(e).despawn_related::<Children>();
+            e
+        } else {
+            commands
+                .spawn((cell, DespawnOnExit(Screen::Gameplay), sprite, transform))
+                .id()
         }
     }
 }
 
-fn spawn_ground_items(
+/// Spawn or update a single ground-item visual entity.
+///
+/// If `visual_entity` is `Some`, the existing visual entity is updated in-place.
+/// If `None`, a new entity is spawned and linked to `source_entity` via
+/// `DevGroundItemVisual`.
+fn place_ground_item_tile(
     commands: &mut Commands,
+    visual_entity: Option<Entity>,
+    source_entity: Entity,
     registry: &TileRegistry,
-    ground_items: &Query<(
-        &WorldPosition,
-        Option<&ItemTypeId>,
-        Option<&ItemSymbol>,
-        Option<&ItemVolume>,
-        &DevGroundItemName,
-    )>,
-    cx: i32,
-    cy: i32,
-    cz: i32,
-) {
-    for (wp, type_id, symbol, _vol, name) in ground_items.iter() {
-        let omt_x = wp.0.x.div_euclid(24);
-        let omt_y = wp.0.y.div_euclid(24);
-        let omt_z = wp.0.z.0 as i32;
+    type_id: Option<&ItemTypeId>,
+    symbol: Option<&ItemSymbol>,
+    name: &DevGroundItemName,
+    col: i32,
+    row: i32,
+) -> Entity {
+    let base_x = col as f32 * TILE_SIZE;
+    let base_y = row as f32 * TILE_SIZE;
+    let cdda_id = type_id.map(|t| t.0.as_str()).unwrap_or("");
 
-        if omt_z != cz {
-            continue;
-        }
-
-        let col = omt_x - cx;
-        let row = cy - omt_y;
-
-        if col.abs() > VIEW_RADIUS || row.abs() > VIEW_RADIUS {
-            continue;
-        }
-
-        let base_x = col as f32 * TILE_SIZE;
-        let base_y = row as f32 * TILE_SIZE;
-
-        let cdda_id = type_id.map(|t| t.0.as_str()).unwrap_or("");
-        if !cdda_id.is_empty() && registry.has_tile(cdda_id) {
-            let info = registry.tile_info(cdda_id);
-            commands.spawn((
-                DevTile,
-                DespawnOnExit(Screen::Gameplay),
-                Sprite {
-                    image: info.image.clone(),
-                    custom_size: Some(info.sprite_size()),
-                    ..default()
-                },
-                Transform::from_translation(Vec3::new(
-                    base_x + info.bevy_offset().x,
-                    base_y + info.bevy_offset().y,
-                    1.0,
-                )),
-            ));
+    if !cdda_id.is_empty() && registry.has_tile(cdda_id) {
+        let info = registry.tile_info(cdda_id);
+        let sprite = Sprite {
+            image: info.image.clone(),
+            custom_size: Some(info.sprite_size()),
+            ..default()
+        };
+        let transform = Transform::from_translation(Vec3::new(
+            base_x + info.bevy_offset().x,
+            base_y + info.bevy_offset().y,
+            1.0,
+        ));
+        if let Some(e) = visual_entity {
+            commands.entity(e).insert(sprite).insert(transform);
+            commands.entity(e).remove::<(Text2d, TextFont, TextColor)>();
+            e
         } else {
-            let sym = symbol
-                .map(|s| s.0)
-                .or_else(|| name.0.chars().next())
-                .unwrap_or('?');
-            commands.spawn((
-                DevTile,
-                DespawnOnExit(Screen::Gameplay),
-                Text2d::new(sym.to_string()),
-                TextFont {
-                    font_size: 22.0,
-                    ..default()
-                },
-                TextColor(COLOR_ITEM_GLYPH),
-                Transform::from_translation(Vec3::new(base_x, base_y, 1.0)),
-            ));
+            commands
+                .spawn((
+                    DevGroundItemVisual(source_entity),
+                    DespawnOnExit(Screen::Gameplay),
+                    sprite,
+                    transform,
+                ))
+                .id()
+        }
+    } else {
+        let sym = symbol
+            .map(|s| s.0)
+            .or_else(|| name.0.chars().next())
+            .unwrap_or('?');
+        let text = Text2d::new(sym.to_string());
+        let font = TextFont {
+            font_size: 22.0,
+            ..default()
+        };
+        let color = TextColor(COLOR_ITEM_GLYPH);
+        let transform = Transform::from_translation(Vec3::new(base_x, base_y, 1.0));
+        if let Some(e) = visual_entity {
+            commands
+                .entity(e)
+                .insert(text)
+                .insert(font)
+                .insert(color)
+                .insert(transform);
+            commands.entity(e).remove::<Sprite>();
+            e
+        } else {
+            commands
+                .spawn((
+                    DevGroundItemVisual(source_entity),
+                    DespawnOnExit(Screen::Gameplay),
+                    text,
+                    font,
+                    color,
+                    transform,
+                ))
+                .id()
         }
     }
 }
@@ -381,10 +424,12 @@ pub(crate) fn update_ascii_view(
     camera: Res<DevCamera>,
     world_map: Res<WorldMapResource>,
     registry: Res<TileRegistry>,
-    tile_query: Query<Entity, With<DevTile>>,
+    terrain_query: Query<(Entity, &DevTileCell)>,
+    ground_visual_query: Query<(Entity, &DevGroundItemVisual)>,
     mut commands: Commands,
     mut status_query: Query<&mut Text2d, With<DevStatusBar>>,
     ground_items: Query<(
+        Entity,
         &WorldPosition,
         Option<&ItemTypeId>,
         Option<&ItemSymbol>,
@@ -395,31 +440,85 @@ pub(crate) fn update_ascii_view(
     item_names: Query<&DevGroundItemName>,
     player_hands: Query<(&HandCount, Option<&WieldedItems>), With<DevPlayer>>,
 ) {
-    for e in &tile_query {
-        commands.entity(e).despawn();
+    let cz = camera.z;
+
+    // ── Terrain tiles: update existing, spawn missing, despawn stale ──
+    let mut existing_terrain: HashMap<(i32, i32, i32), Entity> = HashMap::new();
+    for (e, cell) in &terrain_query {
+        existing_terrain.insert((cell.col, cell.row, cell.z), e);
     }
-    spawn_tiles(
-        &mut commands,
-        &registry,
-        &world_map.0,
-        camera.x,
-        camera.y,
-        camera.z,
-    );
-    spawn_ground_items(
-        &mut commands,
-        &registry,
-        &ground_items,
-        camera.x,
-        camera.y,
-        camera.z,
-    );
+
+    for row in -VIEW_RADIUS..=VIEW_RADIUS {
+        for col in -VIEW_RADIUS..=VIEW_RADIUS {
+            let key = (col, row, cz);
+            let entity = existing_terrain.remove(&key);
+            place_terrain_tile(
+                &mut commands,
+                entity,
+                &registry,
+                &world_map.0,
+                camera.x,
+                camera.y,
+                cz,
+                col,
+                row,
+            );
+        }
+    }
+
+    // Any terrain entities still in the map are no longer visible.
+    for (_key, entity) in existing_terrain {
+        commands.entity(entity).despawn();
+    }
+
+    // ── Ground items: update existing, spawn missing, despawn stale ──
+    let mut existing_ground: HashMap<Entity, Entity> = HashMap::new();
+    for (visual_e, src) in &ground_visual_query {
+        existing_ground.insert(src.0, visual_e);
+    }
+
+    for (item_e, wp, type_id, symbol, _vol, name) in &ground_items {
+        let omt_x = wp.0.x.div_euclid(24);
+        let omt_y = wp.0.y.div_euclid(24);
+        let omt_z = wp.0.z.0 as i32;
+
+        if omt_z != cz {
+            continue;
+        }
+
+        let col = omt_x - camera.x;
+        let row = camera.y - omt_y;
+
+        if col.abs() > VIEW_RADIUS || row.abs() > VIEW_RADIUS {
+            continue;
+        }
+
+        let visual_e = existing_ground.remove(&item_e);
+        place_ground_item_tile(
+            &mut commands,
+            visual_e,
+            item_e,
+            &registry,
+            type_id,
+            symbol,
+            name,
+            col,
+            row,
+        );
+    }
+
+    // Any ground-item visuals still in the map have no matching source item.
+    for (_item_e, visual_e) in existing_ground {
+        commands.entity(visual_e).despawn();
+    }
+
+    // ── Status bar ──
     if let Ok(mut t) = status_query.single_mut() {
         *t = Text2d::new(status_text_with_items(
             &world_map.0,
             camera.x,
             camera.y,
-            camera.z,
+            cz,
             &ground_items,
             &player_inv,
             &item_names,
@@ -490,6 +589,7 @@ fn status_text_with_items(
     cy: i32,
     cz: i32,
     ground_items: &Query<(
+        Entity,
         &WorldPosition,
         Option<&ItemTypeId>,
         Option<&ItemSymbol>,
@@ -505,10 +605,10 @@ fn status_text_with_items(
     // Items at current tile
     let at_tile: Vec<(&str, u32)> = ground_items
         .iter()
-        .filter(|(wp, _, _, _, _)| {
+        .filter(|(_, wp, _, _, _, _)| {
             wp.0.x.div_euclid(24) == cx && wp.0.y.div_euclid(24) == cy && wp.0.z.0 as i32 == cz
         })
-        .map(|(_, _, _, vol, name)| (name.0.as_str(), vol.map(|v| v.0).unwrap_or(0)))
+        .map(|(_, _, _, _, vol, name)| (name.0.as_str(), vol.map(|v| v.0).unwrap_or(0)))
         .collect();
 
     let floor_vol_ml: u32 = at_tile.iter().map(|(_, v)| *v).sum();

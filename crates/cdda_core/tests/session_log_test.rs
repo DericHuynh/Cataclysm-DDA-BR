@@ -181,7 +181,6 @@ fn compressed_roundtrip_with_actions() {
 
 #[test]
 #[ignore]
-#[ignore]
 fn compressed_file_is_smaller_than_uncompressed_for_large_log() {
     let dir = tempfile::tempdir().expect("tempdir");
     let raw_path = dir.path().join("replay.bin");

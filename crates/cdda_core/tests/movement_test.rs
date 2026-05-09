@@ -3,7 +3,7 @@
 //! Tests move points, speed, terrain move cost, and CDDA-derived movement
 //! formulas.
 
-use cdda_core::core::components::actor::{MovePoints, Speed};
+use cdda_core::core::components::actor::{ActionPoints, Speed};
 use cdda_core::sim::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------
@@ -57,30 +57,30 @@ fn stamina_cost(terrain_cost: i32) -> i32 {
 #[test]
 fn move_points_default() {
     let mut test = TestBed::new();
-    test.register::<MovePoints>();
+    test.register::<ActionPoints>();
 
-    let e = test.spawn((MovePoints(0),));
-    let mp = test.get::<MovePoints>(e).unwrap();
+    let e = test.spawn((ActionPoints(0),));
+    let mp = test.get::<ActionPoints>(e).unwrap();
     assert_eq!(mp.0, 0);
 }
 
 #[test]
 fn move_points_positive() {
     let mut test = TestBed::new();
-    test.register::<MovePoints>();
+    test.register::<ActionPoints>();
 
-    let e = test.spawn((MovePoints(100),));
-    let mp = test.get::<MovePoints>(e).unwrap();
+    let e = test.spawn((ActionPoints(100),));
+    let mp = test.get::<ActionPoints>(e).unwrap();
     assert_eq!(mp.0, 100);
 }
 
 #[test]
 fn move_points_negative() {
     let mut test = TestBed::new();
-    test.register::<MovePoints>();
+    test.register::<ActionPoints>();
 
-    let e = test.spawn((MovePoints(-50),));
-    let mp = test.get::<MovePoints>(e).unwrap();
+    let e = test.spawn((ActionPoints(-50),));
+    let mp = test.get::<ActionPoints>(e).unwrap();
     assert_eq!(mp.0, -50);
 }
 

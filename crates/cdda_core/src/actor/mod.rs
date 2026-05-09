@@ -7,4 +7,12 @@
 //!
 //! Depends only on `cdda_core` and `bevy_ecs`.  No item, map, or sim deps.
 
+pub mod bionics;
+pub mod effects;
+pub mod healing;
+pub mod morale;
+pub mod movement;
 pub mod plugin;
+pub mod temperature;
+pub mod turn;
+pub mod vision;

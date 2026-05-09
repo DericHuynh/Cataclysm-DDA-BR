@@ -5,9 +5,9 @@
 //! No `#[ignore]` — they should pass as soon as all types compile.
 
 use bevy_ecs::prelude::*;
-use cdda_core::core::components::actor::{IsAlive, MovePoints, Speed};
+use cdda_core::core::components::actor::{IsAlive, ActionPoints, Speed};
 use cdda_core::sim::state::GameTime;
-use cdda_core::sim::systems::turn::*;
+use cdda_core::actor::turn::*;
 use cdda_core::sim::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------
@@ -18,14 +18,14 @@ use cdda_core::sim::test_utils::TestBed;
 fn tick_move_points_grants_mp() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
-    test.register::<MovePoints>();
+    test.register::<ActionPoints>();
     test.register::<Speed>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
     // Two entities with speed 100, both start at MP=0
-    let _a = test.spawn((IsAlive, MovePoints(0), Speed(100)));
-    let _b = test.spawn((IsAlive, MovePoints(0), Speed(100)));
+    let _a = test.spawn((IsAlive, ActionPoints(0), Speed(100)));
+    let _b = test.spawn((IsAlive, ActionPoints(0), Speed(100)));
 
     test.run_system(tick_move_points);
 
@@ -41,13 +41,13 @@ fn tick_move_points_grants_mp() {
 fn tick_move_points_accumulates() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
-    test.register::<MovePoints>();
+    test.register::<ActionPoints>();
     test.register::<Speed>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
     // Entity starts with MP=50, speed=100 → should have 150 after tick
-    test.spawn((IsAlive, MovePoints(50), Speed(100)));
+    test.spawn((IsAlive, ActionPoints(50), Speed(100)));
 
     test.run_system(tick_move_points);
 
@@ -59,13 +59,13 @@ fn tick_move_points_accumulates() {
 fn tick_move_points_debt_floor() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
-    test.register::<MovePoints>();
+    test.register::<ActionPoints>();
     test.register::<Speed>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
     // Entity deeply in debt: MP=-300, speed=100 → debt floor = -200
-    test.spawn((IsAlive, MovePoints(-300), Speed(100)));
+    test.spawn((IsAlive, ActionPoints(-300), Speed(100)));
 
     test.run_system(tick_move_points);
 
@@ -78,12 +78,12 @@ fn tick_move_points_debt_floor() {
 fn tick_move_points_advances_time() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
-    test.register::<MovePoints>();
+    test.register::<ActionPoints>();
     test.register::<Speed>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
-    test.spawn((IsAlive, MovePoints(0), Speed(100)));
+    test.spawn((IsAlive, ActionPoints(0), Speed(100)));
 
     test.run_system(tick_move_points);
     assert_eq!(test.resource::<GameTime>().turn, 1);
@@ -96,13 +96,13 @@ fn tick_move_points_advances_time() {
 fn tick_move_points_ignores_non_alive() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
-    test.register::<MovePoints>();
+    test.register::<ActionPoints>();
     test.register::<Speed>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
     // Entity without IsAlive — should be skipped
-    test.spawn((MovePoints(0), Speed(100)));
+    test.spawn((ActionPoints(0), Speed(100)));
 
     test.run_system(tick_move_points);
 
@@ -117,34 +117,34 @@ fn tick_move_points_ignores_non_alive() {
 #[test]
 fn spend_mp_reduces_and_returns_true() {
     let mut test = TestBed::new();
-    test.register::<MovePoints>();
+    test.register::<ActionPoints>();
 
-    let e = test.spawn((MovePoints(100),));
+    let e = test.spawn((ActionPoints(100),));
 
     // Directly mutate MP (tests the same logic as spend_move_points)
-    let mut mp = test.world_mut().get_mut::<MovePoints>(e).unwrap();
+    let mut mp = test.world_mut().get_mut::<ActionPoints>(e).unwrap();
     mp.0 -= 30;
     let can_act = mp.0 >= MP_MIN_FLOOR;
     drop(mp);
 
     assert!(can_act);
-    assert_eq!(test.get::<MovePoints>(e).unwrap().0, 70);
+    assert_eq!(test.get::<ActionPoints>(e).unwrap().0, 70);
 }
 
 #[test]
 fn spend_mp_insufficient() {
     let mut test = TestBed::new();
-    test.register::<MovePoints>();
+    test.register::<ActionPoints>();
 
-    let e = test.spawn((MovePoints(20),));
+    let e = test.spawn((ActionPoints(20),));
 
-    let mut mp = test.world_mut().get_mut::<MovePoints>(e).unwrap();
+    let mut mp = test.world_mut().get_mut::<ActionPoints>(e).unwrap();
     mp.0 -= 30;
     let can_act = mp.0 >= MP_MIN_FLOOR;
     drop(mp);
 
     assert!(!can_act);
-    assert_eq!(test.get::<MovePoints>(e).unwrap().0, -10);
+    assert_eq!(test.get::<ActionPoints>(e).unwrap().0, -10);
 }
 
 // ---------------------------------------------------------------------------

@@ -4,6 +4,8 @@ pub mod damage;
 pub mod error;
 pub mod flags;
 pub mod id;
+pub mod raw_defs;
+pub mod raw_types;
 pub mod stats;
 pub mod units;
 

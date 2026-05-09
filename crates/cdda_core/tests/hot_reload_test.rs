@@ -9,8 +9,7 @@
 use cdda_core::data::interner::StringInterner;
 use cdda_core::data::loader::Loader;
 use cdda_core::data::patch::apply_cdda_patch;
-use cdda_core::sim::flags::FlagMap;
-use cdda_core::sim::flags::{ItemFlagRegistry, MonsterFlagRegistry};
+use cdda_core::data::flags::{ItemFlagRegistry, MonsterFlagRegistry};
 use serde_json::json;
 use std::io::Write;
 use std::path::PathBuf;

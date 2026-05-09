@@ -7,7 +7,7 @@ use bevy_ecs::message::Message;
 
 /// Broadcast when the game advances by one turn.
 ///
-/// Emitted by `cdda_sim::systems::turn::tick_move_points` after granting
+/// Emitted by `crate::actor::turn::tick_move_points` after granting
 /// move points, updating the turn counter, and rebuilding `TurnQueue`.
 ///
 /// Systems that tick over time (spoilage, status effects, temperature)

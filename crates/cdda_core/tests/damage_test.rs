@@ -171,11 +171,11 @@ fn speed_default_is_one_hundred() {
 #[test]
 fn move_points_default_is_zero() {
     let mut test = TestBed::new();
-    test.register::<cdda_core::core::components::actor::MovePoints>();
+    test.register::<cdda_core::core::components::actor::ActionPoints>();
 
-    let e = test.spawn((cdda_core::core::components::actor::MovePoints(0),));
+    let e = test.spawn((cdda_core::core::components::actor::ActionPoints(0),));
     let mp = test
-        .get::<cdda_core::core::components::actor::MovePoints>(e)
+        .get::<cdda_core::core::components::actor::ActionPoints>(e)
         .unwrap();
     assert_eq!(mp.0, 0);
 }

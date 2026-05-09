@@ -16,35 +16,35 @@ use bevy_state::prelude::OnEnter;
 use bevy_state::state::NextState;
 use std::time::Duration;
 
-use cdda_core::screen::Screen;
+use cdda_core::context::ctx::Ctx as Screen;
 use cdda_core::{GameSet, SimSet};
 
+use cdda_core::actor::bionics::tick_bionics;
+use cdda_core::actor::effects::effects_phase;
+use cdda_core::actor::healing::healing_phase;
+use cdda_core::actor::morale::tick_morale_decay;
+use cdda_core::actor::movement::movement_phase;
 use cdda_core::actor::plugin::ActorPlugin;
+use cdda_core::actor::temperature::temperature_phase;
+use cdda_core::actor::turn::{debug_turn_queue, tick_move_points};
+use cdda_core::actor::vision::update_vision;
+use cdda_core::ai::systems::ai_phase;
+use cdda_core::combat::systems::combat_phase;
 use cdda_core::data::assets::CddaAssetsPlugin;
+use cdda_core::data::def_world::load_data_system;
+use cdda_core::inventory::systems::{
+    assign_invlets_system, build_inventory_bins, dev_pickup_drop_system,
+    inventory_screen_input, process_item_move_events, spawn_dev_world,
+};
+use cdda_core::crafting::plugin::CraftingPlugin;
 use cdda_core::item::plugin::ItemPlugin;
-use cdda_core::sim::def_world::load_data_system;
+use cdda_core::map::spatial_systems::update_spatial_index;
 use cdda_core::sim::events::ItemMoveEvent;
 use cdda_core::sim::state::AppState;
-use cdda_core::sim::systems::ai::ai_phase;
-use cdda_core::sim::systems::bionics::tick_bionics;
-use cdda_core::sim::systems::combat::combat_phase;
-use cdda_core::sim::systems::dev_spawn::{
+use cdda_core::worldgen::dev_spawn::{
     build_dev_spawn_catalog, dev_spawn_flush, dev_spawn_panel_input,
 };
-use cdda_core::sim::systems::effects::effects_phase;
-use cdda_core::sim::systems::healing::healing_phase;
-use cdda_core::sim::systems::inventory::{
-    assign_invlets_system, build_inventory_bins, dev_pickup_drop_system, inventory_screen_input,
-    process_item_move_events, spawn_dev_world,
-};
-use cdda_core::sim::systems::morale::tick_morale_decay;
-use cdda_core::sim::systems::movement::movement_phase;
-use cdda_core::sim::systems::spatial::update_spatial_index;
-use cdda_core::sim::systems::spawning::spawning_phase;
-use cdda_core::sim::systems::temperature::temperature_phase;
-use cdda_core::sim::systems::turn::{debug_turn_queue, tick_move_points};
-use cdda_core::sim::systems::vision::update_vision;
-use cdda_core::sim::world_setup;
+use cdda_core::worldgen::spawning::spawning_phase;
 
 // ---------------------------------------------------------------------------
 // Startup config
@@ -78,11 +78,11 @@ impl Default for CddaStartupConfig {
 /// Listens for `GameEvent::StartNewGame` and transitions `AppState`
 /// from `MainMenu` → `Gameplay`, kicking off JSON loading + worldgen.
 pub fn start_game_on_event(
-    mut reader: MessageReader<cdda_core::screen::GameEvent>,
+    mut reader: MessageReader<cdda_core::context::nav::GameEvent>,
     mut next: ResMut<NextState<AppState>>,
 ) {
     for event in reader.read() {
-        if *event == cdda_core::screen::GameEvent::StartNewGame {
+        if *event == cdda_core::context::nav::GameEvent::StartNewGame {
             info!("Player confirmed start game — transitioning to DataLoading");
             next.set(AppState::DataLoading);
         }
@@ -110,8 +110,14 @@ pub struct CddaPlugin;
 
 impl Plugin for CddaPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((ActorPlugin, ItemPlugin, CddaAssetsPlugin, cdda_core::sim::flags::CddaDataPlugin));
-        world_setup::setup_world(app.world_mut());
+        app.add_plugins((
+            ActorPlugin,
+            ItemPlugin,
+            CddaAssetsPlugin,
+            CraftingPlugin,
+            cdda_core::data::flags::CddaDataPlugin,
+        ));
+        cdda_core::worldgen::setup::setup_world(app.world_mut());
         register_reflect_types(app);
 
         app.init_state::<AppState>();
@@ -171,7 +177,7 @@ impl Plugin for CddaPlugin {
 
         app.add_plugins(cdda_core::render::CddaRenderPlugin);
         app.add_plugins(cdda_core::input::CddaInputPlugin);
-        app.add_plugins(cdda_core::screen::ScreenNavigationPlugin);
+        app.add_plugins(cdda_core::context::ContextPlugin);
 
         // Replay: record or replay based on startup config
         let config = app
@@ -212,7 +218,7 @@ impl Plugin for CddaPlugin {
         );
         app.add_systems(
             Update,
-            cdda_core::sim::def_world::worldgen_system.run_if(in_state(AppState::WorldGen)),
+            cdda_core::data::def_world::worldgen_system.run_if(in_state(AppState::WorldGen)),
         );
 
         // Fix #6: Gate turn tick so MP isn't granted every frame.

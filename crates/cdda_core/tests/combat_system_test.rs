@@ -11,7 +11,7 @@ use bevy_ecs::prelude::*;
 use cdda_core::core::components::actor::*;
 use cdda_core::core::components::sim::*;
 use cdda_core::core::components::def::*;
-use cdda_core::sim::systems::combat::*;
+use cdda_core::combat::systems::*;
 use cdda_core::sim::test_utils::TestBed;
 use cdda_core::{Damage, DamageTypeId, DefIdx};
 
@@ -27,7 +27,7 @@ fn hit_chance_unskilled_vs_unarmored() {
     test.register::<Health>();
     test.register::<IsAlive>();
 
-    let attacker = test.spawn((
+    let _attacker = test.spawn((
         CombatStats {
             melee_skill: 0,
             melee_dice: 1,
@@ -94,7 +94,7 @@ fn hit_chance_skilled_vs_unskilled() {
     test.register::<Health>();
     test.register::<IsAlive>();
 
-    let attacker = test.spawn((
+    let _attacker = test.spawn((
         CombatStats {
             melee_skill: 10,
             melee_dice: 3,
@@ -160,7 +160,7 @@ fn hit_chance_dodge_reduces() {
     test.register::<Health>();
     test.register::<IsAlive>();
 
-    let attacker = test.spawn((
+    let _attacker = test.spawn((
         CombatStats {
             melee_skill: 5,
             melee_dice: 2,
@@ -227,7 +227,7 @@ fn hit_chance_weapon_bonus() {
     test.register::<Health>();
     test.register::<IsAlive>();
 
-    let weapon = test.spawn(WeaponData {
+    let _weapon = test.spawn(WeaponData {
         damage_bash: 5,
         damage_cut: 0,
         damage_stab: 0,
@@ -239,7 +239,7 @@ fn hit_chance_weapon_bonus() {
         dice_sides: 6,
         skill: "bashing".to_string(),
     });
-    let attacker = test.spawn((
+    let _attacker = test.spawn((
         CombatStats {
             melee_skill: 5,
             melee_dice: 2,
@@ -309,7 +309,7 @@ fn melee_damage_bare_hands() {
     test.register::<IsAlive>();
     test.register::<CombatStats>();
 
-    let attacker = test.spawn((
+    let _attacker = test.spawn((
         Stats::new(8, 8, 8, 8),
         CombatStats {
             melee_skill: 0,
@@ -377,7 +377,7 @@ fn melee_damage_with_weapon() {
     test.register::<IsAlive>();
     test.register::<CombatStats>();
 
-    let weapon = test.spawn(WeaponData {
+    let _weapon = test.spawn(WeaponData {
         damage_bash: 10,
         damage_cut: 5,
         damage_stab: 0,
@@ -389,7 +389,7 @@ fn melee_damage_with_weapon() {
         dice_sides: 6,
         skill: "bashing".to_string(),
     });
-    let attacker = test.spawn((
+    let _attacker = test.spawn((
         Stats::new(10, 8, 8, 8),
         CombatStats {
             melee_skill: 5,
@@ -456,7 +456,7 @@ fn melee_damage_skill_bonus() {
     test.register::<IsAlive>();
     test.register::<CombatStats>();
 
-    let high_skill = test.spawn((
+    let _high_skill = test.spawn((
         Stats::new(8, 8, 8, 8),
         CombatStats {
             melee_skill: 10,
@@ -504,7 +504,7 @@ fn melee_damage_skill_bonus() {
         },
         IsAlive,
     ));
-    let dummy = test.spawn((
+    let _dummy = test.spawn((
         CombatStats {
             melee_skill: 0,
             melee_dice: 1,
@@ -599,7 +599,7 @@ fn apply_damage_armor_reduces() {
         },
         IsAlive,
     ));
-    let attacker = test.spawn((
+    let _attacker = test.spawn((
         CombatStats {
             melee_skill: 5,
             melee_dice: 2,
@@ -697,7 +697,7 @@ fn ranged_hit_short_range() {
     test.register::<Health>();
     test.register::<IsAlive>();
 
-    let gun = test.spawn(GunData {
+    let _gun = test.spawn(GunData {
         skill: "rifle".to_string(),
         ammo_type: "762".to_string(),
         dispersion: 0,
@@ -707,7 +707,7 @@ fn ranged_hit_short_range() {
         burst: 1,
         ammo_effects: Vec::new(),
     });
-    let ammo = test.spawn(AmmoData {
+    let _ammo = test.spawn(AmmoData {
         ammo_type: "762".to_string(),
         damage: 20,
         pierce: 5,
@@ -719,7 +719,7 @@ fn ranged_hit_short_range() {
         effects: Vec::new(),
         stack_size: 30,
     });
-    let shooter = test.spawn((
+    let _shooter = test.spawn((
         CombatStats {
             melee_skill: 0,
             melee_dice: 1,
@@ -787,7 +787,7 @@ fn ranged_hit_long_range() {
     test.register::<Health>();
     test.register::<IsAlive>();
 
-    let gun = test.spawn(GunData {
+    let _gun = test.spawn(GunData {
         skill: "rifle".to_string(),
         ammo_type: "223".to_string(),
         dispersion: 10,
@@ -797,7 +797,7 @@ fn ranged_hit_long_range() {
         burst: 1,
         ammo_effects: Vec::new(),
     });
-    let ammo = test.spawn(AmmoData {
+    let _ammo = test.spawn(AmmoData {
         ammo_type: "223".to_string(),
         damage: 15,
         pierce: 2,
@@ -809,7 +809,7 @@ fn ranged_hit_long_range() {
         effects: Vec::new(),
         stack_size: 30,
     });
-    let shooter = test.spawn((
+    let _shooter = test.spawn((
         CombatStats {
             melee_skill: 0,
             melee_dice: 1,
@@ -877,7 +877,7 @@ fn ranged_hit_high_dispersion() {
     test.register::<Health>();
     test.register::<IsAlive>();
 
-    let gun = test.spawn(GunData {
+    let _gun = test.spawn(GunData {
         skill: "pistol".to_string(),
         ammo_type: "9mm".to_string(),
         dispersion: 50,
@@ -887,7 +887,7 @@ fn ranged_hit_high_dispersion() {
         burst: 1,
         ammo_effects: Vec::new(),
     });
-    let ammo = test.spawn(AmmoData {
+    let _ammo = test.spawn(AmmoData {
         ammo_type: "9mm".to_string(),
         damage: 12,
         pierce: 0,
@@ -899,7 +899,7 @@ fn ranged_hit_high_dispersion() {
         effects: Vec::new(),
         stack_size: 15,
     });
-    let shooter = test.spawn((
+    let _shooter = test.spawn((
         CombatStats {
             melee_skill: 0,
             melee_dice: 1,

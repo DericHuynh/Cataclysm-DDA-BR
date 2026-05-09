@@ -9,7 +9,7 @@ use cdda_core::core::components::item::{
     StackCount,
 };
 use cdda_core::core::components::def::{DefStrId, ItemLongestSide, ItemVolume, ItemWeight};
-use cdda_core::sim::systems::inventory::*;
+use cdda_core::inventory::systems::*;
 use cdda_core::sim::test_utils::TestBed;
 
 // ---- helpers ---------------------------------------------------------------

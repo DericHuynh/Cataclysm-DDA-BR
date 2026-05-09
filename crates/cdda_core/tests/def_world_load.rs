@@ -9,17 +9,17 @@
 
 use bevy_ecs::world::World;
 use cdda_core::core::components::actor::Health;
-use cdda_core::data::loader::Loader;
-use cdda_core::data::raw_defs::{FurnitureDef, ItemDef, MonsterDef, StringOrArray, TerrainDef};
-use cdda_core::data::raw_types::DefId;
 use cdda_core::core::components::def::*;
-use cdda_core::sim::def_world::build_def_world;
+use cdda_core::core::id::DefId;
+use cdda_core::core::raw_defs::{FurnitureDef, ItemDef, MonsterDef, StringOrArray, TerrainDef};
+use cdda_core::data::loader::Loader;
+use cdda_core::data::def_world::build_def_world;
 use std::sync::Arc;
 
 /// Helper: create a World, get Commands, call build_def_world, return (World, DefinitionWorld).
 fn build_def_world_in_world(
     reg: &cdda_core::data::DefRegistry,
-) -> (World, cdda_core::sim::def_world::DefinitionWorld) {
+) -> (World, cdda_core::data::def_world::DefinitionWorld) {
     let mut world = World::new();
     // We need to register all def components so World knows about them
     // (in production this is done by setup_world, but tests register selectively)
@@ -186,8 +186,8 @@ fn test_item_with_flags() {
         "flag_item",
         r#""name": "Flagged", "flags": ["FIRE", "WET"], "volume": "250 ml", "material": ["wood"]"#,
     )]);
-    let (world, def_world) = build_def_world_in_world(&reg);
-    let entity = def_world.entity_by_str("flag_item").unwrap();
+    let (_world, def_world) = build_def_world_in_world(&reg);
+    let _entity = def_world.entity_by_str("flag_item").unwrap();
     /* flag comparison disabled: now FixedBitSet */
 }
 
@@ -313,11 +313,11 @@ fn test_terrain_def_gets_correct_components() {
 
 #[test]
 fn test_terrain_with_flags() {
-    use cdda_core::sim::flags::{
+    use cdda_core::data::flags::{
         FurnitureFlagRegistry, ItemFlagRegistry, MonsterFlagRegistry, TerrainFlagRegistry,
         TerrainFlags,
     };
-    use cdda_core::sim::populate_flags::populate_def_flags;
+    use cdda_core::data::populate_flags::populate_def_flags;
 
     let reg = registry_from_terrain_json(vec![(
         "t_wall",
@@ -363,7 +363,7 @@ fn test_entity_by_str_returns_none_for_missing() {
 #[test]
 fn test_flags_to_vec_single() {
     assert_eq!(
-        cdda_core::sim::def_world::flags_to_vec(&StringOrArray::Single("FLAG_A".to_string())),
+        cdda_core::data::def_world::flags_to_vec(&StringOrArray::Single("FLAG_A".to_string())),
         vec!["FLAG_A".to_string()]
     );
 }
@@ -371,7 +371,7 @@ fn test_flags_to_vec_single() {
 #[test]
 fn test_flags_to_vec_empty() {
     assert_eq!(
-        cdda_core::sim::def_world::flags_to_vec(&StringOrArray::Single(String::new())),
+        cdda_core::data::def_world::flags_to_vec(&StringOrArray::Single(String::new())),
         Vec::<String>::new()
     );
 }
@@ -379,7 +379,7 @@ fn test_flags_to_vec_empty() {
 #[test]
 fn test_flags_to_vec_multi() {
     assert_eq!(
-        cdda_core::sim::def_world::flags_to_vec(&StringOrArray::Multi(vec![
+        cdda_core::data::def_world::flags_to_vec(&StringOrArray::Multi(vec![
             "FLAG_A".to_string(),
             "FLAG_B".to_string()
         ])),

@@ -221,8 +221,7 @@ pub struct Container {
 }
 
 // ===========================================================================
-// Display / render hints
-// ===========================================================================
+/// Display / render hints
 
 /// CDDA type-string ID used for tileset sprite lookup.
 ///
@@ -234,6 +233,26 @@ pub struct Container {
 /// back to `crate::core::components::def::ItemSymbol` if present.
 #[derive(Component, Debug, Clone, Reflect)]
 pub struct ItemTypeId(pub String);
+
+// ===========================================================================
+// Tool qualities on runtime items
+// ===========================================================================
+
+/// Tool qualities present on a runtime item entity.
+///
+/// Populated during def-to-runtime cloning: `build_def_world` inserts this
+/// on the def entity from the JSON `qualities` field, and `EntityCloner`
+/// carries it forward to runtime spawns.
+///
+/// Each entry is `(quality_id, level)` — e.g. `("CUT", 2)`.
+#[derive(Component, Debug, Clone, Reflect)]
+pub struct ItemQualities(pub Vec<(String, i32)>);
+
+impl ItemQualities {
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
 
 // ===========================================================================
 // Inventory system components and resources

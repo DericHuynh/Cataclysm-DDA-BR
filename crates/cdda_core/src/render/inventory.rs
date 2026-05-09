@@ -9,7 +9,7 @@ use crate::core::components::item::StackCount;
 use crate::core::components::item::WieldedBy;
 use crate::core::components::item::{Inventory, InventoryFocus};
 use crate::render::tiles::TileRegistry;
-use crate::screen::screen::Screen;
+use crate::context::ctx::Screen;
 use crate::core::components::def::ItemSymbol;
 use crate::sim::dev_worldgen::{DevGroundItemName, DevPlayer};
 use bevy::prelude::*;
