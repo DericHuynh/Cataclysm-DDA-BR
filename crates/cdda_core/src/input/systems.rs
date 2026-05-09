@@ -154,6 +154,13 @@ pub fn handle_raw_input(
                     ));
                     continue;
                 }
+                Key::Space => {
+                    action_writer.write(InputAction::new(
+                        GameAction::TextChar(" ".to_string()),
+                        ActionSource::Keyboard,
+                    ));
+                    continue;
+                }
                 Key::Backspace => {
                     action_writer.write(InputAction::new(
                         GameAction::TextBackspace,

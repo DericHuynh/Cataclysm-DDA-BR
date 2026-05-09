@@ -356,23 +356,40 @@ pub struct OnFire;
 // Turn scheduling
 // ===========================================================================
 
-/// Current action points (move points) for this entity.
+/// Combined action-point pool and speed for turn scheduling.
+///
+/// `speed` AP is granted each turn. `current` is spent on actions (move,
+/// pickup, wield, craft …) and may go negative (debt). An actor can act
+/// this turn when `current >= MP_MIN_FLOOR` (defined in `actor::turn`).
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Reflect)]
-pub struct ActionPoints(pub i32);
+pub struct ActionPoints {
+    /// Current pool — may be negative when in AP debt.
+    pub current: i32,
+    /// AP gained per turn. Base 100 for a normal human.
+    pub speed: i32,
+}
 
 impl Default for ActionPoints {
     fn default() -> Self {
-        Self(0)
+        Self { current: 0, speed: 100 }
     }
 }
 
-/// How many action points this entity gains per turn (base 100).
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Reflect)]
-pub struct Speed(pub i32);
+impl ActionPoints {
+    pub fn new(speed: i32) -> Self {
+        Self { current: 0, speed }
+    }
 
-impl Default for Speed {
-    fn default() -> Self {
-        Self(100)
+    /// Spend `cost` AP and return remaining `current`.
+    pub fn spend(&mut self, cost: i32) -> i32 {
+        self.current -= cost;
+        self.current
+    }
+
+    /// Grant one turn's worth of AP, clamped to the debt floor.
+    pub fn tick(&mut self) {
+        let floor = -(self.speed * 2).max(50);
+        self.current = (self.current + self.speed).max(floor);
     }
 }
 

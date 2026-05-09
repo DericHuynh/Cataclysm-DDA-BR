@@ -1,13 +1,13 @@
 //! Main menu screen — rendered with standard bevy_ui.
 //!
-//! Spawned on `OnEnter(Screen::MainMenu)`, auto-despawned on `OnExit`
-//! via `DespawnOnExit(Screen::MainMenu)`.
+//! Spawned on `OnEnter(Ctx::MainMenu)`, auto-despawned on `OnExit`
+//! via `DespawnOnExit(Ctx::MainMenu)`.
 
 use crate::context::InputFocus;
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
-use crate::context::ctx::Screen;
-use crate::context::nav::{screen_def, FocusedCommandIndex};
+use crate::context::ctx::Ctx;
+use crate::context::nav::{ctx_def, FocusedCommandIndex};
 
 /// Marks a command button, storing its index into the screen_def command list.
 #[derive(Component)]
@@ -30,11 +30,11 @@ const FOCUSED_BORDER: Color = Color::srgb(0.95, 0.95, 0.95);
 // ---------------------------------------------------------------------------
 
 pub fn spawn(mut commands: Commands, focused: Res<FocusedCommandIndex>) {
-    let def = screen_def(Screen::MainMenu);
+    let def = ctx_def(Ctx::MainMenu);
 
     commands
         .spawn((
-            DespawnOnExit(Screen::MainMenu),
+            DespawnOnExit(Ctx::MainMenu),
             Node {
                 width: Val::Percent(100.0),
                 height: Val::Percent(100.0),

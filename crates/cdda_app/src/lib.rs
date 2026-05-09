@@ -37,6 +37,7 @@ use cdda_core::inventory::systems::{
     inventory_screen_input, process_item_move_events, spawn_dev_world,
 };
 use cdda_core::crafting::plugin::CraftingPlugin;
+use cdda_core::crafting::systems::continue_crafts;
 use cdda_core::item::plugin::ItemPlugin;
 use cdda_core::map::spatial_systems::update_spatial_index;
 use cdda_core::sim::events::ItemMoveEvent;
@@ -275,6 +276,15 @@ impl Plugin for CddaPlugin {
                 .after(dev_spawn_panel_input)
                 .run_if(in_state(AppState::InGame))
                 .run_if(in_state(Screen::DevSpawnPanel)),
+        );
+
+        // Exclusive system: tick in-progress crafts each turn.
+        app.add_systems(
+            Update,
+            continue_crafts
+                .in_set(SimSet::Inventory)
+                .run_if(in_state(AppState::InGame))
+                .run_if(on_timer(Duration::from_millis(100))),
         );
     }
 }

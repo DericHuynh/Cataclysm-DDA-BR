@@ -153,19 +153,13 @@ fn creature_has_default_stats() {
 }
 
 // ---------------------------------------------------------------------------
-// Turn scheduling — MovePoints and Speed
+// Turn scheduling — ActionPoints (merged Speed + current)
 // ---------------------------------------------------------------------------
 
 #[test]
 fn speed_default_is_one_hundred() {
-    let mut test = TestBed::new();
-    test.register::<cdda_core::core::components::actor::Speed>();
-
-    let e = test.spawn((cdda_core::core::components::actor::Speed(100),));
-    let speed = test
-        .get::<cdda_core::core::components::actor::Speed>(e)
-        .unwrap();
-    assert_eq!(speed.0, 100);
+    let ap = cdda_core::core::components::actor::ActionPoints::default();
+    assert_eq!(ap.speed, 100);
 }
 
 #[test]
@@ -173,11 +167,13 @@ fn move_points_default_is_zero() {
     let mut test = TestBed::new();
     test.register::<cdda_core::core::components::actor::ActionPoints>();
 
-    let e = test.spawn((cdda_core::core::components::actor::ActionPoints(0),));
-    let mp = test
+    let e = test.spawn((
+        cdda_core::core::components::actor::ActionPoints { current: 0, speed: 100 },
+    ));
+    let ap = test
         .get::<cdda_core::core::components::actor::ActionPoints>(e)
         .unwrap();
-    assert_eq!(mp.0, 0);
+    assert_eq!(ap.current, 0);
 }
 
 // ---------------------------------------------------------------------------

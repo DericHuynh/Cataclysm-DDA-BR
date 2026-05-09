@@ -57,7 +57,6 @@ impl Plugin for ActorPlugin {
 
         // Turn scheduling + status markers
         app.register_type::<ActionPoints>();
-        app.register_type::<Speed>();
         app.register_type::<IsAlive>();
         app.register_type::<Stunned>();
         app.register_type::<Bleeding>();

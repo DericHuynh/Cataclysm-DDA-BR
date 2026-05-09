@@ -1,5 +1,5 @@
-use cdda_core::context::screen_nav::{screen_def, GameEvent, TransitionTarget};
-use cdda_core::context::screen::Screen;
+use cdda_core::context::nav::{ctx_def as screen_def, GameEvent, TransitionTarget};
+use cdda_core::context::ctx::Ctx as Screen;
 
 // ---------------------------------------------------------------------------
 // MainMenu

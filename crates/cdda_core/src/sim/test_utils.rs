@@ -201,7 +201,6 @@ impl TestBed {
         world.register_component::<OnFire>();
         world.register_component::<InFlight>();
         world.register_component::<ActionPoints>();
-        world.register_component::<Speed>();
     }
 }
 

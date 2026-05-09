@@ -454,3 +454,47 @@ impl InventoryBin {
 pub struct InventoryFocus {
     pub index: usize,
 }
+
+// ===========================================================================
+// InProgressCraft — partially-crafted item entity
+// ===========================================================================
+
+/// Marks a partially-completed craft.
+///
+/// Spawned instead of the final item when the player starts a recipe.
+/// Components are consumed immediately; the result item is withheld until
+/// `ap_spent >= ap_total`. The entity lives in the player's inventory
+/// (`InsideContainer`) or on the ground (`WorldPosition`) — picking it up
+/// resumes crafting automatically each turn.
+#[derive(Component, Debug, Clone, Reflect)]
+pub struct InProgressCraft {
+    /// The recipe definition entity (read-only after construction).
+    pub recipe_entity: Entity,
+    /// String ID of the result item def.
+    pub result_id: String,
+    /// Display name of the result item.
+    pub result_name: String,
+    /// How many of the result will be produced.
+    pub result_count: u32,
+    /// Total AP required at speed=100 (= `recipe_turns * 100`).
+    pub ap_total: i32,
+    /// AP already invested in this craft.
+    pub ap_spent: i32,
+}
+
+impl InProgressCraft {
+    pub fn is_complete(&self) -> bool {
+        self.ap_spent >= self.ap_total
+    }
+
+    pub fn progress_pct(&self) -> u32 {
+        if self.ap_total == 0 {
+            return 100;
+        }
+        ((self.ap_spent as f32 / self.ap_total as f32) * 100.0).min(100.0) as u32
+    }
+
+    pub fn display_name(&self) -> String {
+        format!("[crafting] {} ({}%)", self.result_name, self.progress_pct())
+    }
+}

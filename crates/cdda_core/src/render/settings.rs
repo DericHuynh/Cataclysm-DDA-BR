@@ -1,17 +1,18 @@
 //! Settings screen — tabbed categories with keybinding editor.
 //!
-//! Uses `DespawnOnExit(Screen::SettingsMenu)` for automatic cleanup.
+//! Uses `DespawnOnExit(Ctx::SettingsMenu)` for automatic cleanup.
 //! Tab content is rebuilt via `rebuild_content_panel`.
 
 use bevy::ecs::relationship::RelatedSpawnerCommands;
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
 use crate::input::{
-    ContextBindings, GameAction, InputContextId, KeyChord, RebindCapture, RebindCaptureInner,
+    BindableAction, InputContextId, RebindCapture, RebindCaptureInner,
 };
+use crate::input::bindings::ContextInputMaps;
 use crate::context::config::GameSettings;
-use crate::context::screen::Screen;
-use crate::context::screen_nav::screen_def;
+use crate::context::ctx::Ctx;
+use crate::context::nav::ctx_def;
 
 // ---------------------------------------------------------------------------
 // Settings tab
@@ -56,7 +57,7 @@ impl SettingsTab {
 pub struct SettingsState {
     pub active_tab: SettingsTab,
     pub focused_row: usize,
-    pub rebinding_action: Option<(InputContextId, GameAction)>,
+    pub rebinding_action: Option<(InputContextId, BindableAction)>,
     pub tab_changed: bool,
 }
 
@@ -110,15 +111,15 @@ pub fn spawn(
     mut commands: Commands,
     __settings: Res<GameSettings>,
     state: Res<SettingsState>,
-    bindings: Res<ContextBindings>,
+    bindings: Res<ContextInputMaps>,
 ) {
-    let def = screen_def(Screen::SettingsMenu);
+    let def = ctx_def(Ctx::SettingsMenu);
 
     let mut panel_entity = Entity::PLACEHOLDER;
 
     commands
         .spawn((
-            DespawnOnExit(Screen::SettingsMenu),
+            DespawnOnExit(Ctx::SettingsMenu),
             Node {
                 width: Val::Percent(100.0),
                 height: Val::Percent(100.0),
@@ -206,7 +207,7 @@ fn populate_into(
     mut commands: Commands,
     panel: Entity,
     state: &SettingsState,
-    bindings: Option<&ContextBindings>,
+    bindings: Option<&ContextInputMaps>,
 ) {
     // Wrap everything in a single entity so `despawn_children` on the panel
     // removes all content atomically.
@@ -265,7 +266,7 @@ fn interface_tab(parent: &mut RelatedSpawnerCommands<'_, ChildOf>, state: &Setti
 fn keybindings_tab(
     parent: &mut RelatedSpawnerCommands<'_, ChildOf>,
     state: &SettingsState,
-    bindings: Option<&ContextBindings>,
+    bindings: Option<&ContextInputMaps>,
 ) {
     let Some(bindings) = bindings else {
         parent.spawn((
@@ -289,11 +290,11 @@ fn keybindings_tab(
     let mut row_index = 0usize;
 
     for ctx in contexts {
-        let mut pairs = bindings.list_bindings(ctx);
+        // list_bindings returns Vec<(BindableAction, String)> sorted by label
+        let pairs = bindings.list_bindings(ctx);
         if pairs.is_empty() {
             continue;
         }
-        pairs.sort_by(|a, b| format_gaction(&a.1).cmp(&format_gaction(&b.1)));
 
         // Section header
         parent.spawn((
@@ -309,7 +310,7 @@ fn keybindings_tab(
             },
         ));
 
-        for (chord, action) in &pairs {
+        for (action, key_str) in &pairs {
             let is_focused = row_index == state.focused_row;
             let is_rebinding = state
                 .rebinding_action
@@ -317,11 +318,10 @@ fn keybindings_tab(
                 .map(|(c, a)| c == ctx && a == action)
                 .unwrap_or(false);
 
-            let display = format!("{}  ⟶  {}", format_gaction(action), format_chord(chord));
             let text = if is_rebinding {
-                format!("{}  ⟶  PRESS A KEY... (Esc=cancel)", format_gaction(action))
+                format!("{}  ⟶  PRESS A KEY... (Esc=cancel)", action.label())
             } else {
-                display
+                format!("{}  ⟶  {}", action.label(), key_str)
             };
 
             parent
@@ -416,7 +416,7 @@ pub fn rebuild_content_panel(
     mut commands: Commands,
     mut state: ResMut<SettingsState>,
     __settings: Res<GameSettings>,
-    bindings: Res<ContextBindings>,
+    bindings: Res<ContextInputMaps>,
     panel: Query<Entity, With<ContentPanel>>,
 ) {
     if !state.tab_changed {
@@ -460,7 +460,7 @@ fn switch_tab(state: &mut SettingsState, dir: isize) {
 pub fn navigate(
     mut action_reader: bevy::ecs::message::MessageReader<crate::input::InputAction>,
     mut state: ResMut<SettingsState>,
-    bindings: Res<ContextBindings>,
+    bindings: Res<ContextInputMaps>,
 ) {
     for event in action_reader.read() {
         match &event.action {
@@ -497,7 +497,7 @@ pub fn navigate(
 pub fn handle_confirm(
     mut action_reader: bevy::ecs::message::MessageReader<crate::input::InputAction>,
     mut state: ResMut<SettingsState>,
-    bindings: Res<ContextBindings>,
+    bindings: Res<ContextInputMaps>,
     mut rebind_capture: ResMut<RebindCapture>,
 ) {
     for event in action_reader.read() {
@@ -505,7 +505,7 @@ pub fn handle_confirm(
             if state.active_tab == SettingsTab::Keybindings {
                 if let Some((ctx, action)) = find_binding_at_row(&state, &bindings) {
                     state.rebinding_action = Some((ctx, action.clone()));
-                    rebind_capture.0 = Some(RebindCaptureInner {
+                    rebind_capture.pending = Some(RebindCaptureInner {
                         context: ctx,
                         action: action.clone(),
                     });
@@ -514,7 +514,7 @@ pub fn handle_confirm(
         } else if event.action == crate::input::GameAction::Cancel {
             if state.rebinding_action.is_some() {
                 state.rebinding_action = None;
-                rebind_capture.0.take();
+                rebind_capture.pending.take();
             }
         }
     }
@@ -524,7 +524,7 @@ pub fn detect_rebind_complete(
     mut state: ResMut<SettingsState>,
     rebind_capture: Res<RebindCapture>,
 ) {
-    if state.rebinding_action.is_some() && rebind_capture.0.is_none() {
+    if state.rebinding_action.is_some() && rebind_capture.pending.is_none() {
         // The rebind was completed (handle_raw_input captured a key and
         // cleared RebindCapture).  Clear the UI state so the row returns
         // to normal display.
@@ -578,30 +578,6 @@ fn _yn(b: bool) -> String {
     }
 }
 
-fn format_chord(chord: &KeyChord) -> String {
-    let mut s = String::new();
-    if chord.ctrl {
-        s.push_str("Ctrl+");
-    }
-    if chord.alt {
-        s.push_str("Alt+");
-    }
-    if chord.shift {
-        s.push_str("Shift+");
-    }
-    s.push_str(&format!("{:?}", chord.key));
-    s
-}
-
-fn format_gaction(action: &GameAction) -> String {
-    match action {
-        GameAction::Move(dir) => format!("Move({:?})", dir),
-        GameAction::Run(dir) => format!("Run({:?})", dir),
-        GameAction::HotkeyPress(ch) => format!("Hotkey({})", ch),
-        GameAction::Custom(id) => format!("Custom({})", id),
-        other => format!("{:?}", other),
-    }
-}
 
 fn ctx_label(ctx: &InputContextId) -> String {
     match ctx {
@@ -622,7 +598,7 @@ fn ctx_label(ctx: &InputContextId) -> String {
     }
 }
 
-fn current_tab_row_count(state: &SettingsState, bindings: &ContextBindings) -> usize {
+fn current_tab_row_count(state: &SettingsState, bindings: &ContextInputMaps) -> usize {
     match state.active_tab {
         SettingsTab::General => 3,
         SettingsTab::Graphics => 3,
@@ -649,8 +625,8 @@ fn current_tab_row_count(state: &SettingsState, bindings: &ContextBindings) -> u
 
 fn find_binding_at_row(
     state: &SettingsState,
-    bindings: &ContextBindings,
-) -> Option<(InputContextId, GameAction)> {
+    bindings: &ContextInputMaps,
+) -> Option<(InputContextId, BindableAction)> {
     let contexts = &[
         InputContextId::Gameplay,
         InputContextId::Inventory,
@@ -659,15 +635,15 @@ fn find_binding_at_row(
     ];
     let mut row = 0usize;
     for ctx in contexts {
-        let mut pairs = bindings.list_bindings(ctx);
+        // list_bindings returns Vec<(BindableAction, String)> sorted by label
+        let pairs = bindings.list_bindings(ctx);
         if pairs.is_empty() {
             continue;
         }
         row += 1; // header
-        pairs.sort_by(|a, b| format_gaction(&a.1).cmp(&format_gaction(&b.1)));
-        for (_, action) in &pairs {
+        for (action, _) in &pairs {
             if row == state.focused_row {
-                return Some((*ctx, action.clone()));
+                return Some((*ctx, *action));
             }
             row += 1;
         }

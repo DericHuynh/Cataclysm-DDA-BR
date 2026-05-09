@@ -1,5 +1,5 @@
-use cdda_core::context::screen::{Screen, ScreenStack};
-use cdda_core::context::screen_nav::{pop_screen, push_screen, FocusedCommandIndex};
+use cdda_core::context::ctx::{Ctx as Screen, ContextStack as ScreenStack};
+use cdda_core::context::nav::{pop_ctx as pop_screen, push_ctx as push_screen, FocusedCommandIndex};
 use bevy_state::prelude::NextState;
 
 // ---------------------------------------------------------------------------

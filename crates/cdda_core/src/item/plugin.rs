@@ -45,5 +45,8 @@ impl Plugin for ItemPlugin {
         app.register_type::<InvletFavorites>();
         app.register_type::<Inventory>();
         app.register_type::<ItemQualities>();
+
+        // In-progress crafting
+        app.register_type::<InProgressCraft>();
     }
 }

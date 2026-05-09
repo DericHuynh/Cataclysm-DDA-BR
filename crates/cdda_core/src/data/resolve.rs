@@ -172,19 +172,73 @@ fn apply_relative(target: &mut Value, key: &str, val: &Value) {
 }
 
 /// Apply `proportional`: multiply a numeric field by a factor.
+///
+/// Handles both plain JSON numbers (`25`) and CDDA string-encoded unit values
+/// (`"5 g"`, `"250 ml"`, `"10 cent"`, …).  String values are parsed as
+/// `<number> <unit>`, multiplied, and written back in the same format.
 fn apply_proportional(target: &mut Value, key: &str, val: &Value) {
     let Some(target_obj) = target.as_object_mut() else {
         return;
     };
-    let entry = match target_obj.get_mut(key) {
-        Some(e) => e,
-        None => return,
+    let Some(entry) = target_obj.get_mut(key) else {
+        return;
     };
-    if let (Some(current), Some(factor)) = (entry.as_f64(), val.as_f64()) {
-        if let Some(n) = serde_json::Number::from_f64(current * factor) {
-            *entry = Value::Number(n);
+    let Some(factor) = val.as_f64() else {
+        return;
+    };
+
+    match entry {
+        Value::Number(n) => {
+            if let Some(current) = n.as_f64() {
+                if let Some(new_n) = serde_json::Number::from_f64(current * factor) {
+                    *entry = Value::Number(new_n);
+                }
+            }
         }
+        Value::String(s) => {
+            if let Some(new_s) = multiply_cdda_value_string(s, factor) {
+                *entry = Value::String(new_s);
+            }
+        }
+        _ => {}
     }
+}
+
+/// Parse a CDDA `"<number> <unit>"` string, multiply the numeric part by
+/// `factor`, and return the result in the same `"<number> <unit>"` format.
+///
+/// Examples:
+/// - `"5 g"` × 6 → `"30 g"`
+/// - `"250 ml"` × 0.5 → `"125 ml"`
+/// - `"10 cent"` × 6 → `"60 cent"`
+fn multiply_cdda_value_string(s: &str, factor: f64) -> Option<String> {
+    let s = s.trim();
+    // Find where the numeric part ends (digits + optional decimal point/sign).
+    let num_end = s
+        .char_indices()
+        .find(|(_, c)| !c.is_ascii_digit() && *c != '.' && *c != '-')
+        .map(|(i, _)| i)
+        .unwrap_or(s.len());
+    if num_end == 0 {
+        return None;
+    }
+    let (num_str, rest) = s.split_at(num_end);
+    let num: f64 = num_str.parse().ok()?;
+    let unit = rest.trim();
+    let result = num * factor;
+    Some(if result.fract() < 1e-9 {
+        if unit.is_empty() {
+            format!("{}", result as i64)
+        } else {
+            format!("{} {}", result as i64, unit)
+        }
+    } else {
+        if unit.is_empty() {
+            format!("{}", result)
+        } else {
+            format!("{} {}", result, unit)
+        }
+    })
 }
 
 /// Topological sort of definitions by copy-from dependency.
@@ -446,5 +500,40 @@ mod tests {
         assert_eq!(resolved["a"].as_str(), Some("from_1"));
         assert_eq!(resolved["b"].as_str(), Some("from_2"));
         assert_eq!(resolved["c"].as_str(), Some("from_3"));
+    }
+
+    /// proportional multiplies string-encoded unit values (CDDA format).
+    #[test]
+    fn test_proportional_string_units() {
+        let mut defs = HashMap::new();
+        defs.insert(
+            "base".into(),
+            json!({"id": "base", "weight": "5 g", "volume": "10 ml", "price": "10 cent"}),
+        );
+        defs.insert(
+            "child".into(),
+            json!({"id": "child", "copy-from": "base",
+                   "proportional": {"weight": 6, "volume": 6, "price": 6}}),
+        );
+        let mut chain = Vec::new();
+        let resolved = resolve_copy_from("child", &defs, &mut chain).unwrap();
+
+        assert_eq!(resolved["weight"].as_str(), Some("30 g"));
+        assert_eq!(resolved["volume"].as_str(), Some("60 ml"));
+        assert_eq!(resolved["price"].as_str(), Some("60 cent"));
+    }
+
+    /// proportional with fractional factor preserves decimal.
+    #[test]
+    fn test_proportional_string_fractional() {
+        let mut defs = HashMap::new();
+        defs.insert("base".into(), json!({"id": "base", "weight": "100 g"}));
+        defs.insert(
+            "child".into(),
+            json!({"id": "child", "copy-from": "base", "proportional": {"weight": 0.5}}),
+        );
+        let mut chain = Vec::new();
+        let resolved = resolve_copy_from("child", &defs, &mut chain).unwrap();
+        assert_eq!(resolved["weight"].as_str(), Some("50 g"));
     }
 }

@@ -20,7 +20,7 @@ use crate::input::{GameAction, InputAction};
 
 use crate::context::cursor::ExamineCursor;
 use crate::context::menu::{MenuItem, SelectedIndex};
-use crate::context::Screen;
+use crate::context::ctx::Ctx;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -120,14 +120,14 @@ fn adjust_scroll(selected: &mut SelectedIndex, total: usize) {
 ///
 /// Screen transitions are handled by `handle_navigation_input` —
 /// this system only cares about directional movement of the examine cursor.
-pub fn screen_and_cursor(
+pub fn ctx_and_cursor(
     mut action_reader: MessageReader<InputAction>,
-    screen: Res<State<Screen>>,
+    screen: Res<State<Ctx>>,
     mut cursor: ResMut<ExamineCursor>,
 ) {
     for event in action_reader.read() {
         // ── Examine cursor movement ────────────────────────────
-        if *screen.get() == Screen::ExamineLook {
+        if *screen.get() == Ctx::ExamineLook {
             if let Some((dx, dy)) = movement_delta(&event.action) {
                 let current =
                     cursor

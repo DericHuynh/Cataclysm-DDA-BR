@@ -139,10 +139,10 @@ pub fn setup_world(world: &mut World) {
     world.register_component::<Invlet>();
     world.register_component::<DevPlayer>();
     world.register_component::<DevGroundItemName>();
+    world.register_component::<crate::core::components::item::InProgressCraft>();
 
     // --- Turn scheduling ---
     world.register_component::<ActionPoints>();
-    world.register_component::<Speed>();
     world.register_component::<HandCount>();
 
     // --- Status markers ---

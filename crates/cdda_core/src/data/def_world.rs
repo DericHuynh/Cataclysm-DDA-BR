@@ -12,7 +12,7 @@
 //! `Query<&GunData, With<IsDef>>` — the entities are in the main World.
 
 use crate::core::components::actor::{
-    ActionPoints, Creature, Faction, Gender, Health, IsAlive, PlayerData, Speed,
+    ActionPoints, Creature, Faction, Gender, Health, IsAlive, PlayerData,
 };
 use crate::core::components::def::*;
 use crate::core::components::item::ItemQualities;
@@ -1183,8 +1183,7 @@ pub fn worldgen_system(world: &mut World) {
                 id: crate::FactionId::from(0u32),
             },
             Solid,
-            ActionPoints(100),
-            Speed(100),
+            ActionPoints { current: 100, speed: 100 },
         ));
         info!("Spawned player at origin (0,0). Use the map to explore all buildings.");
     }

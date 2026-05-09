@@ -1,57 +1,36 @@
 //! Movement tests — translated from CDDA's movement/speed testing patterns.
-//!
-//! Tests move points, speed, terrain move cost, and CDDA-derived movement
-//! formulas.
 
-use cdda_core::core::components::actor::{ActionPoints, Speed};
+use cdda_core::core::components::actor::ActionPoints;
 use cdda_core::sim::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------
 // Pure helper functions — CDDA-derived movement formulas
 // ---------------------------------------------------------------------------
 
-/// Base move cost for the given terrain (turns to enter).
-/// Cost 0 is impassable.
 fn terrain_move_cost(cost: i32) -> i32 {
-    if cost == 0 {
-        i32::MAX
-    } else {
-        cost
-    }
+    if cost == 0 { i32::MAX } else { cost }
 }
 
-/// Total move points per turn based on speed.
 fn mp_per_turn(speed: i32) -> i32 {
     speed
 }
 
-/// Whether the entity can act (has positive move points and is not stunned).
 fn can_act(mp: i32, stunned: bool) -> bool {
     mp > 0 && !stunned
 }
 
-/// Move cost modifier from bleeding (bleeding adds 25% cost).
 fn bleeding_move_modifier(bleeding: bool, base_cost: i32) -> i32 {
-    if bleeding {
-        (base_cost as f64 * 1.25).ceil() as i32
-    } else {
-        base_cost
-    }
+    if bleeding { (base_cost as f64 * 1.25).ceil() as i32 } else { base_cost }
 }
 
-/// Stamina cost for moving into a tile (higher for rough terrain).
 fn stamina_cost(terrain_cost: i32) -> i32 {
-    if terrain_cost == 0 || terrain_cost == i32::MAX {
-        0
-    } else if terrain_cost <= 50 {
-        terrain_cost / 2
-    } else {
-        terrain_cost
-    }
+    if terrain_cost == 0 || terrain_cost == i32::MAX { 0 }
+    else if terrain_cost <= 50 { terrain_cost / 2 }
+    else { terrain_cost }
 }
 
 // ---------------------------------------------------------------------------
-// Basic component tests
+// ActionPoints component tests
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -59,9 +38,9 @@ fn move_points_default() {
     let mut test = TestBed::new();
     test.register::<ActionPoints>();
 
-    let e = test.spawn((ActionPoints(0),));
-    let mp = test.get::<ActionPoints>(e).unwrap();
-    assert_eq!(mp.0, 0);
+    let e = test.spawn((ActionPoints { current: 0, speed: 100 },));
+    let ap = test.get::<ActionPoints>(e).unwrap();
+    assert_eq!(ap.current, 0);
 }
 
 #[test]
@@ -69,9 +48,9 @@ fn move_points_positive() {
     let mut test = TestBed::new();
     test.register::<ActionPoints>();
 
-    let e = test.spawn((ActionPoints(100),));
-    let mp = test.get::<ActionPoints>(e).unwrap();
-    assert_eq!(mp.0, 100);
+    let e = test.spawn((ActionPoints { current: 100, speed: 100 },));
+    let ap = test.get::<ActionPoints>(e).unwrap();
+    assert_eq!(ap.current, 100);
 }
 
 #[test]
@@ -79,43 +58,32 @@ fn move_points_negative() {
     let mut test = TestBed::new();
     test.register::<ActionPoints>();
 
-    let e = test.spawn((ActionPoints(-50),));
-    let mp = test.get::<ActionPoints>(e).unwrap();
-    assert_eq!(mp.0, -50);
+    let e = test.spawn((ActionPoints { current: -50, speed: 100 },));
+    let ap = test.get::<ActionPoints>(e).unwrap();
+    assert_eq!(ap.current, -50);
 }
 
 #[test]
 fn speed_default() {
-    let mut test = TestBed::new();
-    test.register::<Speed>();
-
-    let e = test.spawn((Speed(100),));
-    let speed = test.get::<Speed>(e).unwrap();
-    assert_eq!(speed.0, 100);
+    let ap = ActionPoints::default();
+    assert_eq!(ap.speed, 100);
 }
 
 #[test]
 fn speed_custom() {
-    let mut test = TestBed::new();
-    test.register::<Speed>();
+    let e1 = ActionPoints::new(80);
+    let e2 = ActionPoints::new(120);
+    let e3 = ActionPoints::new(200);
 
-    let e1 = test.spawn((Speed(80),));
-    let e2 = test.spawn((Speed(120),));
-    let e3 = test.spawn((Speed(200),));
-
-    assert_eq!(test.get::<Speed>(e1).unwrap().0, 80);
-    assert_eq!(test.get::<Speed>(e2).unwrap().0, 120);
-    assert_eq!(test.get::<Speed>(e3).unwrap().0, 200);
+    assert_eq!(e1.speed, 80);
+    assert_eq!(e2.speed, 120);
+    assert_eq!(e3.speed, 200);
 }
 
 #[test]
 fn speed_zero() {
-    let mut test = TestBed::new();
-    test.register::<Speed>();
-
-    let e = test.spawn((Speed(0),));
-    let speed = test.get::<Speed>(e).unwrap();
-    assert_eq!(speed.0, 0);
+    let ap = ActionPoints::new(0);
+    assert_eq!(ap.speed, 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -157,30 +125,23 @@ fn can_act_with_mp() {
 fn can_act_stunned() {
     assert!(!can_act(10, true));
     assert!(!can_act(100, true));
-    // Also cannot act if mp <= 0 even if not stunned
     assert!(!can_act(0, false));
     assert!(!can_act(-5, false));
 }
 
 #[test]
 fn bleeding_move_cost() {
-    // Base cost 100, bleeding → 125
     assert_eq!(bleeding_move_modifier(true, 100), 125);
-    // No bleeding → no modifier
     assert_eq!(bleeding_move_modifier(false, 100), 100);
-    // Base cost 30, bleeding → 38 (ceil(30 * 1.25) = ceil(37.5) = 38)
     assert_eq!(bleeding_move_modifier(true, 30), 38);
 }
 
 #[test]
 fn stamina_cost_tests() {
-    // Impassable terrain → 0
     assert_eq!(stamina_cost(0), 0);
     assert_eq!(stamina_cost(i32::MAX), 0);
-    // Light terrain (≤50) → half
     assert_eq!(stamina_cost(50), 25);
     assert_eq!(stamina_cost(30), 15);
-    // Rough terrain (>50) → full cost
     assert_eq!(stamina_cost(100), 100);
     assert_eq!(stamina_cost(80), 80);
 }

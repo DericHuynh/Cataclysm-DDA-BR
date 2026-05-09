@@ -24,7 +24,8 @@
 use crate::context::ctx::Ctx;
 use crate::context::nav::{push_ctx, FocusedCommandIndex};
 use crate::context::ContextStack;
-use crate::core::components::actor::HandCount;
+use crate::core::components::actor::{ActionPoints, HandCount, IsAlive};
+use crate::actor::turn::{AP_COST_PICKUP, AP_COST_WIELD};
 use crate::core::components::def::ItemVolume;
 use crate::core::components::item::{
     Container, ContainerContents, CurrentCharges, DefOrigin, InsideContainer, Inventory,
@@ -60,11 +61,47 @@ pub fn assign_invlets_system(
     mut inventories: Query<(Entity, &mut Inventory)>,
     favs: Query<&InvletFavorites>,
     item_origins: Query<&DefOrigin>,
+    stack_counts: Query<&StackCount>,
+    item_damages: Query<&ItemDamage>,
+    current_charges_q: Query<&CurrentCharges>,
 ) {
     for (inv_owner, mut inv) in &mut inventories {
         let pending: Vec<Entity> = inv.needs_invlet.drain().collect();
+
+        // Track count increments from merges so we don't race with deferred commands.
+        let mut merge_adds: std::collections::HashMap<Entity, u32> =
+            std::collections::HashMap::new();
+
         for item in pending {
-            // Try the owner's favourite invlet for this item type first.
+            let incoming_origin = item_origins.get(item).ok().map(|d| d.0);
+            let incoming_damage = item_damages.get(item).ok().map(|d| d.0).unwrap_or(0);
+            let incoming_charges = current_charges_q.get(item).ok().map(|c| c.0).unwrap_or(0);
+            let incoming_count = stack_counts.get(item).ok().map(|s| s.get()).unwrap_or(1);
+
+            // Try to merge into an existing stack with the same identity.
+            let merge_target = if let Some(origin) = incoming_origin {
+                inv.invlets.values().copied().find(|&stack| {
+                    item_origins.get(stack).ok().map(|d| d.0) == Some(origin)
+                        && item_damages.get(stack).ok().map(|d| d.0).unwrap_or(0)
+                            == incoming_damage
+                        && current_charges_q
+                            .get(stack)
+                            .ok()
+                            .map(|c| c.0)
+                            .unwrap_or(0)
+                            == incoming_charges
+                })
+            } else {
+                None
+            };
+
+            if let Some(target) = merge_target {
+                *merge_adds.entry(target).or_insert(0) += incoming_count;
+                commands.entity(item).despawn();
+                continue;
+            }
+
+            // No merge: assign invlet (favourites first, then sequential).
             let fav_invlet = match (item_origins.get(item), favs.get(inv_owner)) {
                 (Ok(origin), Ok(fav)) => fav
                     .invlets_for(origin.0)
@@ -77,6 +114,12 @@ pub fn assign_invlets_system(
                 commands.entity(item).insert(Invlet(c));
                 inv.invlets.insert(c, item);
             }
+        }
+
+        // Apply accumulated stack count increases from merges.
+        for (target, extra) in merge_adds {
+            let current = stack_counts.get(target).ok().map(|s| s.get()).unwrap_or(1);
+            commands.entity(target).insert(StackCount::new(current + extra));
         }
     }
 }
@@ -189,6 +232,7 @@ pub fn inventory_screen_input(
     item_volumes: Query<Option<&ItemVolume>>,
     wielded_items_q: Query<Option<&WieldedItems>>,
     wielded_by_check: Query<Entity, With<WieldedBy>>,
+    mut ap_query: Query<&mut ActionPoints, With<DevPlayer>>,
     mut commands: Commands,
     mut stack: ResMut<ContextStack>,
     mut next_screen: ResMut<NextState<Ctx>>,
@@ -280,6 +324,9 @@ pub fn inventory_screen_input(
                             .entity(item_entity)
                             .remove::<WieldedBy>()
                             .insert(InsideContainer(player_entity));
+                        if let Ok(mut ap) = ap_query.single_mut() {
+                            ap.spend(AP_COST_WIELD);
+                        }
                     } else {
                         // Wield: move from inventory bag to hand if a slot is free.
                         let wielded_count = wielded_items_q
@@ -293,6 +340,9 @@ pub fn inventory_screen_input(
                                 .entity(item_entity)
                                 .remove::<InsideContainer>()
                                 .insert(WieldedBy(player_entity));
+                            if let Ok(mut ap) = ap_query.single_mut() {
+                                ap.spend(AP_COST_WIELD);
+                            }
                         } else {
                             warn!(
                                 "Hands full ({}/{}) — cannot wield.",
@@ -338,6 +388,8 @@ pub fn spawn_dev_world(world: &mut World) {
         HandCount(2),
         Inventory::default(),
         InvletFavorites::default(),
+        ActionPoints::default(),
+        IsAlive,
     ));
 
     // Columns: display name | CDDA type ID | OMT x | OMT y
@@ -401,6 +453,7 @@ pub fn dev_pickup_drop_system(
     >,
     item_volumes: Query<Option<&ItemVolume>>,
     wielded_items_q: Query<Option<&WieldedItems>>,
+    mut ap_query: Query<&mut ActionPoints, With<DevPlayer>>,
     mut commands: Commands,
 ) {
     let actions: Vec<GameAction> = reader.read().map(|e| e.action.clone()).collect();
@@ -447,6 +500,9 @@ pub fn dev_pickup_drop_system(
                             .insert(InsideContainer(player_entity));
                     }
                     inventory.needs_invlet.insert(item);
+                    if let Ok(mut ap) = ap_query.single_mut() {
+                        ap.spend(AP_COST_PICKUP);
+                    }
                 }
             }
 

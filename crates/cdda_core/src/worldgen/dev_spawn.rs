@@ -139,6 +139,10 @@ pub fn dev_spawn_panel_input(
                     focus.filter.push_str(ch.as_str());
                     focus.index = 0;
                 }
+                Key::Space => {
+                    focus.filter.push(' ');
+                    focus.index = 0;
+                }
                 Key::Backspace => {
                     focus.filter.pop();
                     focus.index = 0;

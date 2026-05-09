@@ -358,7 +358,12 @@ pub fn handle_navigation_input(
                 }
             }
             GameAction::Cancel => {
-                pop_ctx(&mut stack, &mut next, &mut focused);
+                // Some screens handle Cancel in their own input systems (crafting
+                // menu calls pop_ctx itself).  Don't double-pop for those.
+                let screen_handles_cancel = matches!(current, Ctx::CraftingMenu);
+                if !screen_handles_cancel {
+                    pop_ctx(&mut stack, &mut next, &mut focused);
+                }
             }
             GameAction::HotkeyPress(ch) => {
                 if let Some((idx, cmd)) = def

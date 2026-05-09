@@ -7,11 +7,11 @@
 use crate::core::components::item::ItemTypeId;
 use crate::core::components::item::StackCount;
 use crate::core::components::item::WieldedBy;
-use crate::core::components::item::{Inventory, InventoryFocus};
+use crate::core::components::item::{InProgressCraft, Inventory, InventoryFocus};
 use crate::render::tiles::TileRegistry;
-use crate::context::ctx::Screen;
+use crate::context::ctx::Ctx;
 use crate::core::components::def::ItemSymbol;
-use crate::sim::dev_worldgen::{DevGroundItemName, DevPlayer};
+use crate::worldgen::dev::{DevGroundItemName, DevPlayer};
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
 
@@ -23,10 +23,11 @@ const BG: Color = Color::srgb(0.04, 0.04, 0.06);
 const HEADER_BG: Color = Color::srgb(0.10, 0.10, 0.14);
 const ITEM_BG: Color = Color::srgb(0.07, 0.07, 0.10);
 const ITEM_FOCUS_BG: Color = Color::srgb(0.20, 0.50, 0.12);
-/// Row background for items currently held in hand (wielded).
 const ITEM_HELD_BG: Color = Color::srgb(0.10, 0.22, 0.40);
+const ITEM_CRAFT_BG: Color = Color::srgb(0.18, 0.12, 0.05);
 const ACCENT: Color = Color::srgb(0.85, 0.60, 0.15);
 const TEXT_BRIGHT: Color = Color::srgb(0.95, 0.95, 0.95);
+const TEXT_CRAFT: Color = Color::srgb(0.85, 0.65, 0.20);
 const TEXT_DIM: Color = Color::srgb(0.55, 0.55, 0.55);
 const DIVIDER: Color = Color::srgb(0.20, 0.20, 0.25);
 const ICON_BG: Color = Color::srgb(0.12, 0.12, 0.16);
@@ -47,7 +48,7 @@ pub(crate) struct InvListContainer;
 pub fn spawn_inventory_screen(mut commands: Commands) {
     commands
         .spawn((
-            DespawnOnExit(Screen::Inventory),
+            DespawnOnExit(Ctx::Inventory),
             Node {
                 width: Val::Percent(100.0),
                 height: Val::Percent(100.0),
@@ -142,6 +143,7 @@ pub(crate) fn update_inventory_screen(
     item_counts: Query<&StackCount>,
     item_type_ids: Query<&ItemTypeId>,
     item_symbols: Query<&ItemSymbol>,
+    in_progress_crafts: Query<&InProgressCraft>,
     container: Query<Entity, With<InvListContainer>>,
     wielded_by_check: Query<Entity, With<WieldedBy>>,
 ) {
@@ -177,22 +179,28 @@ pub(crate) fn update_inventory_screen(
     }
 
     for (i, (invlet_char, item_entity)) in items.iter().enumerate() {
-        let name = item_names
-            .get(*item_entity)
-            .map(|n| n.0.as_str())
-            .unwrap_or("?");
+        let craft = in_progress_crafts.get(*item_entity).ok();
+        let craft_display = craft.map(|c| c.display_name());
+        let name: &str = if let Some(ref s) = craft_display {
+            s.as_str()
+        } else {
+            item_names.get(*item_entity).map(|n| n.0.as_str()).unwrap_or("?")
+        };
         let qty = item_counts.get(*item_entity).map(|s| s.get()).unwrap_or(1);
         let is_focused = i == focus.index;
         let is_held = wielded_by_check.get(*item_entity).is_ok();
+        let is_crafting = craft.is_some();
 
         let row_bg = if is_focused {
             ITEM_FOCUS_BG
+        } else if is_crafting {
+            ITEM_CRAFT_BG
         } else if is_held {
             ITEM_HELD_BG
         } else {
             ITEM_BG
         };
-        let text_color = TEXT_BRIGHT;
+        let text_color = if is_crafting { TEXT_CRAFT } else { TEXT_BRIGHT };
 
         let cdda_id = item_type_ids
             .get(*item_entity)

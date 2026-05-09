@@ -1,19 +1,15 @@
 //! # Turn scheduling — Action Point system
 //!
-//! Reference: Section 8 — The Turn & Action Point System
-//!
-//! Every actor has:
-//! - `Speed` (base 100) — MovePoints gained per turn
-//! - `MovePoints` — current action point pool
-//! - `TurnQueue` — priority queue sorted by highest MP first
+//! Every actor has a single `ActionPoints` component (`current` + `speed`).
+//! Each turn `speed` AP is granted; actions deduct from `current`.
 //!
 //! ## Per-turn flow
-//! 1. `tick_move_points`: all actors gain `Speed` MP (clamped to -2×Speed debt floor)
-//! 2. Actors act in MP order (highest first)
-//! 3. Each action costs MP (walk=100, attack=100, etc.)
-//! 4. When all actors below threshold, next turn begins
+//! 1. `tick_move_points`: all actors gain `speed` AP (clamped to -2×speed debt floor)
+//! 2. Actors act in AP order (highest first via `TurnQueue`)
+//! 3. Each action costs AP (walk=100, pickup=100, wield=100, craft tick=100, …)
+//! 4. When all actors fall below `MP_MIN_FLOOR`, the next turn begins
 
-use crate::core::components::actor::{ActionPoints, IsAlive, Speed};
+use crate::core::components::actor::{ActionPoints, IsAlive};
 use crate::core::components::def::IsDef;
 use bevy_ecs::prelude::*;
 use std::cmp::Ordering;
@@ -24,9 +20,17 @@ use std::cmp::Ordering;
 
 pub const MOVE_COST_WALK: i32 = 100;
 pub const MOVE_COST_RUN: i32 = 80;
-pub const MOVE_COST_CROUCH: i32 = 150;
+/// Crouching doubles the base walk cost (CDDA: `move_mode_crouch` = 2× walk).
+pub const MOVE_COST_CROUCH: i32 = 200;
+/// Prone (crawling) costs 6× walk (CDDA: `move_mode_prone` = 6× walk).
+pub const MOVE_COST_PRONE: i32 = 600;
+/// Being knocked down triples the movement cost (CDDA: `effect_downed` = 3×).
+pub const MOVE_COST_DOWNED_MULTIPLIER: i32 = 3;
 pub const MOVE_COST_ATTACK_BASE: i32 = 100;
-pub const MOVE_COST_PICKUP: i32 = 100;
+pub const AP_COST_PICKUP: i32 = 100;
+pub const AP_COST_WIELD: i32 = 100;
+/// AP deducted per craft-tick (one unit of crafting progress).
+pub const AP_COST_CRAFT_TICK: i32 = 100;
 pub const MOVE_COST_RELOAD_BASE: i32 = 100;
 pub const MP_MIN_FLOOR: i32 = 25; // below this, actor stops acting
 
@@ -102,51 +106,39 @@ impl TurnQueue {
 // Systems
 // ---------------------------------------------------------------------------
 
-/// Phase 0: Grant move points to all actors and rebuild the turn queue.
+/// Phase 0: Grant AP to all living actors and rebuild the turn queue.
 ///
-/// Runs at the start of each game turn.
-///
-/// Reference: Section 8 — "All actors gain Speed move points"
+/// Runs at the start of each game turn (throttled in the app to ≤10 turns/sec).
 pub fn tick_move_points(
-    mut query: Query<(Entity, &mut ActionPoints, &Speed), (With<IsAlive>, Without<IsDef>)>,
+    mut query: Query<(Entity, &mut ActionPoints), (With<IsAlive>, Without<IsDef>)>,
     mut queue: ResMut<TurnQueue>,
     mut game_time: ResMut<crate::sim::state::GameTime>,
 ) {
-    // Clear old queue
     queue.actors.clear();
 
-    for (entity, mut mp, speed) in &mut query {
-        // Grant MP, enforce debt floor: cannot exceed 2 turns of debt
-        let debt_floor = -(speed.0 * 2).max(50); // at least -50
-        mp.0 = (mp.0 + speed.0).max(debt_floor);
-
-        // Add to queue
+    for (entity, mut ap) in &mut query {
+        ap.tick();
         queue.actors.push(ActorTurn {
-            move_points: mp.0,
+            move_points: ap.current,
             entity,
         });
     }
 
-    // Sort descending by MP (highest first)
     queue
         .actors
         .sort_by(|a, b| b.move_points.cmp(&a.move_points));
 
-    // Advance global turn counter
     queue.turn_count += 1;
     game_time.advance();
 }
 
-/// Spend move points for an entity.
+/// Spend AP for an entity.
 ///
-/// Systems call this after resolving an action (movement, attack, etc.).
-/// Returns `true` if the entity can still act this turn (MP >= MP_MIN_FLOOR).
-///
-/// Reference: Section 8 — "Each action costs move points"
+/// Returns `true` if the entity can still act this turn (`current >= MP_MIN_FLOOR`).
 pub fn spend_move_points(entity: Entity, cost: i32, query: &mut Query<&mut ActionPoints>) -> bool {
-    if let Ok(mut mp) = query.get_mut(entity) {
-        mp.0 -= cost;
-        mp.0 >= MP_MIN_FLOOR
+    if let Ok(mut ap) = query.get_mut(entity) {
+        ap.spend(cost);
+        ap.current >= MP_MIN_FLOOR
     } else {
         false
     }

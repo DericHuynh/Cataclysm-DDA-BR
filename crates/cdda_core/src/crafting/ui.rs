@@ -36,8 +36,8 @@ use crate::core::components::def::{
     RecipeSubcategory, RecipeTime,
 };
 use crate::crafting::systems::{
-    check_can_craft, collect_available_items, display_category, display_subcategory, do_craft,
-    find_dev_player, CategoryIndex, RecipeIndex,
+    check_can_craft, collect_available_items, display_category, display_subcategory,
+    find_dev_player, start_craft, CategoryIndex, RecipeIndex,
 };
 use crate::data::def_world::DefinitionWorld;
 use crate::input::context::{InputContextId, InputContextStack};
@@ -154,25 +154,25 @@ pub struct CraftMenuRoot;
 // ── Sub-components for targeted despawn ─────────────────────────────────────
 
 #[derive(Component)]
-pub(crate) struct HeaderContainer;
+pub struct HeaderContainer;
 
 #[derive(Component)]
-pub(crate) struct CategoryTabsContainer;
+pub struct CategoryTabsContainer;
 
 #[derive(Component)]
-pub(crate) struct SubcategoryTabsContainer;
+pub struct SubcategoryTabsContainer;
 
 #[derive(Component)]
-pub(crate) struct RecipeListContainer;
+pub struct RecipeListContainer;
 
 #[derive(Component)]
-pub(crate) struct DetailPanelContainer;
+pub struct DetailPanelContainer;
 
 #[derive(Component)]
-pub(crate) struct FilterBarContainer;
+pub struct FilterBarContainer;
 
 #[derive(Component)]
-pub(crate) struct FooterContainer;
+pub struct FooterContainer;
 
 // ---------------------------------------------------------------------------
 // build_craft_state — exclusive OnEnter system
@@ -488,7 +488,7 @@ pub fn update_crafting_ui(
     filter_q: Query<Entity, With<FilterBarContainer>>,
     footer_q: Query<Entity, With<FooterContainer>>,
 ) {
-    let Ok(root) = root_q.single() else {
+    let Ok(_root) = root_q.single() else {
         return;
     };
     let Ok(header) = header_q.single() else {
@@ -517,7 +517,7 @@ pub fn update_crafting_ui(
     let show_all = state.show_all;
     let filtering = state.filtering;
     let filter = state.filter.clone();
-    let total_visible = state.visible_count();
+    let _total_visible = state.visible_count();
     let focus_zone = cat_index.focus_zone;
     let last_message = state.last_message.clone();
 
@@ -1034,6 +1034,10 @@ pub fn crafting_menu_input(
                     craft_state.filter.push_str(ch.as_str());
                     craft_state.focus = 0;
                 }
+                Key::Space => {
+                    craft_state.filter.push(' ');
+                    craft_state.focus = 0;
+                }
                 Key::Backspace => {
                     craft_state.filter.pop();
                     craft_state.focus = 0;
@@ -1371,15 +1375,15 @@ pub fn process_pending_craft(world: &mut World) {
         return;
     };
 
-    match do_craft(world, player, recipe_entity) {
-        Ok(crafted) => {
-            let result_id = world
-                .get::<crate::core::components::item::ItemTypeId>(crafted)
-                .map(|t| t.0.clone())
+    match start_craft(world, player, recipe_entity) {
+        Ok(craft_e) => {
+            let result_name = world
+                .get::<crate::core::components::item::InProgressCraft>(craft_e)
+                .map(|c| c.result_name.clone())
                 .unwrap_or_else(|| "item".to_string());
-            tracing::info!("Crafted: {}", result_id);
+            tracing::info!("Started crafting: {}", result_name);
             if let Some(mut state) = world.get_resource_mut::<CraftState>() {
-                state.last_message = Some(format!("Crafted: {}", result_id));
+                state.last_message = Some(format!("Crafting: {}", result_name));
             }
         }
         Err(e) => {
