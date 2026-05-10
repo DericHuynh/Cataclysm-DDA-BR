@@ -15,9 +15,11 @@ use bevy_state::condition::in_state;
 use bevy_state::state::OnEnter;
 
 pub mod character;
+pub mod crafting;
 pub mod dev_spawn;
 pub mod dev_worldgen;
 pub mod examine;
+pub mod item_detail;
 pub mod inventory;
 pub mod main_menu;
 pub mod settings;

@@ -5,7 +5,8 @@ use bevy_ecs::prelude::*;
 use crate::actor::turn::AP_COST_CRAFT_TICK;
 use crate::core::components::actor::ActionPoints;
 use crate::core::components::def::{
-    ItemName, RecipeComponents, RecipeQualities, RecipeResult, RecipeResultCount, RecipeTime,
+    ItemName, RecipeCategory, RecipeComponents, RecipeQualities, RecipeResult, RecipeResultCount,
+    RecipeSubcategory, RecipeTime,
 };
 use crate::core::components::item::{
     ContainerContents, InProgressCraft, InsideContainer, Inventory, Invlet, IsPocket,
@@ -586,6 +587,245 @@ pub fn do_craft(
     }
 
     Ok(crafted)
+}
+
+// ---------------------------------------------------------------------------
+// CraftEntry / CraftState — UI-facing crafting data
+// ---------------------------------------------------------------------------
+
+/// One row in the crafting menu recipe list.
+#[derive(Clone)]
+pub struct CraftEntry {
+    pub recipe_entity: Entity,
+    pub result_id: String,
+    pub result_name: String,
+    pub result_count: u32,
+    pub craftable: bool,
+    /// First blocking reason when not craftable.
+    pub reason: String,
+    pub time_turns: u32,
+    pub components_text: Vec<String>,
+    pub qualities_text: Vec<String>,
+}
+
+/// UI state for the crafting menu, rebuilt each time the menu is opened.
+#[derive(Resource)]
+pub struct CraftState {
+    pub focus: usize,
+    /// When `true`, shows all recipes; when `false`, shows only craftable ones.
+    pub show_all: bool,
+    pub entries: Vec<CraftEntry>,
+    /// Message shown after a craft attempt (success or failure).
+    pub last_message: Option<String>,
+    /// Current substring filter (case-insensitive match on result name/ID).
+    pub filter: String,
+    /// True while the TextInput context is active for filter editing.
+    pub filtering: bool,
+}
+
+impl Default for CraftState {
+    fn default() -> Self {
+        Self {
+            focus: 0,
+            show_all: true,
+            entries: Vec::new(),
+            last_message: None,
+            filter: String::new(),
+            filtering: false,
+        }
+    }
+}
+
+impl CraftState {
+    /// Entries matching the current filter (and show_all/craftable toggle).
+    pub fn visible(&self) -> impl Iterator<Item = &CraftEntry> {
+        let filter = self.filter.to_lowercase();
+        self.entries.iter().filter(move |e| {
+            (self.show_all || e.craftable)
+                && (filter.is_empty()
+                    || e.result_name.to_lowercase().contains(&filter)
+                    || e.result_id.to_lowercase().contains(&filter))
+        })
+    }
+
+    pub fn visible_count(&self) -> usize {
+        self.visible().count()
+    }
+
+    pub fn focused_entry(&self) -> Option<&CraftEntry> {
+        self.visible().nth(self.focus)
+    }
+}
+
+/// Set by `crafting_menu_input` when the player confirms a craft.
+/// Drained each frame by `process_pending_craft`.
+#[derive(Resource, Default)]
+pub struct PendingCraft(pub Option<Entity>);
+
+// ---------------------------------------------------------------------------
+// build_craft_state — exclusive state builder
+// ---------------------------------------------------------------------------
+
+/// Rebuild `CraftState` from the current world state.
+/// Runs on `OnEnter(Ctx::CraftingMenu)` and after each craft completes.
+pub fn build_craft_state(world: &mut World) {
+    let Some(player) = find_dev_player(world) else {
+        return;
+    };
+
+    let available = collect_available_items(world, player);
+
+    let recipe_entities: Vec<Entity> = world
+        .get_resource::<RecipeIndex>()
+        .map(|ri| ri.0.clone())
+        .unwrap_or_default();
+
+    // ── Build category index ──────────────────────────────────────────────
+    let mut cat_index = CategoryIndex::default();
+    let mut seen_top: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    let mut seen_sub: std::collections::BTreeSet<(String, String)> =
+        std::collections::BTreeSet::new();
+
+    for &re in &recipe_entities {
+        if world.get::<RecipeResult>(re).is_none() {
+            continue;
+        }
+        let raw_cat = world
+            .get::<RecipeCategory>(re)
+            .map(|c| c.0.clone())
+            .unwrap_or_else(|| "CC_MISC".to_string());
+        let raw_sub = world
+            .get::<RecipeSubcategory>(re)
+            .map(|s| s.0.clone())
+            .unwrap_or_else(|| "CSC_MISC_NONE".to_string());
+
+        let cat_display = display_category(&raw_cat);
+        let sub_display = display_subcategory(&raw_cat, &raw_sub);
+
+        seen_top.insert(cat_display.clone());
+        seen_sub.insert((cat_display.clone(), sub_display.clone()));
+
+        cat_index
+            .sub_recipes
+            .entry((cat_display, sub_display))
+            .or_default()
+            .push(re);
+    }
+
+    cat_index.top_categories = seen_top.into_iter().collect();
+    cat_index.selected_top = 0;
+    cat_index.selected_sub = 0;
+
+    world.insert_resource(cat_index.clone());
+
+    // ── Build craft entries ───────────────────────────────────────────────
+    let def_world: Option<&DefinitionWorld> = world.get_resource::<DefinitionWorld>();
+
+    let mut entries: Vec<CraftEntry> = recipe_entities
+        .iter()
+        .filter(|&&re| world.get::<RecipeResult>(re).is_some())
+        .filter_map(|&re| {
+            let result_id = world
+                .get::<RecipeResult>(re)
+                .map(|r| r.0.clone())
+                .unwrap_or_default();
+
+            // Look up display name from the item def entity
+            let result_name = def_world
+                .and_then(|dw| dw.entity_by_str(&result_id))
+                .and_then(|def_e| world.get::<ItemName>(def_e).map(|n| n.0.clone()))
+                .unwrap_or_else(|| result_id.clone());
+
+            let result_count = world.get::<RecipeResultCount>(re).map(|c| c.0).unwrap_or(1);
+            let time_turns = world.get::<RecipeTime>(re).map(|t| t.0).unwrap_or(0);
+
+            let (craftable, reason) = match check_can_craft(world, re, &available) {
+                Ok(()) => (true, String::new()),
+                Err(e) => (false, e),
+            };
+
+            let components_text = world
+                .get::<RecipeComponents>(re)
+                .map(|comps| {
+                    comps
+                        .0
+                        .iter()
+                        .filter_map(|slot| slot.first())
+                        .map(|entry| {
+                            if slot_has_alternatives(world, re, &entry.item_id) {
+                                format!("  {} x{}  (or alternatives)", entry.item_id, entry.count)
+                            } else {
+                                format!("  {} x{}", entry.item_id, entry.count)
+                            }
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            let qualities_text = world
+                .get::<RecipeQualities>(re)
+                .map(|quals| {
+                    quals
+                        .0
+                        .iter()
+                        .map(|(id, lvl)| format!("  {} (level {})", id, lvl))
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            Some(CraftEntry {
+                recipe_entity: re,
+                result_id,
+                result_name,
+                result_count,
+                craftable,
+                reason,
+                time_turns,
+                components_text,
+                qualities_text,
+            })
+        })
+        .collect();
+
+    // Craftable first, then alphabetical by display name
+    entries.sort_by(|a, b| {
+        b.craftable
+            .cmp(&a.craftable)
+            .then(a.result_name.cmp(&b.result_name))
+    });
+
+    let (show_all, last_message, filter, filtering) = world
+        .get_resource::<CraftState>()
+        .map(|s| {
+            (
+                s.show_all,
+                s.last_message.clone(),
+                s.filter.clone(),
+                s.filtering,
+            )
+        })
+        .unwrap_or((true, None, String::new(), false));
+
+    world.insert_resource(CraftState {
+        focus: 0,
+        show_all,
+        entries,
+        last_message,
+        filter,
+        filtering,
+    });
+}
+
+fn slot_has_alternatives(world: &World, re: Entity, first_id: &str) -> bool {
+    world
+        .get::<RecipeComponents>(re)
+        .map(|comps| {
+            comps
+                .0
+                .iter()
+                .any(|slot| slot.iter().any(|e| e.item_id == first_id) && slot.len() > 1)
+        })
+        .unwrap_or(false)
 }
 
 // ===========================================================================

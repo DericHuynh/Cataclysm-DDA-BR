@@ -403,17 +403,22 @@ pub fn build_def_world(
                                     encumbrance: enc,
                                     warmth: 0,
                                     layers: bp.layers.clone().unwrap_or_default(),
-                                    specifically_covers: bp.specifically_covers.clone().unwrap_or_default(),
+                                    specifically_covers: bp
+                                        .specifically_covers
+                                        .clone()
+                                        .unwrap_or_default(),
                                     material: bp
                                         .material
                                         .as_ref()
                                         .map(|mats| {
                                             mats.iter()
-                                                .map(|m| (
-                                                    m.r#type.clone(),
-                                                    m.thickness.unwrap_or(0.0),
-                                                    m.covered_by_mat.unwrap_or(100) as f64,
-                                                ))
+                                                .map(|m| {
+                                                    (
+                                                        m.r#type.clone(),
+                                                        m.thickness.unwrap_or(0.0),
+                                                        m.covered_by_mat.unwrap_or(100) as f64,
+                                                    )
+                                                })
                                                 .collect()
                                         })
                                         .unwrap_or_default(),
@@ -478,13 +483,18 @@ pub fn build_def_world(
             // ── BOOK subtype ────────────────────────────────────────────
             if subtypes.iter().any(|s| s == "BOOK") {
                 world.entity_mut(entity).insert(BookData {
-                    skill: String::new(),
-                    required_level: 0,
-                    max_level: item.max_charges.unwrap_or(0) as u8,
-                    fun: item.fun.unwrap_or(0),
-                    intelligence: item.charges.unwrap_or(0) as u8,
-                    time: item.charges.unwrap_or(0),
-                    chapters: 0,
+                    skill: item.read_skill.clone().unwrap_or_default(),
+                    required_level: item.required_level.unwrap_or(0) as u8,
+                    max_level: item.max_level.unwrap_or(0) as u8,
+                    // `read_fun` is the book-specific field; fall back to `fun`
+                    // (used by comestibles) if read_fun is not set.
+                    fun: item.read_fun.or(item.fun).unwrap_or(0),
+                    intelligence: item.intelligence.unwrap_or(0) as u8,
+                    // time field from JSON is a Time string ("30 m", "1 h" etc.)
+                    // which parses into turns. Convert turns → minutes for storage.
+                    time: item.time.map(|t| (t.as_turns() / 60) as u32).unwrap_or(0),
+                    chapters: item.chapters.unwrap_or(0),
+                    martial_art: item.martial_art.clone().unwrap_or_default(),
                 });
             }
 
@@ -639,7 +649,10 @@ pub fn build_def_world(
                                     holster: p.holster.unwrap_or(false),
                                     ablative: p.ablative.unwrap_or(false),
                                     description: p.description.clone().unwrap_or_default(),
-                                    flag_restriction: p.flag_restriction.clone().unwrap_or_default(),
+                                    flag_restriction: p
+                                        .flag_restriction
+                                        .clone()
+                                        .unwrap_or_default(),
                                 }
                             })
                             .collect()
@@ -1201,7 +1214,10 @@ pub fn worldgen_system(world: &mut World) {
                 id: crate::FactionId::from(0u32),
             },
             Solid,
-            ActionPoints { current: 100, speed: 100 },
+            ActionPoints {
+                current: 100,
+                speed: 100,
+            },
         ));
         info!("Spawned player at origin (0,0). Use the map to explore all buildings.");
     }

@@ -3,11 +3,11 @@ use bevy_ecs::schedule::IntoScheduleConfigs;
 use bevy_state::prelude::OnEnter;
 
 use crate::context::ctx::Ctx;
-use crate::crafting::systems::{CategoryIndex, RecipeIndex};
-use crate::crafting::ui::{
-    build_craft_state, crafting_menu_input, process_pending_craft, spawn_crafting_ui,
-    update_crafting_ui, CraftState, PendingCraft,
+use crate::crafting::systems::{
+    build_craft_state, CategoryIndex, CraftState, PendingCraft, RecipeIndex,
 };
+use crate::input::crafting::{crafting_menu_input, process_pending_craft};
+use crate::render::crafting::{spawn_crafting_ui, update_crafting_ui};
 
 pub struct CraftingPlugin;
 

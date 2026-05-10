@@ -246,9 +246,44 @@ pub struct ItemDef {
     #[serde(default)]
     pub calories: Option<u32>,
 
-    /// Fun rating (for reading)
+    /// Fun rating (for comestibles / food).
+    /// For books, see `read_fun` instead.
     #[serde(default)]
     pub fun: Option<i32>,
+
+    // ── Book-specific fields ───────────────────────────────────────
+    /// Book: skill this item teaches (e.g. "mechanics", "cooking").
+    #[serde(default)]
+    pub read_skill: Option<String>,
+
+    /// Book: required skill level to read.
+    #[serde(default)]
+    pub required_level: Option<u32>,
+
+    /// Book: max skill level this book teaches.
+    #[serde(default)]
+    pub max_level: Option<u32>,
+
+    /// Book: intelligence requirement.
+    #[serde(default)]
+    pub intelligence: Option<u32>,
+
+    /// Book: reading time (CDDA time string like "30 m" or "8 m").
+    /// Parsed via `Time` which accepts "30 m", "1 h", bare numbers, etc.
+    #[serde(default)]
+    pub time: Option<crate::core::units::Time>,
+
+    /// Book: number of chapters (0 = unlimited).
+    #[serde(default)]
+    pub chapters: Option<u32>,
+
+    /// Book: fun from reading (separate from food `fun`).
+    #[serde(default)]
+    pub read_fun: Option<i32>,
+
+    /// Book: martial art style this book teaches (e.g. "style_aikido").
+    #[serde(default)]
+    pub martial_art: Option<String>,
 
     /// Material thickness (for armor)
     #[serde(default)]

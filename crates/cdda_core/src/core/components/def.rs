@@ -246,6 +246,8 @@ pub struct BookData {
     pub time: u32,
     /// Number of chapters (0 = infinite / no chapter system).
     pub chapters: u32,
+    /// Martial art style this book teaches (empty if not a martial art manual).
+    pub martial_art: String,
 }
 
 // ── Gun mod ────────────────────────────────────────────────────────────────
