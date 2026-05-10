@@ -84,7 +84,9 @@ fn armour_single_part() {
                 coverage: 90,
                 encumbrance: 2,
                 warmth: 10,
-                material: vec![("cotton".to_string(), 1.0)],
+                layers: vec![],
+                specifically_covers: vec![],
+                material: vec![("cotton".to_string(), 1.0, 100.0)],
             }],
             material_thickness: 1.0,
             env_protection: [0, 0, 0, 0, 0],
@@ -99,7 +101,7 @@ fn armour_single_part() {
     assert_eq!(armour.parts[0].warmth, 10);
     assert_eq!(armour.parts[0].material.len(), 1);
     assert_eq!(armour.parts[0].material[0].0, "cotton");
-    assert!((armour.parts[0].material[0].1 - 1.0).abs() < f32::EPSILON);
+    assert!((armour.parts[0].material[0].1 - 1.0).abs() < f64::EPSILON);
 }
 
 #[test]
@@ -132,14 +134,18 @@ fn armour_multi_part() {
                     coverage: 90,
                     encumbrance: 2,
                     warmth: 20,
-                    material: vec![("leather".to_string(), 1.0)],
+                    layers: vec![],
+                    specifically_covers: vec![],
+                    material: vec![("leather".to_string(), 1.0, 100.0)],
                 },
                 ArmourPart {
                     body_part: "arm_l".to_string(),
                     coverage: 60,
                     encumbrance: 1,
                     warmth: 15,
-                    material: vec![("leather".to_string(), 1.0)],
+                    layers: vec![],
+                    specifically_covers: vec![],
+                    material: vec![("leather".to_string(), 1.0, 100.0)],
                 },
             ],
             material_thickness: 1.5,
@@ -184,7 +190,9 @@ fn armour_full_coverage() {
                 coverage: 100,
                 encumbrance: 5,
                 warmth: 30,
-                material: vec![("steel".to_string(), 1.0)],
+                layers: vec![],
+                specifically_covers: vec![],
+                material: vec![("steel".to_string(), 1.0, 100.0)],
             }],
             material_thickness: 3.0,
             env_protection: [5, 5, 0, 0, 10],
@@ -224,7 +232,9 @@ fn armour_no_coverage() {
                 coverage: 0,
                 encumbrance: 0,
                 warmth: 0,
-                material: vec![("cotton".to_string(), 1.0)],
+                layers: vec![],
+                specifically_covers: vec![],
+                material: vec![("cotton".to_string(), 1.0, 100.0)],
             }],
             material_thickness: 0.1,
             env_protection: [0, 0, 0, 0, 0],
@@ -264,7 +274,9 @@ fn armour_encumbrance() {
                 coverage: 95,
                 encumbrance: 20,
                 warmth: 40,
-                material: vec![("steel".to_string(), 1.0)],
+                layers: vec![],
+                specifically_covers: vec![],
+                material: vec![("steel".to_string(), 1.0, 100.0)],
             }],
             material_thickness: 4.0,
             env_protection: [5, 8, 3, 0, 12],
@@ -305,7 +317,9 @@ fn armour_warmth() {
                 coverage: 95,
                 encumbrance: 8,
                 warmth: 40,
-                material: vec![("wool".to_string(), 1.0)],
+                layers: vec![],
+                specifically_covers: vec![],
+                material: vec![("wool".to_string(), 1.0, 100.0)],
             }],
             material_thickness: 2.0,
             env_protection: [0, 0, 0, 0, 0],
@@ -332,7 +346,9 @@ fn armour_warmth() {
                 coverage: 70,
                 encumbrance: 0,
                 warmth: 0,
-                material: vec![("cotton".to_string(), 1.0)],
+                layers: vec![],
+                specifically_covers: vec![],
+                material: vec![("cotton".to_string(), 1.0, 100.0)],
             }],
             material_thickness: 0.5,
             env_protection: [0, 0, 0, 0, 0],
@@ -372,7 +388,9 @@ fn armour_material_thickness() {
                 coverage: 85,
                 encumbrance: 10,
                 warmth: 25,
-                material: vec![("steel".to_string(), 0.5), ("kevlar".to_string(), 0.5)],
+                layers: vec![],
+                specifically_covers: vec![],
+                material: vec![("steel".to_string(), 0.5, 100.0), ("kevlar".to_string(), 0.5, 100.0)],
             }],
             material_thickness: 2.5,
             env_protection: [2, 1, 0, 0, 5],
@@ -383,9 +401,9 @@ fn armour_material_thickness() {
     assert!((armour.material_thickness - 2.5).abs() < f32::EPSILON);
     assert_eq!(armour.parts[0].material.len(), 2);
     assert_eq!(armour.parts[0].material[0].0, "steel");
-    assert!((armour.parts[0].material[0].1 - 0.5).abs() < f32::EPSILON);
+    assert!((armour.parts[0].material[0].1 - 0.5).abs() < f64::EPSILON);
     assert_eq!(armour.parts[0].material[1].0, "kevlar");
-    assert!((armour.parts[0].material[1].1 - 0.5).abs() < f32::EPSILON);
+    assert!((armour.parts[0].material[1].1 - 0.5).abs() < f64::EPSILON);
 }
 
 #[test]
@@ -417,7 +435,9 @@ fn armour_env_protection() {
                 coverage: 100,
                 encumbrance: 12,
                 warmth: 30,
-                material: vec![("plastic".to_string(), 1.0)],
+                layers: vec![],
+                specifically_covers: vec![],
+                material: vec![("plastic".to_string(), 1.0, 100.0)],
             }],
             material_thickness: 1.0,
             env_protection: [5, 3, 0, 0, 8],

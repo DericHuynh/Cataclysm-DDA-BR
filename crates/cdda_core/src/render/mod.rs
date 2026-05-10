@@ -14,12 +14,14 @@ use bevy::prelude::*;
 use bevy_state::condition::in_state;
 use bevy_state::state::OnEnter;
 
+pub mod character;
 pub mod dev_spawn;
 pub mod dev_worldgen;
 pub mod examine;
 pub mod inventory;
 pub mod main_menu;
 pub mod settings;
+pub mod theme;
 pub mod tiles;
 
 /// Plugin that registers all CDDA render systems and components.
@@ -28,6 +30,8 @@ pub struct CddaRenderPlugin;
 impl Plugin for CddaRenderPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<settings::SettingsState>();
+        app.init_resource::<theme::UiTheme>();
+        app.init_resource::<character::CharacterSheetState>();
 
         app.add_systems(Startup, (render_setup, tiles::load_tiles));
 
@@ -82,6 +86,20 @@ impl Plugin for CddaRenderPlugin {
         app.add_systems(
             Update,
             inventory::update_inventory_screen.run_if(in_state(Screen::Inventory)),
+        );
+
+        // ── Character sheet ───────────────────────────────────────────────
+        app.add_systems(
+            OnEnter(Screen::CharacterSheet),
+            character::spawn_character_sheet_screen,
+        );
+        app.add_systems(
+            Update,
+            (
+                character::update_character_sheet_screen,
+                character::character_sheet_input,
+            )
+                .run_if(in_state(Screen::CharacterSheet)),
         );
 
         // ── Item Examine overlay ──────────────────────────────────────────

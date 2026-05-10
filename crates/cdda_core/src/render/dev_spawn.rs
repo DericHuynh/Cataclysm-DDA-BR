@@ -480,16 +480,28 @@ pub(crate) fn update_dev_spawn_panel(
                 if let Ok(armour) = detail.armour_data.get(def) {
                     divider(d);
                     section_header(d, "Armour");
-                    stat_row(d, "Thickness", &format!("{:.1} mm", armour.material_thickness));
-                    for part in &armour.parts {
-                        stat_row(
-                            d,
-                            &part.body_part,
-                            &format!(
-                                "cov {}%  enc {}  warm {}",
-                                part.coverage, part.encumbrance, part.warmth
-                            ),
-                        );
+                    for (i, part) in armour.parts.iter().enumerate() {
+                        if i > 0 {
+                            // small gap between parts
+                            d.spawn(Node { height: Val::Px(4.0), ..default() });
+                        }
+                        let covers_str = if part.body_part.is_empty() { "?".to_string() } else { part.body_part.clone() };
+                        let layers_str = if part.layers.is_empty() { "NORMAL".to_string() } else { part.layers.join(", ") };
+                        stat_row(d, "Covers", &format!("{} [{}]", covers_str, layers_str));
+                        stat_row(d, "Coverage", &format!("{}%  enc {}", part.coverage, part.encumbrance));
+                        if !part.material.is_empty() {
+                            let mat_str: Vec<String> = part.material.iter().map(|(id, thick, cov)| {
+                                if *cov < 100.0 {
+                                    format!("{} {:.1}mm ({}%)", id, thick, *cov as u32)
+                                } else {
+                                    format!("{} {:.1}mm", id, thick)
+                                }
+                            }).collect();
+                            stat_row(d, "Material", &mat_str.join(" / "));
+                        }
+                        if !part.specifically_covers.is_empty() {
+                            stat_row(d, "Specific", &part.specifically_covers.join(", "));
+                        }
                     }
                 }
 
@@ -529,20 +541,39 @@ pub(crate) fn update_dev_spawn_panel(
                 // Container
                 if let Ok(cont) = detail.container_data.get(def) {
                     divider(d);
-                    section_header(d, "Container");
-                    let vol_str = if cont.max_volume >= 1000 {
-                        format!("{:.2} L", cont.max_volume as f32 / 1000.0)
-                    } else {
-                        format!("{} mL", cont.max_volume)
-                    };
-                    let wt_str = if cont.max_weight >= 1000 {
-                        format!("{:.2} kg", cont.max_weight as f32 / 1000.0)
-                    } else {
-                        format!("{} g", cont.max_weight)
-                    };
-                    stat_row(d, "Max volume", &vol_str);
-                    stat_row(d, "Max weight", &wt_str);
-                    stat_row(d, "Pockets", &cont.pockets.len().to_string());
+                    section_header(d, "Pockets");
+                    for (idx, pocket) in cont.pockets.iter().enumerate() {
+                        if idx > 0 {
+                            d.spawn(Node { height: Val::Px(3.0), ..default() });
+                        }
+                        let type_str = &pocket.pocket_type;
+                        let vol_str = if pocket.max_volume >= 1000 {
+                            format!("{:.2} L", pocket.max_volume as f32 / 1000.0)
+                        } else {
+                            format!("{} mL", pocket.max_volume)
+                        };
+                        let wt_str = if pocket.max_weight >= 1000 {
+                            format!("{:.2} kg", pocket.max_weight as f32 / 1000.0)
+                        } else {
+                            format!("{} g", pocket.max_weight)
+                        };
+                        let mut flags: Vec<&str> = Vec::new();
+                        if pocket.holster { flags.push("holster"); }
+                        if pocket.ablative { flags.push("ablative"); }
+                        if pocket.sealed { flags.push("sealed"); }
+                        let header_str = if flags.is_empty() {
+                            format!("#{} {} — {} / {}", idx + 1, type_str, vol_str, wt_str)
+                        } else {
+                            format!("#{} {} — {} / {}  [{}]", idx + 1, type_str, vol_str, wt_str, flags.join(", "))
+                        };
+                        stat_row(d, "Pocket", &header_str);
+                        if !pocket.description.is_empty() {
+                            stat_row(d, "Desc", &pocket.description);
+                        }
+                        if !pocket.flag_restriction.is_empty() {
+                            stat_row(d, "Flags", &pocket.flag_restriction.join(", "));
+                        }
+                    }
                 }
 
                 // Book

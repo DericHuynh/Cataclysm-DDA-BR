@@ -160,6 +160,17 @@ impl MountedPockets {
     }
 }
 
+// -- Pocket identity --------------------------------------------------------
+
+/// Marker placed on every pocket entity.
+#[derive(Component, Debug, Default, Clone, Copy, Reflect)]
+pub struct IsPocket;
+
+/// On a pocket entity: the character who owns this pocket.
+/// Follows the chain: item → InsideContainer(pocket) → PocketOf(player).
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+pub struct PocketOf(pub Entity);
+
 // ===========================================================================
 // Pocket system
 // ===========================================================================
@@ -449,10 +460,12 @@ impl InventoryBin {
 
 /// Tracks which item row (by sorted position) is focused in the inventory screen.
 ///
+/// `panel`: 0 = pocket list (left), 1 = wielded panel (top-right).
 /// Written by `inventory_screen_input`, read by `cdda_render` to highlight rows.
 #[derive(Resource, Debug, Clone, Default)]
 pub struct InventoryFocus {
     pub index: usize,
+    pub panel: usize,
 }
 
 // ===========================================================================

@@ -359,6 +359,9 @@ pub struct ArmorValues {
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct BodyPartArmor {
+    /// Clothing layers this armor piece occupies (e.g. "NORMAL", "OUTER").
+    #[serde(default)]
+    pub layers: Option<Vec<String>>,
     /// Coverages body parts (single string or array of strings).
     #[serde(default)]
     pub covers: Option<StringOrArray>,

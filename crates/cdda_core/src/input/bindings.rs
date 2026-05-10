@@ -228,14 +228,21 @@ pub fn default_bindings() -> ContextInputMaps {
     maps.contexts.insert(InputContextId::CraftingMenu, crafting);
 
     // -- CharacterSheet -----------------------------------------------------
-    let char_sheet = InputMap::new([
+    let mut char_sheet = InputMap::new([
         (BindableAction::NavigateUp, KeyCode::ArrowUp),
         (BindableAction::NavigateUp, KeyCode::KeyK),
         (BindableAction::NavigateDown, KeyCode::ArrowDown),
         (BindableAction::NavigateDown, KeyCode::KeyJ),
+        (BindableAction::NavigateNextTab, KeyCode::Tab),
+        (BindableAction::NavigatePageUp, KeyCode::PageUp),
+        (BindableAction::NavigatePageDown, KeyCode::PageDown),
         (BindableAction::Cancel, KeyCode::Escape),
         (BindableAction::Cancel, KeyCode::KeyQ),
     ]);
+    char_sheet.insert(
+        BindableAction::NavigatePrevTab,
+        ButtonlikeChord::modified(ModifierKey::Shift, KeyCode::Tab),
+    );
     maps.contexts
         .insert(InputContextId::CharacterSheet, char_sheet);
 

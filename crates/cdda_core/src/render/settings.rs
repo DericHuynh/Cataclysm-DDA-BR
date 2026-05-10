@@ -13,6 +13,7 @@ use crate::input::bindings::ContextInputMaps;
 use crate::context::config::GameSettings;
 use crate::context::ctx::Ctx;
 use crate::context::nav::ctx_def;
+use crate::render::theme::{ThemePreset, UiTheme};
 
 // ---------------------------------------------------------------------------
 // Settings tab
@@ -59,6 +60,8 @@ pub struct SettingsState {
     pub focused_row: usize,
     pub rebinding_action: Option<(InputContextId, BindableAction)>,
     pub tab_changed: bool,
+    /// Index into `ThemePreset::ALL` for the Interface tab color scheme setting.
+    pub interface_theme: usize,
 }
 
 impl Default for SettingsState {
@@ -68,6 +71,7 @@ impl Default for SettingsState {
             focused_row: 0,
             rebinding_action: None,
             tab_changed: false,
+            interface_theme: 0,
         }
     }
 }
@@ -112,6 +116,7 @@ pub fn spawn(
     __settings: Res<GameSettings>,
     state: Res<SettingsState>,
     bindings: Res<ContextInputMaps>,
+    ui_theme: Res<UiTheme>,
 ) {
     let def = ctx_def(Ctx::SettingsMenu);
 
@@ -196,7 +201,8 @@ pub fn spawn(
                 .id();
         });
 
-    populate_into(commands, panel_entity, &state, Some(&bindings));
+    let theme_label = ui_theme.preset.label().to_string();
+    populate_into(commands, panel_entity, &state, Some(&bindings), &theme_label);
 }
 
 // ---------------------------------------------------------------------------
@@ -208,6 +214,7 @@ fn populate_into(
     panel: Entity,
     state: &SettingsState,
     bindings: Option<&ContextInputMaps>,
+    theme_label: &str,
 ) {
     // Wrap everything in a single entity so `despawn_children` on the panel
     // removes all content atomically.
@@ -217,7 +224,7 @@ fn populate_into(
             SettingsTab::General => general_tab(content, state),
             SettingsTab::Graphics => graphics_tab(content, state),
             SettingsTab::Sound => sound_tab(content, state),
-            SettingsTab::Interface => interface_tab(content, state),
+            SettingsTab::Interface => interface_tab(content, state, theme_label),
             SettingsTab::Keybindings => keybindings_tab(content, state, bindings),
         });
 }
@@ -251,12 +258,13 @@ fn sound_tab(parent: &mut RelatedSpawnerCommands<'_, ChildOf>, state: &SettingsS
     }
 }
 
-fn interface_tab(parent: &mut RelatedSpawnerCommands<'_, ChildOf>, state: &SettingsState) {
-    let items = [
-        ("Sidebar style", "classic"),
-        ("Show compass", "Yes"),
-        ("Minimap height", "100"),
-        ("Force capital Y/N", "Yes"),
+fn interface_tab(parent: &mut RelatedSpawnerCommands<'_, ChildOf>, state: &SettingsState, theme_label: &str) {
+    let items: Vec<(&str, String)> = vec![
+        ("Sidebar style", "classic".to_string()),
+        ("Show compass", "Yes".to_string()),
+        ("Minimap height", "100".to_string()),
+        ("Force capital Y/N", "Yes".to_string()),
+        ("Color Scheme", format!("{} (←/→ to cycle)", theme_label)),
     ];
     for (i, (label, value)) in items.iter().enumerate() {
         row(parent, i, &format!("{label}: {value}"), state);
@@ -418,6 +426,7 @@ pub fn rebuild_content_panel(
     __settings: Res<GameSettings>,
     bindings: Res<ContextInputMaps>,
     panel: Query<Entity, With<ContentPanel>>,
+    mut ui_theme: ResMut<UiTheme>,
 ) {
     if !state.tab_changed {
         return;
@@ -428,16 +437,22 @@ pub fn rebuild_content_panel(
         return;
     };
 
+    // Sync the UiTheme from state
+    let preset_idx = state.interface_theme % ThemePreset::ALL.len();
+    ui_theme.preset = ThemePreset::ALL[preset_idx];
+
     // Atomic clear — removes all children of the panel in one command
     commands.entity(panel_entity).despawn_children();
 
     let snapshot = SettingsState {
         active_tab: state.active_tab,
         focused_row: state.focused_row,
+        interface_theme: state.interface_theme,
         ..Default::default()
     };
 
-    populate_into(commands, panel_entity, &snapshot, Some(&bindings));
+    let theme_label = ui_theme.preset.label().to_string();
+    populate_into(commands, panel_entity, &snapshot, Some(&bindings), &theme_label);
 }
 
 // ---------------------------------------------------------------------------
@@ -462,13 +477,35 @@ pub fn navigate(
     mut state: ResMut<SettingsState>,
     bindings: Res<ContextInputMaps>,
 ) {
+    // Color Scheme row index in the Interface tab
+    const COLOR_SCHEME_ROW: usize = 4;
+
     for event in action_reader.read() {
         match &event.action {
-            crate::input::GameAction::NavigateLeft | crate::input::GameAction::NavigatePrevTab => {
+            crate::input::GameAction::NavigatePrevTab => {
                 switch_tab(&mut state, -1);
             }
-            crate::input::GameAction::NavigateRight | crate::input::GameAction::NavigateNextTab => {
+            crate::input::GameAction::NavigateNextTab => {
                 switch_tab(&mut state, 1);
+            }
+            crate::input::GameAction::NavigateLeft => {
+                // If on Interface tab and focused on Color Scheme, cycle theme left
+                if state.active_tab == SettingsTab::Interface && state.focused_row == COLOR_SCHEME_ROW {
+                    let n = ThemePreset::ALL.len();
+                    state.interface_theme = if state.interface_theme == 0 { n - 1 } else { state.interface_theme - 1 };
+                    state.tab_changed = true;
+                } else {
+                    switch_tab(&mut state, -1);
+                }
+            }
+            crate::input::GameAction::NavigateRight => {
+                // If on Interface tab and focused on Color Scheme, cycle theme right
+                if state.active_tab == SettingsTab::Interface && state.focused_row == COLOR_SCHEME_ROW {
+                    state.interface_theme = (state.interface_theme + 1) % ThemePreset::ALL.len();
+                    state.tab_changed = true;
+                } else {
+                    switch_tab(&mut state, 1);
+                }
             }
             crate::input::GameAction::NavigateUp => {
                 let count = current_tab_row_count(&state, &bindings);
@@ -603,7 +640,7 @@ fn current_tab_row_count(state: &SettingsState, bindings: &ContextInputMaps) -> 
         SettingsTab::General => 3,
         SettingsTab::Graphics => 3,
         SettingsTab::Sound => 2,
-        SettingsTab::Interface => 4,
+        SettingsTab::Interface => 5,
         SettingsTab::Keybindings => {
             let contexts = &[
                 InputContextId::Gameplay,

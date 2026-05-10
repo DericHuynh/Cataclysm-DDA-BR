@@ -8,8 +8,8 @@ use crate::core::components::def::{
     ItemName, RecipeComponents, RecipeQualities, RecipeResult, RecipeResultCount, RecipeTime,
 };
 use crate::core::components::item::{
-    ContainerContents, InProgressCraft, InsideContainer, Inventory, Invlet, ItemQualities,
-    ItemTypeId, StackCount,
+    ContainerContents, InProgressCraft, InsideContainer, Inventory, Invlet, IsPocket,
+    ItemQualities, ItemTypeId, MountedPockets, PocketOf, StackCount, WieldedBy, WieldedItems,
 };
 use crate::core::components::sim::WorldPosition;
 use crate::data::def_world::DefinitionWorld;
@@ -74,22 +74,47 @@ pub fn display_subcategory(raw_category: &str, raw_subcategory: &str) -> String 
 // ---------------------------------------------------------------------------
 
 /// Collect all item entities available for crafting:
-/// items in the player's inventory (via ContainerContents relationship + Inventory fallback)
-/// + items on the ground in the same OMT tile.
+/// items in the player's body pockets (via MountedPockets → ContainerContents),
+/// wielded items (WieldedItems), fallback direct ContainerContents on player,
+/// Inventory component fallback, plus items on the ground in the same OMT tile.
 pub fn collect_available_items(world: &mut World, player: Entity) -> Vec<Entity> {
     let player_pos = world.get::<WorldPosition>(player).map(|wp| wp.0);
 
     let mut items: Vec<Entity> = Vec::new();
 
-    // Items in inventory via ContainerContents relationship (primary source)
-    if let Some(cc) = world.get::<ContainerContents>(player) {
-        items.extend(cc.iter());
+    // Primary: items in pockets mounted on the player.
+    if let Some(pockets) = world.get::<MountedPockets>(player) {
+        let pocket_list: Vec<Entity> = pockets.iter().collect();
+        for pocket in pocket_list {
+            if let Some(cc) = world.get::<ContainerContents>(pocket) {
+                for e in cc.iter() {
+                    if !items.contains(&e) {
+                        items.push(e);
+                    }
+                }
+            }
+        }
     }
 
-    // Fallback: also collect from Inventory component.
-    // ContainerContents can be out of sync if commands haven't flushed yet,
-    // or if the player entity was spawned without ContainerContents (Bevy's
-    // relationship hooks auto-add it, but only after the first insert).
+    // Wielded items.
+    if let Some(wi) = world.get::<WieldedItems>(player) {
+        for e in wi.iter() {
+            if !items.contains(&e) {
+                items.push(e);
+            }
+        }
+    }
+
+    // Backwards-compat: direct ContainerContents on player (tests + old save data).
+    if let Some(cc) = world.get::<ContainerContents>(player) {
+        for e in cc.iter() {
+            if !items.contains(&e) {
+                items.push(e);
+            }
+        }
+    }
+
+    // Fallback: Inventory component (catches items in needs_invlet, pre-flush).
     if let Some(inv) = world.get::<Inventory>(player) {
         for e in inv.item_entities() {
             if !items.contains(&e) {
@@ -213,10 +238,23 @@ pub fn consume_items(world: &mut World, available: &[Entity], type_id: &str, mut
             // owner's Inventory.invlets (which is NOT a Bevy relationship and
             // therefore won't be cleaned automatically).
             let invlet_char = world.get::<Invlet>(e).map(|i| i.0);
-            let container = world.get::<InsideContainer>(e).map(|ic| ic.0);
+            // Items can be in a body pocket (InsideContainer(pocket)) or in
+            // hands (WieldedBy). For pockets, follow PocketOf to reach the
+            // character who owns the Inventory.
+            let container = world
+                .get::<InsideContainer>(e)
+                .map(|ic| ic.0)
+                .or_else(|| world.get::<WieldedBy>(e).map(|wb| wb.0));
+            let inv_owner = container.map(|c| {
+                if world.get::<IsPocket>(c).is_some() {
+                    world.get::<PocketOf>(c).map(|po| po.0).unwrap_or(c)
+                } else {
+                    c
+                }
+            });
             world.despawn(e);
-            if let (Some(c), Some(cont)) = (invlet_char, container) {
-                if let Some(mut inv) = world.get_mut::<Inventory>(cont) {
+            if let (Some(c), Some(owner)) = (invlet_char, inv_owner) {
+                if let Some(mut inv) = world.get_mut::<Inventory>(owner) {
                     inv.invlets.remove(&c);
                 }
             }
@@ -304,7 +342,12 @@ pub fn start_craft(
         .map(|t| (t.0 as i32 * 100).max(100))
         .unwrap_or(100);
 
-    // Spawn the in-progress entity into the player's inventory.
+    // Spawn the in-progress entity into the player's body pocket.
+    let body_pocket = world
+        .get::<MountedPockets>(player)
+        .and_then(|mp| mp.iter().next())
+        .unwrap_or(player);
+
     let craft_entity = world
         .spawn((
             InProgressCraft {
@@ -316,7 +359,7 @@ pub fn start_craft(
                 ap_spent: 0,
             },
             ItemTypeId(format!("craft:in_progress:{result_id}")),
-            InsideContainer(player),
+            InsideContainer(body_pocket),
         ))
         .id();
 
@@ -368,10 +411,15 @@ fn complete_craft(world: &mut World, player: Entity, craft_entity: Entity) {
                 .insert(ItemTypeId(result_id.clone()));
         }
 
+        let body_pocket = world
+            .get::<MountedPockets>(player)
+            .and_then(|mp| mp.iter().next())
+            .unwrap_or(player);
+
         world
             .entity_mut(crafted)
             .remove::<WorldPosition>()
-            .insert(InsideContainer(player));
+            .insert(InsideContainer(body_pocket));
 
         if let Some(mut inv) = world.get_mut::<Inventory>(player) {
             inv.needs_invlet.insert(crafted);
@@ -397,15 +445,28 @@ pub fn continue_crafts(world: &mut World) {
     };
 
     // Collect in-progress crafts that are inside the player's inventory.
+    // Crafts live inside a body pocket (InsideContainer(pocket) where PocketOf(pocket)==player),
+    // or directly inside the player (backwards compat).
     let craft_entities: Vec<Entity> = {
         let mut q = world.query::<(Entity, &InsideContainer)>();
         q.iter(world)
             .filter_map(|(e, ic)| {
-                if ic.0 == player && world.get::<InProgressCraft>(e).is_some() {
-                    Some(e)
-                } else {
-                    None
+                if world.get::<InProgressCraft>(e).is_none() {
+                    return None;
                 }
+                let container = ic.0;
+                if container == player {
+                    return Some(e);
+                }
+                // Via pocket: PocketOf(container) == player.
+                if world
+                    .get::<PocketOf>(container)
+                    .map(|po| po.0 == player)
+                    .unwrap_or(false)
+                {
+                    return Some(e);
+                }
+                None
             })
             .collect()
     };
@@ -509,11 +570,16 @@ pub fn do_craft(
         world.entity_mut(crafted).insert(ItemTypeId(result_id));
     }
 
-    // Move into player inventory (remove ground position, add containment)
+    // Move into body pocket (remove ground position, add containment).
+    let body_pocket = world
+        .get::<MountedPockets>(player)
+        .and_then(|mp| mp.iter().next())
+        .unwrap_or(player);
+
     world
         .entity_mut(crafted)
         .remove::<WorldPosition>()
-        .insert(InsideContainer(player));
+        .insert(InsideContainer(body_pocket));
 
     if let Some(mut inv) = world.get_mut::<Inventory>(player) {
         inv.needs_invlet.insert(crafted);
@@ -854,5 +920,124 @@ mod tests {
             items.contains(&item),
             "collect_available_items should find items via ContainerContents"
         );
+    }
+
+    // ── Stacked item crafting (the "can't craft with qty:6 short string" bug) ──
+
+    fn setup_with_wield(t: &mut TestBed) {
+        setup(t);
+        t.register::<WieldedBy>();
+        t.register::<crate::core::components::item::WieldedItems>();
+    }
+
+    /// Merged stack (StackCount 6) satisfies a recipe requiring 6.
+    #[test]
+    fn craft_with_merged_inventory_stack() {
+        let mut t = TestBed::new();
+        setup_with_wield(&mut t);
+
+        let player = t.spawn((DevPlayer, Inventory::default()));
+
+        // One merged entity of 6 short strings in the player's inventory.
+        let stack = make_item(&mut t, "string_6", 6);
+        t.world_mut().entity_mut(stack).insert(Invlet('a'));
+        {
+            let world = t.world_mut();
+            let mut inv = world.get_mut::<Inventory>(player).unwrap();
+            inv.invlets.insert('a', stack);
+        }
+        t.world_mut()
+            .entity_mut(stack)
+            .insert(InsideContainer(player));
+
+        let recipe = make_recipe(
+            &mut t,
+            "string_36",
+            vec![vec![RecipeComponentEntry {
+                item_id: "string_6".into(),
+                count: 6,
+                recovered: false,
+            }]],
+        );
+
+        let available = collect_available_items(t.world_mut(), player);
+        let result = check_can_craft(t.world(), recipe, &available);
+        assert!(result.is_ok(), "should craft with merged stack of 6: {:?}", result);
+    }
+
+    /// When consume_items despawns a wielded item (WieldedBy, not InsideContainer),
+    /// the invlet entry must be cleaned up so the inventory has no stale references.
+    #[test]
+    fn consume_items_cleans_invlets_for_wielded_item() {
+        let mut t = TestBed::new();
+        setup_with_wield(&mut t);
+
+        let player = t.spawn((DevPlayer, Inventory::default()));
+
+        // Item is in hands (WieldedBy) — not InsideContainer.
+        let item = make_item(&mut t, "string_6", 6);
+        t.world_mut().entity_mut(item).insert((
+            Invlet('a'),
+            WieldedBy(player),
+        ));
+        {
+            let world = t.world_mut();
+            let mut inv = world.get_mut::<Inventory>(player).unwrap();
+            inv.invlets.insert('a', item);
+        }
+
+        let available = vec![item];
+        consume_items(t.world_mut(), &available, "string_6", 6);
+
+        // Item must be despawned.
+        assert!(
+            !t.world().entities().contains(item),
+            "consumed item should be despawned"
+        );
+        // invlets must not contain the dead entity.
+        let inv = t.world().get::<Inventory>(player).unwrap();
+        assert!(
+            inv.invlets.is_empty(),
+            "invlets should be empty after consuming the only item, but got {:?}",
+            inv.invlets
+        );
+    }
+
+    /// After consuming a wielded item, the inventory has no stale entity that
+    /// would cause count_available to return 0 on the next craft check.
+    #[test]
+    fn no_stale_invlet_after_consuming_wielded_item() {
+        let mut t = TestBed::new();
+        setup_with_wield(&mut t);
+
+        let player = t.spawn((DevPlayer, Inventory::default()));
+
+        let item = make_item(&mut t, "string_6", 6);
+        t.world_mut().entity_mut(item).insert((
+            Invlet('a'),
+            WieldedBy(player),
+        ));
+        {
+            let world = t.world_mut();
+            let mut inv = world.get_mut::<Inventory>(player).unwrap();
+            inv.invlets.insert('a', item);
+        }
+
+        // Consume all 6.
+        let available = vec![item];
+        consume_items(t.world_mut(), &available, "string_6", 6);
+
+        // A subsequent count_available (simulating the next craft menu open)
+        // must return 0, not panic, even though the slot was recycled.
+        // We use an empty available list — the Inventory fallback path
+        // is what would be used in build_craft_state.
+        let available_after: Vec<Entity> = t
+            .world()
+            .get::<Inventory>(player)
+            .map(|inv| inv.item_entities())
+            .unwrap_or_default();
+
+        let count = count_available(t.world(), &available_after, "string_6");
+        assert_eq!(count, 0, "no string_6 should remain after consuming all");
     }
 }

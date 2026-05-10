@@ -20,6 +20,7 @@
 //! - `crafting_menu_input` (regular, per-frame) — keyboard navigation
 //! - `process_pending_craft` (exclusive, per-frame) — executes craft
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy_ecs::message::MessageReader;
 use bevy_input::keyboard::{Key, KeyboardInput};
@@ -32,14 +33,17 @@ use crate::context::nav::{pop_ctx, FocusedCommandIndex};
 use crate::context::ContextStack;
 use crate::core::components::def::ItemName;
 use crate::core::components::def::{
-    RecipeCategory, RecipeComponents, RecipeQualities, RecipeResult, RecipeResultCount,
-    RecipeSubcategory, RecipeTime,
+    AmmoData, ArmourData, BookData, ContainerData, FoodData, GunData, ItemCategory, ItemColor,
+    ItemDescription, ItemMaterials, ItemPhase, ItemSymbol, ItemVolume, ItemWeight, MagazineData,
+    Phase, RecipeCategory, RecipeComponents, RecipeQualities, RecipeResult, RecipeResultCount,
+    RecipeSubcategory, RecipeTime, ToolData, WeaponData,
 };
+use crate::core::components::item::ItemQualities;
+use crate::data::def_world::DefinitionWorld;
 use crate::crafting::systems::{
     check_can_craft, collect_available_items, display_category, display_subcategory,
     find_dev_player, start_craft, CategoryIndex, RecipeIndex,
 };
-use crate::data::def_world::DefinitionWorld;
 use crate::input::context::{InputContextId, InputContextStack};
 use crate::input::{GameAction, InputAction};
 
@@ -61,6 +65,7 @@ const DIVIDER: Color = Color::srgb(0.20, 0.20, 0.25);
 const TAB_BG: Color = Color::srgb(0.08, 0.08, 0.14);
 const TAB_ACTIVE_BG: Color = Color::srgb(0.15, 0.25, 0.40);
 const PANEL_BG: Color = Color::srgb(0.06, 0.06, 0.10);
+const LABEL: Color = Color::srgb(0.50, 0.75, 0.90);
 
 /// Number of recipe rows visible at once in the scroll window.
 const VISIBLE_ROWS: usize = 22;
@@ -167,6 +172,9 @@ pub struct RecipeListContainer;
 
 #[derive(Component)]
 pub struct DetailPanelContainer;
+
+#[derive(Component)]
+pub struct ItemDetailPanelContainer;
 
 #[derive(Component)]
 pub struct FilterBarContainer;
@@ -357,8 +365,6 @@ pub fn spawn_crafting_ui(mut commands: Commands) {
                 width: Val::Percent(100.0),
                 height: Val::Percent(100.0),
                 flex_direction: FlexDirection::Column,
-                padding: UiRect::all(Val::Px(12.0)),
-                row_gap: Val::Px(4.0),
                 ..default()
             },
             BackgroundColor(BG),
@@ -408,7 +414,6 @@ pub fn spawn_crafting_ui(mut commands: Commands) {
                 width: Val::Percent(100.0),
                 flex_grow: 1.0,
                 flex_direction: FlexDirection::Row,
-                column_gap: Val::Px(6.0),
                 min_height: Val::Px(300.0),
                 ..default()
             },))
@@ -429,7 +434,7 @@ pub fn spawn_crafting_ui(mut commands: Commands) {
                         BackgroundColor(PANEL_BG),
                     ));
 
-                    // Right: detail panel
+                    // Middle: crafting detail panel
                     body.spawn((
                         DetailPanelContainer,
                         Node {
@@ -437,6 +442,20 @@ pub fn spawn_crafting_ui(mut commands: Commands) {
                             flex_direction: FlexDirection::Column,
                             padding: UiRect::all(Val::Px(14.0)),
                             row_gap: Val::Px(5.0),
+                            overflow: Overflow::clip(),
+                            ..default()
+                        },
+                        BackgroundColor(PANEL_BG),
+                    ));
+
+                    // Right: item detail panel
+                    body.spawn((
+                        ItemDetailPanelContainer,
+                        Node {
+                            flex_grow: 1.0,
+                            flex_direction: FlexDirection::Column,
+                            padding: UiRect::all(Val::Px(14.0)),
+                            row_gap: Val::Px(4.0),
                             overflow: Overflow::clip(),
                             ..default()
                         },
@@ -471,6 +490,32 @@ pub fn spawn_crafting_ui(mut commands: Commands) {
 }
 
 // ---------------------------------------------------------------------------
+// Bundled def queries for the item detail panel
+// ---------------------------------------------------------------------------
+
+#[derive(SystemParam)]
+pub struct ItemDefQueries<'w, 's> {
+    item_descs: Query<'w, 's, &'static ItemDescription>,
+    item_weights: Query<'w, 's, &'static ItemWeight>,
+    item_volumes: Query<'w, 's, &'static ItemVolume>,
+    item_symbols: Query<'w, 's, &'static ItemSymbol>,
+    item_colors: Query<'w, 's, &'static ItemColor>,
+    item_materials: Query<'w, 's, &'static ItemMaterials>,
+    item_categories: Query<'w, 's, &'static ItemCategory>,
+    item_phases: Query<'w, 's, &'static ItemPhase>,
+    item_qualities: Query<'w, 's, &'static ItemQualities>,
+    weapon_data: Query<'w, 's, &'static WeaponData>,
+    gun_data: Query<'w, 's, &'static GunData>,
+    ammo_data: Query<'w, 's, &'static AmmoData>,
+    armour_data: Query<'w, 's, &'static ArmourData>,
+    food_data: Query<'w, 's, &'static FoodData>,
+    tool_data: Query<'w, 's, &'static ToolData>,
+    container_data: Query<'w, 's, &'static ContainerData>,
+    book_data: Query<'w, 's, &'static BookData>,
+    magazine_data: Query<'w, 's, &'static MagazineData>,
+}
+
+// ---------------------------------------------------------------------------
 // update_crafting_ui — regular Update system
 // ---------------------------------------------------------------------------
 
@@ -479,14 +524,17 @@ pub fn update_crafting_ui(
     mut commands: Commands,
     state: Res<CraftState>,
     cat_index: Res<CategoryIndex>,
+    def_world: Res<DefinitionWorld>,
     root_q: Query<Entity, With<CraftMenuRoot>>,
     header_q: Query<Entity, With<HeaderContainer>>,
     cat_tabs_q: Query<Entity, With<CategoryTabsContainer>>,
     sub_tabs_q: Query<Entity, With<SubcategoryTabsContainer>>,
     list_q: Query<Entity, With<RecipeListContainer>>,
     detail_q: Query<Entity, With<DetailPanelContainer>>,
+    item_detail_q: Query<Entity, With<ItemDetailPanelContainer>>,
     filter_q: Query<Entity, With<FilterBarContainer>>,
     footer_q: Query<Entity, With<FooterContainer>>,
+    defs: ItemDefQueries,
 ) {
     let Ok(_root) = root_q.single() else {
         return;
@@ -504,6 +552,9 @@ pub fn update_crafting_ui(
         return;
     };
     let Ok(detail) = detail_q.single() else {
+        return;
+    };
+    let Ok(item_detail) = item_detail_q.single() else {
         return;
     };
     let Ok(filter_bar) = filter_q.single() else {
@@ -948,6 +999,189 @@ pub fn update_crafting_ui(
                     },
                     TextColor(TEXT_DIM),
                 ));
+            }
+        });
+
+    // ── Item detail panel ──────────────────────────────────────────────────
+    commands
+        .entity(item_detail)
+        .despawn_children()
+        .with_children(|d| {
+            let result_id = focused_entry.as_ref().map(|e| e.result_id.as_str()).unwrap_or("");
+            let def_entity = if result_id.is_empty() { None } else { def_world.entity_by_str(result_id) };
+
+            let Some(def) = def_entity else {
+                d.spawn((
+                    Text::new("Item info"),
+                    TextFont { font_size: 14.0, ..default() },
+                    TextColor(TEXT_DIM),
+                ));
+                return;
+            };
+
+            // Name + ID header
+            let name_str = focused_entry.as_ref().map(|e| e.result_name.as_str()).unwrap_or("");
+            d.spawn((
+                Text::new(name_str.to_string()),
+                TextFont { font_size: 18.0, ..default() },
+                TextColor(ACCENT),
+            ));
+            d.spawn((
+                Text::new(format!("id: {}", result_id)),
+                TextFont { font_size: 11.0, ..default() },
+                TextColor(TEXT_ID),
+            ));
+
+            craft_divider(d);
+
+            // Description
+            if let Ok(desc) = defs.item_descs.get(def) {
+                if !desc.0.is_empty() {
+                    d.spawn((
+                        Text::new(desc.0.clone()),
+                        TextFont { font_size: 12.0, ..default() },
+                        TextColor(TEXT_BRIGHT),
+                    ));
+                    craft_divider(d);
+                }
+            }
+
+            // Basic properties
+            craft_section_header(d, "Properties");
+
+            let weight_g = defs.item_weights.get(def).map(|w| w.0).unwrap_or(0);
+            let volume_ml = defs.item_volumes.get(def).map(|v| v.0).unwrap_or(0);
+            let weight_str = if weight_g >= 1000 {
+                format!("{:.2} kg", weight_g as f32 / 1000.0)
+            } else {
+                format!("{} g", weight_g)
+            };
+            let volume_str = if volume_ml >= 1000 {
+                format!("{:.2} L", volume_ml as f32 / 1000.0)
+            } else {
+                format!("{} mL", volume_ml)
+            };
+            if let Ok(sym) = defs.item_symbols.get(def) {
+                craft_stat_row(d, "Symbol", &sym.0.to_string());
+            }
+            craft_stat_row(d, "Weight", &weight_str);
+            craft_stat_row(d, "Volume", &volume_str);
+            if let Ok(color) = defs.item_colors.get(def) { craft_stat_row(d, "Color", &color.0); }
+            if let Ok(cat) = defs.item_categories.get(def) { craft_stat_row(d, "Category", &cat.0); }
+            if let Ok(mats) = defs.item_materials.get(def) {
+                if !mats.0.is_empty() { craft_stat_row(d, "Materials", &mats.0.join(", ")); }
+            }
+            if let Ok(phase) = defs.item_phases.get(def) {
+                let phase_str = match phase.0 {
+                    Phase::Solid => "Solid", Phase::Liquid => "Liquid",
+                    Phase::Gas => "Gas", Phase::Plasma => "Plasma",
+                };
+                craft_stat_row(d, "Phase", phase_str);
+            }
+
+            // Qualities
+            if let Ok(quals) = defs.item_qualities.get(def) {
+                if !quals.0.is_empty() {
+                    craft_divider(d);
+                    craft_section_header(d, "Tool Qualities");
+                    for (id, level) in &quals.0 {
+                        craft_stat_row(d, id, &level.to_string());
+                    }
+                }
+            }
+
+            // Weapon
+            if let Ok(w) = defs.weapon_data.get(def) {
+                craft_divider(d);
+                craft_section_header(d, "Melee");
+                craft_stat_row(d, "Bash/Cut/Stab", &format!("{}/{}/{}", w.damage_bash, w.damage_cut, w.damage_stab));
+                craft_stat_row(d, "To-hit", &w.to_hit.to_string());
+                if !w.techniques.is_empty() { craft_stat_row(d, "Techniques", &w.techniques.join(", ")); }
+            }
+
+            // Gun
+            if let Ok(g) = defs.gun_data.get(def) {
+                craft_divider(d);
+                craft_section_header(d, "Ranged");
+                craft_stat_row(d, "Skill", &g.skill);
+                craft_stat_row(d, "Ammo", &g.ammo_type);
+                craft_stat_row(d, "Clip", &g.clip_size.to_string());
+            }
+
+            // Ammo
+            if let Ok(a) = defs.ammo_data.get(def) {
+                craft_divider(d);
+                craft_section_header(d, "Ammo");
+                craft_stat_row(d, "Type", &a.ammo_type);
+                craft_stat_row(d, "Damage", &a.damage.to_string());
+                craft_stat_row(d, "Range", &a.range.to_string());
+            }
+
+            // Magazine
+            if let Ok(m) = defs.magazine_data.get(def) {
+                craft_divider(d);
+                craft_section_header(d, "Magazine");
+                craft_stat_row(d, "Ammo type", &m.ammo_type);
+                craft_stat_row(d, "Capacity", &m.capacity.to_string());
+            }
+
+            // Armour
+            if let Ok(armour) = defs.armour_data.get(def) {
+                craft_divider(d);
+                craft_section_header(d, "Armour");
+                for part in &armour.parts {
+                    let covers_str = if part.body_part.is_empty() { "?".to_string() } else { part.body_part.clone() };
+                    let layers_str = if part.layers.is_empty() { "NORMAL".to_string() } else { part.layers.join(", ") };
+                    craft_stat_row(d, "Covers", &format!("{} [{}]", covers_str, layers_str));
+                    craft_stat_row(d, "Coverage", &format!("{}%  enc {}", part.coverage, part.encumbrance));
+                }
+            }
+
+            // Food
+            if let Ok(food) = defs.food_data.get(def) {
+                craft_divider(d);
+                craft_section_header(d, "Food");
+                craft_stat_row(d, "Type", &food.comestible_type);
+                craft_stat_row(d, "Calories", &food.calories.to_string());
+                craft_stat_row(d, "Quench", &food.quench.to_string());
+            }
+
+            // Tool
+            if let Ok(tool) = defs.tool_data.get(def) {
+                craft_divider(d);
+                craft_section_header(d, "Tool");
+                if tool.max_charges != 0 {
+                    craft_stat_row(d, "Max charges", &tool.max_charges.to_string());
+                }
+                if let Some(at) = &tool.ammo_type { craft_stat_row(d, "Ammo type", at); }
+            }
+
+            // Container
+            if let Ok(cont) = defs.container_data.get(def) {
+                craft_divider(d);
+                craft_section_header(d, "Pockets");
+                for (idx, pocket) in cont.pockets.iter().enumerate() {
+                    let vol_str = if pocket.max_volume >= 1000 {
+                        format!("{:.2} L", pocket.max_volume as f32 / 1000.0)
+                    } else {
+                        format!("{} mL", pocket.max_volume)
+                    };
+                    let wt_str = if pocket.max_weight >= 1000 {
+                        format!("{:.2} kg", pocket.max_weight as f32 / 1000.0)
+                    } else {
+                        format!("{} g", pocket.max_weight)
+                    };
+                    craft_stat_row(d, "Pocket", &format!("#{} {} — {} / {}", idx + 1, pocket.pocket_type, vol_str, wt_str));
+                }
+            }
+
+            // Book
+            if let Ok(book) = defs.book_data.get(def) {
+                craft_divider(d);
+                craft_section_header(d, "Book");
+                craft_stat_row(d, "Skill", &book.skill);
+                craft_stat_row(d, "Levels", &format!("{} → {}", book.required_level, book.max_level));
+                craft_stat_row(d, "Fun", &book.fun.to_string());
             }
         });
 
@@ -1396,4 +1630,53 @@ pub fn process_pending_craft(world: &mut World) {
 
     // Rebuild craft state so craftability reflects the updated inventory.
     build_craft_state(world);
+}
+
+// ---------------------------------------------------------------------------
+// UI helpers for crafting item detail pane
+// ---------------------------------------------------------------------------
+
+fn craft_divider(parent: &mut ChildSpawnerCommands) {
+    parent.spawn((
+        Node {
+            width: Val::Percent(100.0),
+            height: Val::Px(1.0),
+            margin: UiRect::vertical(Val::Px(3.0)),
+            ..default()
+        },
+        BackgroundColor(DIVIDER),
+    ));
+}
+
+fn craft_section_header(parent: &mut ChildSpawnerCommands, title: &str) {
+    parent.spawn((
+        Text::new(title.to_uppercase()),
+        TextFont { font_size: 11.0, ..default() },
+        TextColor(LABEL),
+    ));
+}
+
+fn craft_stat_row(parent: &mut ChildSpawnerCommands, label: &str, value: &str) {
+    parent
+        .spawn((Node {
+            flex_direction: FlexDirection::Row,
+            column_gap: Val::Px(4.0),
+            ..default()
+        },))
+        .with_children(|row| {
+            row.spawn((
+                Text::new(format!("{}: ", label)),
+                TextFont { font_size: 12.0, ..default() },
+                TextColor(TEXT_DIM),
+                Node {
+                    min_width: Val::Px(90.0),
+                    ..default()
+                },
+            ));
+            row.spawn((
+                Text::new(value.to_string()),
+                TextFont { font_size: 12.0, ..default() },
+                TextColor(TEXT_BRIGHT),
+            ));
+        });
 }

@@ -395,14 +395,28 @@ pub fn build_def_world(
                                                 s.clone()
                                             }
                                             crate::core::raw_defs::StringOrArray::Multi(v) => {
-                                                v.join(",")
+                                                v.join(", ")
                                             }
                                         })
                                         .unwrap_or_default(),
                                     coverage: bp.coverage.unwrap_or(0) as u8,
                                     encumbrance: enc,
                                     warmth: 0,
-                                    material: Vec::new(),
+                                    layers: bp.layers.clone().unwrap_or_default(),
+                                    specifically_covers: bp.specifically_covers.clone().unwrap_or_default(),
+                                    material: bp
+                                        .material
+                                        .as_ref()
+                                        .map(|mats| {
+                                            mats.iter()
+                                                .map(|m| (
+                                                    m.r#type.clone(),
+                                                    m.thickness.unwrap_or(0.0),
+                                                    m.covered_by_mat.unwrap_or(100) as f64,
+                                                ))
+                                                .collect()
+                                        })
+                                        .unwrap_or_default(),
                                 }
                             })
                             .collect()
@@ -622,6 +636,10 @@ pub fn build_def_world(
                                     max_item_length: 0,
                                     sealed: p.sealed.unwrap_or(false),
                                     rigid: p.rigid.unwrap_or(false),
+                                    holster: p.holster.unwrap_or(false),
+                                    ablative: p.ablative.unwrap_or(false),
+                                    description: p.description.clone().unwrap_or_default(),
+                                    flag_restriction: p.flag_restriction.clone().unwrap_or_default(),
                                 }
                             })
                             .collect()

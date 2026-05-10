@@ -392,6 +392,10 @@ pub struct PocketDef {
     /// Extra flags.
     #[serde(default)]
     pub flag: Option<String>,
+
+    /// Item flag restrictions (only items with these flags can go in this pocket).
+    #[serde(default)]
+    pub flag_restriction: Option<Vec<String>>,
 }
 
 /// Pocket type enumeration.

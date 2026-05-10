@@ -182,12 +182,17 @@ pub struct MagazineData {
 /// One body part covered by an armour item.
 #[derive(Debug, Clone)]
 pub struct ArmourPart {
+    /// Body parts covered (joined from `covers` array, e.g. "head,torso").
     pub body_part: String,
     pub coverage: u8,
     pub encumbrance: i32,
     pub warmth: i32,
-    /// Materials covering this body part, each with a coverage fraction (0.0–1.0).
-    pub material: Vec<(String, f32)>,
+    /// Which clothing layers this piece occupies (e.g. "NORMAL", "OUTER").
+    pub layers: Vec<String>,
+    /// Sub-parts specifically covered (optional detail).
+    pub specifically_covers: Vec<String>,
+    /// Materials: (material_id, thickness_mm, covered_by_mat_pct).
+    pub material: Vec<(String, f64, f64)>,
 }
 
 /// Present on armour items.
@@ -262,6 +267,10 @@ pub struct PocketTemplate {
     pub max_item_length: u32,
     pub sealed: bool,
     pub rigid: bool,
+    pub holster: bool,
+    pub ablative: bool,
+    pub description: String,
+    pub flag_restriction: Vec<String>,
 }
 
 /// Present on container items.

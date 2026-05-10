@@ -24,13 +24,14 @@
 use crate::context::ctx::Ctx;
 use crate::context::nav::{push_ctx, FocusedCommandIndex};
 use crate::context::ContextStack;
-use crate::core::components::actor::{ActionPoints, HandCount, IsAlive};
+use crate::core::components::actor::{ActionPoints, HandCount, Health, IsAlive, PlayerData, Gender};
+use crate::core::components::actor::Stats;
 use crate::actor::turn::{AP_COST_PICKUP, AP_COST_WIELD};
 use crate::core::components::def::ItemVolume;
 use crate::core::components::item::{
     Container, ContainerContents, CurrentCharges, DefOrigin, InsideContainer, Inventory,
     InventoryBin, InventoryFocus, Invlet, InvletFavorites, ItemDamage, ItemTypeId,
-    Pocket, StackCount, WieldedBy, WieldedItems, FLOOR_CAP_ML,
+    MountedPockets, Pocket, StackCount, WieldedBy, WieldedItems, FLOOR_CAP_ML,
 };
 use crate::core::components::sim::WorldPosition;
 use crate::core::coords::WorldPos;
@@ -232,6 +233,7 @@ pub fn inventory_screen_input(
     item_volumes: Query<Option<&ItemVolume>>,
     wielded_items_q: Query<Option<&WieldedItems>>,
     wielded_by_check: Query<Entity, With<WieldedBy>>,
+    mounted_pockets_q: Query<&MountedPockets>,
     mut ap_query: Query<&mut ActionPoints, With<DevPlayer>>,
     mut commands: Commands,
     mut stack: ResMut<ContextStack>,
@@ -248,10 +250,28 @@ pub fn inventory_screen_input(
     };
     let hand_limit = hand_count.0 as usize;
 
-    // Sorted item list — same order as the render shows rows.
-    let mut items: Vec<(char, Entity)> = inventory.invlets.iter().map(|(&c, &e)| (c, e)).collect();
-    items.sort_by_key(|(c, _)| *c);
-    let item_count = items.len();
+    // Panel 0: pocket items (everything not in hand), sorted by invlet char.
+    let mut pocket_items: Vec<(char, Entity)> = inventory
+        .invlets
+        .iter()
+        .filter(|(_, &e)| wielded_by_check.get(e).is_err())
+        .map(|(&c, &e)| (c, e))
+        .collect();
+    pocket_items.sort_by_key(|(c, _)| *c);
+
+    // Panel 1: wielded items.
+    let wielded_list: Vec<Entity> = wielded_items_q
+        .get(player_entity)
+        .ok()
+        .flatten()
+        .map(|wi| wi.iter().collect())
+        .unwrap_or_default();
+
+    let current_panel_len = if focus.panel == 0 {
+        pocket_items.len()
+    } else {
+        wielded_list.len()
+    };
 
     for action in actions {
         match action {
@@ -259,20 +279,28 @@ pub fn inventory_screen_input(
                 focus.index = focus.index.saturating_sub(1);
             }
             GameAction::NavigateDown => {
-                if item_count > 0 {
-                    focus.index = (focus.index + 1).min(item_count - 1);
+                if current_panel_len > 0 {
+                    focus.index = (focus.index + 1).min(current_panel_len - 1);
                 }
             }
             GameAction::NavigateHome => {
                 focus.index = 0;
             }
             GameAction::NavigateEnd => {
-                focus.index = item_count.saturating_sub(1);
+                focus.index = current_panel_len.saturating_sub(1);
+            }
+            // Tab / Shift-Tab: cycle between pocket panel and wielded panel.
+            GameAction::NavigateNextTab | GameAction::NavigatePrevTab => {
+                focus.panel = 1 - focus.panel.min(1);
+                focus.index = 0;
             }
 
-            // [Enter / e] — drop focused item at player's feet (volume-checked).
+            // [Enter / e] — drop focused pocket item at player's feet.
             GameAction::Confirm => {
-                if let Some(&(invlet_char, item_entity)) = items.get(focus.index) {
+                if focus.panel != 0 {
+                    continue;
+                }
+                if let Some(&(invlet_char, item_entity)) = pocket_items.get(focus.index) {
                     let item_vol = item_volumes
                         .get(item_entity)
                         .ok()
@@ -305,36 +333,17 @@ pub fn inventory_screen_input(
                         .remove::<Invlet>()
                         .insert(WorldPosition(drop_pos));
                     inventory.invlets.remove(&invlet_char);
-                    let new_len = inventory.invlets.len();
-                    focus.index = if new_len > 0 {
-                        focus.index.min(new_len - 1)
-                    } else {
-                        0
-                    };
+                    let new_len = pocket_items.len().saturating_sub(1);
+                    focus.index = focus.index.min(new_len);
                 }
             }
 
-            // [w] — wield / unwield focused item (toggle hand slot).
+            // [w] — wield from pocket panel, or unwield from wielded panel.
             GameAction::UseItem => {
-                if let Some(&(_, item_entity)) = items.get(focus.index) {
-                    let is_wielded = wielded_by_check.get(item_entity).is_ok();
-                    if is_wielded {
-                        // Unwield: move from hand back to inventory bag.
-                        commands
-                            .entity(item_entity)
-                            .remove::<WieldedBy>()
-                            .insert(InsideContainer(player_entity));
-                        if let Ok(mut ap) = ap_query.single_mut() {
-                            ap.spend(AP_COST_WIELD);
-                        }
-                    } else {
-                        // Wield: move from inventory bag to hand if a slot is free.
-                        let wielded_count = wielded_items_q
-                            .get(player_entity)
-                            .ok()
-                            .flatten()
-                            .map(|wi| wi.iter().count())
-                            .unwrap_or(0);
+                if focus.panel == 0 {
+                    // Wield: pocket → hand.
+                    if let Some(&(_, item_entity)) = pocket_items.get(focus.index) {
+                        let wielded_count = wielded_list.len();
                         if wielded_count < hand_limit {
                             commands
                                 .entity(item_entity)
@@ -350,21 +359,40 @@ pub fn inventory_screen_input(
                             );
                         }
                     }
+                } else {
+                    // Unwield: hand → body pocket.
+                    if let Some(&item_entity) = wielded_list.get(focus.index) {
+                        let body_pocket = crate::inventory::pocket::get_body_pocket(
+                            player_entity,
+                            &mounted_pockets_q,
+                        )
+                        .unwrap_or(player_entity);
+                        commands
+                            .entity(item_entity)
+                            .remove::<WieldedBy>()
+                            .insert(InsideContainer(body_pocket));
+                        if let Ok(mut ap) = ap_query.single_mut() {
+                            ap.spend(AP_COST_WIELD);
+                        }
+                        let new_len = wielded_list.len().saturating_sub(1);
+                        focus.index = focus.index.min(new_len);
+                    }
                 }
             }
 
-            // [X / examine] — open item detail overlay.
+            // [X / examine] — open item detail overlay (pocket panel only).
             GameAction::Examine => {
-                if let Some(&(_, item_entity)) = items.get(focus.index) {
-                    commands.insert_resource(ExaminedItem(Some(item_entity)));
-                    // Push to ItemExamine overlay, saving Inventory as the parent.
-                    push_ctx(
-                        Ctx::Inventory,
-                        Ctx::ItemExamine,
-                        &mut stack,
-                        &mut next_screen,
-                        &mut focused_cmd,
-                    );
+                if focus.panel == 0 {
+                    if let Some(&(_, item_entity)) = pocket_items.get(focus.index) {
+                        commands.insert_resource(ExaminedItem(Some(item_entity)));
+                        push_ctx(
+                            Ctx::Inventory,
+                            Ctx::ItemExamine,
+                            &mut stack,
+                            &mut next_screen,
+                            &mut focused_cmd,
+                        );
+                    }
                 }
             }
 
@@ -383,14 +411,28 @@ pub fn inventory_screen_input(
 /// `EntityCloner` to copy all def components (qualities, weapon stats, etc.)
 /// to the runtime entity without per-component enumeration.
 pub fn spawn_dev_world(world: &mut World) {
-    world.spawn((
-        DevPlayer,
-        HandCount(2),
-        Inventory::default(),
-        InvletFavorites::default(),
-        ActionPoints::default(),
-        IsAlive,
-    ));
+    let player = world
+        .spawn((
+            DevPlayer,
+            HandCount(2),
+            Inventory::default(),
+            InvletFavorites::default(),
+            ActionPoints::default(),
+            IsAlive,
+            Stats::default(),
+            Health { current: 100, max: 100 },
+            PlayerData {
+                name: "Dev Player".to_string(),
+                gender: Gender::default(),
+                age: 30,
+                height: 170,
+                blood_type: "O+".to_string(),
+                profession: None,
+                scenario: None,
+            },
+        ))
+        .id();
+    crate::inventory::pocket::spawn_body_pocket(world, player);
 
     // Columns: display name | CDDA type ID | OMT x | OMT y
     let items: &[(&str, &str, i32, i32)] = &[
@@ -453,6 +495,7 @@ pub fn dev_pickup_drop_system(
     >,
     item_volumes: Query<Option<&ItemVolume>>,
     wielded_items_q: Query<Option<&WieldedItems>>,
+    mounted_pockets_q: Query<&MountedPockets>,
     mut ap_query: Query<&mut ActionPoints, With<DevPlayer>>,
     mut commands: Commands,
 ) {
@@ -494,10 +537,15 @@ pub fn dev_pickup_drop_system(
                             .remove::<WorldPosition>()
                             .insert(WieldedBy(player_entity));
                     } else {
+                        let body_pocket = crate::inventory::pocket::get_body_pocket(
+                            player_entity,
+                            &mounted_pockets_q,
+                        )
+                        .unwrap_or(player_entity);
                         commands
                             .entity(item)
                             .remove::<WorldPosition>()
-                            .insert(InsideContainer(player_entity));
+                            .insert(InsideContainer(body_pocket));
                     }
                     inventory.needs_invlet.insert(item);
                     if let Ok(mut ap) = ap_query.single_mut() {
