@@ -48,6 +48,11 @@ impl TestBed {
         self
     }
 
+    pub fn add_message<T: bevy_ecs::message::Message>(&mut self) -> &mut Self {
+        bevy_ecs::message::MessageRegistry::register_message::<T>(&mut self.world);
+        self
+    }
+
     pub fn run_system<M: 'static>(&mut self, system: impl IntoSystem<(), (), M>) {
         let mut sys = IntoSystem::into_system(system);
         sys.initialize(&mut self.world);

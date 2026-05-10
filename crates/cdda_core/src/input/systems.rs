@@ -273,6 +273,39 @@ fn key_to_user_input(key: KeyCode, shift: bool, ctrl: bool, alt: bool) -> Box<dy
     }
 }
 
+// ---------------------------------------------------------------------------
+// refresh_active_keybindings — keep ActiveKeybindings in sync
+// ---------------------------------------------------------------------------
+
+/// Rebuilds `ActiveKeybindings` whenever the screen context or input maps
+/// change. UI systems read `ActiveKeybindings::key_for(action)` to get the
+/// current key for an action instead of hardcoding key labels.
+pub fn refresh_active_keybindings(
+    query: Query<&InputMap<BindableAction>, With<GlobalInputEntity>>,
+    mut active: ResMut<crate::input::bindings::ActiveKeybindings>,
+    context_maps: Res<crate::input::bindings::ContextInputMaps>,
+    ctx_state: Res<State<Ctx>>,
+) {
+    if !ctx_state.is_changed() && !context_maps.is_changed() && !active.is_changed() {
+        return;
+    }
+
+    let Ok(map) = query.single() else {
+        return;
+    };
+
+    active.keys.clear();
+    for action in BindableAction::all() {
+        if let Some(inputs) = map.get(&action) {
+            if !inputs.is_empty() {
+                active
+                    .keys
+                    .insert(action, crate::input::bindings::format_wrapper(&inputs[0]));
+            }
+        }
+    }
+}
+
 /// Mirror of `sync_input_context` (nav.rs) — maps a `Ctx` to its
 /// `InputContextId`.  Kept private; external callers use `sync_input_context`.
 pub(crate) fn screen_to_input_ctx(ctx: Ctx) -> InputContextId {

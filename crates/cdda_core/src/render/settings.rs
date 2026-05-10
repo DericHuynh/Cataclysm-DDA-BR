@@ -3,17 +3,16 @@
 //! Uses `DespawnOnExit(Ctx::SettingsMenu)` for automatic cleanup.
 //! Tab content is rebuilt via `rebuild_content_panel`.
 
-use bevy::ecs::relationship::RelatedSpawnerCommands;
-use bevy::prelude::*;
-use bevy_state::state_scoped::DespawnOnExit;
-use crate::input::{
-    BindableAction, InputContextId, RebindCapture, RebindCaptureInner,
-};
-use crate::input::bindings::ContextInputMaps;
 use crate::context::config::GameSettings;
 use crate::context::ctx::Ctx;
 use crate::context::nav::ctx_def;
+use crate::input::bindings::ContextInputMaps;
+use crate::input::{BindableAction, InputContextId, RebindCapture, RebindCaptureInner};
 use crate::render::theme::{ThemePreset, UiTheme};
+use bevy::ecs::relationship::RelatedSpawnerCommands;
+use bevy::prelude::*;
+use bevy::ui::ScrollPosition;
+use bevy_state::state_scoped::DespawnOnExit;
 
 // ---------------------------------------------------------------------------
 // Settings tab
@@ -117,6 +116,7 @@ pub fn spawn(
     state: Res<SettingsState>,
     bindings: Res<ContextInputMaps>,
     ui_theme: Res<UiTheme>,
+    ui_font_handle: Res<super::UiFontHandle>,
 ) {
     let def = ctx_def(Ctx::SettingsMenu);
 
@@ -193,6 +193,7 @@ pub fn spawn(
                         flex_direction: FlexDirection::Column,
                         padding: UiRect::all(Val::Px(16.0)),
                         border: UiRect::all(Val::Px(1.0)),
+                        overflow: Overflow::clip_y(),
                         ..default()
                     },
                     BackgroundColor(PANEL),
@@ -202,12 +203,15 @@ pub fn spawn(
         });
 
     let theme_label = ui_theme.preset.label().to_string();
-    populate_into(commands, panel_entity, &state, Some(&bindings), &theme_label);
+    populate_into(
+        commands,
+        panel_entity,
+        &state,
+        Some(&bindings),
+        &theme_label,
+        &ui_font_handle,
+    );
 }
-
-// ---------------------------------------------------------------------------
-// Tab content population
-// ---------------------------------------------------------------------------
 
 fn populate_into(
     mut commands: Commands,
@@ -215,6 +219,7 @@ fn populate_into(
     state: &SettingsState,
     bindings: Option<&ContextInputMaps>,
     theme_label: &str,
+    ui_font_handle: &super::UiFontHandle,
 ) {
     // Wrap everything in a single entity so `despawn_children` on the panel
     // removes all content atomically.
@@ -225,7 +230,7 @@ fn populate_into(
             SettingsTab::Graphics => graphics_tab(content, state),
             SettingsTab::Sound => sound_tab(content, state),
             SettingsTab::Interface => interface_tab(content, state, theme_label),
-            SettingsTab::Keybindings => keybindings_tab(content, state, bindings),
+            SettingsTab::Keybindings => keybindings_tab(content, state, bindings, ui_font_handle),
         });
 }
 
@@ -258,7 +263,11 @@ fn sound_tab(parent: &mut RelatedSpawnerCommands<'_, ChildOf>, state: &SettingsS
     }
 }
 
-fn interface_tab(parent: &mut RelatedSpawnerCommands<'_, ChildOf>, state: &SettingsState, theme_label: &str) {
+fn interface_tab(
+    parent: &mut RelatedSpawnerCommands<'_, ChildOf>,
+    state: &SettingsState,
+    theme_label: &str,
+) {
     let items: Vec<(&str, String)> = vec![
         ("Sidebar style", "classic".to_string()),
         ("Show compass", "Yes".to_string()),
@@ -275,6 +284,7 @@ fn keybindings_tab(
     parent: &mut RelatedSpawnerCommands<'_, ChildOf>,
     state: &SettingsState,
     bindings: Option<&ContextInputMaps>,
+    ui_font_handle: &super::UiFontHandle,
 ) {
     let Some(bindings) = bindings else {
         parent.spawn((
@@ -354,10 +364,7 @@ fn keybindings_tab(
                 ))
                 .with_child((
                     Text::new(text),
-                    TextFont {
-                        font_size: 18.0,
-                        ..default()
-                    },
+                    super::ui_font(&ui_font_handle.0, 18.0),
                     TextColor(TEXT_BRIGHT),
                 ));
 
@@ -427,6 +434,7 @@ pub fn rebuild_content_panel(
     bindings: Res<ContextInputMaps>,
     panel: Query<Entity, With<ContentPanel>>,
     mut ui_theme: ResMut<UiTheme>,
+    ui_font_handle: Res<super::UiFontHandle>,
 ) {
     if !state.tab_changed {
         return;
@@ -452,7 +460,14 @@ pub fn rebuild_content_panel(
     };
 
     let theme_label = ui_theme.preset.label().to_string();
-    populate_into(commands, panel_entity, &snapshot, Some(&bindings), &theme_label);
+    populate_into(
+        commands,
+        panel_entity,
+        &snapshot,
+        Some(&bindings),
+        &theme_label,
+        &ui_font_handle,
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -490,9 +505,15 @@ pub fn navigate(
             }
             crate::input::GameAction::NavigateLeft => {
                 // If on Interface tab and focused on Color Scheme, cycle theme left
-                if state.active_tab == SettingsTab::Interface && state.focused_row == COLOR_SCHEME_ROW {
+                if state.active_tab == SettingsTab::Interface
+                    && state.focused_row == COLOR_SCHEME_ROW
+                {
                     let n = ThemePreset::ALL.len();
-                    state.interface_theme = if state.interface_theme == 0 { n - 1 } else { state.interface_theme - 1 };
+                    state.interface_theme = if state.interface_theme == 0 {
+                        n - 1
+                    } else {
+                        state.interface_theme - 1
+                    };
                     state.tab_changed = true;
                 } else {
                     switch_tab(&mut state, -1);
@@ -500,7 +521,9 @@ pub fn navigate(
             }
             crate::input::GameAction::NavigateRight => {
                 // If on Interface tab and focused on Color Scheme, cycle theme right
-                if state.active_tab == SettingsTab::Interface && state.focused_row == COLOR_SCHEME_ROW {
+                if state.active_tab == SettingsTab::Interface
+                    && state.focused_row == COLOR_SCHEME_ROW
+                {
                     state.interface_theme = (state.interface_theme + 1) % ThemePreset::ALL.len();
                     state.tab_changed = true;
                 } else {
@@ -591,7 +614,9 @@ pub fn sync_tab_highlight(
 pub fn sync_item_highlight(
     state: Res<SettingsState>,
     mut items: Query<(&SettingsItem, &mut BackgroundColor, &mut BorderColor)>,
+    mut content_panel: Query<&mut ScrollPosition, With<ContentPanel>>,
 ) {
+    const ROW_HEIGHT_PX: f32 = 40.0;
     for (item, mut bg, mut border) in &mut items {
         if item.0 == state.focused_row {
             bg.0 = ITEM_FOCUS_BG;
@@ -600,6 +625,9 @@ pub fn sync_item_highlight(
             bg.0 = ITEM_BG;
             *border = BorderColor::all(Color::NONE);
         }
+    }
+    if let Ok(mut scroll) = content_panel.single_mut() {
+        scroll.y = state.focused_row as f32 * ROW_HEIGHT_PX;
     }
 }
 
@@ -614,7 +642,6 @@ fn _yn(b: bool) -> String {
         "No".into()
     }
 }
-
 
 fn ctx_label(ctx: &InputContextId) -> String {
     match ctx {

@@ -4,6 +4,7 @@ use bevy_ecs::prelude::*;
 
 use crate::activity::actor::{ActivityActor, CraftActor};
 use crate::activity::components::{ActivityPhase, PlayerActivity};
+use crate::context::ContextActions;
 use crate::core::components::def::{
     ItemName, RecipeCategory, RecipeComponents, RecipeQualities, RecipeResult, RecipeResultCount,
     RecipeSubcategory, RecipeTime,
@@ -14,6 +15,8 @@ use crate::core::components::item::{
 };
 use crate::core::components::sim::WorldPosition;
 use crate::data::def_world::DefinitionWorld;
+use crate::input::BindableAction;
+use crate::inventory::examine_resource::ExaminedItem;
 use crate::worldgen::dev::DevPlayer;
 use crate::worldgen::spawning_impl::spawn_item_from_def;
 use crate::{WorldPos, ZLevel};
@@ -438,6 +441,82 @@ pub fn complete_craft(world: &mut World, player: Entity, craft_entity: Entity) {
         }
 
         tracing::info!("Craft complete: {}", result_id);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// resume_craft — re-attach activity to an interrupted in-progress craft
+// ---------------------------------------------------------------------------
+
+/// Resume an interrupted `InProgressCraft` by re-attaching a `PlayerActivity`
+/// with `CraftActor` on the player.  The craft picks up where it left off
+/// (`ap_spent` is preserved).
+///
+/// Returns `Ok(())` if the activity was created, or `Err` if the craft entity
+/// no longer exists or the player already has an active craft.
+pub fn resume_craft(world: &mut World, player: Entity, craft_entity: Entity) -> Result<(), String> {
+    let ap_remaining = world
+        .get::<InProgressCraft>(craft_entity)
+        .map(|c| c.ap_total.saturating_sub(c.ap_spent))
+        .ok_or_else(|| "Craft entity no longer exists".to_string())?;
+
+    if ap_remaining <= 0 {
+        // Craft is already complete — finish it immediately.
+        complete_craft(world, player, craft_entity);
+        return Ok(());
+    }
+
+    // Don't overwrite an existing activity.
+    if world
+        .get::<PlayerActivity>(player)
+        .map(|a| a.phase != ActivityPhase::Done)
+        .unwrap_or(false)
+    {
+        // If the existing activity is also a craft, just return — already crafting.
+        if world
+            .get::<PlayerActivity>(player)
+            .map(|a| a.activity_type.as_str() == "ACT_CRAFT")
+            .unwrap_or(false)
+        {
+            return Ok(());
+        }
+        return Err("Another activity is already in progress".to_string());
+    }
+
+    let actor = ActivityActor::Craft(CraftActor { craft_entity });
+    world.entity_mut(player).insert({
+        let mut act = PlayerActivity::new("ACT_CRAFT", actor);
+        act.moves_total = ap_remaining;
+        act.moves_left = ap_remaining;
+        act.phase = ActivityPhase::Active;
+        act
+    });
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// on_examine_item_changed — dynamic resume-craft action
+// ---------------------------------------------------------------------------
+
+/// Runs when `ExaminedItem` changes (user selects a different item in the
+/// examine overlay).  Checks whether the new item has an `InProgressCraft`
+/// and appends the "resume craft" action if so.
+pub fn on_examine_item_changed(
+    examined: Res<ExaminedItem>,
+    in_progress_q: Query<&InProgressCraft>,
+    mut ctx_actions: ResMut<ContextActions>,
+) {
+    if !examined.is_changed() {
+        return;
+    }
+    let has_in_progress = examined
+        .0
+        .map(|e| in_progress_q.get(e).is_ok())
+        .unwrap_or(false);
+
+    if has_in_progress {
+        ctx_actions.push("resume craft", BindableAction::HotkeyR);
     }
 }
 
@@ -1167,7 +1246,11 @@ mod tests {
 
         let available = collect_available_items(t.world_mut(), player);
         let result = check_can_craft(t.world(), recipe, &available);
-        assert!(result.is_ok(), "should craft with merged stack of 6: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "should craft with merged stack of 6: {:?}",
+            result
+        );
     }
 
     /// When consume_items despawns a wielded item (WieldedBy, not InsideContainer),
@@ -1181,10 +1264,9 @@ mod tests {
 
         // Item is in hands (WieldedBy) — not InsideContainer.
         let item = make_item(&mut t, "string_6", 6);
-        t.world_mut().entity_mut(item).insert((
-            Invlet('a'),
-            WieldedBy(player),
-        ));
+        t.world_mut()
+            .entity_mut(item)
+            .insert((Invlet('a'), WieldedBy(player)));
         {
             let world = t.world_mut();
             let mut inv = world.get_mut::<Inventory>(player).unwrap();
@@ -1218,10 +1300,9 @@ mod tests {
         let player = t.spawn((DevPlayer, Inventory::default()));
 
         let item = make_item(&mut t, "string_6", 6);
-        t.world_mut().entity_mut(item).insert((
-            Invlet('a'),
-            WieldedBy(player),
-        ));
+        t.world_mut()
+            .entity_mut(item)
+            .insert((Invlet('a'), WieldedBy(player)));
         {
             let world = t.world_mut();
             let mut inv = world.get_mut::<Inventory>(player).unwrap();

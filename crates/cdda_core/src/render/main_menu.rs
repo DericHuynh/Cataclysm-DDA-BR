@@ -3,11 +3,13 @@
 //! Spawned on `OnEnter(Ctx::MainMenu)`, auto-despawned on `OnExit`
 //! via `DespawnOnExit(Ctx::MainMenu)`.
 
-use crate::context::InputFocus;
-use bevy::prelude::*;
-use bevy_state::state_scoped::DespawnOnExit;
+use super::FooterHint;
 use crate::context::ctx::Ctx;
 use crate::context::nav::{ctx_def, FocusedCommandIndex};
+use crate::context::InputFocus;
+use crate::input::ActiveKeybindings;
+use bevy::prelude::*;
+use bevy_state::state_scoped::DespawnOnExit;
 
 /// Marks a command button, storing its index into the screen_def command list.
 #[derive(Component)]
@@ -29,7 +31,12 @@ const FOCUSED_BORDER: Color = Color::srgb(0.95, 0.95, 0.95);
 // Spawn
 // ---------------------------------------------------------------------------
 
-pub fn spawn(mut commands: Commands, focused: Res<FocusedCommandIndex>) {
+pub fn spawn(
+    mut commands: Commands,
+    focused: Res<FocusedCommandIndex>,
+    active_keys: Res<ActiveKeybindings>,
+    ui_font_handle: Res<super::UiFontHandle>,
+) {
     let def = ctx_def(Ctx::MainMenu);
 
     commands
@@ -103,13 +110,17 @@ pub fn spawn(mut commands: Commands, focused: Res<FocusedCommandIndex>) {
             }
 
             // Footer hint
+            let nav_key = active_keys.key_for(crate::input::BindableAction::NavigateUp);
+            let confirm_key = active_keys.key_for(crate::input::BindableAction::Confirm);
+            let hints = format!(
+                "[{}] navigate  |  [{}] select  |  Hotkey: quick-select",
+                nav_key, confirm_key
+            );
             parent.spawn((
-                Text::new("Arrow keys: navigate  |  Enter: select  |  Hotkey: quick-select"),
-                TextFont {
-                    font_size: 18.0,
-                    ..default()
-                },
+                Text::new(hints),
+                super::ui_font(&ui_font_handle.0, 18.0),
                 TextColor(TEXT_DIM),
+                FooterHint,
                 TextLayout::new_with_justify(Justify::Center),
                 Node {
                     margin: UiRect::top(Val::Px(64.0)),
@@ -126,6 +137,9 @@ pub fn spawn(mut commands: Commands, focused: Res<FocusedCommandIndex>) {
 pub fn sync_focus(
     focused: Res<FocusedCommandIndex>,
     mut input_focus: ResMut<InputFocus>,
+    active_keys: Res<ActiveKeybindings>,
+    _ui_font_handle: Res<super::UiFontHandle>,
+    mut footer_hint_q: Query<&mut Text, With<FooterHint>>,
     mut buttons: Query<(
         Entity,
         &CommandButton,
@@ -133,6 +147,16 @@ pub fn sync_focus(
         &mut BorderColor,
     )>,
 ) {
+    // Live-update footer hints
+    if let Ok(mut text) = footer_hint_q.single_mut() {
+        let nav_key = active_keys.key_for(crate::input::BindableAction::NavigateUp);
+        let confirm_key = active_keys.key_for(crate::input::BindableAction::Confirm);
+        let hints = format!(
+            "[{}] navigate  |  [{}] select  |  Hotkey: quick-select",
+            nav_key, confirm_key
+        );
+        **text = hints;
+    }
     let current = focused.current();
     for (entity, btn, mut bg, mut border) in &mut buttons {
         if btn.0 == current {

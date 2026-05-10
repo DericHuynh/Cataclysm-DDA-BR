@@ -83,14 +83,53 @@ impl ContextInputMaps {
 pub fn format_wrapper(wrapper: &UserInputWrapper) -> String {
     // Use Debug and clean up the output to something short and readable.
     let raw = format!("{wrapper:?}");
-    raw.replace("Button(KeyCode(", "")
+    let s = raw
         .replace("Button(ButtonlikeChord([KeyCode(", "")
-        .replace("]))", "")
+        .replace("Button(KeyCode(", "")
+        .replace("Button(", "");
+    // Strip trailing parens, brackets, and "Key" prefix.
+    let key = s
+        .replace("])", "")
         .replace("))", "")
         .replace(')', "")
         .replace("Key", "")
         .trim()
-        .to_string()
+        .to_string();
+    // Map common key names to compact display forms.
+    match key.as_str() {
+        "ArrowUp" => "\u{2191}".to_string(),
+        "ArrowDown" => "\u{2193}".to_string(),
+        "ArrowLeft" => "\u{2190}".to_string(),
+        "ArrowRight" => "\u{2192}".to_string(),
+        "Escape" => "Esc".to_string(),
+        "Backspace" => "Bksp".to_string(),
+        "PageUp" => "PgUp".to_string(),
+        "PageDown" => "PgDn".to_string(),
+        "Slash" => "/".to_string(),
+        "Space" => "Spc".to_string(),
+        other => other.to_string(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ActiveKeybindings — live key display strings for the current context
+// ---------------------------------------------------------------------------
+
+/// Maps each `BindableAction` to its currently-bound key display string
+/// for the active input context. Updated whenever the context or bindings
+/// change. UI systems query this to render dynamic key hints instead of
+/// hardcoding `[w]` / `[d]` etc.
+#[derive(Resource, Debug, Clone, Default)]
+pub struct ActiveKeybindings {
+    /// `BindableAction` → human-readable key string (e.g. `"W"`, `"D"`, `"Esc"`).
+    pub keys: HashMap<BindableAction, String>,
+}
+
+impl ActiveKeybindings {
+    /// Get the display key for an action, or `"?"` if unbound.
+    pub fn key_for(&self, action: BindableAction) -> &str {
+        self.keys.get(&action).map(|s| s.as_str()).unwrap_or("?")
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -199,6 +238,8 @@ pub fn default_bindings() -> ContextInputMaps {
         (BindableAction::NavigateEnd, KeyCode::End),
         (BindableAction::UseItem, KeyCode::KeyW),
         (BindableAction::Examine, KeyCode::KeyX),
+        (BindableAction::Drop, KeyCode::KeyD),
+        (BindableAction::HotkeyR, KeyCode::KeyR),
     ]);
     maps.contexts.insert(InputContextId::Inventory, inventory);
 

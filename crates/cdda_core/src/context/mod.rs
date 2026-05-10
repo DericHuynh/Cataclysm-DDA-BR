@@ -7,6 +7,7 @@
 //! `cdda_render` reads the same `Ctx` state and registers
 //! `OnEnter`/`OnExit` systems to spawn/despawn visual UI.
 
+pub mod actions;
 pub mod config;
 pub mod ctx;
 pub mod cursor;
@@ -17,6 +18,10 @@ pub mod systems;
 
 // ----- Re-exports ---------------------------------------------------------
 
+pub use actions::{
+    on_enter_character_actions, on_enter_crafting_actions, on_enter_dev_spawn_actions,
+    on_enter_examine_actions, on_enter_inventory_actions, ContextAction, ContextActions,
+};
 pub use config::{CharacterCreationState, GameSettings, WorldCreationSettings};
 pub use ctx::{ContextStack, Ctx};
 pub use cursor::ExamineCursor;
@@ -44,6 +49,7 @@ impl Plugin for ContextPlugin {
         app.init_state::<Ctx>();
 
         // Resources
+        app.insert_resource(ContextActions::default());
         app.insert_resource(ContextStack::default());
         app.insert_resource(FocusedCommandIndex::default());
         app.insert_resource(InputFocus::default());

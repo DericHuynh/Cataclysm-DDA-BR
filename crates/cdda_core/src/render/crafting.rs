@@ -12,9 +12,11 @@
 //!   5. Filter bar (at bottom)
 //!   6. Footer with key hints
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
 
+use super::FooterHint;
 use crate::context::ctx::Ctx;
 use crate::crafting::systems::{CategoryIndex, CraftEntry, CraftState};
 use crate::data::def_world::DefinitionWorld;
@@ -74,10 +76,22 @@ pub struct FilterBarContainer;
 pub struct FooterContainer;
 
 // ---------------------------------------------------------------------------
-// Bundled def queries for the item detail panel
+// SystemParam that bundles all container queries, keeping the system
+// under Bevy's IntoSystem parameter limit.
 // ---------------------------------------------------------------------------
 
-// Shared item detail queries
+#[derive(SystemParam)]
+pub struct CraftingContainers<'w, 's> {
+    pub root: Query<'w, 's, Entity, With<CraftMenuRoot>>,
+    pub header: Query<'w, 's, Entity, With<HeaderContainer>>,
+    pub cat_tabs: Query<'w, 's, Entity, With<CategoryTabsContainer>>,
+    pub sub_tabs: Query<'w, 's, Entity, With<SubcategoryTabsContainer>>,
+    pub list: Query<'w, 's, Entity, With<RecipeListContainer>>,
+    pub detail: Query<'w, 's, Entity, With<DetailPanelContainer>>,
+    pub item_detail: Query<'w, 's, Entity, With<ItemDetailPanelContainer>>,
+    pub filter: Query<'w, 's, Entity, With<FilterBarContainer>>,
+    pub footer: Query<'w, 's, Entity, With<FooterContainer>>,
+}
 
 // ---------------------------------------------------------------------------
 // spawn_crafting_ui — OnEnter system (root shell only)
@@ -214,6 +228,15 @@ pub fn spawn_crafting_ui(mut commands: Commands) {
                 },
                 BackgroundColor(HEADER_BG),
                 BorderColor::all(DIVIDER),
+            ))
+            .with_child((
+                Text::new(""),
+                TextFont {
+                    font_size: 12.0,
+                    ..default()
+                },
+                TextColor(TEXT_DIM),
+                FooterHint,
             ));
         });
 }
@@ -228,42 +251,34 @@ pub fn update_crafting_ui(
     state: Res<CraftState>,
     cat_index: Res<CategoryIndex>,
     def_world: Res<DefinitionWorld>,
-    root_q: Query<Entity, With<CraftMenuRoot>>,
-    header_q: Query<Entity, With<HeaderContainer>>,
-    cat_tabs_q: Query<Entity, With<CategoryTabsContainer>>,
-    sub_tabs_q: Query<Entity, With<SubcategoryTabsContainer>>,
-    list_q: Query<Entity, With<RecipeListContainer>>,
-    detail_q: Query<Entity, With<DetailPanelContainer>>,
-    item_detail_q: Query<Entity, With<ItemDetailPanelContainer>>,
-    filter_q: Query<Entity, With<FilterBarContainer>>,
-    footer_q: Query<Entity, With<FooterContainer>>,
+    containers: CraftingContainers,
     defs: ItemDetailQueries,
 ) {
-    let Ok(_root) = root_q.single() else {
+    let Ok(_root) = containers.root.single() else {
         return;
     };
-    let Ok(header) = header_q.single() else {
+    let Ok(header) = containers.header.single() else {
         return;
     };
-    let Ok(cat_tabs) = cat_tabs_q.single() else {
+    let Ok(cat_tabs) = containers.cat_tabs.single() else {
         return;
     };
-    let Ok(sub_tabs) = sub_tabs_q.single() else {
+    let Ok(sub_tabs) = containers.sub_tabs.single() else {
         return;
     };
-    let Ok(list) = list_q.single() else {
+    let Ok(list) = containers.list.single() else {
         return;
     };
-    let Ok(detail) = detail_q.single() else {
+    let Ok(detail) = containers.detail.single() else {
         return;
     };
-    let Ok(item_detail) = item_detail_q.single() else {
+    let Ok(item_detail) = containers.item_detail.single() else {
         return;
     };
-    let Ok(filter_bar) = filter_q.single() else {
+    let Ok(filter_bar) = containers.filter.single() else {
         return;
     };
-    let Ok(footer) = footer_q.single() else {
+    let Ok(_footer) = containers.footer.single() else {
         return;
     };
 
@@ -772,19 +787,4 @@ pub fn update_crafting_ui(
                 TextColor(if filtering { TEXT_BRIGHT } else { TEXT_DIM }),
             ));
         });
-
-    // ── Footer ────────────────────────────────────────────────────────────
-    commands
-        .entity(footer)
-        .despawn_children()
-        .with_child((
-            Text::new(
-                "[↑↓ / j,k] navigate   [←→] category   [Enter] craft   [a] all/craftable   [/] filter   [Esc] back",
-            ),
-            TextFont {
-                font_size: 12.0,
-                ..default()
-            },
-            TextColor(TEXT_DIM),
-        ));
 }

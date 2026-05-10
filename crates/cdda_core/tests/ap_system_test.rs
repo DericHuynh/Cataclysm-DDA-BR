@@ -9,16 +9,16 @@
 //!   Downed status: 3× movement cost
 //!   Terrain cost scales movement: rough terrain (200) → 2× base cost
 
+use bevy_ecs::prelude::*;
+use cdda_core::actor::turn::tick_move_points;
 use cdda_core::actor::turn::{
-    effective_move_cost, ActorTurn, TurnQueue, MP_MIN_FLOOR,
-    MOVE_COST_CROUCH, MOVE_COST_DOWNED_MULTIPLIER, MOVE_COST_PRONE, MOVE_COST_WALK,
+    effective_move_cost, ActorTurn, TurnQueue, MOVE_COST_CROUCH, MOVE_COST_DOWNED_MULTIPLIER,
+    MOVE_COST_PRONE, MOVE_COST_WALK, MP_MIN_FLOOR,
 };
 use cdda_core::core::components::actor::{ActionPoints, IsAlive};
 use cdda_core::core::components::def::IsDef;
 use cdda_core::sim::state::GameTime;
 use cdda_core::sim::test_utils::TestBed;
-use cdda_core::actor::turn::{tick_move_points};
-use bevy_ecs::prelude::*;
 
 // ---------------------------------------------------------------------------
 // Constants — match CDDA baseline values
@@ -108,7 +108,10 @@ fn ap_accumulates_across_turns() {
 /// AP starts at 50 (existing debt-free balance); one tick should add speed.
 #[test]
 fn tick_accumulates_on_existing_ap() {
-    let mut ap = ActionPoints { current: 50, speed: 100 };
+    let mut ap = ActionPoints {
+        current: 50,
+        speed: 100,
+    };
     ap.tick();
     assert_eq!(ap.current, 150);
 }
@@ -137,7 +140,10 @@ fn fast_actor_gains_more_ap_per_tick() {
 /// At default speed=100, the debt floor is -200.
 #[test]
 fn debt_floor_default_speed_is_negative_200() {
-    let mut ap = ActionPoints { current: -300, speed: 100 };
+    let mut ap = ActionPoints {
+        current: -300,
+        speed: 100,
+    };
     ap.tick(); // -300 + 100 = -200 (clamped to floor)
     assert_eq!(ap.current, -200);
 }
@@ -145,7 +151,10 @@ fn debt_floor_default_speed_is_negative_200() {
 /// Deeply negative AP is clamped to the floor after ticking.
 #[test]
 fn deeply_negative_ap_clamped_to_floor() {
-    let mut ap = ActionPoints { current: -10_000, speed: 100 };
+    let mut ap = ActionPoints {
+        current: -10_000,
+        speed: 100,
+    };
     ap.tick(); // would be -9900 but clamped to -200
     assert_eq!(ap.current, -200);
 }
@@ -153,7 +162,10 @@ fn deeply_negative_ap_clamped_to_floor() {
 /// At speed=200, the debt floor is -400.
 #[test]
 fn debt_floor_scales_with_speed() {
-    let mut ap = ActionPoints { current: -1000, speed: 200 };
+    let mut ap = ActionPoints {
+        current: -1000,
+        speed: 200,
+    };
     ap.tick(); // would be -800 but clamped to -(200*2) = -400
     assert_eq!(ap.current, -400);
 }
@@ -165,7 +177,10 @@ fn debt_floor_scales_with_speed() {
 /// CDDA: `mod_moves(-100)` after walking one tile; actor still can act.
 #[test]
 fn spending_100_ap_leaves_actor_able_to_act() {
-    let mut ap = ActionPoints { current: 100, speed: 100 };
+    let mut ap = ActionPoints {
+        current: 100,
+        speed: 100,
+    };
     ap.spend(MOVE_COST_WALK);
     assert_eq!(ap.current, 0);
     // MP_MIN_FLOOR = 25; 0 < 25 means cannot act — that's intentional
@@ -175,7 +190,10 @@ fn spending_100_ap_leaves_actor_able_to_act() {
 /// CDDA: spending more than available drives moves negative.
 #[test]
 fn spending_more_than_available_goes_negative() {
-    let mut ap = ActionPoints { current: 20, speed: 100 };
+    let mut ap = ActionPoints {
+        current: 20,
+        speed: 100,
+    };
     ap.spend(MOVE_COST_WALK); // 20 - 100 = -80
     assert_eq!(ap.current, -80);
 }
@@ -184,10 +202,16 @@ fn spending_more_than_available_goes_negative() {
 #[test]
 fn mp_min_floor_gate() {
     assert!(MP_MIN_FLOOR > 0, "min floor must be positive");
-    let ready = ActionPoints { current: MP_MIN_FLOOR, speed: 100 };
+    let ready = ActionPoints {
+        current: MP_MIN_FLOOR,
+        speed: 100,
+    };
     assert!(ready.current >= MP_MIN_FLOOR);
 
-    let not_ready = ActionPoints { current: MP_MIN_FLOOR - 1, speed: 100 };
+    let not_ready = ActionPoints {
+        current: MP_MIN_FLOOR - 1,
+        speed: 100,
+    };
     assert!(not_ready.current < MP_MIN_FLOOR);
 }
 
@@ -213,7 +237,10 @@ fn rough_terrain_doubles_walk_cost() {
 /// `effective_move_cost(100, 0) == i32::MAX`.
 #[test]
 fn impassable_terrain_returns_max() {
-    assert_eq!(effective_move_cost(MOVE_COST_WALK, TERRAIN_IMPASSABLE), i32::MAX);
+    assert_eq!(
+        effective_move_cost(MOVE_COST_WALK, TERRAIN_IMPASSABLE),
+        i32::MAX
+    );
 }
 
 /// Crouch on normal terrain: still costs MOVE_COST_CROUCH.
@@ -252,6 +279,7 @@ fn tick_move_points_system_grants_ap_to_alive_actors() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
+    test.add_message::<cdda_core::messages::TurnAdvanced>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
@@ -263,7 +291,10 @@ fn tick_move_points_system_grants_ap_to_alive_actors() {
     let queue = test.resource::<TurnQueue>();
     assert_eq!(queue.actors.len(), 2);
     for actor in &queue.actors {
-        assert_eq!(actor.move_points, 100, "each actor should gain speed(100) AP");
+        assert_eq!(
+            actor.move_points, 100,
+            "each actor should gain speed(100) AP"
+        );
     }
 }
 
@@ -274,6 +305,7 @@ fn dead_actors_excluded_from_turn_queue() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
+    test.add_message::<cdda_core::messages::TurnAdvanced>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
@@ -294,6 +326,7 @@ fn faster_actor_has_higher_mp_in_queue() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
+    test.add_message::<cdda_core::messages::TurnAdvanced>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
@@ -303,9 +336,22 @@ fn faster_actor_has_higher_mp_in_queue() {
     test.run_system(tick_move_points);
 
     let queue = test.resource::<TurnQueue>();
-    let fast_mp = queue.actors.iter().find(|a| a.entity == fast).unwrap().move_points;
-    let slow_mp = queue.actors.iter().find(|a| a.entity == slow).unwrap().move_points;
-    assert!(fast_mp > slow_mp, "faster actor (200 speed) should have more AP than slow (50)");
+    let fast_mp = queue
+        .actors
+        .iter()
+        .find(|a| a.entity == fast)
+        .unwrap()
+        .move_points;
+    let slow_mp = queue
+        .actors
+        .iter()
+        .find(|a| a.entity == slow)
+        .unwrap()
+        .move_points;
+    assert!(
+        fast_mp > slow_mp,
+        "faster actor (200 speed) should have more AP than slow (50)"
+    );
     assert_eq!(fast_mp, 200);
     assert_eq!(slow_mp, 50);
 }
@@ -317,6 +363,7 @@ fn def_entities_excluded_from_turn_queue() {
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
     test.register::<IsDef>();
+    test.add_message::<cdda_core::messages::TurnAdvanced>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
@@ -336,6 +383,7 @@ fn tick_advances_game_time() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
+    test.add_message::<cdda_core::messages::TurnAdvanced>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
     test.spawn((IsAlive, ActionPoints::default()));
@@ -359,9 +407,18 @@ fn turn_queue_pop_returns_highest_mp_first() {
     let e3 = Entity::from_bits(3);
 
     queue.actors = vec![
-        ActorTurn { move_points: 50,  entity: e1 },
-        ActorTurn { move_points: 100, entity: e2 },
-        ActorTurn { move_points: 75,  entity: e3 },
+        ActorTurn {
+            move_points: 50,
+            entity: e1,
+        },
+        ActorTurn {
+            move_points: 100,
+            entity: e2,
+        },
+        ActorTurn {
+            move_points: 75,
+            entity: e3,
+        },
     ];
 
     assert_eq!(queue.pop_highest().unwrap().entity, e2); // 100 first
@@ -376,9 +433,15 @@ fn queue_has_actors_ready_when_mp_above_floor() {
     let e = Entity::from_bits(1);
     let mut queue = TurnQueue::default();
 
-    queue.actors = vec![ActorTurn { move_points: MP_MIN_FLOOR, entity: e }];
+    queue.actors = vec![ActorTurn {
+        move_points: MP_MIN_FLOOR,
+        entity: e,
+    }];
     assert!(queue.has_actors_ready());
 
-    queue.actors = vec![ActorTurn { move_points: MP_MIN_FLOOR - 1, entity: e }];
+    queue.actors = vec![ActorTurn {
+        move_points: MP_MIN_FLOOR - 1,
+        entity: e,
+    }];
     assert!(!queue.has_actors_ready());
 }

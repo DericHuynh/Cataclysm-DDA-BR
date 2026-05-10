@@ -33,6 +33,7 @@ pub enum GameSet {
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SimSet {
     TurnTick,
+    Activity,
     Ai,
     Movement,
     Combat,

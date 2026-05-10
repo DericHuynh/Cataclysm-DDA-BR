@@ -25,8 +25,10 @@ use crate::actor::turn::{AP_COST_PICKUP, AP_COST_WIELD};
 use crate::context::ctx::Ctx;
 use crate::context::nav::{push_ctx, FocusedCommandIndex};
 use crate::context::ContextStack;
-use crate::core::components::actor::{ActionPoints, HandCount, Health, IsAlive, PlayerData, Gender};
 use crate::core::components::actor::Stats;
+use crate::core::components::actor::{
+    ActionPoints, Gender, HandCount, Health, IsAlive, PlayerData,
+};
 use crate::core::components::def::ItemVolume;
 use crate::core::components::item::{
     Container, ContainerContents, CurrentCharges, DefOrigin, InsideContainer, Inventory,
@@ -43,10 +45,11 @@ use crate::sim::events::{ItemMoveEvent, MoveLocation};
 use crate::worldgen::dev::{DevGroundItemName, DevPlayer};
 use crate::worldgen::dev_move::DevCamera;
 use crate::ZLevel;
-use bevy_ecs::message::MessageReader;
+use bevy_ecs::message::{MessageReader, MessageWriter};
 use bevy_ecs::prelude::*;
+use bevy_ecs::world::World;
 use bevy_state::prelude::NextState;
-use tracing::warn;
+use tracing::{info, warn};
 
 // ===========================================================================
 // Systems
@@ -208,6 +211,51 @@ pub fn process_item_move_events(
                     to_inv.needs_invlet.insert(event.item);
                 }
             }
+            // Ground → Wielded (pickup into hands)
+            (MoveLocation::Ground(_), MoveLocation::Wielded(wielder)) => {
+                commands
+                    .entity(event.item)
+                    .remove::<WorldPosition>()
+                    .insert(WieldedBy(wielder));
+                if let Ok(mut inv) = inventory_query.get_mut(wielder) {
+                    inv.needs_invlet.insert(event.item);
+                }
+            }
+            // Wielded → Ground (drop from hands)
+            (MoveLocation::Wielded(wielder), MoveLocation::Ground(pos)) => {
+                let invlet_char = invlet_query.get(event.item).ok().map(|i| i.0);
+                commands
+                    .entity(event.item)
+                    .remove::<WieldedBy>()
+                    .remove::<Invlet>()
+                    .insert(WorldPosition(pos));
+                if let Ok(mut inv) = inventory_query.get_mut(wielder) {
+                    if let Some(c) = invlet_char {
+                        inv.invlets.remove(&c);
+                    }
+                    inv.needs_invlet.remove(&event.item);
+                }
+            }
+            // Wielded → Container (stow from hands)
+            (MoveLocation::Wielded(wielder), MoveLocation::Container(container)) => {
+                let invlet_char = invlet_query.get(event.item).ok().map(|i| i.0);
+                commands
+                    .entity(event.item)
+                    .remove::<WieldedBy>()
+                    .insert(InsideContainer(container))
+                    .remove::<Invlet>();
+                if let Ok(mut from_inv) = inventory_query.get_mut(wielder) {
+                    if let Some(c) = invlet_char {
+                        from_inv.invlets.remove(&c);
+                    }
+                    from_inv.needs_invlet.remove(&event.item);
+                }
+                if wielder != container {
+                    if let Ok(mut to_inv) = inventory_query.get_mut(container) {
+                        to_inv.needs_invlet.insert(event.item);
+                    }
+                }
+            }
             _ => {}
         }
     }
@@ -224,10 +272,7 @@ pub fn process_item_move_events(
 pub fn inventory_screen_input(
     mut reader: MessageReader<InputAction>,
     mut focus: ResMut<InventoryFocus>,
-    camera: Res<DevCamera>,
     mut player_query: Query<(Entity, &mut Inventory, &HandCount), With<DevPlayer>>,
-    ground_items: Query<(&WorldPosition, Option<&ItemVolume>), With<DevGroundItemName>>,
-    item_volumes: Query<Option<&ItemVolume>>,
     wielded_items_q: Query<Option<&WieldedItems>>,
     wielded_by_check: Query<Entity, With<WieldedBy>>,
     mounted_pockets_q: Query<&MountedPockets>,
@@ -242,7 +287,7 @@ pub fn inventory_screen_input(
         return;
     }
 
-    let Ok((player_entity, mut inventory, hand_count)) = player_query.single_mut() else {
+    let Ok((player_entity, inventory, hand_count)) = player_query.single_mut() else {
         return;
     };
     let hand_limit = hand_count.0 as usize;
@@ -292,46 +337,20 @@ pub fn inventory_screen_input(
                 focus.index = 0;
             }
 
-            // [Enter / e] — drop focused pocket item at player's feet.
+            // [Enter] — open item examine / action menu.
             GameAction::Confirm => {
                 if focus.panel != 0 {
                     continue;
                 }
-                if let Some(&(invlet_char, item_entity)) = pocket_items.get(focus.index) {
-                    let item_vol = item_volumes
-                        .get(item_entity)
-                        .ok()
-                        .flatten()
-                        .map(|v| v.0)
-                        .unwrap_or(0);
-                    let floor_volume: u32 = ground_items
-                        .iter()
-                        .filter(|(wp, _)| {
-                            wp.0.x.div_euclid(24) == camera.x
-                                && wp.0.y.div_euclid(24) == camera.y
-                                && wp.0.z.0 as i32 == camera.z
-                        })
-                        .filter_map(|(_, vol)| vol.map(|v| v.0))
-                        .sum();
-                    if floor_volume + item_vol > FLOOR_CAP_ML {
-                        warn!(
-                            "Floor ({},{}) full: {}/{} mL — drop blocked.",
-                            camera.x, camera.y, floor_volume, FLOOR_CAP_ML
-                        );
-                        continue;
-                    }
-
-                    let drop_pos =
-                        WorldPos::new(camera.x * 24, camera.y * 24, ZLevel::new(camera.z as i8));
-                    commands
-                        .entity(item_entity)
-                        .remove::<InsideContainer>()
-                        .remove::<WieldedBy>()
-                        .remove::<Invlet>()
-                        .insert(WorldPosition(drop_pos));
-                    inventory.invlets.remove(&invlet_char);
-                    let new_len = pocket_items.len().saturating_sub(1);
-                    focus.index = focus.index.min(new_len);
+                if let Some(&(_, item_entity)) = pocket_items.get(focus.index) {
+                    commands.insert_resource(ExaminedItem(Some(item_entity)));
+                    push_ctx(
+                        Ctx::Inventory,
+                        Ctx::ItemExamine,
+                        &mut stack,
+                        &mut next_screen,
+                        &mut focused_cmd,
+                    );
                 }
             }
 
@@ -390,6 +409,179 @@ pub fn inventory_screen_input(
                             &mut focused_cmd,
                         );
                     }
+                }
+            }
+
+            _ => {}
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// examine_item_input — actions on the ItemExamine overlay
+// ---------------------------------------------------------------------------
+
+/// Handles item actions while the `ItemExamine` overlay is open.
+///
+/// Exclusive system — needs `&mut World` access for `resume_craft`.
+///
+/// Actions:
+/// - **d / Drop** — drop the examined item at the player's OMT tile.
+/// - **w** — wield the item (if pocket) or unwield (if wielded).
+/// - **r** — resume an interrupted `InProgressCraft`.
+/// - **Esc / Enter** — close the overlay, return to inventory.
+pub fn examine_item_input(world: &mut World) {
+    // Drain InputAction messages.
+    let actions: Vec<GameAction> = {
+        let mut messages = world.resource_mut::<bevy_ecs::message::Messages<InputAction>>();
+        messages.update();
+        messages.drain().map(|e| e.action.clone()).collect()
+    };
+    if actions.is_empty() {
+        return;
+    }
+
+    let item_entity = match world.resource::<ExaminedItem>().0 {
+        Some(e) => e,
+        None => return,
+    };
+
+    let player_entity = {
+        let mut q = world.query_filtered::<Entity, With<DevPlayer>>();
+        match q.iter(world).next() {
+            Some(e) => e,
+            None => return,
+        }
+    };
+
+    let hand_limit = world
+        .get::<HandCount>(player_entity)
+        .map(|h| h.0 as usize)
+        .unwrap_or(0);
+
+    let camera = world.resource::<DevCamera>().clone();
+
+    for action in actions {
+        match action {
+            // ── Close overlay ─────────────────────────────────────────
+            GameAction::Cancel => {
+                *world.resource_mut::<ExaminedItem>() = ExaminedItem(None);
+                let parent = world.resource_mut::<ContextStack>().0.pop();
+                if let Some(p) = parent {
+                    world.resource_mut::<FocusedCommandIndex>().on_pop(p);
+                    world.resource_mut::<NextState<Ctx>>().set(p);
+                }
+            }
+
+            // ── Drop ─────────────────────────────────────────────────
+            GameAction::Drop => {
+                let item_vol = world
+                    .get::<ItemVolume>(item_entity)
+                    .map(|v| v.0)
+                    .unwrap_or(0);
+
+                // Check floor volume.
+                let floor_volume: u32 = {
+                    let mut q = world.query::<(&WorldPosition, Option<&ItemVolume>)>();
+                    q.iter(world)
+                        .filter(|(wp, _)| {
+                            wp.0.x.div_euclid(24) == camera.x
+                                && wp.0.y.div_euclid(24) == camera.y
+                                && wp.0.z.0 as i32 == camera.z
+                        })
+                        .filter_map(|(_, vol)| vol.map(|v| v.0))
+                        .sum()
+                };
+                if floor_volume + item_vol > FLOOR_CAP_ML {
+                    warn!(
+                        "Floor ({},{}) full: {}/{} mL — drop blocked.",
+                        camera.x, camera.y, floor_volume, FLOOR_CAP_ML
+                    );
+                    continue;
+                }
+
+                let drop_pos =
+                    WorldPos::new(camera.x * 24, camera.y * 24, ZLevel::new(camera.z as i8));
+
+                // Clean up invlet from player's Inventory.
+                let invlet_char = world.get::<Invlet>(item_entity).map(|i| i.0);
+                if let Some(c) = invlet_char {
+                    if let Some(mut inv) = world.get_mut::<Inventory>(player_entity) {
+                        inv.invlets.remove(&c);
+                    }
+                }
+
+                world
+                    .entity_mut(item_entity)
+                    .remove::<InsideContainer>()
+                    .remove::<WieldedBy>()
+                    .remove::<Invlet>()
+                    .insert(WorldPosition(drop_pos));
+
+                *world.resource_mut::<ExaminedItem>() = ExaminedItem(None);
+                let parent = world.resource_mut::<ContextStack>().0.pop();
+                if let Some(p) = parent {
+                    world.resource_mut::<FocusedCommandIndex>().on_pop(p);
+                    world.resource_mut::<NextState<Ctx>>().set(p);
+                }
+            }
+
+            // ── Wield / Unwield ───────────────────────────────────────
+            GameAction::UseItem => {
+                let is_wielded = world.get::<WieldedBy>(item_entity).is_some();
+                if is_wielded {
+                    let body_pocket = {
+                        let mp = world.get::<MountedPockets>(player_entity);
+                        mp.and_then(|mp| mp.iter().next()).unwrap_or(player_entity)
+                    };
+                    world
+                        .entity_mut(item_entity)
+                        .remove::<WieldedBy>()
+                        .insert(InsideContainer(body_pocket));
+                } else {
+                    let wielded_count = world
+                        .get::<WieldedItems>(player_entity)
+                        .map(|wi| wi.iter().count())
+                        .unwrap_or(0);
+                    if wielded_count < hand_limit {
+                        world
+                            .entity_mut(item_entity)
+                            .remove::<InsideContainer>()
+                            .insert(WieldedBy(player_entity));
+                    } else {
+                        warn!(
+                            "Hands full ({}/{}) — cannot wield.",
+                            wielded_count, hand_limit
+                        );
+                        continue;
+                    }
+                }
+                if let Some(mut ap) = world.get_mut::<ActionPoints>(player_entity) {
+                    ap.spend(AP_COST_WIELD);
+                }
+                *world.resource_mut::<ExaminedItem>() = ExaminedItem(None);
+                let parent = world.resource_mut::<ContextStack>().0.pop();
+                if let Some(p) = parent {
+                    world.resource_mut::<FocusedCommandIndex>().on_pop(p);
+                    world.resource_mut::<NextState<Ctx>>().set(p);
+                }
+            }
+
+            // ── Resume craft ──────────────────────────────────────────
+            GameAction::HotkeyPress('r') => {
+                match crate::crafting::systems::resume_craft(world, player_entity, item_entity) {
+                    Ok(()) => {
+                        info!("Resumed craft on {:?}", item_entity);
+                    }
+                    Err(e) => {
+                        warn!("Cannot resume craft: {}", e);
+                    }
+                }
+                *world.resource_mut::<ExaminedItem>() = ExaminedItem(None);
+                let parent = world.resource_mut::<ContextStack>().0.pop();
+                if let Some(p) = parent {
+                    world.resource_mut::<FocusedCommandIndex>().on_pop(p);
+                    world.resource_mut::<NextState<Ctx>>().set(p);
                 }
             }
 
@@ -483,28 +675,30 @@ pub fn spawn_dev_world(world: &mut World) {
 /// - **d / Drop**   — drops the first item in the player's inventory at the
 ///   camera's current OMT tile.
 ///
-/// Directly mutates `Inventory` and issues `Commands`; bypasses
-/// `ItemMoveEvent` to avoid needing a `MessageWriter` in the dev path.
+/// Emits `ItemMoveEvent` messages for each item moved. The
+/// `process_item_move_events` system (which runs later in the same
+/// `SimSet::Inventory` phase) applies the actual component changes.
 pub fn dev_pickup_drop_system(
     mut reader: MessageReader<InputAction>,
     camera: Res<DevCamera>,
-    mut player_query: Query<(Entity, &mut Inventory, &HandCount), With<DevPlayer>>,
+    player_query: Query<(Entity, &HandCount), With<DevPlayer>>,
     ground_item_query: Query<
         (Entity, &WorldPosition, Option<&ItemVolume>),
         With<DevGroundItemName>,
     >,
     item_volumes: Query<Option<&ItemVolume>>,
+    inventory_query: Query<&Inventory, With<DevPlayer>>,
     wielded_items_q: Query<Option<&WieldedItems>>,
     mounted_pockets_q: Query<&MountedPockets>,
     mut ap_query: Query<&mut ActionPoints, With<DevPlayer>>,
-    mut commands: Commands,
+    mut move_writer: MessageWriter<ItemMoveEvent>,
 ) {
     let actions: Vec<GameAction> = reader.read().map(|e| e.action.clone()).collect();
     if actions.is_empty() {
         return;
     }
 
-    let Ok((player_entity, mut inventory, hand_count)) = player_query.single_mut() else {
+    let Ok((player_entity, hand_count)) = player_query.single() else {
         return;
     };
     let hand_limit = hand_count.0 as usize;
@@ -512,18 +706,18 @@ pub fn dev_pickup_drop_system(
     for action in actions {
         match action {
             GameAction::Pickup => {
-                let to_pickup: Vec<Entity> = ground_item_query
+                let to_pickup: Vec<(Entity, WorldPos)> = ground_item_query
                     .iter()
                     .filter(|(_, wp, _)| {
                         wp.0.x.div_euclid(24) == camera.x
                             && wp.0.y.div_euclid(24) == camera.y
                             && wp.0.z.0 as i32 == camera.z
                     })
-                    .map(|(e, _, _)| e)
+                    .map(|(e, wp, _)| (e, wp.0))
                     .collect();
 
-                for item in to_pickup {
-                    // Fill hand slots first (WieldedBy), then fall back to inventory.
+                for (item, pos) in to_pickup {
+                    // Fill hand slots first (WieldedBy), then fall back to body pocket.
                     let wielded_count = wielded_items_q
                         .get(player_entity)
                         .ok()
@@ -532,22 +726,25 @@ pub fn dev_pickup_drop_system(
                         .unwrap_or(0);
 
                     if wielded_count < hand_limit {
-                        commands
-                            .entity(item)
-                            .remove::<WorldPosition>()
-                            .insert(WieldedBy(player_entity));
+                        move_writer.write(ItemMoveEvent {
+                            item,
+                            from: MoveLocation::Ground(pos),
+                            to: MoveLocation::Wielded(player_entity),
+                            count: 1,
+                        });
                     } else {
                         let body_pocket = crate::inventory::pocket::get_body_pocket(
                             player_entity,
                             &mounted_pockets_q,
                         )
                         .unwrap_or(player_entity);
-                        commands
-                            .entity(item)
-                            .remove::<WorldPosition>()
-                            .insert(InsideContainer(body_pocket));
+                        move_writer.write(ItemMoveEvent {
+                            item,
+                            from: MoveLocation::Ground(pos),
+                            to: MoveLocation::Container(body_pocket),
+                            count: 1,
+                        });
                     }
-                    inventory.needs_invlet.insert(item);
                     if let Ok(mut ap) = ap_query.single_mut() {
                         ap.spend(AP_COST_PICKUP);
                     }
@@ -556,41 +753,44 @@ pub fn dev_pickup_drop_system(
 
             GameAction::Drop => {
                 // Drop the first invlet-assigned item at the camera position.
-                if let Some((&invlet_char, &item_entity)) = inventory.invlets.iter().next() {
-                    // Volume check: floor has a hard cap of FLOOR_CAP_ML.
-                    let item_vol = item_volumes
-                        .get(item_entity)
-                        .ok()
-                        .flatten()
-                        .map(|v| v.0)
-                        .unwrap_or(0);
-                    let floor_volume: u32 = ground_item_query
-                        .iter()
-                        .filter(|(_, wp, _)| {
-                            wp.0.x.div_euclid(24) == camera.x
-                                && wp.0.y.div_euclid(24) == camera.y
-                                && wp.0.z.0 as i32 == camera.z
-                        })
-                        .filter_map(|(_, _, vol)| vol.map(|v| v.0))
-                        .sum();
-                    if floor_volume + item_vol > FLOOR_CAP_ML {
-                        warn!(
-                            "Floor ({},{}) full: {}/{} mL — cannot drop.",
-                            camera.x, camera.y, floor_volume, FLOOR_CAP_ML
-                        );
-                        continue;
-                    }
+                if let Ok(inventory) = inventory_query.single() {
+                    if let Some((&_invlet_char, &item_entity)) = inventory.invlets.iter().next() {
+                        // Volume check: floor has a hard cap of FLOOR_CAP_ML.
+                        let item_vol = item_volumes
+                            .get(item_entity)
+                            .ok()
+                            .flatten()
+                            .map(|v| v.0)
+                            .unwrap_or(0);
+                        let floor_volume: u32 = ground_item_query
+                            .iter()
+                            .filter(|(_, wp, _)| {
+                                wp.0.x.div_euclid(24) == camera.x
+                                    && wp.0.y.div_euclid(24) == camera.y
+                                    && wp.0.z.0 as i32 == camera.z
+                            })
+                            .filter_map(|(_, _, vol)| vol.map(|v| v.0))
+                            .sum();
+                        if floor_volume + item_vol > FLOOR_CAP_ML {
+                            warn!(
+                                "Floor ({},{}) full: {}/{} mL — cannot drop.",
+                                camera.x, camera.y, floor_volume, FLOOR_CAP_ML
+                            );
+                            continue;
+                        }
 
-                    let drop_pos =
-                        WorldPos::new(camera.x * 24, camera.y * 24, ZLevel::new(camera.z as i8));
-                    commands
-                        .entity(item_entity)
-                        .remove::<InsideContainer>()
-                        .remove::<WieldedBy>()
-                        .remove::<Invlet>()
-                        .insert(WorldPosition(drop_pos));
-                    let c = invlet_char;
-                    inventory.invlets.remove(&c);
+                        let drop_pos = WorldPos::new(
+                            camera.x * 24,
+                            camera.y * 24,
+                            ZLevel::new(camera.z as i8),
+                        );
+                        move_writer.write(ItemMoveEvent {
+                            item: item_entity,
+                            from: MoveLocation::Container(player_entity),
+                            to: MoveLocation::Ground(drop_pos),
+                            count: 1,
+                        });
+                    }
                 }
             }
             _ => {}

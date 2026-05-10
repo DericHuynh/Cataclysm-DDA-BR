@@ -11,8 +11,11 @@
 
 use crate::core::components::actor::{ActionPoints, IsAlive};
 use crate::core::components::def::IsDef;
+use bevy_ecs::message::MessageWriter;
 use bevy_ecs::prelude::*;
 use std::cmp::Ordering;
+
+use crate::messages::TurnAdvanced;
 
 // ---------------------------------------------------------------------------
 // Action cost constants
@@ -113,6 +116,7 @@ pub fn tick_move_points(
     mut query: Query<(Entity, &mut ActionPoints), (With<IsAlive>, Without<IsDef>)>,
     mut queue: ResMut<TurnQueue>,
     mut game_time: ResMut<crate::sim::state::GameTime>,
+    mut turn_writer: MessageWriter<TurnAdvanced>,
 ) {
     queue.actors.clear();
 
@@ -130,6 +134,11 @@ pub fn tick_move_points(
 
     queue.turn_count += 1;
     game_time.advance();
+
+    // Emit TurnAdvanced so time-based systems can react.
+    turn_writer.write(TurnAdvanced {
+        turn: game_time.turn,
+    });
 }
 
 /// Spend AP for an entity.

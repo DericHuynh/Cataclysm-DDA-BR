@@ -10,7 +10,10 @@
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
 
+use super::FooterHint;
 use crate::context::ctx::Ctx;
+use crate::context::ContextActions;
+use crate::input::ActiveKeybindings;
 use crate::render::item_detail::{spawn_item_detail, ItemDetailQueries};
 use crate::worldgen::dev_spawn::DevSpawnFocus;
 
@@ -59,7 +62,12 @@ pub(crate) struct SpawnFilterBar;
 // Spawn (OnEnter) — full layout skeleton, built once
 // ---------------------------------------------------------------------------
 
-pub fn spawn_dev_spawn_panel(mut commands: Commands) {
+pub fn spawn_dev_spawn_panel(
+    mut commands: Commands,
+    ctx_actions: Res<ContextActions>,
+    active_keys: Res<ActiveKeybindings>,
+    ui_font_handle: Res<super::UiFontHandle>,
+) {
     commands
         .spawn((
             DespawnOnExit(Ctx::DevSpawnPanel),
@@ -97,41 +105,41 @@ pub fn spawn_dev_spawn_panel(mut commands: Commands) {
                 overflow: Overflow::clip(),
                 ..default()
             },))
-            .with_children(|body| {
-                // Left: list panel — children rebuilt each frame
-                body.spawn((
-                    SpawnListPanel,
-                    Node {
-                        width: Val::Percent(38.0),
-                        min_width: Val::Percent(38.0),
-                        max_width: Val::Percent(38.0),
-                        min_height: Val::Px(0.0),
-                        flex_shrink: 0.0,
-                        flex_grow: 0.0,
-                        flex_direction: FlexDirection::Column,
-                        overflow: Overflow::clip(),
-                        border: UiRect::right(Val::Px(1.0)),
-                        ..default()
-                    },
-                    BackgroundColor(PANEL_BG),
-                    BorderColor::all(DIVIDER),
-                ));
+                .with_children(|body| {
+                    // Left: list panel — children rebuilt each frame
+                    body.spawn((
+                        SpawnListPanel,
+                        Node {
+                            width: Val::Percent(38.0),
+                            min_width: Val::Percent(38.0),
+                            max_width: Val::Percent(38.0),
+                            min_height: Val::Px(0.0),
+                            flex_shrink: 0.0,
+                            flex_grow: 0.0,
+                            flex_direction: FlexDirection::Column,
+                            overflow: Overflow::clip(),
+                            border: UiRect::right(Val::Px(1.0)),
+                            ..default()
+                        },
+                        BackgroundColor(PANEL_BG),
+                        BorderColor::all(DIVIDER),
+                    ));
 
-                // Right: detail panel — children rebuilt each frame
-                body.spawn((
-                    SpawnDetailPanel,
-                    Node {
-                        flex_grow: 1.0,
-                        min_height: Val::Px(0.0),
-                        flex_direction: FlexDirection::Column,
-                        padding: UiRect::all(Val::Px(16.0)),
-                        row_gap: Val::Px(4.0),
-                        overflow: Overflow::clip(),
-                        ..default()
-                    },
-                    BackgroundColor(PANEL_BG),
-                ));
-            });
+                    // Right: detail panel — children rebuilt each frame
+                    body.spawn((
+                        SpawnDetailPanel,
+                        Node {
+                            flex_grow: 1.0,
+                            min_height: Val::Px(0.0),
+                            flex_direction: FlexDirection::Column,
+                            padding: UiRect::all(Val::Px(16.0)),
+                            row_gap: Val::Px(4.0),
+                            overflow: Overflow::clip(),
+                            ..default()
+                        },
+                        BackgroundColor(PANEL_BG),
+                    ));
+                });
 
             // Filter bar — background + child rebuilt each frame
             root.spawn((
@@ -147,6 +155,12 @@ pub fn spawn_dev_spawn_panel(mut commands: Commands) {
             ));
 
             // Footer — static, built once
+            let cancel_key = active_keys.key_for(crate::input::BindableAction::Cancel);
+            let mut hints = format!("[{}] close", cancel_key);
+            for entry in &ctx_actions.actions {
+                let key = active_keys.key_for(entry.action);
+                hints.push_str(&format!("  [{}] {}", key, entry.label));
+            }
             root.spawn((
                 Node {
                     width: Val::Percent(100.0),
@@ -158,11 +172,10 @@ pub fn spawn_dev_spawn_panel(mut commands: Commands) {
                 BorderColor::all(DIVIDER),
             ))
             .with_child((
-                Text::new(
-                    "[j/k / ↑↓] navigate    [PgUp/PgDn] page    [Home/End] first/last    [/] filter    [Enter] spawn    [Esc] close",
-                ),
-                TextFont { font_size: 12.0, ..default() },
+                Text::new(hints),
+                super::ui_font(&ui_font_handle.0, 12.0),
                 TextColor(TEXT_DIM),
+                FooterHint,
             ));
         });
 }

@@ -16,6 +16,7 @@ fn tick_move_points_grants_mp() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
+    test.add_message::<cdda_core::messages::TurnAdvanced>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
@@ -37,11 +38,18 @@ fn tick_move_points_accumulates() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
+    test.add_message::<cdda_core::messages::TurnAdvanced>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
     // Entity starts with current=50, speed=100 → should have 150 after tick
-    test.spawn((IsAlive, ActionPoints { current: 50, speed: 100 }));
+    test.spawn((
+        IsAlive,
+        ActionPoints {
+            current: 50,
+            speed: 100,
+        },
+    ));
 
     test.run_system(tick_move_points);
 
@@ -54,11 +62,18 @@ fn tick_move_points_debt_floor() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
+    test.add_message::<cdda_core::messages::TurnAdvanced>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
     // Entity deeply in debt: current=-300, speed=100 → debt floor = -200
-    test.spawn((IsAlive, ActionPoints { current: -300, speed: 100 }));
+    test.spawn((
+        IsAlive,
+        ActionPoints {
+            current: -300,
+            speed: 100,
+        },
+    ));
 
     test.run_system(tick_move_points);
 
@@ -72,6 +87,7 @@ fn tick_move_points_advances_time() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
+    test.add_message::<cdda_core::messages::TurnAdvanced>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
@@ -110,7 +126,10 @@ fn spend_mp_reduces_and_returns_true() {
     let mut test = TestBed::new();
     test.register::<ActionPoints>();
 
-    let e = test.spawn((ActionPoints { current: 100, speed: 100 },));
+    let e = test.spawn((ActionPoints {
+        current: 100,
+        speed: 100,
+    },));
 
     let mut ap = test.world_mut().get_mut::<ActionPoints>(e).unwrap();
     ap.spend(30);
@@ -126,7 +145,10 @@ fn spend_mp_insufficient() {
     let mut test = TestBed::new();
     test.register::<ActionPoints>();
 
-    let e = test.spawn((ActionPoints { current: 20, speed: 100 },));
+    let e = test.spawn((ActionPoints {
+        current: 20,
+        speed: 100,
+    },));
 
     let mut ap = test.world_mut().get_mut::<ActionPoints>(e).unwrap();
     ap.spend(30);
@@ -173,9 +195,18 @@ fn turn_queue_pop_highest_order() {
     let e3 = Entity::from_bits(3);
 
     queue.actors = vec![
-        ActorTurn { move_points: 50,  entity: e1 },
-        ActorTurn { move_points: 100, entity: e2 },
-        ActorTurn { move_points: 75,  entity: e3 },
+        ActorTurn {
+            move_points: 50,
+            entity: e1,
+        },
+        ActorTurn {
+            move_points: 100,
+            entity: e2,
+        },
+        ActorTurn {
+            move_points: 75,
+            entity: e3,
+        },
     ];
 
     assert_eq!(queue.pop_highest().unwrap().entity, e2);
@@ -189,10 +220,16 @@ fn turn_queue_has_actors_ready() {
     let e = Entity::from_bits(1);
     let mut queue = TurnQueue::default();
 
-    queue.actors = vec![ActorTurn { move_points: 100, entity: e }];
+    queue.actors = vec![ActorTurn {
+        move_points: 100,
+        entity: e,
+    }];
     assert!(queue.has_actors_ready());
 
-    queue.actors = vec![ActorTurn { move_points: 10, entity: e }];
+    queue.actors = vec![ActorTurn {
+        move_points: 10,
+        entity: e,
+    }];
     assert!(!queue.has_actors_ready());
 }
 
@@ -204,8 +241,14 @@ fn turn_queue_highest_mp() {
     let e1 = Entity::from_bits(1);
     let e2 = Entity::from_bits(2);
     queue.actors = vec![
-        ActorTurn { move_points: 50,  entity: e1 },
-        ActorTurn { move_points: 120, entity: e2 },
+        ActorTurn {
+            move_points: 50,
+            entity: e1,
+        },
+        ActorTurn {
+            move_points: 120,
+            entity: e2,
+        },
     ];
     assert_eq!(queue.highest_mp(), 120);
 }

@@ -10,14 +10,16 @@ use bevy::prelude::*;
 use bevy_ecs::message::MessageReader;
 use bevy_state::state_scoped::DespawnOnExit;
 
+use super::FooterHint;
 use crate::context::ctx::Ctx;
-use crate::core::components::actor::{
-    ActionPoints, ActiveEffects, Bionic, Bleeding, BodyTemperature, CombatStats,
-    CreatureMutations, CreatureProficiencies, CreatureSkills, Health, InstalledBionics, Morale,
-    MutationEntry, OnFire, PlayerData, ProficiencyEntry, SkillEntry, StatusEffect, Stunned,
-    Vision, Wetness,
-};
+use crate::context::ContextActions;
 use crate::core::components::actor::Stats;
+use crate::core::components::actor::{
+    ActionPoints, ActiveEffects, Bionic, Bleeding, BodyTemperature, CombatStats, CreatureMutations,
+    CreatureProficiencies, CreatureSkills, Health, InstalledBionics, Morale, MutationEntry, OnFire,
+    PlayerData, ProficiencyEntry, SkillEntry, StatusEffect, Stunned, Vision, Wetness,
+};
+use crate::input::ActiveKeybindings;
 use crate::input::{GameAction, InputAction};
 use crate::worldgen::dev::DevPlayer;
 
@@ -110,6 +112,9 @@ pub struct CharSheetContentContainer;
 pub fn spawn_character_sheet_screen(
     mut commands: Commands,
     mut state: ResMut<CharacterSheetState>,
+    ctx_actions: Res<ContextActions>,
+    active_keys: Res<ActiveKeybindings>,
+    ui_font_handle: Res<super::UiFontHandle>,
 ) {
     // Reset state on every open.
     *state = CharacterSheetState::default();
@@ -137,7 +142,10 @@ pub fn spawn_character_sheet_screen(
             ))
             .with_child((
                 Text::new("CHARACTER SHEET"),
-                TextFont { font_size: 26.0, ..default() },
+                TextFont {
+                    font_size: 26.0,
+                    ..default()
+                },
                 TextColor(ACCENT),
             ));
 
@@ -148,51 +156,61 @@ pub fn spawn_character_sheet_screen(
                 flex_grow: 1.0,
                 ..default()
             },))
-            .with_children(|main| {
-                // ── LEFT PANEL (overview) ─────────────────────────────────
-                main.spawn((Node {
-                    flex_direction: FlexDirection::Column,
-                    width: Val::Px(360.0),
-                    flex_shrink: 0.0,
-                    border: UiRect::right(Val::Px(1.0)),
-                    overflow: Overflow::clip_y(),
-                    ..default()
-                }, BackgroundColor(LEFT_BG), BorderColor::all(DIVIDER)))
-                .with_children(|left| {
-                    left.spawn((
-                        CharSheetLeftContainer,
+                .with_children(|main| {
+                    // ── LEFT PANEL (overview) ─────────────────────────────────
+                    main.spawn((
                         Node {
                             flex_direction: FlexDirection::Column,
-                            width: Val::Percent(100.0),
-                            flex_grow: 1.0,
-                            ..default()
-                        },
-                    ));
-                });
-
-                // ── RIGHT PANEL (tabs) ────────────────────────────────────
-                main.spawn((Node {
-                    flex_direction: FlexDirection::Column,
-                    flex_grow: 1.0,
-                    ..default()
-                },))
-                .with_children(|right| {
-                    // Tab bar — placeholder, rebuilt in update_character_sheet_screen.
-                    // We create the content container here; the tab bar is rebuilt as sibling.
-                    right.spawn((
-                        CharSheetContentContainer,
-                        Node {
-                            flex_direction: FlexDirection::Column,
-                            width: Val::Percent(100.0),
-                            flex_grow: 1.0,
+                            width: Val::Px(360.0),
+                            flex_shrink: 0.0,
+                            border: UiRect::right(Val::Px(1.0)),
                             overflow: Overflow::clip_y(),
                             ..default()
                         },
-                    ));
+                        BackgroundColor(LEFT_BG),
+                        BorderColor::all(DIVIDER),
+                    ))
+                    .with_children(|left| {
+                        left.spawn((
+                            CharSheetLeftContainer,
+                            Node {
+                                flex_direction: FlexDirection::Column,
+                                width: Val::Percent(100.0),
+                                flex_grow: 1.0,
+                                ..default()
+                            },
+                        ));
+                    });
+
+                    // ── RIGHT PANEL (tabs) ────────────────────────────────────
+                    main.spawn((Node {
+                        flex_direction: FlexDirection::Column,
+                        flex_grow: 1.0,
+                        ..default()
+                    },))
+                        .with_children(|right| {
+                            // Tab bar — placeholder, rebuilt in update_character_sheet_screen.
+                            // We create the content container here; the tab bar is rebuilt as sibling.
+                            right.spawn((
+                                CharSheetContentContainer,
+                                Node {
+                                    flex_direction: FlexDirection::Column,
+                                    width: Val::Percent(100.0),
+                                    flex_grow: 1.0,
+                                    overflow: Overflow::clip_y(),
+                                    ..default()
+                                },
+                            ));
+                        });
                 });
-            });
 
             // ── Footer ────────────────────────────────────────────────────
+            let cancel_key = active_keys.key_for(crate::input::BindableAction::Cancel);
+            let mut hints = format!("[{}] close", cancel_key);
+            for entry in &ctx_actions.actions {
+                let key = active_keys.key_for(entry.action);
+                hints.push_str(&format!("  [{}] {}", key, entry.label));
+            }
             root.spawn((
                 Node {
                     width: Val::Percent(100.0),
@@ -204,11 +222,10 @@ pub fn spawn_character_sheet_screen(
                 BorderColor::all(DIVIDER),
             ))
             .with_child((
-                Text::new(
-                    "[Tab / Shift-Tab] switch tab    [j/k / ↑↓] scroll    [Esc / q] close",
-                ),
-                TextFont { font_size: 13.0, ..default() },
+                Text::new(hints),
+                super::ui_font(&ui_font_handle.0, 13.0),
                 TextColor(TEXT_DIM),
+                FooterHint,
             ));
         });
 }
@@ -220,6 +237,7 @@ pub fn spawn_character_sheet_screen(
 pub fn update_character_sheet_screen(
     mut commands: Commands,
     state: Res<CharacterSheetState>,
+    _ui_font_handle: Res<super::UiFontHandle>,
     player_vitals: Query<
         (
             Option<&PlayerData>,
@@ -255,8 +273,12 @@ pub fn update_character_sheet_screen(
     left_container: Query<Entity, With<CharSheetLeftContainer>>,
     content_container: Query<Entity, With<CharSheetContentContainer>>,
 ) {
-    let Ok(left_entity) = left_container.single() else { return; };
-    let Ok(content_entity) = content_container.single() else { return; };
+    let Ok(left_entity) = left_container.single() else {
+        return;
+    };
+    let Ok(content_entity) = content_container.single() else {
+        return;
+    };
 
     commands.entity(left_entity).despawn_children();
     commands.entity(content_entity).despawn_children();
@@ -266,8 +288,16 @@ pub fn update_character_sheet_screen(
         .single()
         .unwrap_or((None, None, None, None, None, None, None, None, None));
 
-    let (creature_skills, creature_mutations, active_effects, installed_bionics,
-         creature_profs, stunned, bleeding, on_fire) = player_rels
+    let (
+        creature_skills,
+        creature_mutations,
+        active_effects,
+        installed_bionics,
+        creature_profs,
+        stunned,
+        bleeding,
+        on_fire,
+    ) = player_rels
         .single()
         .unwrap_or((None, None, None, None, None, None, None, None));
 
@@ -305,22 +335,35 @@ pub fn update_character_sheet_screen(
 
         // ── Vitals section ─────────────────────────────────────────────────
         spawn_section_header(left, "VITALS");
-        let hp_color = if hp_cur <= hp_max / 4 { TEXT_RED }
-            else if hp_cur <= hp_max / 2 { TEXT_ORANGE }
-            else if hp_cur < hp_max { TEXT_YELLOW }
-            else { TEXT_GREEN };
+        let hp_color = if hp_cur <= hp_max / 4 {
+            TEXT_RED
+        } else if hp_cur <= hp_max / 2 {
+            TEXT_ORANGE
+        } else if hp_cur < hp_max {
+            TEXT_YELLOW
+        } else {
+            TEXT_GREEN
+        };
         spawn_info_row(left, "HP", &format!("{} / {}", hp_cur, hp_max), hp_color, 0);
-        let speed_color = if speed < 80 { TEXT_RED }
-            else if speed < 100 { TEXT_YELLOW }
-            else if speed > 100 { TEXT_GREEN }
-            else { TEXT_BRIGHT };
+        let speed_color = if speed < 80 {
+            TEXT_RED
+        } else if speed < 100 {
+            TEXT_YELLOW
+        } else if speed > 100 {
+            TEXT_GREEN
+        } else {
+            TEXT_BRIGHT
+        };
         spawn_info_row(left, "Speed", &format!("{}", speed), speed_color, 1);
 
         // ── Combat section ─────────────────────────────────────────────────
         spawn_section_header(left, "COMBAT");
         if let Some(cs) = combat {
             let melee_str = if cs.melee_dice > 0 {
-                format!("{}d{} (skill {})", cs.melee_dice, cs.melee_dice_sides, cs.melee_skill)
+                format!(
+                    "{}d{} (skill {})",
+                    cs.melee_dice, cs.melee_dice_sides, cs.melee_skill
+                )
             } else {
                 format!("skill {}", cs.melee_skill)
             };
@@ -337,7 +380,13 @@ pub fn update_character_sheet_screen(
             spawn_info_row(left, "Dodge", "—", TEXT_DIM, 1);
         }
         if let Some(vis) = vision {
-            spawn_info_row(left, "Vision", &format!("{} / {} tiles", vis.day_range, vis.night_range), TEXT_BRIGHT, if combat.is_some() { 1 } else { 0 });
+            spawn_info_row(
+                left,
+                "Vision",
+                &format!("{} / {} tiles", vis.day_range, vis.night_range),
+                TEXT_BRIGHT,
+                if combat.is_some() { 1 } else { 0 },
+            );
         }
 
         // ── Status section ─────────────────────────────────────────────────
@@ -362,9 +411,15 @@ pub fn update_character_sheet_screen(
 
         // Status markers
         let mut status_parts: Vec<(&str, Color)> = Vec::new();
-        if stunned.is_some() { status_parts.push(("STUNNED", TEXT_YELLOW)); }
-        if bleeding.is_some() { status_parts.push(("BLEEDING", TEXT_RED)); }
-        if on_fire.is_some() { status_parts.push(("ON FIRE", TEXT_ORANGE)); }
+        if stunned.is_some() {
+            status_parts.push(("STUNNED", TEXT_YELLOW));
+        }
+        if bleeding.is_some() {
+            status_parts.push(("BLEEDING", TEXT_RED));
+        }
+        if on_fire.is_some() {
+            status_parts.push(("ON FIRE", TEXT_ORANGE));
+        }
 
         if !status_parts.is_empty() {
             spawn_section_header(left, "CONDITIONS");
@@ -379,7 +434,10 @@ pub fn update_character_sheet_screen(
                 ))
                 .with_child((
                     Text::new(format!("  ● {}", label)),
-                    TextFont { font_size: 15.0, ..default() },
+                    TextFont {
+                        font_size: 15.0,
+                        ..default()
+                    },
                     TextColor(*color),
                 ));
             }
@@ -389,31 +447,39 @@ pub fn update_character_sheet_screen(
     // ── RIGHT PANEL ────────────────────────────────────────────────────────
     commands.entity(content_entity).with_children(|right| {
         // Tab bar
-        right.spawn((Node {
-            flex_direction: FlexDirection::Row,
-            width: Val::Percent(100.0),
-            border: UiRect::bottom(Val::Px(1.0)),
-            ..default()
-        }, BackgroundColor(HEADER_BG), BorderColor::all(DIVIDER)))
-        .with_children(|tabs| {
-            for tab in CharacterTab::ALL {
-                let active = tab == state.tab;
-                tabs.spawn((
-                    Node {
-                        padding: UiRect::axes(Val::Px(18.0), Val::Px(10.0)),
-                        border: UiRect::right(Val::Px(1.0)),
-                        ..default()
-                    },
-                    BackgroundColor(if active { TAB_ACTIVE_BG } else { TAB_BG }),
-                    BorderColor::all(DIVIDER),
-                ))
-                .with_child((
-                    Text::new(tab.label()),
-                    TextFont { font_size: 15.0, ..default() },
-                    TextColor(if active { ACCENT2 } else { TEXT_DIM }),
-                ));
-            }
-        });
+        right
+            .spawn((
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    width: Val::Percent(100.0),
+                    border: UiRect::bottom(Val::Px(1.0)),
+                    ..default()
+                },
+                BackgroundColor(HEADER_BG),
+                BorderColor::all(DIVIDER),
+            ))
+            .with_children(|tabs| {
+                for tab in CharacterTab::ALL {
+                    let active = tab == state.tab;
+                    tabs.spawn((
+                        Node {
+                            padding: UiRect::axes(Val::Px(18.0), Val::Px(10.0)),
+                            border: UiRect::right(Val::Px(1.0)),
+                            ..default()
+                        },
+                        BackgroundColor(if active { TAB_ACTIVE_BG } else { TAB_BG }),
+                        BorderColor::all(DIVIDER),
+                    ))
+                    .with_child((
+                        Text::new(tab.label()),
+                        TextFont {
+                            font_size: 15.0,
+                            ..default()
+                        },
+                        TextColor(if active { ACCENT2 } else { TEXT_DIM }),
+                    ));
+                }
+            });
 
         // Tab content
         match state.tab {
@@ -430,11 +496,14 @@ pub fn update_character_sheet_screen(
                 if skills.is_empty() {
                     spawn_empty_message(right, "No skills learned yet.");
                 } else {
-                    spawn_list_header(right, &format!("{:<24}  {:>5}  {:>8}", "Skill", "Level", "XP"));
+                    spawn_list_header(
+                        right,
+                        &format!("{:<24}  {:>5}  {:>8}", "Skill", "Level", "XP"),
+                    );
                     for (i, entry) in skills.iter().enumerate().skip(state.scroll) {
                         let row_str = format!(
                             "{:<24}  {:>5}  {:>8}",
-                            format!("skill #{}", entry.skill_id.0.0),
+                            format!("skill #{}", entry.skill_id.0 .0),
                             entry.level,
                             entry.exercise,
                         );
@@ -460,7 +529,7 @@ pub fn update_character_sheet_screen(
                     for (i, entry) in traits.iter().enumerate().skip(state.scroll) {
                         let row_str = format!(
                             "{:<30}  {}",
-                            format!("mutation #{}", entry.id.0.0),
+                            format!("mutation #{}", entry.id.0 .0),
                             if entry.visible { "yes" } else { "no" },
                         );
                         spawn_content_row(right, &row_str, i % 2 == 0, TEXT_BRIGHT);
@@ -481,18 +550,25 @@ pub fn update_character_sheet_screen(
                 if effects.is_empty() {
                     spawn_empty_message(right, "No active effects.");
                 } else {
-                    spawn_list_header(right, &format!("{:<28}  {:>6}  {}", "Effect", "Intens", "Duration"));
+                    spawn_list_header(
+                        right,
+                        &format!("{:<28}  {:>6}  {}", "Effect", "Intens", "Duration"),
+                    );
                     for (i, entry) in effects.iter().enumerate().skip(state.scroll) {
                         let duration_str = format!("{}t", entry.remaining.0);
                         let row_str = format!(
                             "{:<28}  {:>6}  {}",
-                            format!("effect #{}", entry.effect_id.0.0),
+                            format!("effect #{}", entry.effect_id.0 .0),
                             entry.intensity,
                             duration_str,
                         );
-                        let color = if entry.intensity > 3 { TEXT_RED }
-                            else if entry.intensity > 1 { TEXT_YELLOW }
-                            else { TEXT_BRIGHT };
+                        let color = if entry.intensity > 3 {
+                            TEXT_RED
+                        } else if entry.intensity > 1 {
+                            TEXT_YELLOW
+                        } else {
+                            TEXT_BRIGHT
+                        };
                         spawn_content_row(right, &row_str, i % 2 == 0, color);
                     }
                 }
@@ -511,15 +587,22 @@ pub fn update_character_sheet_screen(
                 if bionics.is_empty() {
                     spawn_empty_message(right, "No bionics installed.");
                 } else {
-                    spawn_list_header(right, &format!("{:<30}  {:>8}  {}", "Bionic", "Power", "Active"));
+                    spawn_list_header(
+                        right,
+                        &format!("{:<30}  {:>8}  {}", "Bionic", "Power", "Active"),
+                    );
                     for (i, entry) in bionics.iter().enumerate().skip(state.scroll) {
                         let row_str = format!(
                             "{:<30}  {:>8}  {}",
-                            format!("bionic #{}", entry.bionic_id.0.0),
+                            format!("bionic #{}", entry.bionic_id.0 .0),
                             entry.power_used.0,
                             if entry.active { "yes" } else { "no" },
                         );
-                        let color = if entry.active { TEXT_GREEN } else { TEXT_BRIGHT };
+                        let color = if entry.active {
+                            TEXT_GREEN
+                        } else {
+                            TEXT_BRIGHT
+                        };
                         spawn_content_row(right, &row_str, i % 2 == 0, color);
                     }
                 }
@@ -540,7 +623,7 @@ pub fn update_character_sheet_screen(
                 } else {
                     spawn_list_header(right, "Proficiency");
                     for (i, entry) in profs.iter().enumerate().skip(state.scroll) {
-                        let row_str = format!("proficiency #{}", entry.id.0.0);
+                        let row_str = format!("proficiency #{}", entry.id.0 .0);
                         spawn_content_row(right, &row_str, i % 2 == 0, TEXT_BRIGHT);
                     }
                 }
@@ -597,133 +680,176 @@ pub fn character_sheet_input(
 // ---------------------------------------------------------------------------
 
 fn spawn_section_header(parent: &mut ChildSpawnerCommands, title: &str) {
-    parent.spawn((
-        Node {
-            width: Val::Percent(100.0),
-            padding: UiRect::new(Val::Px(14.0), Val::Px(14.0), Val::Px(6.0), Val::Px(4.0)),
-            border: UiRect::top(Val::Px(1.0)),
-            ..default()
-        },
-        BackgroundColor(SECTION_HEADER_BG),
-        BorderColor::all(DIVIDER),
-    ))
-    .with_child((
-        Text::new(title),
-        TextFont { font_size: 13.0, ..default() },
-        TextColor(TEXT_DIM),
-    ));
-}
-
-fn spawn_info_row(parent: &mut ChildSpawnerCommands, label: &str, value: &str, color: Color, alt: usize) {
-    parent.spawn((
-        Node {
-            width: Val::Percent(100.0),
-            padding: UiRect::axes(Val::Px(14.0), Val::Px(5.0)),
-            justify_content: JustifyContent::SpaceBetween,
-            ..default()
-        },
-        BackgroundColor(if alt == 0 { ROW_BG } else { ROW_ALT_BG }),
-    ))
-    .with_children(|row| {
-        row.spawn((
-            Text::new(label),
-            TextFont { font_size: 15.0, ..default() },
+    parent
+        .spawn((
+            Node {
+                width: Val::Percent(100.0),
+                padding: UiRect::new(Val::Px(14.0), Val::Px(14.0), Val::Px(6.0), Val::Px(4.0)),
+                border: UiRect::top(Val::Px(1.0)),
+                ..default()
+            },
+            BackgroundColor(SECTION_HEADER_BG),
+            BorderColor::all(DIVIDER),
+        ))
+        .with_child((
+            Text::new(title),
+            TextFont {
+                font_size: 13.0,
+                ..default()
+            },
             TextColor(TEXT_DIM),
         ));
-        row.spawn((
-            Text::new(value.to_string()),
-            TextFont { font_size: 15.0, ..default() },
-            TextColor(color),
-        ));
-    });
+}
+
+fn spawn_info_row(
+    parent: &mut ChildSpawnerCommands,
+    label: &str,
+    value: &str,
+    color: Color,
+    alt: usize,
+) {
+    parent
+        .spawn((
+            Node {
+                width: Val::Percent(100.0),
+                padding: UiRect::axes(Val::Px(14.0), Val::Px(5.0)),
+                justify_content: JustifyContent::SpaceBetween,
+                ..default()
+            },
+            BackgroundColor(if alt == 0 { ROW_BG } else { ROW_ALT_BG }),
+        ))
+        .with_children(|row| {
+            row.spawn((
+                Text::new(label),
+                TextFont {
+                    font_size: 15.0,
+                    ..default()
+                },
+                TextColor(TEXT_DIM),
+            ));
+            row.spawn((
+                Text::new(value.to_string()),
+                TextFont {
+                    font_size: 15.0,
+                    ..default()
+                },
+                TextColor(color),
+            ));
+        });
 }
 
 fn spawn_stat_row(parent: &mut ChildSpawnerCommands, name: &str, value: u32, alt: usize) {
     let bar = stat_bar(value);
     let color = stat_color(value);
-    parent.spawn((
-        Node {
-            width: Val::Percent(100.0),
-            padding: UiRect::axes(Val::Px(14.0), Val::Px(6.0)),
-            flex_direction: FlexDirection::Row,
-            align_items: AlignItems::Center,
-            ..default()
-        },
-        BackgroundColor(if alt == 0 { ROW_BG } else { ROW_ALT_BG }),
-    ))
-    .with_children(|row| {
-        row.spawn((
-            Node { width: Val::Px(38.0), ..default() },
-            // empty
+    parent
+        .spawn((
+            Node {
+                width: Val::Percent(100.0),
+                padding: UiRect::axes(Val::Px(14.0), Val::Px(6.0)),
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(if alt == 0 { ROW_BG } else { ROW_ALT_BG }),
         ))
-        .with_child((
-            Text::new(name),
-            TextFont { font_size: 15.0, ..default() },
-            TextColor(TEXT_DIM),
-        ));
-        row.spawn((
-            Node { width: Val::Px(30.0), ..default() },
-        ))
-        .with_child((
-            Text::new(format!("{:>2}", value)),
-            TextFont { font_size: 15.0, ..default() },
-            TextColor(color),
-        ));
-        row.spawn((
-            Text::new(bar),
-            TextFont { font_size: 13.0, ..default() },
-            TextColor(color),
-        ));
-    });
+        .with_children(|row| {
+            row.spawn((
+                Node {
+                    width: Val::Px(38.0),
+                    ..default()
+                },
+                // empty
+            ))
+            .with_child((
+                Text::new(name),
+                TextFont {
+                    font_size: 15.0,
+                    ..default()
+                },
+                TextColor(TEXT_DIM),
+            ));
+            row.spawn((Node {
+                width: Val::Px(30.0),
+                ..default()
+            },))
+                .with_child((
+                    Text::new(format!("{:>2}", value)),
+                    TextFont {
+                        font_size: 15.0,
+                        ..default()
+                    },
+                    TextColor(color),
+                ));
+            row.spawn((
+                Text::new(bar),
+                TextFont {
+                    font_size: 13.0,
+                    ..default()
+                },
+                TextColor(color),
+            ));
+        });
 }
 
 fn spawn_list_header(parent: &mut ChildSpawnerCommands, label: &str) {
-    parent.spawn((
-        Node {
-            width: Val::Percent(100.0),
-            padding: UiRect::axes(Val::Px(18.0), Val::Px(6.0)),
-            border: UiRect::bottom(Val::Px(1.0)),
-            ..default()
-        },
-        BackgroundColor(HEADER_BG),
-        BorderColor::all(DIVIDER),
-    ))
-    .with_child((
-        Text::new(label.to_string()),
-        TextFont { font_size: 13.0, ..default() },
-        TextColor(TEXT_DIM),
-    ));
+    parent
+        .spawn((
+            Node {
+                width: Val::Percent(100.0),
+                padding: UiRect::axes(Val::Px(18.0), Val::Px(6.0)),
+                border: UiRect::bottom(Val::Px(1.0)),
+                ..default()
+            },
+            BackgroundColor(HEADER_BG),
+            BorderColor::all(DIVIDER),
+        ))
+        .with_child((
+            Text::new(label.to_string()),
+            TextFont {
+                font_size: 13.0,
+                ..default()
+            },
+            TextColor(TEXT_DIM),
+        ));
 }
 
 fn spawn_content_row(parent: &mut ChildSpawnerCommands, text: &str, even: bool, color: Color) {
-    parent.spawn((
-        Node {
-            width: Val::Percent(100.0),
-            padding: UiRect::axes(Val::Px(18.0), Val::Px(7.0)),
-            border: UiRect::bottom(Val::Px(1.0)),
-            ..default()
-        },
-        BackgroundColor(if even { ROW_BG } else { ROW_ALT_BG }),
-        BorderColor::all(DIVIDER),
-    ))
-    .with_child((
-        Text::new(text.to_string()),
-        TextFont { font_size: 15.0, ..default() },
-        TextColor(color),
-    ));
+    parent
+        .spawn((
+            Node {
+                width: Val::Percent(100.0),
+                padding: UiRect::axes(Val::Px(18.0), Val::Px(7.0)),
+                border: UiRect::bottom(Val::Px(1.0)),
+                ..default()
+            },
+            BackgroundColor(if even { ROW_BG } else { ROW_ALT_BG }),
+            BorderColor::all(DIVIDER),
+        ))
+        .with_child((
+            Text::new(text.to_string()),
+            TextFont {
+                font_size: 15.0,
+                ..default()
+            },
+            TextColor(color),
+        ));
 }
 
 fn spawn_empty_message(parent: &mut ChildSpawnerCommands, msg: &str) {
-    parent.spawn((Node {
-        width: Val::Percent(100.0),
-        padding: UiRect::axes(Val::Px(24.0), Val::Px(20.0)),
-        ..default()
-    },))
-    .with_child((
-        Text::new(msg.to_string()),
-        TextFont { font_size: 16.0, ..default() },
-        TextColor(TEXT_DIM),
-    ));
+    parent
+        .spawn((Node {
+            width: Val::Percent(100.0),
+            padding: UiRect::axes(Val::Px(24.0), Val::Px(20.0)),
+            ..default()
+        },))
+        .with_child((
+            Text::new(msg.to_string()),
+            TextFont {
+                font_size: 16.0,
+                ..default()
+            },
+            TextColor(TEXT_DIM),
+        ));
 }
 
 // ---------------------------------------------------------------------------
@@ -737,32 +863,55 @@ fn stat_bar(value: u32) -> String {
 }
 
 fn stat_color(value: u32) -> Color {
-    if value >= 14 { TEXT_GREEN }
-    else if value >= 10 { ACCENT2 }
-    else if value >= 8 { TEXT_BRIGHT }
-    else if value >= 6 { TEXT_YELLOW }
-    else { TEXT_RED }
+    if value >= 14 {
+        TEXT_GREEN
+    } else if value >= 10 {
+        ACCENT2
+    } else if value >= 8 {
+        TEXT_BRIGHT
+    } else if value >= 6 {
+        TEXT_YELLOW
+    } else {
+        TEXT_RED
+    }
 }
 
 fn temp_display(celsius: f64) -> (String, Color) {
     let s = format!("{:.1}°C", celsius);
-    let color = if celsius >= 40.0 { TEXT_RED }
-        else if celsius >= 38.5 { TEXT_ORANGE }
-        else if celsius < 35.0 { ACCENT2 }
-        else { TEXT_GREEN };
+    let color = if celsius >= 40.0 {
+        TEXT_RED
+    } else if celsius >= 38.5 {
+        TEXT_ORANGE
+    } else if celsius < 35.0 {
+        ACCENT2
+    } else {
+        TEXT_GREEN
+    };
     (s, color)
 }
 
 fn morale_display(m: i32) -> (String, Color) {
-    let label = if m >= 10 { "happy" }
-        else if m >= 1 { "fine" }
-        else if m == 0 { "neutral" }
-        else if m >= -10 { "down" }
-        else { "depressed" };
-    let color = if m >= 10 { TEXT_GREEN }
-        else if m > 0 { ACCENT2 }
-        else if m == 0 { TEXT_BRIGHT }
-        else if m >= -10 { TEXT_YELLOW }
-        else { TEXT_RED };
+    let label = if m >= 10 {
+        "happy"
+    } else if m >= 1 {
+        "fine"
+    } else if m == 0 {
+        "neutral"
+    } else if m >= -10 {
+        "down"
+    } else {
+        "depressed"
+    };
+    let color = if m >= 10 {
+        TEXT_GREEN
+    } else if m > 0 {
+        ACCENT2
+    } else if m == 0 {
+        TEXT_BRIGHT
+    } else if m >= -10 {
+        TEXT_YELLOW
+    } else {
+        TEXT_RED
+    };
     (format!("{} ({})", m, label), color)
 }

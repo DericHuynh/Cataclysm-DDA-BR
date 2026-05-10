@@ -16,9 +16,14 @@ use bevy_state::prelude::OnEnter;
 use bevy_state::state::NextState;
 use std::time::Duration;
 
+use cdda_core::context::actions::{
+    on_enter_character_actions, on_enter_crafting_actions, on_enter_dev_spawn_actions,
+    on_enter_examine_actions, on_enter_inventory_actions,
+};
 use cdda_core::context::ctx::Ctx as Screen;
 use cdda_core::{GameSet, SimSet};
 
+use cdda_core::activity::plugin::ActivityPlugin;
 use cdda_core::actor::bionics::tick_bionics;
 use cdda_core::actor::effects::effects_phase;
 use cdda_core::actor::healing::healing_phase;
@@ -30,14 +35,14 @@ use cdda_core::actor::turn::{debug_turn_queue, tick_move_points};
 use cdda_core::actor::vision::update_vision;
 use cdda_core::ai::systems::ai_phase;
 use cdda_core::combat::systems::combat_phase;
+use cdda_core::crafting::plugin::CraftingPlugin;
+use cdda_core::crafting::systems::on_examine_item_changed;
 use cdda_core::data::assets::CddaAssetsPlugin;
 use cdda_core::data::def_world::load_data_system;
 use cdda_core::inventory::systems::{
-    assign_invlets_system, build_inventory_bins, dev_pickup_drop_system,
+    assign_invlets_system, build_inventory_bins, dev_pickup_drop_system, examine_item_input,
     inventory_screen_input, process_item_move_events, spawn_dev_world,
 };
-use cdda_core::crafting::plugin::CraftingPlugin;
-use cdda_core::crafting::systems::continue_crafts;
 use cdda_core::item::plugin::ItemPlugin;
 use cdda_core::map::spatial_systems::update_spatial_index;
 use cdda_core::sim::events::ItemMoveEvent;
@@ -112,6 +117,7 @@ pub struct CddaPlugin;
 impl Plugin for CddaPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
+            ActivityPlugin,
             ActorPlugin,
             ItemPlugin,
             CddaAssetsPlugin,
@@ -157,6 +163,7 @@ impl Plugin for CddaPlugin {
             Update,
             (
                 SimSet::TurnTick,
+                SimSet::Activity,
                 SimSet::Ai,
                 SimSet::Movement,
                 SimSet::Combat,
@@ -175,6 +182,17 @@ impl Plugin for CddaPlugin {
         );
 
         app.add_message::<ItemMoveEvent>();
+        app.add_message::<cdda_core::messages::TurnAdvanced>();
+
+        // ── Context action registration — OnEnter (event-driven) ──────
+        //
+        // MUST run before CddaRenderPlugin's OnEnter systems so that
+        // ContextActions is populated when renderers spawn UI.
+        app.add_systems(OnEnter(Screen::Inventory), on_enter_inventory_actions);
+        app.add_systems(OnEnter(Screen::CraftingMenu), on_enter_crafting_actions);
+        app.add_systems(OnEnter(Screen::DevSpawnPanel), on_enter_dev_spawn_actions);
+        app.add_systems(OnEnter(Screen::ItemExamine), on_enter_examine_actions);
+        app.add_systems(OnEnter(Screen::CharacterSheet), on_enter_character_actions);
 
         app.add_plugins(cdda_core::render::CddaRenderPlugin);
         app.add_plugins(cdda_core::input::CddaInputPlugin);
@@ -278,13 +296,22 @@ impl Plugin for CddaPlugin {
                 .run_if(in_state(Screen::DevSpawnPanel)),
         );
 
-        // Exclusive system: tick in-progress crafts each turn.
+        // Exclusive system: item examine overlay actions (drop, wield, resume craft).
         app.add_systems(
             Update,
-            continue_crafts
+            examine_item_input
                 .in_set(SimSet::Inventory)
                 .run_if(in_state(AppState::InGame))
-                .run_if(on_timer(Duration::from_millis(100))),
+                .run_if(in_state(Screen::ItemExamine)),
+        );
+
+        // Dynamic: re-check for resume-craft action when examined item changes.
+        app.add_systems(
+            Update,
+            on_examine_item_changed
+                .in_set(SimSet::Inventory)
+                .run_if(in_state(AppState::InGame))
+                .run_if(in_state(Screen::ItemExamine)),
         );
     }
 }

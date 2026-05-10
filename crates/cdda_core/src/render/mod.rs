@@ -19,12 +19,63 @@ pub mod crafting;
 pub mod dev_spawn;
 pub mod dev_worldgen;
 pub mod examine;
-pub mod item_detail;
 pub mod inventory;
+pub mod item_detail;
 pub mod main_menu;
 pub mod settings;
 pub mod theme;
 pub mod tiles;
+
+/// Marker component for footer hint text entities that should be
+/// live-updated from ContextActions + ActiveKeybindings each frame
+/// by the shared `refresh_all_footer_hints` system.
+#[derive(Component)]
+pub struct FooterHint;
+
+// ---------------------------------------------------------------------------
+// refresh_all_footer_hints — single shared system for all screens
+// ---------------------------------------------------------------------------
+
+/// Updates every `FooterHint` text entity from `ContextActions` +
+/// `ActiveKeybindings`.  Registered once in `CddaRenderPlugin` — no
+/// per-screen footer update systems needed.
+pub fn refresh_all_footer_hints(
+    ctx_actions: Res<crate::context::ContextActions>,
+    active_keys: Res<crate::input::ActiveKeybindings>,
+    mut footer_q: Query<&mut Text, With<FooterHint>>,
+) {
+    for mut text in &mut footer_q {
+        let cancel_key = active_keys.key_for(crate::input::BindableAction::Cancel);
+        let mut hints = format!("[{}] close", cancel_key);
+        for entry in &ctx_actions.actions {
+            let key = active_keys.key_for(entry.action);
+            hints.push_str(&format!("  [{}] {}", key, entry.label));
+        }
+        **text = hints;
+    }
+}
+
+/// Handle to the UI font (ShareTechMono-Regular.ttf), loaded at startup.
+/// Wraps `Option` because font loading happens in `Startup` but
+/// `OnEnter(MainMenu)` fires earlier during state initialisation.
+#[derive(Resource, Clone)]
+pub struct UiFontHandle(pub Option<Handle<Font>>);
+
+impl Default for UiFontHandle {
+    fn default() -> Self {
+        Self(None)
+    }
+}
+
+/// Helper: build a `TextFont` using the shared UI font.
+/// Falls back to default font if the handle isn't loaded yet.
+pub fn ui_font(handle: &Option<Handle<Font>>, size: f32) -> TextFont {
+    TextFont {
+        font: handle.clone().unwrap_or_default(),
+        font_size: size,
+        ..default()
+    }
+}
 
 /// Plugin that registers all CDDA render systems and components.
 pub struct CddaRenderPlugin;
@@ -34,8 +85,13 @@ impl Plugin for CddaRenderPlugin {
         app.init_resource::<settings::SettingsState>();
         app.init_resource::<theme::UiTheme>();
         app.init_resource::<character::CharacterSheetState>();
+        app.init_resource::<UiFontHandle>();
 
         app.add_systems(Startup, (render_setup, tiles::load_tiles));
+
+        // Shared footer hint refresh — updates ALL FooterHint texts
+        // across all screens. No per-screen footer systems needed.
+        app.add_systems(Update, refresh_all_footer_hints);
 
         // ── Main menu ─────────────────────────────────────────────────────
         app.add_systems(OnEnter(Screen::MainMenu), main_menu::spawn);
@@ -125,7 +181,10 @@ impl Plugin for CddaRenderPlugin {
     }
 }
 
-fn render_setup(mut commands: Commands) {
+fn render_setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let font_handle: Handle<Font> = asset_server.load("fonts/ShareTechMono-Regular.ttf");
+    commands.insert_resource(UiFontHandle(Some(font_handle)));
+
     commands.spawn((
         Camera2d,
         Camera {

@@ -8,6 +8,7 @@ use crate::crafting::systems::{
 };
 use crate::input::crafting::{crafting_menu_input, process_pending_craft};
 use crate::render::crafting::{spawn_crafting_ui, update_crafting_ui};
+use crate::schedule::SimSet;
 
 pub struct CraftingPlugin;
 
@@ -25,13 +26,20 @@ impl Plugin for CraftingPlugin {
             spawn_crafting_ui.after(build_craft_state),
         );
 
+        // Input + UI: runs whenever the crafting menu is open.
         app.add_systems(
             Update,
-            (
-                crafting_menu_input,
-                update_crafting_ui.after(crafting_menu_input),
-                process_pending_craft.after(crafting_menu_input),
-            )
+            (crafting_menu_input, update_crafting_ui)
+                .chain()
+                .run_if(bevy_state::condition::in_state(Ctx::CraftingMenu)),
+        );
+
+        // Simulation: execute pending craft in the Activity phase so it
+        // participates in the AP-driven activity system.
+        app.add_systems(
+            Update,
+            process_pending_craft
+                .in_set(SimSet::Activity)
                 .run_if(bevy_state::condition::in_state(Ctx::CraftingMenu)),
         );
     }

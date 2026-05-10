@@ -18,11 +18,11 @@ pub mod systems;
 // ----- Re-exports ---------------------------------------------------------
 
 pub use actions::{ActionSource, BindableAction, Direction, GameAction, InputAction};
-pub use bindings::{default_bindings, ContextInputMaps};
+pub use bindings::{default_bindings, ActiveKeybindings, ContextInputMaps};
 pub use context::{InputContextId, InputContextStack};
 pub use systems::{
-    bridge_actionstate, clear_rebind_flag, handle_raw_input, sync_leafwing_input_map,
-    GlobalInputEntity, RebindCapture, RebindCaptureInner,
+    bridge_actionstate, clear_rebind_flag, handle_raw_input, refresh_active_keybindings,
+    sync_leafwing_input_map, GlobalInputEntity, RebindCapture, RebindCaptureInner,
 };
 
 // ----- Plugin -------------------------------------------------------------
@@ -54,13 +54,17 @@ impl Plugin for CddaInputPlugin {
         app.add_systems(PreUpdate, handle_raw_input);
 
         // Update: bridge ActionState → InputAction messages, then clean up
-        app.add_systems(
-            Update,
-            (bridge_actionstate, clear_rebind_flag).chain(),
-        );
+        app.add_systems(Update, (bridge_actionstate, clear_rebind_flag).chain());
 
         // Update: keep InputMap in sync when context changes
         app.add_systems(Update, sync_leafwing_input_map);
+
+        // Update: rebuild ActiveKeybindings resource for UI hints
+        app.init_resource::<ActiveKeybindings>();
+        app.add_systems(
+            Update,
+            refresh_active_keybindings.after(sync_leafwing_input_map),
+        );
     }
 }
 

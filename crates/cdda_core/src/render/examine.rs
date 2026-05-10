@@ -5,9 +5,11 @@
 //! looking up the def entity from the runtime item's type ID.
 
 use crate::context::ctx::Ctx;
+use crate::context::ContextActions;
 use crate::core::components::item::{ItemTypeId, StackCount};
-use crate::inventory::examine_resource::ExaminedItem;
 use crate::data::def_world::DefinitionWorld;
+use crate::input::ActiveKeybindings;
+use crate::inventory::examine_resource::ExaminedItem;
 use crate::render::item_detail::{spawn_item_detail, ItemDetailQueries};
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
@@ -33,6 +35,9 @@ pub fn spawn_examine_overlay(
     def_world: Res<DefinitionWorld>,
     item_type_ids: Query<&ItemTypeId>,
     item_counts: Query<&StackCount>,
+    ctx_actions: Res<ContextActions>,
+    active_keys: Res<ActiveKeybindings>,
+    ui_font_handle: Res<super::UiFontHandle>,
     detail: ItemDetailQueries,
 ) {
     let Some(item_entity) = examined.0 else {
@@ -84,21 +89,19 @@ pub fn spawn_examine_overlay(
 
             // ── Runtime info ──────────────────────────────────────────────
             if qty > 1 {
-                root.spawn((
-                    Node {
-                        width: Val::Percent(100.0),
-                        padding: UiRect::axes(Val::Px(8.0), Val::Px(4.0)),
-                        ..default()
-                    },
-                ))
-                .with_child((
-                    Text::new(format!("Stack:  {}", qty)),
-                    TextFont {
-                        font_size: 16.0,
-                        ..default()
-                    },
-                    TextColor(TEXT_BRIGHT),
-                ));
+                root.spawn((Node {
+                    width: Val::Percent(100.0),
+                    padding: UiRect::axes(Val::Px(8.0), Val::Px(4.0)),
+                    ..default()
+                },))
+                    .with_child((
+                        Text::new(format!("Stack:  {}", qty)),
+                        TextFont {
+                            font_size: 16.0,
+                            ..default()
+                        },
+                        TextColor(TEXT_BRIGHT),
+                    ));
             }
 
             // ── Divider before detail ─────────────────────────────────────
@@ -121,9 +124,9 @@ pub fn spawn_examine_overlay(
                     flex_grow: 1.0,
                     ..default()
                 },))
-                .with_children(|d| {
-                    spawn_item_detail(d, type_id, type_id, def, &detail);
-                });
+                    .with_children(|d| {
+                        spawn_item_detail(d, type_id, type_id, def, &detail);
+                    });
             } else {
                 root.spawn((
                     Text::new("(no definition data)"),
@@ -136,6 +139,12 @@ pub fn spawn_examine_overlay(
             }
 
             // ── Footer hints ──────────────────────────────────────────────
+            let mut hints = String::from("[Esc] close");
+            for entry in &ctx_actions.actions {
+                let key = active_keys.key_for(entry.action);
+                hints.push_str(&format!("  [{}] {}", key, entry.label));
+            }
+
             root.spawn((Node {
                 width: Val::Percent(100.0),
                 flex_grow: 0.0,
@@ -143,11 +152,8 @@ pub fn spawn_examine_overlay(
                 ..default()
             },))
                 .with_child((
-                    Text::new("[Esc / q / Enter] close"),
-                    TextFont {
-                        font_size: 15.0,
-                        ..default()
-                    },
+                    Text::new(hints),
+                    super::ui_font(&ui_font_handle.0, 15.0),
                     TextColor(TEXT_DIM),
                 ));
         });

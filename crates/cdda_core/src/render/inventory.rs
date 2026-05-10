@@ -7,15 +7,18 @@
 //!
 //! Spawned on `OnEnter(Screen::Inventory)`, auto-despawned via `DespawnOnExit`.
 
+use super::FooterHint;
+use crate::context::ctx::Ctx;
+use crate::context::ContextActions;
 use crate::core::components::def::{ItemName, ItemSymbol};
 use crate::core::components::item::{
-    ContainerContents, InProgressCraft, Inventory, InventoryFocus, Invlet, ItemTypeId, MountedPockets,
-    StackCount, WieldedBy, WieldedItems, WornBy,
+    ContainerContents, InProgressCraft, Inventory, InventoryFocus, Invlet, ItemTypeId,
+    MountedPockets, StackCount, WieldedBy, WieldedItems, WornBy,
 };
+use crate::input::ActiveKeybindings;
 use crate::render::theme;
-use crate::context::ctx::Ctx;
-use crate::worldgen::dev::{DevGroundItemName, DevPlayer};
 use crate::render::tiles::TileRegistry;
+use crate::worldgen::dev::{DevGroundItemName, DevPlayer};
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
 
@@ -60,7 +63,12 @@ pub(crate) struct InvWornContainer;
 // Spawn (OnEnter)
 // ---------------------------------------------------------------------------
 
-pub fn spawn_inventory_screen(mut commands: Commands) {
+pub fn spawn_inventory_screen(
+    ctx_actions: Res<ContextActions>,
+    active_keys: Res<ActiveKeybindings>,
+    ui_font_handle: Res<super::UiFontHandle>,
+    mut commands: Commands,
+) {
     commands
         .spawn((
             DespawnOnExit(Ctx::Inventory),
@@ -77,7 +85,12 @@ pub fn spawn_inventory_screen(mut commands: Commands) {
             root.spawn((
                 Node {
                     width: Val::Percent(100.0),
-                    padding: UiRect::new(Val::Px(20.0), Val::Px(20.0), Val::Px(10.0), Val::Px(10.0)),
+                    padding: UiRect::new(
+                        Val::Px(20.0),
+                        Val::Px(20.0),
+                        Val::Px(10.0),
+                        Val::Px(10.0),
+                    ),
                     flex_direction: FlexDirection::Row,
                     justify_content: JustifyContent::SpaceBetween,
                     align_items: AlignItems::Center,
@@ -88,7 +101,10 @@ pub fn spawn_inventory_screen(mut commands: Commands) {
             .with_children(|h| {
                 h.spawn((
                     Text::new("INVENTORY"),
-                    TextFont { font_size: 22.0, ..default() },
+                    TextFont {
+                        font_size: 22.0,
+                        ..default()
+                    },
                     TextColor(ACCENT),
                 ));
             });
@@ -102,67 +118,30 @@ pub fn spawn_inventory_screen(mut commands: Commands) {
                 overflow: Overflow::clip(),
                 ..default()
             },))
-            .with_children(|main| {
-                // ── LEFT PANEL — pocket items ─────────────────────────────
-                main.spawn((Node {
-                    flex_direction: FlexDirection::Column,
-                    flex_grow: 1.0,
-                    min_height: Val::Px(0.0),
-                    border: UiRect::right(Val::Px(1.0)),
-                    overflow: Overflow::clip(),
-                    ..default()
-                }, BorderColor::all(DIVIDER)))
-                .with_children(|left| {
-                    // Column header
-                    left.spawn((
-                        Node {
-                            width: Val::Percent(100.0),
-                            padding: UiRect::new(Val::Px(14.0), Val::Px(14.0), Val::Px(4.0), Val::Px(4.0)),
-                            border: UiRect::bottom(Val::Px(1.0)),
-                            ..default()
-                        },
-                        BackgroundColor(PANEL_HEADER_BG),
-                        BorderColor::all(DIVIDER),
-                    ))
-                    .with_child((
-                        Text::new("ITEMS"),
-                        TextFont { font_size: 13.0, ..default() },
-                        TextColor(TEXT_DIM),
-                    ));
-
-                    left.spawn((
-                        InvListContainer,
+                .with_children(|main| {
+                    // ── LEFT PANEL — pocket items ─────────────────────────────
+                    main.spawn((
                         Node {
                             flex_direction: FlexDirection::Column,
-                            width: Val::Percent(100.0),
                             flex_grow: 1.0,
-                            overflow: Overflow::clip_y(),
+                            min_height: Val::Px(0.0),
+                            border: UiRect::right(Val::Px(1.0)),
+                            overflow: Overflow::clip(),
                             ..default()
                         },
-                    ));
-                });
-
-                // ── RIGHT PANELS — wielded + worn stacked vertically ───────
-                main.spawn((Node {
-                    flex_direction: FlexDirection::Column,
-                    width: Val::Px(300.0),
-                    flex_shrink: 0.0,
-                    min_height: Val::Px(0.0),
-                    ..default()
-                },))
-                .with_children(|right| {
-                    // ── Wielded panel ──────────────────────────────────────
-                    right.spawn((Node {
-                        flex_direction: FlexDirection::Column,
-                        flex_grow: 1.0,
-                        border: UiRect::bottom(Val::Px(1.0)),
-                        ..default()
-                    }, BorderColor::all(DIVIDER), BackgroundColor(PANEL_BG)))
-                    .with_children(|wp| {
-                        wp.spawn((
+                        BorderColor::all(DIVIDER),
+                    ))
+                    .with_children(|left| {
+                        // Column header
+                        left.spawn((
                             Node {
                                 width: Val::Percent(100.0),
-                                padding: UiRect::new(Val::Px(14.0), Val::Px(14.0), Val::Px(4.0), Val::Px(4.0)),
+                                padding: UiRect::new(
+                                    Val::Px(14.0),
+                                    Val::Px(14.0),
+                                    Val::Px(4.0),
+                                    Val::Px(4.0),
+                                ),
                                 border: UiRect::bottom(Val::Px(1.0)),
                                 ..default()
                             },
@@ -170,13 +149,16 @@ pub fn spawn_inventory_screen(mut commands: Commands) {
                             BorderColor::all(DIVIDER),
                         ))
                         .with_child((
-                            Text::new("WIELDED"),
-                            TextFont { font_size: 13.0, ..default() },
-                            TextColor(ACCENT2),
+                            Text::new("ITEMS"),
+                            TextFont {
+                                font_size: 13.0,
+                                ..default()
+                            },
+                            TextColor(TEXT_DIM),
                         ));
 
-                        wp.spawn((
-                            InvWieldedContainer,
+                        left.spawn((
+                            InvListContainer,
                             Node {
                                 flex_direction: FlexDirection::Column,
                                 width: Val::Percent(100.0),
@@ -187,44 +169,120 @@ pub fn spawn_inventory_screen(mut commands: Commands) {
                         ));
                     });
 
-                    // ── Worn panel ─────────────────────────────────────────
-                    right.spawn((Node {
+                    // ── RIGHT PANELS — wielded + worn stacked vertically ───────
+                    main.spawn((Node {
                         flex_direction: FlexDirection::Column,
-                        flex_grow: 1.0,
+                        width: Val::Px(300.0),
+                        flex_shrink: 0.0,
+                        min_height: Val::Px(0.0),
                         ..default()
-                    }, BackgroundColor(PANEL_BG)))
-                    .with_children(|worn| {
-                        worn.spawn((
-                            Node {
-                                width: Val::Percent(100.0),
-                                padding: UiRect::new(Val::Px(14.0), Val::Px(14.0), Val::Px(4.0), Val::Px(4.0)),
-                                border: UiRect::bottom(Val::Px(1.0)),
-                                ..default()
-                            },
-                            BackgroundColor(PANEL_HEADER_BG),
-                            BorderColor::all(DIVIDER),
-                        ))
-                        .with_child((
-                            Text::new("WORN"),
-                            TextFont { font_size: 13.0, ..default() },
-                            TextColor(ACCENT2),
-                        ));
+                    },))
+                        .with_children(|right| {
+                            // ── Wielded panel ──────────────────────────────────────
+                            right
+                                .spawn((
+                                    Node {
+                                        flex_direction: FlexDirection::Column,
+                                        flex_grow: 1.0,
+                                        border: UiRect::bottom(Val::Px(1.0)),
+                                        ..default()
+                                    },
+                                    BorderColor::all(DIVIDER),
+                                    BackgroundColor(PANEL_BG),
+                                ))
+                                .with_children(|wp| {
+                                    wp.spawn((
+                                        Node {
+                                            width: Val::Percent(100.0),
+                                            padding: UiRect::new(
+                                                Val::Px(14.0),
+                                                Val::Px(14.0),
+                                                Val::Px(4.0),
+                                                Val::Px(4.0),
+                                            ),
+                                            border: UiRect::bottom(Val::Px(1.0)),
+                                            ..default()
+                                        },
+                                        BackgroundColor(PANEL_HEADER_BG),
+                                        BorderColor::all(DIVIDER),
+                                    ))
+                                    .with_child((
+                                        Text::new("WIELDED"),
+                                        TextFont {
+                                            font_size: 13.0,
+                                            ..default()
+                                        },
+                                        TextColor(ACCENT2),
+                                    ));
 
-                        worn.spawn((
-                            InvWornContainer,
-                            Node {
-                                flex_direction: FlexDirection::Column,
-                                width: Val::Percent(100.0),
-                                flex_grow: 1.0,
-                                overflow: Overflow::clip_y(),
-                                ..default()
-                            },
-                        ));
-                    });
+                                    wp.spawn((
+                                        InvWieldedContainer,
+                                        Node {
+                                            flex_direction: FlexDirection::Column,
+                                            width: Val::Percent(100.0),
+                                            flex_grow: 1.0,
+                                            overflow: Overflow::clip_y(),
+                                            ..default()
+                                        },
+                                    ));
+                                });
+
+                            // ── Worn panel ─────────────────────────────────────────
+                            right
+                                .spawn((
+                                    Node {
+                                        flex_direction: FlexDirection::Column,
+                                        flex_grow: 1.0,
+                                        ..default()
+                                    },
+                                    BackgroundColor(PANEL_BG),
+                                ))
+                                .with_children(|worn| {
+                                    worn.spawn((
+                                        Node {
+                                            width: Val::Percent(100.0),
+                                            padding: UiRect::new(
+                                                Val::Px(14.0),
+                                                Val::Px(14.0),
+                                                Val::Px(4.0),
+                                                Val::Px(4.0),
+                                            ),
+                                            border: UiRect::bottom(Val::Px(1.0)),
+                                            ..default()
+                                        },
+                                        BackgroundColor(PANEL_HEADER_BG),
+                                        BorderColor::all(DIVIDER),
+                                    ))
+                                    .with_child((
+                                        Text::new("WORN"),
+                                        TextFont {
+                                            font_size: 13.0,
+                                            ..default()
+                                        },
+                                        TextColor(ACCENT2),
+                                    ));
+
+                                    worn.spawn((
+                                        InvWornContainer,
+                                        Node {
+                                            flex_direction: FlexDirection::Column,
+                                            width: Val::Percent(100.0),
+                                            flex_grow: 1.0,
+                                            overflow: Overflow::clip_y(),
+                                            ..default()
+                                        },
+                                    ));
+                                });
+                        });
                 });
-            });
 
             // ── Footer hint ───────────────────────────────────────────────
+            let cancel_key = active_keys.key_for(crate::input::BindableAction::Cancel);
+            let mut hints = format!("[{}] close", cancel_key);
+            for entry in &ctx_actions.actions {
+                let key = active_keys.key_for(entry.action);
+                hints.push_str(&format!("  [{}] {}", key, entry.label));
+            }
             root.spawn((
                 Node {
                     width: Val::Percent(100.0),
@@ -236,12 +294,10 @@ pub fn spawn_inventory_screen(mut commands: Commands) {
                 BorderColor::all(DIVIDER),
             ))
             .with_child((
-                Text::new(
-                    "[j/k / ↑↓] navigate    [Tab] switch panel    \
-                     [Enter / e] drop    [w] wield / unwield    [Esc / q] close",
-                ),
-                TextFont { font_size: 13.0, ..default() },
+                Text::new(hints),
+                super::ui_font(&ui_font_handle.0, 13.0),
                 TextColor(TEXT_DIM),
+                FooterHint,
             ));
         });
 }
@@ -255,7 +311,13 @@ pub(crate) fn update_inventory_screen(
     focus: Res<InventoryFocus>,
     registry: Res<TileRegistry>,
     player_query: Query<
-        (Entity, &Inventory, Option<&MountedPockets>, Option<&WieldedItems>, Option<&WornBy>),
+        (
+            Entity,
+            &Inventory,
+            Option<&MountedPockets>,
+            Option<&WieldedItems>,
+            Option<&WornBy>,
+        ),
         With<DevPlayer>,
     >,
     item_names: Query<&DevGroundItemName>,
@@ -271,11 +333,16 @@ pub(crate) fn update_inventory_screen(
     wielded_container: Query<Entity, With<InvWieldedContainer>>,
     worn_container: Query<Entity, With<InvWornContainer>>,
 ) {
-    let Ok(container_entity) = container.single() else { return; };
-    let Ok(wielded_entity) = wielded_container.single() else { return; };
-    let Ok(worn_entity) = worn_container.single() else { return; };
-    let Ok((_player_entity, inv, mounted_pockets, wielded_items, worn_by)) =
-        player_query.single()
+    let Ok(container_entity) = container.single() else {
+        return;
+    };
+    let Ok(wielded_entity) = wielded_container.single() else {
+        return;
+    };
+    let Ok(worn_entity) = worn_container.single() else {
+        return;
+    };
+    let Ok((_player_entity, inv, mounted_pockets, wielded_items, worn_by)) = player_query.single()
     else {
         return;
     };
@@ -330,11 +397,14 @@ pub(crate) fn update_inventory_screen(
                 padding: UiRect::axes(Val::Px(14.0), Val::Px(14.0)),
                 ..default()
             },))
-            .with_child((
-                Text::new("(empty)"),
-                TextFont { font_size: 15.0, ..default() },
-                TextColor(TEXT_DIM),
-            ));
+                .with_child((
+                    Text::new("(empty)"),
+                    TextFont {
+                        font_size: 15.0,
+                        ..default()
+                    },
+                    TextColor(TEXT_DIM),
+                ));
         });
     }
 
@@ -353,12 +423,18 @@ pub(crate) fn update_inventory_screen(
 
     if wielded.is_empty() {
         commands.entity(wielded_entity).with_children(|p| {
-            p.spawn((Node { padding: UiRect::axes(Val::Px(14.0), Val::Px(8.0)), ..default() },))
-            .with_child((
-                Text::new("(nothing wielded)"),
-                TextFont { font_size: 14.0, ..default() },
-                TextColor(TEXT_DIM),
-            ));
+            p.spawn((Node {
+                padding: UiRect::axes(Val::Px(14.0), Val::Px(8.0)),
+                ..default()
+            },))
+                .with_child((
+                    Text::new("(nothing wielded)"),
+                    TextFont {
+                        font_size: 14.0,
+                        ..default()
+                    },
+                    TextColor(TEXT_DIM),
+                ));
         });
     } else {
         spawn_item_panel(
@@ -383,12 +459,18 @@ pub(crate) fn update_inventory_screen(
 
     if worn_list.is_empty() {
         commands.entity(worn_entity).with_children(|p| {
-            p.spawn((Node { padding: UiRect::axes(Val::Px(14.0), Val::Px(8.0)), ..default() },))
-            .with_child((
-                Text::new("(nothing worn)"),
-                TextFont { font_size: 14.0, ..default() },
-                TextColor(TEXT_DIM),
-            ));
+            p.spawn((Node {
+                padding: UiRect::axes(Val::Px(14.0), Val::Px(8.0)),
+                ..default()
+            },))
+                .with_child((
+                    Text::new("(nothing worn)"),
+                    TextFont {
+                        font_size: 14.0,
+                        ..default()
+                    },
+                    TextColor(TEXT_DIM),
+                ));
         });
     } else {
         let worn_with_chars: Vec<(char, Entity)> = worn_list
@@ -451,7 +533,12 @@ fn spawn_item_panel(
                 .get(item_entity)
                 .ok()
                 .map(|n| n.0.as_str())
-                .or_else(|| item_name_fallback.get(item_entity).ok().map(|n| n.0.as_str()))
+                .or_else(|| {
+                    item_name_fallback
+                        .get(item_entity)
+                        .ok()
+                        .map(|n| n.0.as_str())
+                })
                 .unwrap_or("?")
         };
         let qty = item_counts.get(item_entity).map(|s| s.get()).unwrap_or(1);
@@ -467,12 +554,19 @@ fn spawn_item_panel(
         };
         let text_color = if is_crafting { TEXT_CRAFT } else { TEXT_BRIGHT };
 
-        let cdda_id = item_type_ids.get(item_entity).map(|t| t.0.clone()).unwrap_or_default();
+        let cdda_id = item_type_ids
+            .get(item_entity)
+            .map(|t| t.0.clone())
+            .unwrap_or_default();
         let has_sprite = !cdda_id.is_empty() && registry.has_tile(&cdda_id);
         let sym: char = item_symbols
             .get(item_entity)
             .map(|s| s.0)
-            .or_else(|_| item_names.get(item_entity).map(|n| n.0.chars().next().unwrap_or('?')))
+            .or_else(|_| {
+                item_names
+                    .get(item_entity)
+                    .map(|n| n.0.chars().next().unwrap_or('?'))
+            })
             .unwrap_or('?');
 
         let label = format!("{:<4}  {:<28}  {}", invlet_char, name, qty);
@@ -483,7 +577,12 @@ fn spawn_item_panel(
                     width: Val::Percent(100.0),
                     flex_direction: FlexDirection::Row,
                     align_items: AlignItems::Center,
-                    padding: UiRect::new(Val::Px(10.0), Val::Px(10.0), Val::Px(pad_v), Val::Px(pad_v)),
+                    padding: UiRect::new(
+                        Val::Px(10.0),
+                        Val::Px(10.0),
+                        Val::Px(pad_v),
+                        Val::Px(pad_v),
+                    ),
                     border: UiRect::bottom(Val::Px(1.0)),
                     ..default()
                 },
@@ -501,7 +600,10 @@ fn spawn_item_panel(
                             margin: UiRect::right(Val::Px(8.0)),
                             ..default()
                         },
-                        ImageNode { image: info.image.clone(), ..default() },
+                        ImageNode {
+                            image: info.image.clone(),
+                            ..default()
+                        },
                     ));
                 } else {
                     row.spawn((
@@ -518,14 +620,20 @@ fn spawn_item_panel(
                     ))
                     .with_child((
                         Text::new(sym.to_string()),
-                        TextFont { font_size: font_size - 2.0, ..default() },
+                        TextFont {
+                            font_size: font_size - 2.0,
+                            ..default()
+                        },
                         TextColor(ICON_TEXT),
                     ));
                 }
 
                 row.spawn((
                     Text::new(label),
-                    TextFont { font_size, ..default() },
+                    TextFont {
+                        font_size,
+                        ..default()
+                    },
                     TextColor(text_color),
                 ));
             });
