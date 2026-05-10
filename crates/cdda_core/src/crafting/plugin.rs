@@ -7,7 +7,6 @@ use crate::crafting::systems::{
     build_craft_state, CategoryIndex, CraftState, PendingCraft, RecipeIndex,
 };
 use crate::input::crafting::{crafting_menu_input, process_pending_craft};
-use crate::render::crafting::{spawn_crafting_ui, update_crafting_ui};
 use crate::schedule::SimSet;
 
 pub struct CraftingPlugin;
@@ -19,19 +18,13 @@ impl Plugin for CraftingPlugin {
         app.init_resource::<RecipeIndex>();
         app.init_resource::<CategoryIndex>();
 
-        // OnEnter: exclusive state builder first, then spawn the root shell.
+        // OnEnter: build the recipe/category index when crafting menu opens.
         app.add_systems(OnEnter(Ctx::CraftingMenu), build_craft_state);
-        app.add_systems(
-            OnEnter(Ctx::CraftingMenu),
-            spawn_crafting_ui.after(build_craft_state),
-        );
 
-        // Input + UI: runs whenever the crafting menu is open.
+        // Input: runs whenever the crafting menu is open.
         app.add_systems(
             Update,
-            (crafting_menu_input, update_crafting_ui)
-                .chain()
-                .run_if(bevy_state::condition::in_state(Ctx::CraftingMenu)),
+            crafting_menu_input.run_if(bevy_state::condition::in_state(Ctx::CraftingMenu)),
         );
 
         // Simulation: execute pending craft in the Activity phase so it

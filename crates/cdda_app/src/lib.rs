@@ -194,7 +194,7 @@ impl Plugin for CddaPlugin {
         app.add_systems(OnEnter(Screen::ItemExamine), on_enter_examine_actions);
         app.add_systems(OnEnter(Screen::CharacterSheet), on_enter_character_actions);
 
-        app.add_plugins(cdda_core::render::CddaRenderPlugin);
+        app.add_plugins(cdda_render::render::CddaRenderPlugin);
         app.add_plugins(cdda_core::input::CddaInputPlugin);
         app.add_plugins(cdda_core::context::ContextPlugin);
 

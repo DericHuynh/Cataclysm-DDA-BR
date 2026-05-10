@@ -126,6 +126,13 @@ impl Plugin for CddaRenderPlugin {
                 .run_if(in_state(Screen::SettingsMenu)),
         );
 
+        // ── Crafting menu ────────────────────────────────────────────────
+        app.add_systems(OnEnter(Screen::CraftingMenu), crafting::spawn_crafting_ui);
+        app.add_systems(
+            Update,
+            crafting::update_crafting_ui.run_if(in_state(Screen::CraftingMenu)),
+        );
+
         // ── Debug spawn panel ─────────────────────────────────────────────
         app.add_systems(
             OnEnter(Screen::DevSpawnPanel),

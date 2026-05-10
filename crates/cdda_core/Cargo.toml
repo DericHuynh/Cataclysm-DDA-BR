@@ -23,19 +23,9 @@ bevy_input = { version = "0.18", features = ["keyboard"] }
 bevy_ui = "0.18"
 leafwing-input-manager.workspace = true
 postcard.workspace = true
-bevy = { workspace = true, default-features = false, features = [
-    "bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_render",
-    "bevy_sprite", "bevy_text", "bevy_ui", "bevy_winit", "x11",
-] }
-bevy-inspector-egui = { workspace = true, optional = true }
 dyn-clone = "1.0.20"
 fixedbitset = "0.5.7"
 bidimap = "0.7.0"
-
-[features]
-default = ["inspector"]
-inspector = ["bevy-inspector-egui"]
-devtools = []
 
 [dev-dependencies]
 tempfile = "3.27.0"

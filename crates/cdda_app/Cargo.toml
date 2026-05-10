@@ -11,6 +11,7 @@ path = "src/main.rs"
 [dependencies]
 clap.workspace = true
 cdda_core.workspace = true
+cdda_render.workspace = true
 bevy = { workspace = true, features = ["3d"] }
 bevy-inspector-egui.workspace = true
 bevy_egui = { version = "0.39" }

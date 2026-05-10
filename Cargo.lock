@@ -2060,6 +2060,7 @@ dependencies = [
  "bevy_mod_debugdump",
  "bevy_state",
  "cdda_core",
+ "cdda_render",
  "clap",
  "tracing",
 ]
@@ -2080,8 +2081,6 @@ dependencies = [
 name = "cdda_core"
 version = "0.1.0"
 dependencies = [
- "bevy",
- "bevy-inspector-egui",
  "bevy_app",
  "bevy_asset",
  "bevy_ecs",
@@ -2103,6 +2102,24 @@ dependencies = [
  "smallvec",
  "tempfile",
  "thiserror 2.0.18",
+ "tracing",
+]
+
+[[package]]
+name = "cdda_render"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_app",
+ "bevy_asset",
+ "bevy_ecs",
+ "bevy_input",
+ "bevy_reflect",
+ "bevy_state",
+ "cdda_core",
+ "leafwing-input-manager",
+ "serde",
+ "serde_json",
  "tracing",
 ]
 
