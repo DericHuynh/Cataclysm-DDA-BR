@@ -436,7 +436,7 @@ pub fn update_character_sheet_screen(
                             "{:<24}  {:>5}  {:>8}",
                             format!("skill #{}", entry.skill_id.0.0),
                             entry.level,
-                            entry.experience,
+                            entry.exercise,
                         );
                         spawn_content_row(right, &row_str, i % 2 == 0, TEXT_BRIGHT);
                     }

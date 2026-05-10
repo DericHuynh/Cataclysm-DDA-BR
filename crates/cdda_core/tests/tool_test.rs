@@ -163,7 +163,7 @@ fn book_skill_teaching() {
         fun: 1,
         intelligence: 8,
         time: 18000,
-        chapters: 0,
+        chapters: 0, martial_art: String::new(),
     },));
     let book = test.get::<BookData>(e).unwrap();
     assert_eq!(book.skill, "melee");
@@ -187,7 +187,7 @@ fn book_high_requirement() {
         fun: -1,
         intelligence: 14,
         time: 36000,
-        chapters: 3,
+        chapters: 3, martial_art: String::new(),
     },));
     let book = test.get::<BookData>(e).unwrap();
     assert_eq!(book.required_level, 8);
@@ -207,7 +207,7 @@ fn book_high_fun() {
         fun: 5,
         intelligence: 6,
         time: 12000,
-        chapters: 0,
+        chapters: 0, martial_art: String::new(),
     },));
     let book = test.get::<BookData>(e).unwrap();
     assert_eq!(book.fun, 5);
@@ -225,7 +225,7 @@ fn book_negative_fun() {
         fun: -2,
         intelligence: 12,
         time: 24000,
-        chapters: 4,
+        chapters: 4, martial_art: String::new(),
     },));
     let book = test.get::<BookData>(e).unwrap();
     assert_eq!(book.fun, -2);
@@ -243,7 +243,7 @@ fn book_chapters() {
         fun: 0,
         intelligence: 9,
         time: 15000,
-        chapters: 5,
+        chapters: 5, martial_art: String::new(),
     },));
     let book = test.get::<BookData>(e).unwrap();
     assert_eq!(book.chapters, 5);
@@ -261,7 +261,7 @@ fn book_infinite_chapters() {
         fun: 2,
         intelligence: 7,
         time: 20000,
-        chapters: 0,
+        chapters: 0, martial_art: String::new(),
     },));
     let book = test.get::<BookData>(e).unwrap();
     assert_eq!(book.chapters, 0);

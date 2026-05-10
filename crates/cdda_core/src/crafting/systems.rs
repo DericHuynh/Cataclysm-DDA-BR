@@ -2,8 +2,8 @@
 
 use bevy_ecs::prelude::*;
 
-use crate::actor::turn::AP_COST_CRAFT_TICK;
-use crate::core::components::actor::ActionPoints;
+use crate::activity::actor::{ActivityActor, CraftActor};
+use crate::activity::components::{ActivityPhase, PlayerActivity};
 use crate::core::components::def::{
     ItemName, RecipeCategory, RecipeComponents, RecipeQualities, RecipeResult, RecipeResultCount,
     RecipeSubcategory, RecipeTime,
@@ -368,6 +368,17 @@ pub fn start_craft(
         inv.needs_invlet.insert(craft_entity);
     }
 
+    // Attach a PlayerActivity so the activity system drives the craft.
+    // Phase starts as Active — start() has already been accounted for via ap_total.
+    let actor = ActivityActor::Craft(CraftActor { craft_entity });
+    world.entity_mut(player).insert({
+        let mut act = PlayerActivity::new("ACT_CRAFT", actor);
+        act.moves_total = ap_total;
+        act.moves_left = ap_total;
+        act.phase = ActivityPhase::Active;
+        act
+    });
+
     Ok(craft_entity)
 }
 
@@ -376,7 +387,7 @@ pub fn start_craft(
 // ---------------------------------------------------------------------------
 
 /// Despawn `craft_entity`, spawn the result item in `player`'s inventory.
-fn complete_craft(world: &mut World, player: Entity, craft_entity: Entity) {
+pub fn complete_craft(world: &mut World, player: Entity, craft_entity: Entity) {
     let (result_id, result_count) = {
         let Some(craft) = world.get::<InProgressCraft>(craft_entity) else {
             return;
@@ -434,71 +445,25 @@ fn complete_craft(world: &mut World, player: Entity, craft_entity: Entity) {
 // continue_crafts — tick in-progress crafts each turn
 // ---------------------------------------------------------------------------
 
-/// Each game turn, spend the player's available AP on any in-progress crafts
-/// held in their inventory.  When a craft's `ap_spent` reaches `ap_total`,
-/// the result item is spawned and the in-progress entity is despawned.
+/// Advance the player's in-progress craft by one tick.
 ///
-/// Runs as an exclusive system (needs `&mut World`) so it can call
-/// `complete_craft`, which itself needs to mutate the world.
+/// Delegates to the `CraftActor` via the activity system. Each call spends
+/// `AP_COST_CRAFT_TICK` from the player's `ActionPoints`, advances
+/// `InProgressCraft::ap_spent`, and spawns the result item once complete.
+///
+/// Called each game turn from `cdda_app` (and directly by tests).
 pub fn continue_crafts(world: &mut World) {
     let Some(player) = find_dev_player(world) else {
         return;
     };
 
-    // Collect in-progress crafts that are inside the player's inventory.
-    // Crafts live inside a body pocket (InsideContainer(pocket) where PocketOf(pocket)==player),
-    // or directly inside the player (backwards compat).
-    let craft_entities: Vec<Entity> = {
-        let mut q = world.query::<(Entity, &InsideContainer)>();
-        q.iter(world)
-            .filter_map(|(e, ic)| {
-                if world.get::<InProgressCraft>(e).is_none() {
-                    return None;
-                }
-                let container = ic.0;
-                if container == player {
-                    return Some(e);
-                }
-                // Via pocket: PocketOf(container) == player.
-                if world
-                    .get::<PocketOf>(container)
-                    .map(|po| po.0 == player)
-                    .unwrap_or(false)
-                {
-                    return Some(e);
-                }
-                None
-            })
-            .collect()
-    };
+    let has_active_craft = world
+        .get::<PlayerActivity>(player)
+        .map(|a| a.activity_type.as_str() == "ACT_CRAFT" && a.phase == ActivityPhase::Active)
+        .unwrap_or(false);
 
-    for craft_e in craft_entities {
-        // Check the player has enough AP for one craft tick.
-        let current_ap = world
-            .get::<ActionPoints>(player)
-            .map(|ap| ap.current)
-            .unwrap_or(0);
-        if current_ap < AP_COST_CRAFT_TICK {
-            break;
-        }
-
-        // Spend AP.
-        if let Some(mut ap) = world.get_mut::<ActionPoints>(player) {
-            ap.spend(AP_COST_CRAFT_TICK);
-        }
-
-        // Advance the craft.
-        let is_done = {
-            let Some(mut craft) = world.get_mut::<InProgressCraft>(craft_e) else {
-                continue;
-            };
-            craft.ap_spent += AP_COST_CRAFT_TICK;
-            craft.is_complete()
-        };
-
-        if is_done {
-            complete_craft(world, player, craft_e);
-        }
+    if has_active_craft {
+        crate::activity::systems::tick_one(world, player);
     }
 }
 

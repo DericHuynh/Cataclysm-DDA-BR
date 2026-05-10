@@ -10,6 +10,7 @@
 
 #![allow(unexpected_cfgs)]
 
+pub mod activity;
 pub mod actor;
 pub mod ai;
 pub mod combat;

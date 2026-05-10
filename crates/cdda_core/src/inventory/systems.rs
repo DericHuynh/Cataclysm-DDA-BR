@@ -21,17 +21,17 @@
 //!
 //! Reference: CDDA-master `inventory.h` / `inventory.cpp`.
 
+use crate::actor::turn::{AP_COST_PICKUP, AP_COST_WIELD};
 use crate::context::ctx::Ctx;
 use crate::context::nav::{push_ctx, FocusedCommandIndex};
 use crate::context::ContextStack;
 use crate::core::components::actor::{ActionPoints, HandCount, Health, IsAlive, PlayerData, Gender};
 use crate::core::components::actor::Stats;
-use crate::actor::turn::{AP_COST_PICKUP, AP_COST_WIELD};
 use crate::core::components::def::ItemVolume;
 use crate::core::components::item::{
     Container, ContainerContents, CurrentCharges, DefOrigin, InsideContainer, Inventory,
-    InventoryBin, InventoryFocus, Invlet, InvletFavorites, ItemDamage, ItemTypeId,
-    MountedPockets, Pocket, StackCount, WieldedBy, WieldedItems, FLOOR_CAP_ML,
+    InventoryBin, InventoryFocus, Invlet, InvletFavorites, ItemDamage, ItemTypeId, MountedPockets,
+    Pocket, StackCount, WieldedBy, WieldedItems, FLOOR_CAP_ML,
 };
 use crate::core::components::sim::WorldPosition;
 use crate::core::coords::WorldPos;
@@ -83,13 +83,8 @@ pub fn assign_invlets_system(
             let merge_target = if let Some(origin) = incoming_origin {
                 inv.invlets.values().copied().find(|&stack| {
                     item_origins.get(stack).ok().map(|d| d.0) == Some(origin)
-                        && item_damages.get(stack).ok().map(|d| d.0).unwrap_or(0)
-                            == incoming_damage
-                        && current_charges_q
-                            .get(stack)
-                            .ok()
-                            .map(|c| c.0)
-                            .unwrap_or(0)
+                        && item_damages.get(stack).ok().map(|d| d.0).unwrap_or(0) == incoming_damage
+                        && current_charges_q.get(stack).ok().map(|c| c.0).unwrap_or(0)
                             == incoming_charges
                 })
             } else {
@@ -120,7 +115,9 @@ pub fn assign_invlets_system(
         // Apply accumulated stack count increases from merges.
         for (target, extra) in merge_adds {
             let current = stack_counts.get(target).ok().map(|s| s.get()).unwrap_or(1);
-            commands.entity(target).insert(StackCount::new(current + extra));
+            commands
+                .entity(target)
+                .insert(StackCount::new(current + extra));
         }
     }
 }
@@ -420,7 +417,10 @@ pub fn spawn_dev_world(world: &mut World) {
             ActionPoints::default(),
             IsAlive,
             Stats::default(),
-            Health { current: 100, max: 100 },
+            Health {
+                current: 100,
+                max: 100,
+            },
             PlayerData {
                 name: "Dev Player".to_string(),
                 gender: Gender::default(),
@@ -436,11 +436,11 @@ pub fn spawn_dev_world(world: &mut World) {
 
     // Columns: display name | CDDA type ID | OMT x | OMT y
     let items: &[(&str, &str, i32, i32)] = &[
-        ("Rock",    "sharp_rock",         0, 0),
-        ("Stick",   "stick",              1, 0),
+        ("Rock", "sharp_rock", 0, 0),
+        ("Stick", "stick", 1, 0),
         ("Battery", "light_battery_cell", 0, 1),
-        ("Knife",   "spear_knife",        2, 0),
-        ("Lighter", "lighter",            1, 1),
+        ("Knife", "spear_knife", 2, 0),
+        ("Lighter", "lighter", 1, 1),
     ];
 
     // Resolve def entities before mutably borrowing world for spawning.

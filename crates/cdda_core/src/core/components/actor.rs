@@ -156,12 +156,40 @@ impl CreatureSkills {
     }
 }
 
+/// Maximum skill level a character can reach.
+pub const MAX_SKILL: u32 = 10;
+
 /// Data on a skill entity: which skill, its current level and XP.
+///
+/// CDDA uses a dual-track model: `level`/`exercise` track hands-on practice
+/// while `knowledge_level`/`knowledge_exercise` track theoretical knowledge
+/// (e.g. from reading books). `rust_accumulator` tracks skill decay.
 #[derive(Component, Debug, Clone, Reflect)]
 pub struct SkillEntry {
     pub skill_id: crate::SkillId,
+    /// Practical (hands-on) skill level.
     pub level: u32,
-    pub experience: u32,
+    /// XP progress toward the next practice level.
+    pub exercise: u32,
+    /// Theoretical knowledge level (can exceed practice, e.g. from books).
+    pub knowledge_level: u32,
+    /// XP progress toward the next knowledge level.
+    pub knowledge_exercise: u32,
+    /// Accumulated rust — used to decay practice level over time.
+    pub rust_accumulator: u32,
+}
+
+impl Default for SkillEntry {
+    fn default() -> Self {
+        SkillEntry {
+            skill_id: crate::SkillId::from(0u32),
+            level: 0,
+            exercise: 0,
+            knowledge_level: 0,
+            knowledge_exercise: 0,
+            rust_accumulator: 0,
+        }
+    }
 }
 
 // ===========================================================================
@@ -209,10 +237,16 @@ impl CreatureProficiencies {
     }
 }
 
-/// Data on a proficiency entity: which proficiency is known.
+/// Data on a proficiency entity: which proficiency is known and its progress.
 #[derive(Component, Debug, Clone, Reflect)]
 pub struct ProficiencyEntry {
     pub id: crate::ProficiencyId,
+    /// Whether the proficiency has been fully learned.
+    pub known: bool,
+    /// Turns of practice accumulated toward this proficiency.
+    pub practiced: u64,
+    /// Total turns of practice required to learn this proficiency.
+    pub time_to_learn: u64,
 }
 
 // ===========================================================================
@@ -371,7 +405,10 @@ pub struct ActionPoints {
 
 impl Default for ActionPoints {
     fn default() -> Self {
-        Self { current: 0, speed: 100 }
+        Self {
+            current: 0,
+            speed: 100,
+        }
     }
 }
 

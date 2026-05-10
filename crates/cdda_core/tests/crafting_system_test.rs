@@ -20,7 +20,7 @@ fn spawn_creature_with_skills(test: &mut TestBed, skills: Vec<(SkillId, u32)>) -
     for (id, level) in skills {
         test.spawn((
             SkillOf(creature),
-            SkillEntry { skill_id: id, level, experience: 0 },
+            SkillEntry { skill_id: id, level, ..Default::default() },
         ));
     }
     creature

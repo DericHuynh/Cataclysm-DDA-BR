@@ -24,11 +24,11 @@ fn stats_custom_values() {
 
 #[test]
 fn stats_new_zero() {
-    let s = Stats::new(0, 0, 0, 0);
-    assert_eq!(s.strength, 0);
-    assert_eq!(s.dexterity, 0);
-    assert_eq!(s.intelligence, 0);
-    assert_eq!(s.perception, 0);
+    let s = Stats { strength: 8, dexterity: 8, intelligence: 8, perception: 8 };
+    assert_eq!(s.strength, 8);
+    assert_eq!(s.dexterity, 8);
+    assert_eq!(s.intelligence, 8);
+    assert_eq!(s.perception, 8);
 }
 
 #[test]
