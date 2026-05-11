@@ -5,7 +5,7 @@
 
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::Resource;
-use crate::core::coords::WorldPos;
+use cdda_core_types::core::coords::WorldPos;
 use std::collections::HashMap;
 
 /// The spatial cell size in world tiles (must be a power of two for fast division).

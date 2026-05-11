@@ -20,7 +20,8 @@ use cdda_core::context::ctx::Ctx as Screen;
 use cdda_core::context::screen::Screen as ScreenPlugin;
 use cdda_core::{GameSet, SimSet};
 
-use cdda_core::activity::plugin::ActivityPlugin;
+use cdda_components::events::ItemMoveEvent;
+use cdda_activity::plugin::ActivityPlugin;
 use cdda_core::actor::bionics::tick_bionics;
 use cdda_core::actor::effects::effects_phase;
 use cdda_core::actor::healing::healing_phase;
@@ -45,7 +46,6 @@ use cdda_core::inventory::systems::{
 };
 use cdda_core::item::plugin::ItemPlugin;
 use cdda_core::map::spatial_systems::update_spatial_index;
-use cdda_core::sim::events::ItemMoveEvent;
 use cdda_core::sim::state::AppState;
 use cdda_core::worldgen::dev_spawn::{
     build_dev_spawn_catalog, dev_spawn_flush, dev_spawn_panel_input,
@@ -182,7 +182,7 @@ impl Plugin for CddaPlugin {
         );
 
         app.add_message::<ItemMoveEvent>();
-        app.add_message::<cdda_core::messages::TurnAdvanced>();
+        app.add_message::<cdda_components::messages::TurnAdvanced>();
 
         // ── Context action registration — OnEnter (event-driven) ──────
         //

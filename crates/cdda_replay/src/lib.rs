@@ -47,8 +47,8 @@ pub struct CddaReplayModePlugin;
 
 impl Plugin for CddaReplayModePlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(crate::replay::ReplayState::default());
-        app.add_systems(Update, crate::replay::inject_replay_actions);
+        app.insert_resource(ReplayState::default());
+        app.add_systems(Update, inject_replay_actions);
 
         #[cfg(feature = "devtools")]
         {

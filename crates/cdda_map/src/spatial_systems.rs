@@ -2,10 +2,10 @@
 //!
 //! Updates the EntitySpatialIndex whenever entities change position.
 
-use crate::core::components::sim::WorldPosition;
-use crate::core::components::def::IsDef;
-use crate::map::spatial::EntitySpatialIndex;
+use crate::spatial::EntitySpatialIndex;
 use bevy_ecs::prelude::*;
+use cdda_components::def::IsDef;
+use cdda_components::sim::WorldPosition;
 
 /// Update the spatial index for all entities whose position changed this tick.
 pub fn update_spatial_index(

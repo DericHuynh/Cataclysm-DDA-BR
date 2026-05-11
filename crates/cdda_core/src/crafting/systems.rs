@@ -17,9 +17,9 @@ use crate::core::components::sim::WorldPosition;
 use crate::data::def_world::DefinitionWorld;
 use crate::input::BindableAction;
 use crate::inventory::examine_resource::ExaminedItem;
-use crate::worldgen::dev::DevPlayer;
 use crate::worldgen::spawning_impl::spawn_item_from_def;
 use crate::{WorldPos, ZLevel};
+use cdda_components::dev::DevPlayer;
 
 // ---------------------------------------------------------------------------
 // RecipeIndex — all recipe def entities

@@ -7,8 +7,8 @@
 
 use bevy_ecs::prelude::*;
 
-use crate::activity::components::{ActivityPhase, PlayerActivity};
-use crate::activity::tracker::ActivityTracker;
+use crate::components::{ActivityPhase, PlayerActivity};
+use crate::tracker::ActivityTracker;
 
 // ---------------------------------------------------------------------------
 // start_pending_activities

@@ -11,6 +11,11 @@ members = [
     "crates/cdda_equipment",
     "crates/cdda_combat",
     "crates/cdda_actor",
+    "crates/cdda_map",
+    "crates/cdda_sim",
+    "crates/cdda_replay",
+    "crates/cdda_item",
+    "crates/cdda_activity",
 ]
 
 [workspace.dependencies]
@@ -53,6 +58,11 @@ cdda_ai = { path = "crates/cdda_ai" }
 cdda_equipment = { path = "crates/cdda_equipment" }
 cdda_combat = { path = "crates/cdda_combat" }
 cdda_actor = { path = "crates/cdda_actor" }
+cdda_map = { path = "crates/cdda_map" }
+cdda_sim = { path = "crates/cdda_sim" }
+cdda_replay = { path = "crates/cdda_replay" }
+cdda_item = { path = "crates/cdda_item" }
+cdda_activity = { path = "crates/cdda_activity" }
 
 [profile.dev]
 opt-level = 0

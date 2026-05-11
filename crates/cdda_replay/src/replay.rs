@@ -2,14 +2,13 @@
 //!
 //! When in replay mode, this system writes the next action from the log
 //! as an `InputAction` message, replacing the normal input system.
-//! Turn timing is driven by `crate::sim::GameTime`.
+//! Turn timing is driven by `GameTime`.
 
+use crate::session_log::SessionLog;
 use bevy_ecs::message::MessageWriter;
 use bevy_ecs::prelude::*;
-use crate::input::{ActionSource, InputAction};
-use crate::sim::state::GameTime;
-
-use crate::replay::session_log::SessionLog;
+use cdda_components::input::{ActionSource, InputAction};
+use cdda_components::sim::GameTime;
 
 // ---------------------------------------------------------------------------
 // ReplayState

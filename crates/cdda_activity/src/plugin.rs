@@ -8,12 +8,12 @@
 
 use bevy_app::{App, Plugin, Update};
 use bevy_ecs::schedule::IntoScheduleConfigs;
+use cdda_components::schedule::SimSet;
 
-use crate::activity::systems::{
+use crate::systems::{
     cleanup_done_activities, start_pending_activities, tick_activities,
 };
-use crate::activity::tracker::ActivityTracker;
-use crate::schedule::SimSet;
+use crate::tracker::ActivityTracker;
 
 pub struct ActivityPlugin;
 

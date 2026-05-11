@@ -15,7 +15,8 @@
 //!   ap_total = RecipeTime (turns) * 100
 
 use bevy_ecs::prelude::*;
-use cdda_core::actor::turn::{AP_COST_CRAFT_TICK};
+use cdda_components::dev::DevPlayer;
+use cdda_core::actor::turn::AP_COST_CRAFT_TICK;
 use cdda_core::core::components::actor::{ActionPoints, HandCount, IsAlive};
 use cdda_core::core::components::def::{ItemName, RecipeResult, RecipeResultCount, RecipeTime};
 use cdda_core::core::components::item::{
@@ -23,13 +24,17 @@ use cdda_core::core::components::item::{
 };
 use cdda_core::crafting::systems::{continue_crafts, start_craft};
 use cdda_core::sim::test_utils::TestBed;
-use cdda_core::worldgen::dev::DevPlayer;
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 fn register_crafting_components(test: &mut TestBed) {
+    // Ensure the craft completion hook is set so activity finishes work.
+    cdda_activity::CRAFT_COMPLETE_HOOK
+        .set(cdda_core::crafting::systems::complete_craft)
+        .ok();
+
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
     test.register::<Inventory>();
@@ -49,7 +54,10 @@ fn spawn_player(test: &mut TestBed) -> Entity {
     test.spawn((
         DevPlayer,
         IsAlive,
-        ActionPoints { current: 10_000, speed: 100 }, // plenty of AP
+        ActionPoints {
+            current: 10_000,
+            speed: 100,
+        }, // plenty of AP
         Inventory::default(),
         InvletFavorites::default(),
         HandCount(2),
@@ -80,7 +88,8 @@ fn start_craft_creates_in_progress_entity() {
     let player = spawn_player(&mut test);
     let recipe = spawn_recipe(&mut test, 5, "test_gum");
 
-    let craft_e = start_craft(test.world_mut(), player, recipe).expect("start_craft should succeed");
+    let craft_e =
+        start_craft(test.world_mut(), player, recipe).expect("start_craft should succeed");
 
     assert!(
         test.world().get::<InProgressCraft>(craft_e).is_some(),
@@ -142,7 +151,10 @@ fn in_progress_craft_is_inside_player_inventory() {
     let craft_e = start_craft(test.world_mut(), player, recipe).unwrap();
 
     let inside = test.world().get::<InsideContainer>(craft_e).unwrap();
-    assert_eq!(inside.0, player, "in-progress craft should be inside the player");
+    assert_eq!(
+        inside.0, player,
+        "in-progress craft should be inside the player"
+    );
 }
 
 /// The recipe result ID is stored on the InProgressCraft.
@@ -178,7 +190,11 @@ fn continue_crafts_spends_player_ap() {
     continue_crafts(test.world_mut());
     let ap_after = test.world().get::<ActionPoints>(player).unwrap().current;
 
-    assert_eq!(ap_before - ap_after, AP_COST_CRAFT_TICK, "one craft tick should cost AP_COST_CRAFT_TICK AP");
+    assert_eq!(
+        ap_before - ap_after,
+        AP_COST_CRAFT_TICK,
+        "one craft tick should cost AP_COST_CRAFT_TICK AP"
+    );
 }
 
 /// CDDA: each `do_turn` advances the craft toward completion.
@@ -232,7 +248,10 @@ fn craft_not_complete_before_full_ap_spent() {
     }
 
     let craft = test.world().get::<InProgressCraft>(craft_e).unwrap();
-    assert!(!craft.is_complete(), "craft should not be complete after 4 of 5 ticks");
+    assert!(
+        !craft.is_complete(),
+        "craft should not be complete after 4 of 5 ticks"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -280,14 +299,16 @@ fn craft_completes_in_exactly_the_expected_number_of_turns() {
     }
     assert!(
         test.world().get_entity(craft_e).is_ok(),
-        "craft should still exist after {} ticks", time_turns - 1
+        "craft should still exist after {} ticks",
+        time_turns - 1
     );
 
     // Final tick: craft completes
     continue_crafts(test.world_mut());
     assert!(
         test.world().get_entity(craft_e).is_err(),
-        "craft should be gone after {} ticks", time_turns
+        "craft should be gone after {} ticks",
+        time_turns
     );
 }
 
@@ -312,9 +333,16 @@ fn interrupted_craft_remains_in_inventory() {
     }
 
     // Craft still exists with partial progress
-    assert!(test.world().get_entity(craft_e).is_ok(), "craft should persist after interruption");
+    assert!(
+        test.world().get_entity(craft_e).is_ok(),
+        "craft should persist after interruption"
+    );
     let craft = test.world().get::<InProgressCraft>(craft_e).unwrap();
-    assert_eq!(craft.ap_spent, 3 * AP_COST_CRAFT_TICK, "ap_spent should reflect 3 ticks of work");
+    assert_eq!(
+        craft.ap_spent,
+        3 * AP_COST_CRAFT_TICK,
+        "ap_spent should reflect 3 ticks of work"
+    );
     assert!(!craft.is_complete());
 }
 
@@ -337,7 +365,10 @@ fn resumed_craft_completes_from_saved_progress() {
     for _ in 0..interrupt_at {
         continue_crafts(test.world_mut());
     }
-    assert!(test.world().get_entity(craft_e).is_ok(), "still in-progress");
+    assert!(
+        test.world().get_entity(craft_e).is_ok(),
+        "still in-progress"
+    );
 
     // Resume: run the remaining turns
     for _ in 0..remaining {
@@ -348,7 +379,9 @@ fn resumed_craft_completes_from_saved_progress() {
     assert!(
         test.world().get_entity(craft_e).is_err(),
         "craft should complete after {} + {} = {} total ticks",
-        interrupt_at, remaining, time_turns
+        interrupt_at,
+        remaining,
+        time_turns
     );
 }
 
@@ -363,13 +396,31 @@ fn progress_percent_increases_with_ap_spent() {
     let craft_e = start_craft(test.world_mut(), player, recipe).unwrap();
 
     // 0% progress
-    assert_eq!(test.world().get::<InProgressCraft>(craft_e).unwrap().progress_pct(), 0);
+    assert_eq!(
+        test.world()
+            .get::<InProgressCraft>(craft_e)
+            .unwrap()
+            .progress_pct(),
+        0
+    );
 
     continue_crafts(test.world_mut()); // 100/400 = 25%
-    assert_eq!(test.world().get::<InProgressCraft>(craft_e).unwrap().progress_pct(), 25);
+    assert_eq!(
+        test.world()
+            .get::<InProgressCraft>(craft_e)
+            .unwrap()
+            .progress_pct(),
+        25
+    );
 
     continue_crafts(test.world_mut()); // 200/400 = 50%
-    assert_eq!(test.world().get::<InProgressCraft>(craft_e).unwrap().progress_pct(), 50);
+    assert_eq!(
+        test.world()
+            .get::<InProgressCraft>(craft_e)
+            .unwrap()
+            .progress_pct(),
+        50
+    );
 }
 
 /// A craft with ap_total=0 (recipe time 0) is considered instantly complete.

@@ -13,8 +13,8 @@ use crate::core::components::sim::{InFlight, Solid, Velocity, WorldPosition};
 use crate::map::spatial::EntitySpatialIndex;
 use crate::sim::state::*;
 use crate::worldgen::dev::DevWorldgenConfig;
-use crate::worldgen::dev::{DevGroundItemName, DevPlayer};
 use crate::worldgen::dev_spawn::{DevSpawnFocus, DevSpawnQueue};
+use cdda_components::dev::{DevCamera, DevGroundItemName, DevPlayer};
 
 /// Wrapper to store `crate::map::WorldMap` as a Bevy resource.
 /// `WorldMap` lives in the zero-bevy `cdda_map` crate, so it cannot
@@ -47,7 +47,7 @@ pub fn setup_world(world: &mut World) {
     world.insert_resource(TurnQueue::default());
     world.insert_resource(WorldMapResource::default());
     world.insert_resource(DevWorldgenConfig::default());
-    world.insert_resource(crate::worldgen::dev_move::DevCamera::default());
+    world.insert_resource(DevCamera::default());
     world.insert_resource(InventoryBin::default());
     world.insert_resource(crate::inventory::examine_resource::ExaminedItem::default());
 

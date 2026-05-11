@@ -4,15 +4,21 @@ use bevy_state::prelude::OnEnter;
 
 use crate::context::ctx::Ctx;
 use crate::crafting::systems::{
-    build_craft_state, CategoryIndex, CraftState, PendingCraft, RecipeIndex,
+    build_craft_state, complete_craft, CategoryIndex, CraftState, PendingCraft, RecipeIndex,
 };
 use crate::input::crafting::{crafting_menu_input, process_pending_craft};
-use crate::schedule::SimSet;
+use cdda_components::schedule::SimSet;
 
 pub struct CraftingPlugin;
 
 impl Plugin for CraftingPlugin {
     fn build(&self, app: &mut App) {
+        // Register the craft completion hook so cdda_activity can complete
+        // crafts without a circular dependency on cdda_crafting.
+        cdda_activity::CRAFT_COMPLETE_HOOK
+            .set(complete_craft)
+            .ok();
+
         app.init_resource::<CraftState>();
         app.init_resource::<PendingCraft>();
         app.init_resource::<RecipeIndex>();

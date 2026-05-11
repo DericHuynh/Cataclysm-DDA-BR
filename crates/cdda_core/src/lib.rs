@@ -10,7 +10,7 @@
 
 #![allow(unexpected_cfgs)]
 
-pub mod activity;
+pub use cdda_activity as activity;
 pub use cdda_actor as actor;
 pub use cdda_ai as ai;
 pub use cdda_combat as combat;
@@ -21,12 +21,10 @@ pub mod data;
 pub use cdda_equipment as equipment;
 pub mod input;
 pub mod inventory;
-pub mod item;
-pub mod map;
-pub mod messages;
-pub mod replay;
-pub mod schedule;
-pub mod sim;
+pub use cdda_item as item;
+pub use cdda_map as map;
+pub use cdda_replay as replay;
+pub use cdda_sim as sim;
 pub mod worldgen;
 
 // Re-export key types — all point to cdda_core_types for the canonical definitions
@@ -60,5 +58,5 @@ pub use cdda_core_types::rng;
 pub use cdda_core_types::rng::SeededRng;
 pub use cdda_core_types::sim_id::SimId;
 pub use cdda_core_types::wyrand::WyRand;
-pub use messages::TurnAdvanced;
-pub use schedule::{GameSet, SimSet};
+pub use cdda_components::messages::TurnAdvanced;
+pub use cdda_components::schedule::{GameSet, SimSet};

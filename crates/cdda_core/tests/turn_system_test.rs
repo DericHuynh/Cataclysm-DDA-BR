@@ -16,7 +16,7 @@ fn tick_move_points_grants_mp() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
-    test.add_message::<cdda_core::messages::TurnAdvanced>();
+    test.add_message::<cdda_components::messages::TurnAdvanced>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
@@ -38,7 +38,7 @@ fn tick_move_points_accumulates() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
-    test.add_message::<cdda_core::messages::TurnAdvanced>();
+    test.add_message::<cdda_components::messages::TurnAdvanced>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
@@ -62,7 +62,7 @@ fn tick_move_points_debt_floor() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
-    test.add_message::<cdda_core::messages::TurnAdvanced>();
+    test.add_message::<cdda_components::messages::TurnAdvanced>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
@@ -87,7 +87,7 @@ fn tick_move_points_advances_time() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
-    test.add_message::<cdda_core::messages::TurnAdvanced>();
+    test.add_message::<cdda_components::messages::TurnAdvanced>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 

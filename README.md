@@ -1,7 +1,10 @@
 # CDDA-BR — Cataclysm: Dark Days Ahead in Rust + Bevy ECS
 
-A clean-room reimplementation of CDDA in Rust, targeting maintainability,
+A reimplementation of CDDA in Rust, targeting maintainability,
 performance, and first-class modding support.
+
+## Remember to route in OpenTelemetry for Events
+Example: https://github.com/madesroches/optimism
 
 ## Architecture
 

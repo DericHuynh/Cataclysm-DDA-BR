@@ -21,6 +21,11 @@ pub use cdda_core_types::core::WorldPos;
 
 pub mod actor;
 pub mod def;
+pub mod dev;
+pub mod events;
+pub mod input;
 pub mod item;
+pub mod messages;
+pub mod schedule;
 pub mod sim;
 pub mod stats;

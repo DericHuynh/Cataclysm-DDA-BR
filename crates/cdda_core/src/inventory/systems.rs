@@ -41,14 +41,13 @@ use crate::core::units::*;
 use crate::data::def_world::DefinitionWorld;
 use crate::input::{GameAction, InputAction};
 use crate::inventory::examine_resource::ExaminedItem;
-use crate::sim::events::{ItemMoveEvent, MoveLocation};
-use crate::worldgen::dev::{DevGroundItemName, DevPlayer};
-use crate::worldgen::dev_move::DevCamera;
 use crate::ZLevel;
 use bevy_ecs::message::{MessageReader, MessageWriter};
 use bevy_ecs::prelude::*;
 use bevy_ecs::world::World;
 use bevy_state::prelude::NextState;
+use cdda_components::dev::{DevCamera, DevGroundItemName, DevPlayer};
+use cdda_components::events::{ItemMoveEvent, MoveLocation};
 use tracing::{info, warn};
 
 // ===========================================================================

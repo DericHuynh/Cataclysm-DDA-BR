@@ -6,6 +6,7 @@ description = "CDDA UI rendering — all bevy_ui, Text2d, and tile rendering."
 
 [dependencies]
 cdda_core = { path = "../cdda_core" }
+cdda_components = { path = "../cdda_components" }
 bevy = { workspace = true, default-features = false, features = [
     "bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_render",
     "bevy_sprite", "bevy_text", "bevy_ui", "bevy_winit", "x11",

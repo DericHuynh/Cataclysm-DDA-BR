@@ -2051,6 +2051,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "cdda_activity"
+version = "0.1.0"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_reflect",
+ "bevy_state",
+ "cdda_actor",
+ "cdda_components",
+ "cdda_core_types",
+ "serde",
+]
+
+[[package]]
 name = "cdda_actor"
 version = "0.1.0"
 dependencies = [
@@ -2080,6 +2094,8 @@ dependencies = [
  "bevy_egui",
  "bevy_mod_debugdump",
  "bevy_state",
+ "cdda_activity",
+ "cdda_components",
  "cdda_core",
  "cdda_render",
  "clap",
@@ -2133,12 +2149,17 @@ dependencies = [
  "bevy_state",
  "bevy_ui",
  "bidimap",
+ "cdda_activity",
  "cdda_actor",
  "cdda_ai",
  "cdda_combat",
  "cdda_components",
  "cdda_core_types",
  "cdda_equipment",
+ "cdda_item",
+ "cdda_map",
+ "cdda_replay",
+ "cdda_sim",
  "dyn-clone",
  "fixedbitset",
  "indexmap",
@@ -2177,6 +2198,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "cdda_item"
+version = "0.1.0"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "cdda_components",
+]
+
+[[package]]
+name = "cdda_map"
+version = "0.1.0"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "cdda_components",
+ "cdda_core_types",
+]
+
+[[package]]
 name = "cdda_render"
 version = "0.1.0"
 dependencies = [
@@ -2187,11 +2227,36 @@ dependencies = [
  "bevy_input",
  "bevy_reflect",
  "bevy_state",
+ "cdda_components",
  "cdda_core",
  "leafwing-input-manager",
  "serde",
  "serde_json",
  "tracing",
+]
+
+[[package]]
+name = "cdda_replay"
+version = "0.1.0"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "cdda_components",
+ "cdda_core_types",
+ "postcard",
+ "serde",
+ "tracing",
+]
+
+[[package]]
+name = "cdda_sim"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "bevy_state",
+ "cdda_actor",
+ "cdda_components",
+ "cdda_core_types",
 ]
 
 [[package]]

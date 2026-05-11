@@ -3,12 +3,11 @@
 //! Hashes all `SimId`-tagged entities each turn.  During replay,
 //! compares live hashes against recorded hashes in the `SessionLog`.
 
+use crate::session_log::SessionLog;
 use bevy_ecs::message::Message;
 use bevy_ecs::prelude::*;
-use crate::SimId;
-use crate::sim::state::GameTime;
-
-use crate::replay::session_log::SessionLog;
+use cdda_core_types::sim_id::SimId;
+use cdda_components::sim::GameTime;
 
 // ---------------------------------------------------------------------------
 // StateHashLog
@@ -41,7 +40,7 @@ pub fn hash_simulation_state(
         let mut ids: Vec<u64> = entities.iter().map(|id| id.0).collect();
         ids.sort();
 
-        let mut hasher = FxHasher::default();
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
         ids.len().hash(&mut hasher);
         for id in &ids {
             id.hash(&mut hasher);
@@ -63,7 +62,7 @@ pub fn check_divergence(
     hash_log: Res<StateHashLog>,
     session_log: Res<SessionLog>,
     game_time: Res<GameTime>,
-    mut divergence_writer: MessageWriter<SimulationDiverged>,
+    mut divergence_writer: bevy_ecs::message::MessageWriter<SimulationDiverged>,
 ) {
     let turn = game_time.turn;
 

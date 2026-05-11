@@ -3,13 +3,13 @@
 //! Provides `TestBed` — a lightweight, `bevy_ecs`-compatible wrapper around `World`
 //! for testing systems and entities in isolation.  No full `bevy` dependency needed.
 
-use crate::core::components::actor::*;
-use crate::core::components::def::*;
-use crate::core::components::item::*;
-use crate::core::components::sim::{InFlight, Solid, Velocity, WorldPosition};
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::IntoSystem;
 use bevy_ecs::world::World;
+use cdda_components::actor::*;
+use cdda_components::def::*;
+use cdda_components::item::*;
+use cdda_components::sim::{InFlight, Solid, Velocity, WorldPosition};
 
 /// A lightweight test environment wrapping a `World`.
 pub struct TestBed {
@@ -58,15 +58,6 @@ impl TestBed {
         sys.initialize(&mut self.world);
         let _ = sys.run((), &mut self.world);
         sys.apply_deferred(&mut self.world);
-    }
-
-    /// Load def data from a DefRegistry. Registers all def components, builds def world.
-    pub fn load_data(
-        &mut self,
-        registry: &crate::data::DefRegistry,
-    ) -> crate::data::def_world::DefinitionWorld {
-        Self::register_all_def_components(&mut self.world);
-        crate::data::def_world::build_def_world(&mut self.world, registry, true)
     }
 
     // ── Batch registration ────────────────────────────────────────

@@ -22,7 +22,7 @@ use crate::core::components::actor::{
 };
 use crate::input::ActiveKeybindings;
 use crate::input::{BindableAction, GameAction, InputAction};
-use crate::worldgen::dev::DevPlayer;
+use cdda_components::dev::DevPlayer;
 
 // ---------------------------------------------------------------------------
 // Colours

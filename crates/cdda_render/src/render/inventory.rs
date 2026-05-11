@@ -22,9 +22,9 @@ use crate::input::ActiveKeybindings;
 use crate::input::BindableAction;
 use crate::render::theme;
 use crate::render::tiles::TileRegistry;
-use crate::worldgen::dev::{DevGroundItemName, DevPlayer};
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
+use cdda_components::dev::{DevGroundItemName, DevPlayer};
 
 // ---------------------------------------------------------------------------
 // Fixed colours (match dev_spawn palette exactly)

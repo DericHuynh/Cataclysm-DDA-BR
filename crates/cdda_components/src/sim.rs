@@ -5,7 +5,6 @@
 //! Import directly from those crates rather than through this module.
 
 use bevy_ecs::component::Component;
-use bevy_ecs::message::Message;
 use bevy_ecs::prelude::Resource;
 use bevy_reflect::Reflect;
 use cdda_core_types::core::coords::WorldPos;
@@ -50,13 +49,5 @@ impl GameTime {
     pub const TURNS_PER_DAY: u64 = 14400;
 }
 
-// ---------------------------------------------------------------------------
-// TurnAdvanced message
-// ---------------------------------------------------------------------------
-
-/// Broadcast when the game advances by one turn.
-#[derive(Message, Debug, Clone, Copy)]
-pub struct TurnAdvanced {
-    /// The new turn number (1-based after the first tick).
-    pub turn: u64,
-}
+// TurnAdvanced message — defined in the messages module.
+pub use crate::messages::TurnAdvanced;

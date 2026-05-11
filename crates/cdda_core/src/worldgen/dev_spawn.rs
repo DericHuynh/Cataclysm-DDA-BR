@@ -20,8 +20,7 @@ use bevy_input::ButtonState;
 
 use crate::core::components::def::{DefStrId, IsDef, ItemName};
 use crate::core::components::item::ItemTypeId;
-use crate::worldgen::dev::DevGroundItemName;
-use crate::worldgen::dev_move::DevCamera;
+use cdda_components::dev::{DevCamera, DevGroundItemName};
 
 // ---------------------------------------------------------------------------
 // Catalog entry

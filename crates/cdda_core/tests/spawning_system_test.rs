@@ -7,9 +7,9 @@ use cdda_core::*;
 use cdda_core::core::coords::WorldPos;
 use cdda_core::core::components::sim::*;
 use cdda_core::core::components::def::*;
-use cdda_core::sim::events::SpawnEvent;
+use cdda_components::events::SpawnEvent;
 use cdda_core::worldgen::spawning::*;
-use cdda_core::sim::test_utils::TestBed;
+use cdda_sim::test_utils::TestBed;
 
 // ===========================================================================
 // 1: spawn_monster_entity_created

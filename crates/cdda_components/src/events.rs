@@ -1,20 +1,41 @@
 //! Message types for decoupled system communication.
 //!
-//! Systems communicate through Bevy Messages (buffered, broadcast), not
-//! direct mutation.  Adding a new reaction is a new message reader — no
-//! existing code changes.
-//!
-//! In Bevy 0.17+, there is a split:
-//! - `#[derive(Message)]` — buffered, broadcast (replaces old `Event`)
-//! - `#[derive(Event)]` — observer-based, triggered on specific entities
-//!
-//! All types in this module are globally broadcast → they derive `Message`.
+//! Moved here from `cdda_core::sim::events` to break circular dependencies
+//! when extracting subsystems into separate crates.
 
-use crate::core::coords::WorldPos;
-use crate::core::id::*;
-use crate::Damage;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::message::Message;
+use cdda_core_types::core::coords::WorldPos;
+use cdda_core_types::core::id::{DefCategory, DefIdx, FactionId, MonsterId};
+use cdda_core_types::core::Damage;
+
+// ---------------------------------------------------------------------------
+// Trade / Inventory
+// ---------------------------------------------------------------------------
+
+#[derive(Message, Debug, Clone)]
+pub struct ItemMoveEvent {
+    /// The item entity being moved.
+    pub item: Entity,
+    /// Where the item was (entity container or WorldPos on ground).
+    pub from: MoveLocation,
+    /// Where the item is going (entity container or WorldPos on ground).
+    pub to: MoveLocation,
+    /// How many items in the stack were moved.
+    pub count: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MoveLocation {
+    /// Item is on the ground at this world position.
+    Ground(WorldPos),
+    /// Item is inside a container entity.
+    Container(Entity),
+    /// Item is wielded by an entity.
+    Wielded(Entity),
+    /// Item is worn by an entity.
+    Worn(Entity),
+}
 
 // ---------------------------------------------------------------------------
 // Damage / Death
@@ -71,35 +92,7 @@ pub struct SpawnEvent {
 pub struct DefChangedEvent {
     pub category: DefCategory,
     /// Numeric indices of changed definitions.
-    pub ids: Vec<u32>,
-}
-
-// ---------------------------------------------------------------------------
-// Trade / Inventory
-// ---------------------------------------------------------------------------
-
-#[derive(Message, Debug, Clone)]
-pub struct ItemMoveEvent {
-    /// The item entity being moved.
-    pub item: Entity,
-    /// Where the item was (entity container or WorldPos on ground).
-    pub from: MoveLocation,
-    /// Where the item is going (entity container or WorldPos on ground).
-    pub to: MoveLocation,
-    /// How many items in the stack were moved.
-    pub count: u32,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MoveLocation {
-    /// Item is on the ground at this world position.
-    Ground(crate::core::coords::WorldPos),
-    /// Item is inside a container entity.
-    Container(Entity),
-    /// Item is wielded by an entity.
-    Wielded(Entity),
-    /// Item is worn by an entity.
-    Worn(Entity),
+    pub ids: Vec<DefIdx>,
 }
 
 #[derive(Message, Debug, Clone)]

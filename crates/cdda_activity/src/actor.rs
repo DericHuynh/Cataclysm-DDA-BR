@@ -12,10 +12,11 @@
 
 use bevy_ecs::prelude::*;
 
-use crate::activity::tracker::{ActivityTracker, BRISK_EXERCISE, LIGHT_EXERCISE, NO_EXERCISE};
-use crate::actor::turn::AP_COST_CRAFT_TICK;
-use crate::core::components::actor::ActionPoints;
-use crate::core::components::item::InProgressCraft;
+use crate::tracker::{ActivityTracker, BRISK_EXERCISE, LIGHT_EXERCISE, NO_EXERCISE};
+use crate::CRAFT_COMPLETE_HOOK;
+use cdda_actor::turn::AP_COST_CRAFT_TICK;
+use cdda_components::actor::ActionPoints;
+use cdda_components::item::InProgressCraft;
 
 // ---------------------------------------------------------------------------
 // ActivityActor — enum-based dispatch
@@ -268,8 +269,8 @@ impl ActorImpl for ReloadActor {
 /// The `craft_entity` holds the `InProgressCraft` component in the player's
 /// inventory. Each `do_turn` tick spends `AP_COST_CRAFT_TICK` from the
 /// character's `ActionPoints` and advances `InProgressCraft::ap_spent`.
-/// When `ap_spent >= ap_total`, `finish` calls `complete_craft` to spawn
-/// the result item.
+/// When `ap_spent >= ap_total`, `finish` calls the registered craft completion
+/// hook to spawn the result item.
 #[derive(Debug, Clone)]
 pub struct CraftActor {
     /// The `InProgressCraft` entity in the player's inventory.
@@ -323,7 +324,11 @@ impl ActorImpl for CraftActor {
     }
 
     fn finish(&mut self, entity: Entity, world: &mut World) {
-        crate::crafting::systems::complete_craft(world, entity, self.craft_entity);
+        // Craft completion is handled by registering a callback via CRAFT_COMPLETE_HOOK.
+        // This avoids a circular dependency between cdda_activity and cdda_crafting.
+        if let Some(complete_craft) = CRAFT_COMPLETE_HOOK.get() {
+            complete_craft(world, entity, self.craft_entity);
+        }
     }
 
     fn canceled(&mut self, _entity: Entity, _world: &mut World) {

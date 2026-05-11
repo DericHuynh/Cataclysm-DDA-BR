@@ -3,12 +3,11 @@
 //! Reads `GameTime.turn` from `cdda_sim` to stamp each action with
 //! the current turn number.
 
+use crate::session_log::{ActionRecord, SessionLog};
 use bevy_ecs::message::MessageReader;
 use bevy_ecs::prelude::*;
-use crate::input::InputAction;
-use crate::sim::state::GameTime;
-
-use crate::replay::session_log::{ActionRecord, SessionLog};
+use cdda_components::input::InputAction;
+use cdda_components::sim::GameTime;
 
 /// Records `InputAction` messages into the `SessionLog`, stamped with
 /// the current turn from `GameTime`.

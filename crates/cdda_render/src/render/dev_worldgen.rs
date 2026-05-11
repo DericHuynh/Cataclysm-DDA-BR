@@ -15,12 +15,11 @@ use crate::core::components::item::{Inventory, FLOOR_CAP_ML};
 use crate::core::components::sim::WorldPosition;
 use crate::map::WorldMap;
 use crate::render::tiles::TileRegistry;
-use crate::worldgen::dev::{DevGroundItemName, DevPlayer};
-use crate::worldgen::dev_move::DevCamera;
 use crate::worldgen::setup::WorldMapResource;
 use bevy::prelude::*;
 use bevy::text::LineBreak;
 use bevy_state::state_scoped::DespawnOnExit;
+use cdda_components::dev::{DevCamera, DevGroundItemName, DevPlayer};
 use std::collections::HashMap;
 use tracing::info;
 

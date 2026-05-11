@@ -279,7 +279,7 @@ fn tick_move_points_system_grants_ap_to_alive_actors() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
-    test.add_message::<cdda_core::messages::TurnAdvanced>();
+    test.add_message::<cdda_components::messages::TurnAdvanced>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
@@ -305,7 +305,7 @@ fn dead_actors_excluded_from_turn_queue() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
-    test.add_message::<cdda_core::messages::TurnAdvanced>();
+    test.add_message::<cdda_components::messages::TurnAdvanced>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
@@ -326,7 +326,7 @@ fn faster_actor_has_higher_mp_in_queue() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
-    test.add_message::<cdda_core::messages::TurnAdvanced>();
+    test.add_message::<cdda_components::messages::TurnAdvanced>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
@@ -363,7 +363,7 @@ fn def_entities_excluded_from_turn_queue() {
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
     test.register::<IsDef>();
-    test.add_message::<cdda_core::messages::TurnAdvanced>();
+    test.add_message::<cdda_components::messages::TurnAdvanced>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
@@ -383,7 +383,7 @@ fn tick_advances_game_time() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
-    test.add_message::<cdda_core::messages::TurnAdvanced>();
+    test.add_message::<cdda_components::messages::TurnAdvanced>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
     test.spawn((IsAlive, ActionPoints::default()));

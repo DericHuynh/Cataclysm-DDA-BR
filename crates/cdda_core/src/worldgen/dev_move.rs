@@ -3,36 +3,10 @@
 //! Simple 2D camera panning over the OMT grid. The camera position
 //! is stored as a resource and read by the ASCII renderer.
 
+use crate::input::{Direction, GameAction, InputAction};
 use bevy_ecs::message::MessageReader;
 use bevy_ecs::prelude::*;
-use crate::input::{Direction, GameAction, InputAction};
-
-// ---------------------------------------------------------------------------
-// DevCamera
-// ---------------------------------------------------------------------------
-
-/// Camera position in OMT-grid coordinates for the dev-worldgen showcase.
-#[derive(Resource, Debug, Clone)]
-pub struct DevCamera {
-    /// Current X position in OMT units.
-    pub x: i32,
-    /// Current Y position in OMT units.
-    pub y: i32,
-    /// Current Z level.
-    pub z: i32,
-}
-
-impl Default for DevCamera {
-    fn default() -> Self {
-        Self { x: 0, y: 0, z: 0 }
-    }
-}
-
-impl DevCamera {
-    pub fn new(x: i32, y: i32, z: i32) -> Self {
-        Self { x, y, z }
-    }
-}
+use cdda_components::dev::DevCamera;
 
 // ---------------------------------------------------------------------------
 // dev_camera_move

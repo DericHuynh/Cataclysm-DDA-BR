@@ -1,0 +1,12 @@
+[package]
+name = "cdda_sim"
+version = "0.1.0"
+edition = "2021"
+description = "Simulation layer — game state machine, clock, and test utilities"
+
+[dependencies]
+bevy_ecs.workspace = true
+bevy_state.workspace = true
+cdda_core_types = { path = "../cdda_core_types" }
+cdda_components = { path = "../cdda_components" }
+cdda_actor = { path = "../cdda_actor" }

@@ -2,9 +2,9 @@
 
 use bevy_ecs::prelude::*;
 use bevy_reflect::Reflect;
+use cdda_core_types::core::coords::WorldPos;
 
-use super::actor::ActivityActor;
-use crate::core::coords::WorldPos;
+use crate::actor::ActivityActor;
 
 // ---------------------------------------------------------------------------
 // ActivityTypeId — string ID of an activity_type def

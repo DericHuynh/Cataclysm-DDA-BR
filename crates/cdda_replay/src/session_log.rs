@@ -2,8 +2,8 @@
 //!
 //! Uses `GameAction` from `cdda_input`. Binary format is `postcard`,
 
-use crate::input::{ActionSource, GameAction};
 use bevy_ecs::prelude::Resource;
+use cdda_components::input::{ActionSource, GameAction};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -65,8 +65,6 @@ impl SessionLog {
     }
     pub fn load_compressed(path: &std::path::Path) -> Result<Self, String> {
         let compressed = std::fs::read(path).map_err(|e| format!("IO: {e}"))?;
-        Self::from_bytes(
-            &compressed,
-        )
+        Self::from_bytes(&compressed)
     }
 }
