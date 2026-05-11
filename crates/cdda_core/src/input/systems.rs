@@ -25,9 +25,6 @@ use leafwing_input_manager::user_input::Buttonlike;
 use crate::input::actions::{ActionSource, BindableAction, GameAction, InputAction};
 use crate::input::bindings::ContextInputMaps;
 use crate::input::context::{InputContextId, InputContextStack};
-use bevy_state::prelude::State;
-
-use crate::context::ctx::Ctx;
 
 // ---------------------------------------------------------------------------
 // RebindCapture
@@ -92,7 +89,6 @@ pub fn handle_raw_input(
     mut action_writer: MessageWriter<InputAction>,
     mut rebind_capture: ResMut<RebindCapture>,
     mut input_map_query: Query<&mut InputMap<BindableAction>, With<GlobalInputEntity>>,
-    ctx_state: Res<State<Ctx>>,
 ) {
     let active_context = context_stack.top();
     let shift = keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]);
@@ -132,7 +128,7 @@ pub fn handle_raw_input(
                     tracing::info!("Rebound {:?} in {:?} to {:?}", action, ctx, input);
 
                     // Refresh the entity's InputMap for the current context
-                    let ctx_id = screen_to_input_ctx(*ctx_state.get());
+                    let ctx_id = context_stack.top();
                     let merged = context_maps.merged_for(&ctx_id);
                     if let Ok(mut map) = input_map_query.single_mut() {
                         *map = merged;
@@ -245,14 +241,14 @@ pub fn clear_rebind_flag(mut rebind_capture: ResMut<RebindCapture>) {
 /// active `Ctx` state changes.  This keeps leafwing's action resolution
 /// aligned with the current screen's bindings.
 pub fn sync_leafwing_input_map(
-    ctx_state: Res<State<Ctx>>,
+    context_stack: Res<InputContextStack>,
     context_maps: Res<ContextInputMaps>,
     mut query: Query<&mut InputMap<BindableAction>, With<GlobalInputEntity>>,
 ) {
-    if !ctx_state.is_changed() && !context_maps.is_changed() {
+    if !context_stack.is_changed() && !context_maps.is_changed() {
         return;
     }
-    let ctx_id = screen_to_input_ctx(*ctx_state.get());
+    let ctx_id = context_stack.top();
     let merged = context_maps.merged_for(&ctx_id);
     if let Ok(mut map) = query.single_mut() {
         *map = merged;
@@ -279,15 +275,15 @@ fn key_to_user_input(key: KeyCode, shift: bool, ctrl: bool, alt: bool) -> Box<dy
 // ---------------------------------------------------------------------------
 
 /// Rebuilds `ActiveKeybindings` whenever the screen context or input maps
-/// change. UI systems read `ActiveKeybindings::key_for(action)` to get the
+/// changes. UI systems read `ActiveKeybindings::key_for(action)` to get the
 /// current key for an action instead of hardcoding key labels.
 pub fn refresh_active_keybindings(
     query: Query<&InputMap<BindableAction>, With<GlobalInputEntity>>,
     mut active: ResMut<crate::input::bindings::ActiveKeybindings>,
     context_maps: Res<crate::input::bindings::ContextInputMaps>,
-    ctx_state: Res<State<Ctx>>,
+    context_stack: Res<InputContextStack>,
 ) {
-    if !ctx_state.is_changed() && !context_maps.is_changed() && !active.is_changed() {
+    if !context_stack.is_changed() && !context_maps.is_changed() && !active.is_changed() {
         return;
     }
 
@@ -304,29 +300,5 @@ pub fn refresh_active_keybindings(
                     .insert(action, crate::input::bindings::format_wrapper(&inputs[0]));
             }
         }
-    }
-}
-
-/// Mirror of `sync_input_context` (nav.rs) — maps a `Ctx` to its
-/// `InputContextId`.  Kept private; external callers use `sync_input_context`.
-pub(crate) fn screen_to_input_ctx(ctx: Ctx) -> InputContextId {
-    use Ctx::*;
-    match ctx {
-        MainMenu | NewGameHub | HelpScreen | CreditsScreen | WorldMenu | WorldSettings
-        | DevWorldgen | ScenarioSelect | ProfessionSelect | CharacterCreation
-        | CharacterConfirm | Custom(_) => InputContextId::MainMenu,
-        DevSpawnPanel => InputContextId::Inventory,
-        SettingsMenu => InputContextId::Settings,
-        Inventory | ItemExamine => InputContextId::Inventory,
-        CraftingMenu => InputContextId::CraftingMenu,
-        CharacterSheet => InputContextId::CharacterSheet,
-        ExamineLook => InputContextId::ExamineLook,
-        Dialog => InputContextId::Dialog,
-        DirectionSelect => InputContextId::DirectionSelect,
-        TextInput => InputContextId::TextInput,
-        QuantityInput => InputContextId::QuantityInput,
-        PauseMenu => InputContextId::PauseMenu,
-        VehicleInteraction => InputContextId::VehicleInteraction,
-        Gameplay => InputContextId::Gameplay,
     }
 }

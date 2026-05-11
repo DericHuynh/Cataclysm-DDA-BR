@@ -7,7 +7,7 @@
 //! the ability to validate and autocomplete CDDA JSON files against
 //! the authoritative Rust types.
 
-use crate::data::schema::write_all_schemas;
+use cdda_data::schema::write_all_schemas;
 use std::path::PathBuf;
 
 fn main() {

@@ -20,12 +20,14 @@ pub use cdda_core_types::core::Damage;
 pub use cdda_core_types::core::WorldPos;
 
 pub mod actor;
+pub mod context;
 pub mod def;
 pub mod dev;
 pub mod events;
 pub mod input;
 pub mod item;
 pub mod messages;
+pub mod recipe;
 pub mod schedule;
 pub mod sim;
 pub mod stats;

@@ -20,6 +20,13 @@ use crate::input::BindableAction;
 
 /// Implement this trait on a unit struct to declare a screen.
 ///
+/// # Cleanup responsibility
+///
+/// Implementors that spawn UI trees MUST ensure proper cleanup when the
+/// screen exits.  Use either `DespawnOnExit` on the root entity (preferred)
+/// or call `despawn_recursive()` manually.  Failing to do so leaks entities
+/// and can cause visual overlay glitches on screen transitions.
+///
 /// # Example
 /// ```ignore
 /// pub struct InventoryScreen;

@@ -10,13 +10,6 @@
 //!   `serde_json::Value`s keyed by their `"type"` field.
 //! - **Pass 2:** Deserialize each raw def into its typed struct, resolving
 //!   `copy-from` inheritance chains topologically.
-//!
-//! ## Anti-Corruption Layer (ACL)
-//! After loading and resolving copy-from, raw CDDA types are translated into
-//! pure domain types via `crate::translate`. The rest of the game only sees
-//! clean types from `cdda_core::templates` and `cdda_core::id`.
-//!
-//! This crate has **zero Bevy dependencies**.
 
 pub mod assets;
 pub mod def_kinds;

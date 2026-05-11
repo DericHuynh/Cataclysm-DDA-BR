@@ -12,11 +12,7 @@ bevy = { workspace = true, default-features = false, features = [
     "bevy_sprite", "bevy_text", "bevy_ui", "bevy_winit", "x11",
 ] }
 bevy_ecs.workspace = true
-bevy_reflect.workspace = true
-bevy_app.workspace = true
-bevy_asset.workspace = true
 bevy_state.workspace = true
-bevy_input.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true

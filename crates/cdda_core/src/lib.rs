@@ -17,7 +17,7 @@ pub use cdda_combat as combat;
 pub mod context;
 pub mod core;
 pub mod crafting;
-pub mod data;
+pub use cdda_data as data;
 pub use cdda_equipment as equipment;
 pub mod input;
 pub mod inventory;
@@ -25,6 +25,7 @@ pub use cdda_item as item;
 pub use cdda_map as map;
 pub use cdda_replay as replay;
 pub use cdda_sim as sim;
+pub mod startup;
 pub mod worldgen;
 
 // Re-export key types — all point to cdda_core_types for the canonical definitions

@@ -609,6 +609,8 @@ pub struct RecipeResultCharges(pub u32);
 pub struct RecipeComponentEntry {
     pub item_id: String,
     pub count: u32,
+    /// TODO: convert this `bool` to a `Recovered` / `Consumed` tag component
+    /// so it's archetype-queryable (consistent with the AGENTS.md tag pattern).
     pub recovered: bool,
 }
 

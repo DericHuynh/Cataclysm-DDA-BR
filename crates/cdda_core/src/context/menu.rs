@@ -21,6 +21,9 @@ pub struct MenuItem {
     /// Shortcut key hint (e.g. "a", "b", …). Empty = no shortcut.
     pub hotkey: String,
     /// Whether this item is currently selectable.
+    ///
+    /// TODO: convert this `bool` to an `Enabled` / `Disabled` tag component
+    /// so it's archetype-queryable (consistent with the AGENTS.md tag pattern).
     pub enabled: bool,
 }
 

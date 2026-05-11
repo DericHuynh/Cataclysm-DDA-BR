@@ -7,8 +7,8 @@
 use bevy_ecs::prelude::*;
 use fixedbitset::FixedBitSet;
 
-use crate::data::def_world::{flags_to_vec, DefinitionWorld};
-use crate::data::flags::{
+use crate::def_world::{flags_to_vec, DefinitionWorld};
+use crate::flags::{
     FurnitureFlagRegistry, FurnitureFlags, ItemFlagRegistry, ItemFlags, MonsterFlagRegistry,
     MonsterFlags, TerrainFlagRegistry, TerrainFlags,
 };
@@ -23,7 +23,7 @@ use crate::data::flags::{
 /// and `build_def_world` has spawned the definition entities.
 pub fn populate_def_flags(
     world: &mut World,
-    registry: &crate::data::DefRegistry,
+    registry: &crate::DefRegistry,
     def_world: &DefinitionWorld,
 ) {
     // ── Item flags ───────────────────────────────────────────────────

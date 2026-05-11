@@ -11,17 +11,12 @@
 //! Systems that need definition data query directly:
 //! `Query<&GunData, With<IsDef>>` — the entities are in the main World.
 
-use crate::core::components::actor::{
-    ActionPoints, Creature, Faction, Gender, Health, IsAlive, PlayerData,
-};
-use crate::core::components::def::*;
-use crate::core::components::item::ItemQualities;
-use crate::core::components::sim::{Solid, WorldPosition};
-use crate::core::coords::WorldPos;
-use crate::crafting::systems::RecipeIndex;
-use crate::sim::state::{AppState, GameTime, LoadingStatus, StartupConfig};
+use cdda_components::def::*;
+use cdda_components::item::ItemQualities;
+use cdda_components::recipe::RecipeIndex;
+
 use bevy_ecs::prelude::*;
-use bevy_state::state::NextState;
+
 use std::collections::HashMap;
 
 // ===========================================================================
@@ -113,8 +108,8 @@ fn parse_weight_string_to_grams(s: &str) -> Option<u32> {
 
 /// Extract numeric ammo damage from a RawValue.
 /// Handles: bare number, {"amount": 25}, [{"amount": 25}]
-fn extract_ammo_damage(raw: &crate::core::raw_defs::RawValue) -> Option<i32> {
-    use crate::core::raw_defs::RawValue;
+fn extract_ammo_damage(raw: &cdda_core_types::core::raw_defs::RawValue) -> Option<i32> {
+    use cdda_core_types::core::raw_defs::RawValue;
     match raw {
         RawValue::Number(n) => Some(*n as i32),
         RawValue::String(s) => s.parse::<i32>().ok(),
@@ -136,10 +131,10 @@ fn extract_ammo_damage(raw: &crate::core::raw_defs::RawValue) -> Option<i32> {
     }
 }
 
-fn extract_price(p: &crate::core::raw_defs::CddaPrice) -> u64 {
+fn extract_price(p: &cdda_core_types::core::raw_defs::CddaPrice) -> u64 {
     match p {
-        crate::core::raw_defs::CddaPrice::Numeric(c) => *c as u64,
-        crate::core::raw_defs::CddaPrice::Text(s) => s
+        cdda_core_types::core::raw_defs::CddaPrice::Numeric(c) => *c as u64,
+        cdda_core_types::core::raw_defs::CddaPrice::Text(s) => s
             .split_whitespace()
             .next()
             .and_then(|w| w.parse::<f64>().ok())
@@ -148,15 +143,15 @@ fn extract_price(p: &crate::core::raw_defs::CddaPrice) -> u64 {
     }
 }
 
-fn color_to_string(c: &crate::core::raw_defs::CddaColor) -> String {
+fn color_to_string(c: &cdda_core_types::core::raw_defs::CddaColor) -> String {
     match c {
-        crate::core::raw_defs::CddaColor::Named(s) => s.clone(),
-        crate::core::raw_defs::CddaColor::Multi(v) => v.join(","),
-        crate::core::raw_defs::CddaColor::Structured(s) => s.fg.clone().unwrap_or_default(),
+        cdda_core_types::core::raw_defs::CddaColor::Named(s) => s.clone(),
+        cdda_core_types::core::raw_defs::CddaColor::Multi(v) => v.join(","),
+        cdda_core_types::core::raw_defs::CddaColor::Structured(s) => s.fg.clone().unwrap_or_default(),
     }
 }
 
-pub fn flags_to_vec(f: &crate::core::raw_defs::StringOrArray) -> Vec<String> {
+pub fn flags_to_vec(f: &cdda_core_types::core::raw_defs::StringOrArray) -> Vec<String> {
     f.all_strings()
         .into_iter()
         .filter(|s| !s.is_empty())
@@ -164,25 +159,25 @@ pub fn flags_to_vec(f: &crate::core::raw_defs::StringOrArray) -> Vec<String> {
         .collect()
 }
 
-fn materials_to_vec(m: &crate::core::raw_defs::MaterialList) -> Vec<String> {
+fn materials_to_vec(m: &cdda_core_types::core::raw_defs::MaterialList) -> Vec<String> {
     match m {
-        crate::core::raw_defs::MaterialList::Array(arr) => arr
+        cdda_core_types::core::raw_defs::MaterialList::Array(arr) => arr
             .iter()
             .map(|r| match r {
-                crate::core::raw_defs::MaterialRef::Single(id) => id.clone(),
-                crate::core::raw_defs::MaterialRef::Composite(c) => c.r#type.clone(),
-                crate::core::raw_defs::MaterialRef::Map(m) => {
+                cdda_core_types::core::raw_defs::MaterialRef::Single(id) => id.clone(),
+                cdda_core_types::core::raw_defs::MaterialRef::Composite(c) => c.r#type.clone(),
+                cdda_core_types::core::raw_defs::MaterialRef::Map(m) => {
                     m.keys().cloned().next().unwrap_or_default()
                 }
             })
             .collect(),
-        crate::core::raw_defs::MaterialList::Map(map) => map.keys().cloned().collect(),
+        cdda_core_types::core::raw_defs::MaterialList::Map(map) => map.keys().cloned().collect(),
     }
 }
 
 /// Convert a slice of raw `ComponentOption` lists into `RecipeComponentEntry` slots.
 fn parse_component_slots(
-    slots: &[Vec<crate::core::raw_defs::recipe::ComponentOption>],
+    slots: &[Vec<cdda_core_types::core::raw_defs::recipe::ComponentOption>],
 ) -> Vec<Vec<RecipeComponentEntry>> {
     slots
         .iter()
@@ -190,16 +185,16 @@ fn parse_component_slots(
             slot.iter()
                 .map(|opt| {
                     let (item_id, count) = match opt {
-                        crate::core::raw_defs::recipe::ComponentOption::SimpleId(id) => {
+                        cdda_core_types::core::raw_defs::recipe::ComponentOption::SimpleId(id) => {
                             (id.clone(), 1u32)
                         }
-                        crate::core::raw_defs::recipe::ComponentOption::Simple(id, c) => {
+                        cdda_core_types::core::raw_defs::recipe::ComponentOption::Simple(id, c) => {
                             (id.clone(), *c)
                         }
-                        crate::core::raw_defs::recipe::ComponentOption::WithFlag(id, c, _) => {
+                        cdda_core_types::core::raw_defs::recipe::ComponentOption::WithFlag(id, c, _) => {
                             (id.clone(), *c)
                         }
-                        crate::core::raw_defs::recipe::ComponentOption::Object(o) => {
+                        cdda_core_types::core::raw_defs::recipe::ComponentOption::Object(o) => {
                             (o.item.clone(), o.count.unwrap_or(1))
                         }
                     };
@@ -215,9 +210,9 @@ fn parse_component_slots(
 }
 
 /// Extract a specific damage type amount from a `Vec<DamageByType>`.
-/// DamageByType lives in crate::core::raw_defs::monster.
+/// DamageByType lives in cdda_core_types::core::raw_defs::monster.
 fn extract_monster_melee_damage(
-    damage_vec: &[crate::core::raw_defs::monster::DamageByType],
+    damage_vec: &[cdda_core_types::core::raw_defs::monster::DamageByType],
     damage_type: &str,
 ) -> i32 {
     damage_vec
@@ -242,7 +237,7 @@ fn extract_monster_melee_damage(
 /// `"subtypes": ["ARMOR", "TOOL"]` get both `ArmourData` and `ToolData`.
 pub fn build_def_world(
     world: &mut World,
-    def_registry: &crate::data::DefRegistry,
+    def_registry: &crate::DefRegistry,
     spawn_all: bool,
 ) -> DefinitionWorld {
     let mut def_world = DefinitionWorld::empty();
@@ -277,11 +272,11 @@ pub fn build_def_world(
                             .unwrap_or_default(),
                     ),
                     ItemWeight(item.weight.map(|w| w.as_grams() as u32).unwrap_or(0)),
-                    ItemVolume(crate::Volume::as_milliliters(&item.volume) as u32),
+                    ItemVolume(cdda_core_types::core::units::Volume::as_milliliters(&item.volume) as u32),
                     ItemSymbol(item.symbol.chars().next().unwrap_or('#')),
                     ItemColor(item.color.as_ref().map(color_to_string).unwrap_or_default()),
                     ItemMaterials(materials_to_vec(&item.material)),
-                    crate::data::flags::ItemFlags::new(),
+                    crate::flags::ItemFlags::new(),
                     ItemPrice {
                         price: item.price.as_ref().map(extract_price).unwrap_or(0),
                         price_postapoc: item
@@ -291,17 +286,17 @@ pub fn build_def_world(
                             .unwrap_or(0),
                     },
                     ItemPhase(match item.phase {
-                        crate::core::raw_defs::item::Phase::Solid => {
-                            crate::core::components::def::Phase::Solid
+                        cdda_core_types::core::raw_defs::item::Phase::Solid => {
+                            cdda_components::def::Phase::Solid
                         }
-                        crate::core::raw_defs::item::Phase::Liquid => {
-                            crate::core::components::def::Phase::Liquid
+                        cdda_core_types::core::raw_defs::item::Phase::Liquid => {
+                            cdda_components::def::Phase::Liquid
                         }
-                        crate::core::raw_defs::item::Phase::Gas => {
-                            crate::core::components::def::Phase::Gas
+                        cdda_core_types::core::raw_defs::item::Phase::Gas => {
+                            cdda_components::def::Phase::Gas
                         }
-                        crate::core::raw_defs::item::Phase::Plasma => {
-                            crate::core::components::def::Phase::Plasma
+                        cdda_core_types::core::raw_defs::item::Phase::Plasma => {
+                            cdda_components::def::Phase::Plasma
                         }
                     }),
                     ItemStackSize(item.stack_size.unwrap_or(1)),
@@ -378,10 +373,10 @@ pub fn build_def_world(
                                     .encumbrance
                                     .as_ref()
                                     .map(|e| match e {
-                                        crate::core::raw_defs::EncumbranceOrRange::Single(v) => {
+                                        cdda_core_types::core::raw_defs::EncumbranceOrRange::Single(v) => {
                                             *v as i32
                                         }
-                                        crate::core::raw_defs::EncumbranceOrRange::Range(v) => {
+                                        cdda_core_types::core::raw_defs::EncumbranceOrRange::Range(v) => {
                                             v.first().copied().unwrap_or(0) as i32
                                         }
                                     })
@@ -391,10 +386,10 @@ pub fn build_def_world(
                                         .covers
                                         .as_ref()
                                         .map(|c| match c {
-                                            crate::core::raw_defs::StringOrArray::Single(s) => {
+                                            cdda_core_types::core::raw_defs::StringOrArray::Single(s) => {
                                                 s.clone()
                                             }
-                                            crate::core::raw_defs::StringOrArray::Multi(v) => {
+                                            cdda_core_types::core::raw_defs::StringOrArray::Multi(v) => {
                                                 v.join(", ")
                                             }
                                         })
@@ -447,8 +442,8 @@ pub fn build_def_world(
                         .spoils_in
                         .as_ref()
                         .map(|d| match d {
-                            crate::core::raw_defs::CddaDuration::Number(n) => *n,
-                            crate::core::raw_defs::CddaDuration::Text(s) => s
+                            cdda_core_types::core::raw_defs::CddaDuration::Number(n) => *n,
+                            cdda_core_types::core::raw_defs::CddaDuration::Text(s) => s
                                 .split_whitespace()
                                 .next()
                                 .and_then(|w| w.parse::<u32>().ok())
@@ -525,12 +520,12 @@ pub fn build_def_world(
             // ── Melee weapon (any item with melee_damage) ───────────────
             if item.melee_damage.is_some() {
                 let (dmg_bash, dmg_cut) = match &item.melee_damage {
-                    Some(crate::core::raw_defs::MeleeDamage::BashOnly(b)) => (*b, 0),
-                    Some(crate::core::raw_defs::MeleeDamage::ByType(map)) => (
+                    Some(cdda_core_types::core::raw_defs::MeleeDamage::BashOnly(b)) => (*b, 0),
+                    Some(cdda_core_types::core::raw_defs::MeleeDamage::ByType(map)) => (
                         map.get("bash").copied().unwrap_or(0),
                         map.get("cut").copied().unwrap_or(0),
                     ),
-                    Some(crate::core::raw_defs::MeleeDamage::TypedArray(arr)) => {
+                    Some(cdda_core_types::core::raw_defs::MeleeDamage::TypedArray(arr)) => {
                         let mut b = 0;
                         let mut c = 0;
                         for td in arr {
@@ -548,8 +543,8 @@ pub fn build_def_world(
                     .to_hit
                     .as_ref()
                     .map(|t| match t {
-                        crate::core::raw_defs::ToHit::Number(n) => *n,
-                        crate::core::raw_defs::ToHit::Struct {
+                        cdda_core_types::core::raw_defs::ToHit::Number(n) => *n,
+                        cdda_core_types::core::raw_defs::ToHit::Struct {
                             grip,
                             length,
                             surface,
@@ -623,7 +618,7 @@ pub fn build_def_world(
                                 // max_contains_volume string.
                                 let max_vol = p
                                     .max_volume
-                                    .map(|v| crate::Volume::as_milliliters(&v) as u32)
+                                    .map(|v| cdda_core_types::core::units::Volume::as_milliliters(&v) as u32)
                                     .or_else(|| {
                                         p.max_contains_volume
                                             .as_ref()
@@ -726,7 +721,7 @@ pub fn build_def_world(
                         day: monster.vision_day as u32,
                         night: monster.vision_night as u32,
                     },
-                    crate::data::flags::MonsterFlags::new(),
+                    crate::flags::MonsterFlags::new(),
                     MonsterSpecies(species_list),
                     MonsterDefaultFaction(monster.default_faction.clone().unwrap_or_default()),
                     MonsterBodyType(monster.bodytype.clone().unwrap_or_default()),
@@ -766,7 +761,7 @@ pub fn build_def_world(
                             .unwrap_or_default(),
                     ),
                     TerrainMoveCost(terrain.move_cost.max(0)),
-                    crate::data::flags::TerrainFlags::new(),
+                    crate::flags::TerrainFlags::new(),
                     TerrainLightEmitted(terrain.light_emitted.unwrap_or(0)),
                     TerrainHasCeiling(terrain.has_ceiling.unwrap_or(false)),
                     TerrainConnectsTo(flags_to_vec(&terrain.connects_to)),
@@ -797,14 +792,14 @@ pub fn build_def_world(
                             .map(color_to_string)
                             .unwrap_or_default(),
                     ),
-                    crate::data::flags::FurnitureFlags::new(),
+                    crate::flags::FurnitureFlags::new(),
                     FurnitureMoveCostMod(furniture.move_cost_mod.unwrap_or(0)),
                     FurnitureCoverage(furniture.coverage.unwrap_or(0)),
                     FurnitureLightEmitted(furniture.light_emitted.unwrap_or(0)),
                     FurnitureMaxVolume(
                         furniture
                             .max_volume
-                            .map(|v| crate::Volume::as_milliliters(&v) as u32)
+                            .map(|v| cdda_core_types::core::units::Volume::as_milliliters(&v) as u32)
                             .unwrap_or(0),
                     ),
                 ))
@@ -816,7 +811,7 @@ pub fn build_def_world(
         // Build a quick lookup: requirement ID → RequirementDef.
         let req_lookup: std::collections::HashMap<
             &str,
-            &crate::core::raw_defs::requirement::RequirementDef,
+            &cdda_core_types::core::raw_defs::requirement::RequirementDef,
         > = def_registry
             .requirements
             .iter()
@@ -878,8 +873,8 @@ pub fn build_def_world(
             }
 
             let autolearn = match &recipe.autolearn {
-                Some(crate::core::raw_defs::recipe::Autolearn::Bool(b)) => *b,
-                Some(crate::core::raw_defs::recipe::Autolearn::Skills(v)) => !v.is_empty(),
+                Some(cdda_core_types::core::raw_defs::recipe::Autolearn::Bool(b)) => *b,
+                Some(cdda_core_types::core::raw_defs::recipe::Autolearn::Skills(v)) => !v.is_empty(),
                 None => false,
             };
             world.entity_mut(entity).insert(RecipeAutolearn(autolearn));
@@ -889,10 +884,10 @@ pub fn build_def_world(
                 let flat: Vec<(String, u32)> = quals
                     .iter()
                     .filter_map(|q| match q {
-                        crate::core::raw_defs::recipe::QualityEntry::Single(qr) => {
+                        cdda_core_types::core::raw_defs::recipe::QualityEntry::Single(qr) => {
                             Some((qr.id.clone(), qr.level))
                         }
-                        crate::core::raw_defs::recipe::QualityEntry::Alternative(alts) => {
+                        cdda_core_types::core::raw_defs::recipe::QualityEntry::Alternative(alts) => {
                             alts.first().map(|qr| (qr.id.clone(), qr.level))
                         }
                     })
@@ -921,7 +916,7 @@ pub fn build_def_world(
                             if let Some(comp_val) = &req.components {
                                 if let Ok(slots) =
                                     serde_json::from_value::<
-                                        Vec<Vec<crate::core::raw_defs::recipe::ComponentOption>>,
+                                        Vec<Vec<cdda_core_types::core::raw_defs::recipe::ComponentOption>>,
                                     >(comp_val.clone())
                                 {
                                     let scaled = parse_component_slots(&slots)
@@ -1065,163 +1060,4 @@ pub fn build_def_world(
     }
 
     def_world
-}
-
-// ===========================================================================
-// CityBuildings — resource wrapper for worldgen access
-// ===========================================================================
-
-/// Thin wrapper to store city_building definitions as a Bevy resource.
-/// Extracted from `DefRegistry` after loading so worldgen can access them.
-#[derive(Resource, Debug, Clone)]
-pub struct CityBuildings(
-    pub  std::collections::HashMap<
-        crate::core::id::DefId<crate::core::raw_defs::city_building::CityBuildingDef>,
-        std::sync::Arc<crate::core::raw_defs::city_building::CityBuildingDef>,
-    >,
-);
-
-// ===========================================================================
-// Startup system — load JSON data and build DefinitionWorld
-// ===========================================================================
-
-pub fn load_data_system(world: &mut World) {
-    use crate::data::loader::Loader;
-    use tracing::info;
-
-    info!("Data loading deferred until player starts game");
-
-    let data_dirs = world.resource::<StartupConfig>().data_dirs.clone();
-
-    world.resource_mut::<LoadingStatus>().current_phase = "Scanning JSON files...".into();
-    info!("Loading data from {:?}", data_dirs);
-
-    let mut loader = Loader::new(data_dirs);
-
-    world.resource_mut::<LoadingStatus>().current_phase = "Ingesting raw definitions...".into();
-    let raw_map = loader.ingest_all();
-    let total_raw: usize = raw_map.values().map(|v| v.len()).sum();
-    world.resource_mut::<LoadingStatus>().total_defs = total_raw;
-    info!("Ingested {} raw definitions", total_raw);
-
-    world.resource_mut::<LoadingStatus>().current_phase =
-        "Resolving copy-from inheritance...".into();
-    match loader.load() {
-        Ok(registry) => {
-            let count = registry.total_count();
-            info!("Data loading complete: {} resolved definitions", count);
-
-            world.resource_mut::<LoadingStatus>().current_phase =
-                "Building definition entities...".into();
-            let def_world = build_def_world(world, &registry, true);
-            crate::data::populate_flags::populate_def_flags(world, &registry, &def_world);
-            crate::data::schema_gen::collect_and_generate_schemas(world);
-            info!(
-                "DefinitionWorld: {} items, {} terrain, {} furniture, {} monsters",
-                registry.items.len(),
-                registry.terrain.len(),
-                registry.furniture.len(),
-                registry.monsters.len(),
-            );
-
-            // Store the city_buildings for dev-worldgen access
-            world.insert_resource(CityBuildings(registry.city_buildings.clone()));
-
-            world.insert_resource(def_world);
-            world.insert_resource(GameTime::default());
-
-            world.resource_mut::<LoadingStatus>().current_phase = "Complete".into();
-            world.resource_mut::<LoadingStatus>().total_defs = count;
-            world
-                .resource_mut::<NextState<AppState>>()
-                .set(AppState::WorldGen);
-        }
-        Err(errors) => {
-            for err in &errors {
-                tracing::warn!("Data loading error: {:?}", err);
-            }
-            info!(
-                "Data loading finished with {} non-fatal errors, continuing...",
-                errors.len()
-            );
-            world
-                .resource_mut::<NextState<AppState>>()
-                .set(AppState::WorldGen);
-        }
-    }
-}
-
-// ===========================================================================
-// Worldgen system - dev-worldgen: one of every building
-// ===========================================================================
-
-pub fn worldgen_system(world: &mut World) {
-    use tracing::info;
-
-    let has_defs = world.get_resource::<DefinitionWorld>().is_some();
-
-    // --- Dev-worldgen: populate WorldMap with one of every city building ---
-    if has_defs {
-        let city_buildings = world.remove_resource::<CityBuildings>();
-        let config = world
-            .get_resource::<crate::worldgen::dev::DevWorldgenConfig>()
-            .cloned()
-            .unwrap_or_default();
-
-        if let Some(cb) = city_buildings {
-            let building_count = cb.0.len();
-            info!(
-                "Dev-worldgen: generating showcase with {} city buildings...",
-                building_count
-            );
-
-            let mut world_map = world.resource_mut::<crate::worldgen::setup::WorldMapResource>();
-            let placed =
-                crate::worldgen::dev::generate_dev_worldmap(&mut world_map.0, &cb.0, &config);
-            info!(
-                "Dev-worldgen complete: {} buildings placed, {} bubbles created",
-                placed,
-                world_map.0.bubble_count(),
-            );
-        }
-    }
-
-    if has_defs {
-        let pos = WorldPos::new(0, 0, crate::ZLevel::new(0));
-        world.spawn((
-            PlayerData {
-                name: "Survivor".into(),
-                gender: Gender::Male,
-                age: 25,
-                height: 175,
-                blood_type: "O+".into(),
-                profession: None,
-                scenario: None,
-            },
-            IsAlive,
-            WorldPosition(pos),
-            Creature {
-                def_id: "player".into(),
-                name: "Survivor".into(),
-                species: crate::SpeciesId::from(0u32),
-                symbol: '@',
-            },
-            Health {
-                current: 100,
-                max: 100,
-            },
-            Faction {
-                id: crate::FactionId::from(0u32),
-            },
-            Solid,
-            ActionPoints {
-                current: 100,
-                speed: 100,
-            },
-        ));
-        info!("Spawned player at origin (0,0). Use the map to explore all buildings.");
-    }
-    world
-        .resource_mut::<NextState<AppState>>()
-        .set(AppState::InGame);
 }

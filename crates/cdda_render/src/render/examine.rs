@@ -12,19 +12,9 @@ use crate::data::def_world::DefinitionWorld;
 use crate::input::{ActiveKeybindings, BindableAction};
 use crate::inventory::examine_resource::ExaminedItem;
 use crate::render::item_detail::ItemDetailSnapshot;
+use crate::render::theme::{self, UiTheme};
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
-
-// ---------------------------------------------------------------------------
-// Colours (match inventory palette)
-// ---------------------------------------------------------------------------
-
-const BG: Color = Color::srgb(0.04, 0.04, 0.06);
-const OVERLAY_BG: Color = Color::srgb(0.08, 0.08, 0.14);
-const ACCENT: Color = Color::srgb(0.85, 0.60, 0.15);
-const TEXT_BRIGHT: Color = Color::srgb(0.95, 0.95, 0.95);
-const TEXT_DIM: Color = Color::srgb(0.55, 0.55, 0.55);
-const DIVIDER: Color = Color::srgb(0.20, 0.20, 0.25);
 
 // ---------------------------------------------------------------------------
 // CddaScreen trait impl
@@ -46,6 +36,7 @@ impl CddaScreen for ExamineScreen {
 
 fn spawn_examine_from_world(world: &mut World) {
     // ── Phase 1: extract data from world ────────────────────────────────
+    let theme = world.resource::<UiTheme>().clone();
     let examined_opt = world.resource::<ExaminedItem>().0;
     let Some(item_entity) = examined_opt else {
         return;
@@ -89,7 +80,7 @@ fn spawn_examine_from_world(world: &mut World) {
             padding: UiRect::all(Val::Px(24.0)),
             ..default()
         },
-        BackgroundColor(BG),
+        BackgroundColor(theme::BG),
     ))
     .with_children(|root| {
         // ── Title ─────────────────────────────────────────────────────
@@ -99,7 +90,7 @@ fn spawn_examine_from_world(world: &mut World) {
                 padding: UiRect::axes(Val::Px(16.0), Val::Px(10.0)),
                 ..default()
             },
-            BackgroundColor(OVERLAY_BG),
+            BackgroundColor(theme::TAB_BG),
         ))
         .with_child((
             Text::new(format!("{} — DETAILS", type_id_ref)),
@@ -107,7 +98,7 @@ fn spawn_examine_from_world(world: &mut World) {
                 font_size: 28.0,
                 ..default()
             },
-            TextColor(ACCENT),
+            TextColor(theme.accent2()),
         ));
 
         // ── Runtime info ──────────────────────────────────────────────
@@ -123,7 +114,7 @@ fn spawn_examine_from_world(world: &mut World) {
                         font_size: 16.0,
                         ..default()
                     },
-                    TextColor(TEXT_BRIGHT),
+                    TextColor(theme::TEXT_BRIGHT),
                 ));
         }
 
@@ -135,7 +126,7 @@ fn spawn_examine_from_world(world: &mut World) {
                 margin: UiRect::vertical(Val::Px(4.0)),
                 ..default()
             },
-            BackgroundColor(DIVIDER),
+            BackgroundColor(theme::DIVIDER),
         ));
 
         // ── Item details from def entity ──────────────────────────────
@@ -157,7 +148,7 @@ fn spawn_examine_from_world(world: &mut World) {
                     font_size: 16.0,
                     ..default()
                 },
-                TextColor(TEXT_DIM),
+                TextColor(theme::TEXT_DIM),
             ));
         }
 
@@ -177,7 +168,7 @@ fn spawn_examine_from_world(world: &mut World) {
             .with_child((
                 Text::new(hints),
                 super::ui_font(&font_handle, 15.0),
-                TextColor(TEXT_DIM),
+                TextColor(theme::TEXT_DIM),
             ));
     });
 }

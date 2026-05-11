@@ -4,7 +4,6 @@
 //! ordering (Input → Sim → Render).
 
 use bevy::app::{App, Plugin, PluginGroup, Update};
-use bevy::ecs::message::MessageReader;
 use bevy::prelude::*;
 use bevy::render::settings::{RenderCreation, WgpuSettings};
 use bevy::render::RenderPlugin;
@@ -21,6 +20,7 @@ use cdda_core::context::screen::Screen as ScreenPlugin;
 use cdda_core::{GameSet, SimSet};
 
 use cdda_components::events::ItemMoveEvent;
+use cdda_events::GameEvent;
 use cdda_activity::plugin::ActivityPlugin;
 use cdda_core::actor::bionics::tick_bionics;
 use cdda_core::actor::effects::effects_phase;
@@ -39,7 +39,7 @@ use cdda_core::context::overlay::{
 use cdda_core::crafting::plugin::CraftingPlugin;
 use cdda_core::crafting::systems::on_examine_item_changed;
 use cdda_core::data::assets::CddaAssetsPlugin;
-use cdda_core::data::def_world::load_data_system;
+use cdda_core::startup::load_data_system;
 use cdda_core::inventory::systems::{
     assign_invlets_system, build_inventory_bins, dev_pickup_drop_system, examine_item_input,
     inventory_screen_input, process_item_move_events, spawn_dev_world,
@@ -78,20 +78,23 @@ impl Default for CddaStartupConfig {
 }
 
 // ---------------------------------------------------------------------------
-// StartGame transition system
+// StartGame observer — reacts to GameEvent::StartNewGame immediately
 // ---------------------------------------------------------------------------
 
-/// Listens for `GameEvent::StartNewGame` and transitions `AppState`
-/// from `MainMenu` → `Gameplay`, kicking off JSON loading + worldgen.
+/// Observer that reacts to `GameEvent::StartNewGame` by transitioning
+/// `AppState` from `MainMenu` → `DataLoading`, kicking off JSON loading
+/// and worldgen.
+///
+/// This is an observer (not a polling system), so the transition happens
+/// immediately when the navigation system triggers the event — no frame
+/// delay.
 pub fn start_game_on_event(
-    mut reader: MessageReader<cdda_core::context::nav::GameEvent>,
+    event: On<GameEvent>,
     mut next: ResMut<NextState<AppState>>,
 ) {
-    for event in reader.read() {
-        if *event == cdda_core::context::nav::GameEvent::StartNewGame {
-            info!("Player confirmed start game — transitioning to DataLoading");
-            next.set(AppState::DataLoading);
-        }
+    if matches!(*event, GameEvent::StartNewGame) {
+        info!("Player confirmed start game — transitioning to DataLoading");
+        next.set(AppState::DataLoading);
     }
 }
 
@@ -184,6 +187,9 @@ impl Plugin for CddaPlugin {
         app.add_message::<ItemMoveEvent>();
         app.add_message::<cdda_components::messages::TurnAdvanced>();
 
+        // ── Observer: reacts to GameEvent (e.g. StartNewGame) immediately ──
+        app.add_observer(start_game_on_event);
+
         // ── Context action registration — OnEnter (event-driven) ──────
         //
         // MUST run before CddaRenderPlugin's OnEnter systems so that
@@ -237,11 +243,7 @@ impl Plugin for CddaPlugin {
         );
         app.add_systems(
             Update,
-            start_game_on_event.run_if(in_state(AppState::MainMenu)),
-        );
-        app.add_systems(
-            Update,
-            cdda_core::data::def_world::worldgen_system.run_if(in_state(AppState::WorldGen)),
+            cdda_core::startup::worldgen_system.run_if(in_state(AppState::WorldGen)),
         );
 
         // Fix #6: Gate turn tick so MP isn't granted every frame.

@@ -2051,6 +2051,7 @@ dependencies = [
  "cdda_components",
  "cdda_core",
  "cdda_core_types",
+ "cdda_data",
  "cdda_equipment",
  "cdda_item",
  "cdda_map",
@@ -2120,6 +2121,7 @@ dependencies = [
  "cdda_activity",
  "cdda_components",
  "cdda_core",
+ "cdda_events",
  "cdda_render",
  "clap",
  "tracing",
@@ -2156,8 +2158,11 @@ version = "0.1.0"
 dependencies = [
  "bevy_ecs",
  "bevy_reflect",
+ "bevy_state",
  "cdda_core_types",
+ "cdda_events",
  "fixedbitset",
+ "leafwing-input-manager",
  "schemars",
  "serde",
 ]
@@ -2180,7 +2185,9 @@ dependencies = [
  "cdda_combat",
  "cdda_components",
  "cdda_core_types",
+ "cdda_data",
  "cdda_equipment",
+ "cdda_events",
  "cdda_item",
  "cdda_map",
  "cdda_replay",
@@ -2216,11 +2223,57 @@ dependencies = [
 ]
 
 [[package]]
+name = "cdda_data"
+version = "0.1.0"
+dependencies = [
+ "bevy_app",
+ "bevy_asset",
+ "bevy_ecs",
+ "bevy_reflect",
+ "bevy_state",
+ "bidimap",
+ "cdda_components",
+ "cdda_core_types",
+ "cdda_events",
+ "cdda_sim",
+ "fixedbitset",
+ "indexmap",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tracing",
+]
+
+[[package]]
 name = "cdda_equipment"
 version = "0.1.0"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
+]
+
+[[package]]
+name = "cdda_events"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "cdda_core_types",
+]
+
+[[package]]
+name = "cdda_inventory"
+version = "0.1.0"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_state",
+ "cdda_actor",
+ "cdda_components",
+ "cdda_core_types",
+ "cdda_events",
+ "tracing",
 ]
 
 [[package]]
@@ -2247,11 +2300,7 @@ name = "cdda_render"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "bevy_app",
- "bevy_asset",
  "bevy_ecs",
- "bevy_input",
- "bevy_reflect",
  "bevy_state",
  "cdda_components",
  "cdda_core",

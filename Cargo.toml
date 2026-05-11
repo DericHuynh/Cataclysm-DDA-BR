@@ -21,6 +21,9 @@ members = [
     "crates/cdda_replay",
     "crates/cdda_item",
     "crates/cdda_activity",
+    "crates/cdda_events",
+    "crates/cdda_inventory",
+    "crates/cdda_data",
 ]
 
 [workspace.dependencies]
@@ -68,6 +71,8 @@ cdda_sim = { path = "crates/cdda_sim" }
 cdda_replay = { path = "crates/cdda_replay" }
 cdda_item = { path = "crates/cdda_item" }
 cdda_activity = { path = "crates/cdda_activity" }
+cdda_events = { path = "crates/cdda_events" }
+cdda_data = { path = "crates/cdda_data" }
 
 [dev-dependencies]
 cdda_core = { path = "crates/cdda_core" }
@@ -85,6 +90,7 @@ bevy_ecs.workspace = true
 bevy_app.workspace = true
 bevy_state.workspace = true
 serde_json.workspace = true
+cdda_data.workspace = true
 tempfile = "3.27.0"
 
 [profile.dev]

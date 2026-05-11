@@ -34,6 +34,8 @@ cdda_sim = { path = "../cdda_sim" }
 cdda_replay = { path = "../cdda_replay" }
 cdda_item = { path = "../cdda_item" }
 cdda_activity = { path = "../cdda_activity" }
+cdda_events = { path = "../cdda_events" }
+cdda_data = { path = "../cdda_data" }
 dyn-clone = "1.0.20"
 fixedbitset = "0.5.7"
 bidimap = "0.7.0"

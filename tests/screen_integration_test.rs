@@ -216,7 +216,6 @@ fn overlay_blocks_navigation_actions() {
     app.insert_resource(ContextStack::default());
     app.insert_resource(FocusedCommandIndex::default());
     app.insert_resource(ContextActions::default());
-    app.add_message::<cdda_core::context::nav::GameEvent>();
     app.add_message::<InputAction>();
 
     // Add an overlay

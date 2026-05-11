@@ -27,7 +27,7 @@ use bevy_reflect::{Reflect, TypePath};
 use serde::Deserialize;
 use tracing::info;
 
-pub use crate::data::registry::DefRegistry;
+pub use crate::registry::DefRegistry;
 
 // ---------------------------------------------------------------------------
 // Asset type
@@ -75,7 +75,7 @@ pub enum PackLoaderError {
     #[error("Data loading failed with {count} error(s): {first}")]
     Load {
         count: usize,
-        first: crate::data::loader::LoaderError,
+        first: crate::loader::LoaderError,
     },
 }
 
@@ -108,7 +108,7 @@ impl AssetLoader for CddaDataPackLoader {
             manifest.data_dirs.len()
         );
 
-        let mut loader = crate::data::loader::Loader::new(manifest.data_dirs);
+        let mut loader = crate::loader::Loader::new(manifest.data_dirs);
         loader.ingest_all();
         let registry = loader.load().map_err(|mut errs| {
             let first = errs.remove(0);

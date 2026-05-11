@@ -21,35 +21,30 @@
 //!
 //! Reference: CDDA-master `inventory.h` / `inventory.cpp`.
 
-use cdda_components::item::PocketOf;
-use crate::actor::turn::{AP_COST_PICKUP, AP_COST_WIELD};
-use crate::context::ctx::Ctx;
-use crate::context::nav::{push_ctx, FocusedCommandIndex};
-use crate::context::ContextStack;
-use crate::core::components::actor::Stats;
-use crate::core::components::actor::{
-    ActionPoints, Gender, HandCount, Health, IsAlive, PlayerData,
+use cdda_actor::turn::{AP_COST_PICKUP, AP_COST_WIELD};
+use cdda_components::actor::{
+    ActionPoints, Gender, HandCount, Health, IsAlive, PlayerData, Stats,
 };
-use crate::core::components::def::ItemVolume;
-use crate::core::components::item::{
+use cdda_components::context::{ContextStack, Ctx, FocusedCommandIndex, push_ctx};
+use cdda_components::def::ItemVolume;
+use cdda_components::dev::{DevCamera, DevGroundItemName, DevPlayer};
+use cdda_components::events::{ItemMoveEvent, MoveLocation};
+use cdda_components::item::{
     Container, ContainerContents, CurrentCharges, DefOrigin, InsideContainer, Inventory,
     InventoryBin, InventoryFocus, Invlet, InvletFavorites, ItemDamage, ItemTypeId, MountedPockets,
     Pocket, StackCount, WieldedBy, WieldedItems, FLOOR_CAP_ML,
 };
-use crate::core::components::sim::WorldPosition;
-use crate::core::coords::WorldPos;
-use crate::core::units::*;
-use crate::data::def_world::DefinitionWorld;
-use crate::input::{GameAction, InputAction};
-use crate::inventory::examine_resource::ExaminedItem;
-use crate::ZLevel;
+use cdda_components::sim::WorldPosition;
+use cdda_core_types::core::coords::{WorldPos, ZLevel};
+use cdda_core_types::core::units::*;
 use bevy_ecs::message::{MessageReader, MessageWriter};
 use bevy_ecs::prelude::*;
 use bevy_ecs::world::World;
 use bevy_state::prelude::NextState;
-use cdda_components::dev::{DevCamera, DevGroundItemName, DevPlayer};
-use cdda_components::events::{ItemMoveEvent, MoveLocation};
 use tracing::{info, warn};
+
+use crate::examine_resource::ExaminedItem;
+use crate::pocket;
 
 // ===========================================================================
 // Systems
@@ -160,7 +155,6 @@ pub fn process_item_move_events(
     mut commands: Commands,
     invlet_query: Query<&Invlet>,
     mut inventory_query: Query<&mut Inventory>,
-    pocket_of_query: Query<&PocketOf>,
 ) {
     let events: Vec<ItemMoveEvent> = reader.read().cloned().collect();
     for event in events {
@@ -174,11 +168,6 @@ pub fn process_item_move_events(
 
                 if let Ok(mut inv) = inventory_query.get_mut(container) {
                     inv.needs_invlet.insert(event.item);
-                } else if let Ok(pocket_of) = pocket_of_query.get(container) {
-                    // Body pocket doesn't have Inventory — follow PocketOf to owner
-                    if let Ok(mut owner_inv) = inventory_query.get_mut(pocket_of.0) {
-                        owner_inv.needs_invlet.insert(event.item);
-                    }
                 }
             }
             // Container → Ground (drop)
@@ -384,7 +373,7 @@ pub fn inventory_screen_input(
                 } else {
                     // Unwield: hand → body pocket.
                     if let Some(&item_entity) = wielded_list.get(focus.index) {
-                        let body_pocket = crate::inventory::pocket::get_body_pocket(
+                        let body_pocket = pocket::get_body_pocket(
                             player_entity,
                             &mounted_pockets_q,
                         )
@@ -423,259 +412,7 @@ pub fn inventory_screen_input(
     }
 }
 
-// ---------------------------------------------------------------------------
-// examine_item_input — actions on the ItemExamine overlay
-// ---------------------------------------------------------------------------
-
-/// Handles item actions while the `ItemExamine` overlay is open.
-///
-/// Exclusive system — needs `&mut World` access for `resume_craft`.
-///
-/// Actions:
-/// - **d / Drop** — drop the examined item at the player's OMT tile.
-/// - **w** — wield the item (if pocket) or unwield (if wielded).
-/// - **r** — resume an interrupted `InProgressCraft`.
-/// - **Esc / Enter** — close the overlay, return to inventory.
-pub fn examine_item_input(world: &mut World) {
-    // Drain InputAction messages.
-    let actions: Vec<GameAction> = {
-        let mut messages = world.resource_mut::<bevy_ecs::message::Messages<InputAction>>();
-        messages.update();
-        messages.drain().map(|e| e.action.clone()).collect()
-    };
-    if actions.is_empty() {
-        return;
-    }
-
-    let item_entity = match world.resource::<ExaminedItem>().0 {
-        Some(e) => e,
-        None => return,
-    };
-
-    let player_entity = {
-        let mut q = world.query_filtered::<Entity, With<DevPlayer>>();
-        match q.iter(world).next() {
-            Some(e) => e,
-            None => return,
-        }
-    };
-
-    let hand_limit = world
-        .get::<HandCount>(player_entity)
-        .map(|h| h.0 as usize)
-        .unwrap_or(0);
-
-    let camera = world.resource::<DevCamera>().clone();
-
-    for action in actions {
-        match action {
-            // ── Close overlay ─────────────────────────────────────────
-            GameAction::Cancel => {
-                *world.resource_mut::<ExaminedItem>() = ExaminedItem(None);
-                let parent = world.resource_mut::<ContextStack>().0.pop();
-                if let Some(p) = parent {
-                    world.resource_mut::<FocusedCommandIndex>().on_pop(p);
-                    world.resource_mut::<NextState<Ctx>>().set(p);
-                }
-            }
-
-            // ── Drop ─────────────────────────────────────────────────
-            GameAction::Drop => {
-                let item_vol = world
-                    .get::<ItemVolume>(item_entity)
-                    .map(|v| v.0)
-                    .unwrap_or(0);
-
-                // Check floor volume.
-                let floor_volume: u32 = {
-                    let mut q = world.query::<(&WorldPosition, Option<&ItemVolume>)>();
-                    q.iter(world)
-                        .filter(|(wp, _)| {
-                            wp.0.x.div_euclid(24) == camera.x
-                                && wp.0.y.div_euclid(24) == camera.y
-                                && wp.0.z.0 as i32 == camera.z
-                        })
-                        .filter_map(|(_, vol)| vol.map(|v| v.0))
-                        .sum()
-                };
-                if floor_volume + item_vol > FLOOR_CAP_ML {
-                    warn!(
-                        "Floor ({},{}) full: {}/{} mL — drop blocked.",
-                        camera.x, camera.y, floor_volume, FLOOR_CAP_ML
-                    );
-                    continue;
-                }
-
-                let drop_pos =
-                    WorldPos::new(camera.x * 24, camera.y * 24, ZLevel::new(camera.z as i8));
-
-                // Clean up invlet from player's Inventory.
-                let invlet_char = world.get::<Invlet>(item_entity).map(|i| i.0);
-                if let Some(c) = invlet_char {
-                    if let Some(mut inv) = world.get_mut::<Inventory>(player_entity) {
-                        inv.invlets.remove(&c);
-                    }
-                }
-
-                world
-                    .entity_mut(item_entity)
-                    .remove::<InsideContainer>()
-                    .remove::<WieldedBy>()
-                    .remove::<Invlet>()
-                    .insert(WorldPosition(drop_pos));
-
-                *world.resource_mut::<ExaminedItem>() = ExaminedItem(None);
-                let parent = world.resource_mut::<ContextStack>().0.pop();
-                if let Some(p) = parent {
-                    world.resource_mut::<FocusedCommandIndex>().on_pop(p);
-                    world.resource_mut::<NextState<Ctx>>().set(p);
-                }
-            }
-
-            // ── Wield / Unwield ───────────────────────────────────────
-            GameAction::UseItem => {
-                let is_wielded = world.get::<WieldedBy>(item_entity).is_some();
-                if is_wielded {
-                    let body_pocket = {
-                        let mp = world.get::<MountedPockets>(player_entity);
-                        mp.and_then(|mp| mp.iter().next()).unwrap_or(player_entity)
-                    };
-                    world
-                        .entity_mut(item_entity)
-                        .remove::<WieldedBy>()
-                        .insert(InsideContainer(body_pocket));
-                } else {
-                    let wielded_count = world
-                        .get::<WieldedItems>(player_entity)
-                        .map(|wi| wi.iter().count())
-                        .unwrap_or(0);
-                    if wielded_count < hand_limit {
-                        world
-                            .entity_mut(item_entity)
-                            .remove::<InsideContainer>()
-                            .insert(WieldedBy(player_entity));
-                    } else {
-                        warn!(
-                            "Hands full ({}/{}) — cannot wield.",
-                            wielded_count, hand_limit
-                        );
-                        continue;
-                    }
-                }
-                if let Some(mut ap) = world.get_mut::<ActionPoints>(player_entity) {
-                    ap.spend(AP_COST_WIELD);
-                }
-                *world.resource_mut::<ExaminedItem>() = ExaminedItem(None);
-                let parent = world.resource_mut::<ContextStack>().0.pop();
-                if let Some(p) = parent {
-                    world.resource_mut::<FocusedCommandIndex>().on_pop(p);
-                    world.resource_mut::<NextState<Ctx>>().set(p);
-                }
-            }
-
-            // ── Resume craft ──────────────────────────────────────────
-            GameAction::HotkeyPress('r') => {
-                match crate::crafting::systems::resume_craft(world, player_entity, item_entity) {
-                    Ok(()) => {
-                        info!("Resumed craft on {:?}", item_entity);
-                    }
-                    Err(e) => {
-                        warn!("Cannot resume craft: {}", e);
-                    }
-                }
-                *world.resource_mut::<ExaminedItem>() = ExaminedItem(None);
-                let parent = world.resource_mut::<ContextStack>().0.pop();
-                if let Some(p) = parent {
-                    world.resource_mut::<FocusedCommandIndex>().on_pop(p);
-                    world.resource_mut::<NextState<Ctx>>().set(p);
-                }
-            }
-
-            _ => {}
-        }
-    }
-}
-
-// ===========================================================================
-// Dev-world systems
-// ===========================================================================
-
-/// Spawns the dev player entity and a handful of ground items for testing.
-///
-/// Exclusive system so it can call `spawn_item_from_def` directly, which uses
-/// `EntityCloner` to copy all def components (qualities, weapon stats, etc.)
-/// to the runtime entity without per-component enumeration.
-pub fn spawn_dev_world(world: &mut World) {
-    let player = world
-        .spawn((
-            DevPlayer,
-            HandCount(2),
-            Inventory::default(),
-            InvletFavorites::default(),
-            ActionPoints::default(),
-            IsAlive,
-            Stats::default(),
-            Health {
-                current: 100,
-                max: 100,
-            },
-            PlayerData {
-                name: "Dev Player".to_string(),
-                gender: Gender::default(),
-                age: 30,
-                height: 170,
-                blood_type: "O+".to_string(),
-                profession: None,
-                scenario: None,
-            },
-        ))
-        .id();
-    crate::inventory::pocket::spawn_body_pocket(world, player);
-
-    // Columns: display name | CDDA type ID | OMT x | OMT y
-    let items: &[(&str, &str, i32, i32)] = &[
-        ("Rock", "sharp_rock", 0, 0),
-        ("Stick", "stick", 1, 0),
-        ("Battery", "light_battery_cell", 0, 1),
-        ("Knife", "spear_knife", 2, 0),
-        ("Lighter", "lighter", 1, 1),
-    ];
-
-    // Resolve def entities before mutably borrowing world for spawning.
-    let resolved: Vec<(&str, &str, i32, i32, Option<Entity>)> = {
-        let dw = world.get_resource::<DefinitionWorld>();
-        items
-            .iter()
-            .map(|&(name, cdda_id, ox, oy)| {
-                let def_e = dw.and_then(|dw| dw.entity_by_str(cdda_id));
-                (name, cdda_id, ox, oy, def_e)
-            })
-            .collect()
-    };
-
-    for (name, cdda_id, omt_x, omt_y, def_e) in resolved {
-        let pos = WorldPos::new(omt_x * 24, omt_y * 24, ZLevel::new(0));
-        if let Some(def_entity) = def_e {
-            let instance =
-                crate::worldgen::spawning_impl::spawn_item_from_def(world, def_entity, pos, 1);
-            world
-                .entity_mut(instance)
-                .insert(DevGroundItemName(name.to_string()))
-                .insert(ItemTypeId(cdda_id.to_string()));
-        } else {
-            // Def not found — spawn a minimal placeholder so the dev world still loads.
-            world.spawn((
-                DevGroundItemName(name.to_string()),
-                ItemTypeId(cdda_id.to_string()),
-                StackCount::new(1),
-                WorldPosition(pos),
-            ));
-        }
-    }
-}
-
 /// Handles `Pickup` and `Drop` actions in the dev world.
-
 ///
 /// - **g / Pickup** — picks up all items at the camera's current OMT tile.
 /// - **d / Drop**   — drops the first item in the player's inventory at the
@@ -739,7 +476,7 @@ pub fn dev_pickup_drop_system(
                             count: 1,
                         });
                     } else {
-                        let body_pocket = crate::inventory::pocket::get_body_pocket(
+                        let body_pocket = pocket::get_body_pocket(
                             player_entity,
                             &mounted_pockets_q,
                         )
@@ -850,7 +587,7 @@ pub fn items_in_container(container: Entity, world: &World) -> Vec<Entity> {
 /// Check whether `item` can fit into `container` based on pocket/container
 /// volume, weight, and length constraints.
 pub fn can_fit_in_container(world: &World, container: Entity, item: Entity) -> bool {
-    use crate::core::components::def::{ItemLongestSide, ItemVolume, ItemWeight};
+    use cdda_components::def::{ItemLongestSide, ItemVolume, ItemWeight};
 
     let item_vol = match world.get::<ItemVolume>(item) {
         Some(v) => Volume::from_milliliters(v.0 as u64),
@@ -891,7 +628,7 @@ pub fn can_fit_in_container(world: &World, container: Entity, item: Entity) -> b
 
 /// Total volume occupied by all items inside `container`.
 pub fn total_container_volume(world: &World, container: Entity) -> Volume {
-    use crate::core::components::def::ItemVolume;
+    use cdda_components::def::ItemVolume;
     let mut total = Volume::ZERO;
     if let Some(contents) = world.get::<ContainerContents>(container) {
         for child in contents.iter() {
@@ -908,7 +645,7 @@ pub fn total_container_volume(world: &World, container: Entity) -> Volume {
 
 /// Total weight of all items inside `container`.
 pub fn total_container_weight(world: &World, container: Entity) -> Weight {
-    use crate::core::components::def::ItemWeight;
+    use cdda_components::def::ItemWeight;
     let mut total = Weight::ZERO;
     if let Some(contents) = world.get::<ContainerContents>(container) {
         for child in contents.iter() {
@@ -936,7 +673,7 @@ pub fn total_container_weight(world: &World, container: Entity) -> Weight {
 /// Both entities must be of the same `DefOrigin` (or same `DefStrId`).
 /// Different damage levels or charge states prevent merging.
 pub fn merge_or_stack(world: &mut World, target: Entity, incoming: Entity) -> bool {
-    use crate::core::components::def::DefStrId;
+    use cdda_components::def::DefStrId;
 
     let same_type = match (
         world.get::<DefOrigin>(target),
@@ -1139,3 +876,209 @@ pub fn transfer_item(
         count: 1,
     })
 }
+
+// ===========================================================================
+// Tests — covering all inventory functionality
+// ===========================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cdda_components::def::{DefStrId, ItemName, ItemVolume, ItemWeight};
+    use cdda_components::item::INVLET_CHARS;
+    use cdda_sim::test_utils::TestBed;
+
+    fn setup(t: &mut TestBed) {
+        t.register::<DefOrigin>();
+        t.register::<DefStrId>();
+        t.register::<ItemName>();
+        t.register::<ItemVolume>();
+        t.register::<ItemWeight>();
+        t.register::<StackCount>();
+        t.register::<CurrentCharges>();
+        t.register::<ItemDamage>();
+        t.register::<Invlet>();
+        t.register::<InvletFavorites>();
+        t.register::<Inventory>();
+        t.register::<InsideContainer>();
+        t.register::<ContainerContents>();
+        t.register::<Container>();
+        t.register::<Pocket>();
+        t.register::<WorldPosition>();
+    }
+
+    fn make_item(t: &mut TestBed, name: &str, count: u32) -> Entity {
+        t.spawn((
+            DefStrId(name.into()),
+            ItemName(name.into()),
+            StackCount::new(count),
+            ItemVolume(250),
+            ItemWeight(100),
+        ))
+    }
+
+    fn make_item_charges(t: &mut TestBed, name: &str, count: u32, charges: i32) -> Entity {
+        t.spawn((
+            DefStrId(name.into()),
+            ItemName(name.into()),
+            StackCount::new(count),
+            CurrentCharges(charges),
+            ItemVolume(250),
+            ItemWeight(100),
+        ))
+    }
+
+    // ── Inventory lifecycle ───────────────────────────────────────────
+
+    #[test]
+    fn empty_inventory() {
+        let inv = Inventory::default();
+        assert!(inv.is_empty());
+        assert_eq!(inv.len(), 0);
+    }
+
+    #[test]
+    fn invlet_alloc_first() {
+        let inv = Inventory::default();
+        assert_eq!(inv.allocate_invlet(), Some('a'));
+    }
+
+    #[test]
+    fn invlet_alloc_after_used() {
+        let mut inv = Inventory::default();
+        inv.invlets.insert('a', Entity::PLACEHOLDER);
+        assert_eq!(inv.allocate_invlet(), Some('b'));
+    }
+
+    #[test]
+    fn invlet_alloc_all_full() {
+        let mut inv = Inventory::default();
+        for (_i, c) in INVLET_CHARS.iter().enumerate() {
+            inv.invlets.insert(*c, Entity::PLACEHOLDER);
+        }
+        assert_eq!(inv.allocate_invlet(), None);
+    }
+
+    // ── Add & remove ──────────────────────────────────────────────────
+
+    #[test]
+    fn add_assigns_invlet() {
+        let mut t = TestBed::new();
+        setup(&mut t);
+        let mut inv = Inventory::default();
+        let item = make_item(&mut t, "rock", 1);
+        let _result = add_to_inventory(&mut t.world_mut(), &mut inv, item, None);
+        assert_eq!(inv.len(), 1);
+        assert!(t.get::<Invlet>(item).is_some());
+        assert_eq!(_result, item);
+    }
+
+    #[test]
+    fn remove_clears_invlet() {
+        let mut t = TestBed::new();
+        setup(&mut t);
+        let mut inv = Inventory::default();
+        let item = make_item(&mut t, "rock", 1);
+        add_to_inventory(&mut t.world_mut(), &mut inv, item, None);
+        remove_from_inventory(&mut t.world_mut(), &mut inv, item, None);
+        assert!(inv.is_empty());
+        assert!(t.get::<Invlet>(item).is_none());
+    }
+
+    #[test]
+    fn add_multiple_unique_invlets() {
+        let mut t = TestBed::new();
+        setup(&mut t);
+        let mut inv = Inventory::default();
+        let a = make_item(&mut t, "rock", 1);
+        let b = make_item(&mut t, "stick", 1);
+        add_to_inventory(&mut t.world_mut(), &mut inv, a, None);
+        add_to_inventory(&mut t.world_mut(), &mut inv, b, None);
+        assert_eq!(inv.len(), 2);
+        let keys: Vec<char> = inv.invlets.keys().copied().collect();
+        assert_ne!(keys[0], keys[1]);
+    }
+
+    // ── Stack merging ─────────────────────────────────────────────────
+
+    #[test]
+    fn merge_identical_items() {
+        let mut t = TestBed::new();
+        setup(&mut t);
+        let mut inv = Inventory::default();
+        let a = make_item(&mut t, "rock", 3);
+        let b = make_item(&mut t, "rock", 2);
+        let _merged = add_to_inventory(&mut t.world_mut(), &mut inv, a, None);
+        t.world_mut().entity_mut(b).insert(DefStrId("rock".into()));
+        t.world_mut().entity_mut(a).insert(DefStrId("rock".into()));
+        // Manually merge (since DefOrigin not set)
+        t.world_mut().entity_mut(a).insert(DefOrigin(1));
+        t.world_mut().entity_mut(b).insert(DefOrigin(1));
+        let _result = add_to_inventory(&mut t.world_mut(), &mut inv, b, None);
+        // Should have merged into a
+        assert_eq!(inv.len(), 1);
+        assert_eq!(t.get::<StackCount>(a).unwrap().get(), 5);
+    }
+
+    #[test]
+    fn merge_diff_types() {
+        let mut t = TestBed::new();
+        setup(&mut t);
+        let mut inv = Inventory::default();
+        let r = make_item(&mut t, "rock", 1);
+        let s = make_item(&mut t, "stick", 1);
+        t.world_mut().entity_mut(r).insert(DefOrigin(1));
+        t.world_mut().entity_mut(s).insert(DefOrigin(2));
+        add_to_inventory(&mut t.world_mut(), &mut inv, r, None);
+        add_to_inventory(&mut t.world_mut(), &mut inv, s, None);
+        assert_eq!(inv.len(), 2);
+    }
+
+    #[test]
+    fn merge_same_charges() {
+        let mut t = TestBed::new();
+        setup(&mut t);
+        let mut inv = Inventory::default();
+        let a = make_item_charges(&mut t, "battery", 2, 100);
+        let b = make_item_charges(&mut t, "battery", 1, 100);
+        t.world_mut().entity_mut(a).insert(DefOrigin(3));
+        t.world_mut().entity_mut(b).insert(DefOrigin(3));
+        add_to_inventory(&mut t.world_mut(), &mut inv, a, None);
+        let _result = add_to_inventory(&mut t.world_mut(), &mut inv, b, None);
+        assert_eq!(inv.len(), 1);
+        assert_eq!(t.get::<CurrentCharges>(a).unwrap().0, 200);
+    }
+
+    #[test]
+    fn merge_diff_charges() {
+        let mut t = TestBed::new();
+        setup(&mut t);
+        let mut inv = Inventory::default();
+        let a = make_item_charges(&mut t, "battery", 1, 100);
+        let b = make_item_charges(&mut t, "battery", 1, 50);
+        t.world_mut().entity_mut(a).insert(DefOrigin(3));
+        t.world_mut().entity_mut(b).insert(DefOrigin(3));
+        add_to_inventory(&mut t.world_mut(), &mut inv, a, None);
+        add_to_inventory(&mut t.world_mut(), &mut inv, b, None);
+        // Auto-stacking via add_to_inventory requires same charge level; stays as 2 stacks.
+        assert_eq!(inv.len(), 2);
+    }
+
+    #[test]
+    fn merge_diff_damage() {
+        let mut t = TestBed::new();
+        setup(&mut t);
+        let mut inv = Inventory::default();
+        let a = t.spawn((
+            DefStrId("knife".into()),
+            ItemName("knife".into()),
+            StackCount::new(1),
+            ItemDamage(0),
+            DefOrigin(10),
+            ItemVolume(250),
+            ItemWeight(100),
+        ));
+        let b = t.spawn((
+            DefStrId("knife".into()),
+            ItemName("knife".into()),
+            StackCount::new(1),

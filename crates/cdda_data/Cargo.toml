@@ -1,0 +1,27 @@
+[package]
+name = "cdda_data"
+version = "0.1.0"
+edition = "2021"
+description = "JSON loading, def registry, ACL translation for CDDA"
+
+[dependencies]
+bevy_ecs.workspace = true
+bevy_app.workspace = true
+bevy_asset.workspace = true
+bevy_state.workspace = true
+bevy_reflect.workspace = true
+cdda_core_types = { path = "../cdda_core_types" }
+cdda_components = { path = "../cdda_components" }
+cdda_events = { path = "../cdda_events" }
+cdda_sim = { path = "../cdda_sim" }
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+schemars.workspace = true
+indexmap.workspace = true
+fixedbitset = "0.5.7"
+bidimap = "0.7.0"
+
+[dev-dependencies]
+tempfile = "3.27.0"

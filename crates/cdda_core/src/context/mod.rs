@@ -62,9 +62,6 @@ impl Plugin for ContextPlugin {
         app.insert_resource(crate::context::config::CharacterCreationState::default());
         app.insert_resource(crate::context::config::WorldCreationSettings::default());
 
-        // Events (messages)
-        app.add_message::<GameEvent>();
-
         // Core navigation — processes InputAction messages and dispatches transitions.
         // Runs in Update so it sees messages written by bridge_actionstate (also Update).
         app.add_systems(

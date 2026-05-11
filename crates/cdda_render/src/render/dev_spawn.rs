@@ -17,23 +17,8 @@ use crate::input::BindableAction;
 use crate::context::ContextActions;
 use crate::input::ActiveKeybindings;
 use crate::render::item_detail::{spawn_item_detail, ItemDetailQueries};
+use crate::render::theme::{self, UiTheme};
 use crate::worldgen::dev_spawn::DevSpawnFocus;
-
-// ---------------------------------------------------------------------------
-// Colours
-// ---------------------------------------------------------------------------
-
-const BG: Color = Color::srgb(0.04, 0.04, 0.06);
-const PANEL_BG: Color = Color::srgb(0.07, 0.07, 0.10);
-const HEADER_BG: Color = Color::srgb(0.10, 0.10, 0.14);
-const ITEM_BG: Color = Color::srgb(0.06, 0.06, 0.09);
-const ITEM_FOCUS_BG: Color = Color::srgb(0.12, 0.35, 0.55);
-const ACCENT: Color = Color::srgb(0.30, 0.70, 1.00);
-const TEXT_BRIGHT: Color = Color::srgb(0.95, 0.95, 0.95);
-const TEXT_DIM: Color = Color::srgb(0.55, 0.55, 0.55);
-const TEXT_ID: Color = Color::srgb(0.50, 0.65, 0.50);
-const DIVIDER: Color = Color::srgb(0.20, 0.20, 0.25);
-const FILTER_ACTIVE_BG: Color = Color::srgb(0.08, 0.18, 0.30);
 
 // Rows visible at once in the list (controls centered-scroll window).
 const VISIBLE_ROWS: usize = 22;
@@ -81,11 +66,13 @@ impl CddaScreen for DevSpawnScreen {
     ];
 
     fn spawn(_world: &mut World) {
-        // Spawn handled by original system in mod.rs for now.
+        // Handled by spawn_dev_spawn_panel in mod.rs.
+        // TODO: migrate that system into this method.
     }
 
     fn update(_world: &mut World) {
-        // Original update_dev_spawn_panel system handles updates for now.
+        // Handled by update_dev_spawn_panel in mod.rs.
+        // TODO: migrate that system into this method.
     }
 }
 
@@ -106,7 +93,7 @@ pub fn spawn_dev_spawn_panel(
                 overflow: Overflow::clip(),
                 ..default()
             },
-            BackgroundColor(BG),
+            BackgroundColor(theme::BG),
         ))
         .with_children(|root| {
             // Title bar — children rebuilt each frame
@@ -120,7 +107,7 @@ pub fn spawn_dev_spawn_panel(
                     align_items: AlignItems::Center,
                     ..default()
                 },
-                BackgroundColor(HEADER_BG),
+                BackgroundColor(theme::HEADER_BG),
             ));
 
             // Body row: grows to fill all space between title and footer
@@ -148,8 +135,8 @@ pub fn spawn_dev_spawn_panel(
                             border: UiRect::right(Val::Px(1.0)),
                             ..default()
                         },
-                        BackgroundColor(PANEL_BG),
-                        BorderColor::all(DIVIDER),
+                        BackgroundColor(theme::PANEL_BG),
+                        BorderColor::all(theme::DIVIDER),
                     ));
 
                     // Right: detail panel — children rebuilt each frame
@@ -164,7 +151,7 @@ pub fn spawn_dev_spawn_panel(
                             overflow: Overflow::clip(),
                             ..default()
                         },
-                        BackgroundColor(PANEL_BG),
+                        BackgroundColor(theme::PANEL_BG),
                     ));
                 });
 
@@ -178,7 +165,7 @@ pub fn spawn_dev_spawn_panel(
                     ..default()
                 },
                 BackgroundColor(Color::NONE),
-                BorderColor::all(DIVIDER),
+                BorderColor::all(theme::DIVIDER),
             ));
 
             // Footer — static, built once
@@ -195,13 +182,13 @@ pub fn spawn_dev_spawn_panel(
                     border: UiRect::top(Val::Px(1.0)),
                     ..default()
                 },
-                BackgroundColor(HEADER_BG),
-                BorderColor::all(DIVIDER),
+                BackgroundColor(theme::HEADER_BG),
+                BorderColor::all(theme::DIVIDER),
             ))
             .with_child((
                 Text::new(hints),
                 super::ui_font(&ui_font_handle.0, 12.0),
-                TextColor(TEXT_DIM),
+                TextColor(theme::TEXT_DIM),
                 FooterHint,
             ));
         });
@@ -219,6 +206,7 @@ pub(crate) fn update_dev_spawn_panel(
     detail_panel: Query<Entity, With<SpawnDetailPanel>>,
     filter_bar: Query<Entity, With<SpawnFilterBar>>,
     detail: ItemDetailQueries,
+    theme: Res<UiTheme>,
 ) {
     let filtered = focus.filtered_entries();
     let total = filtered.len();
@@ -240,7 +228,7 @@ pub(crate) fn update_dev_spawn_panel(
                         font_size: 22.0,
                         ..default()
                     },
-                    TextColor(ACCENT),
+                    TextColor(theme.accent()),
                 ));
                 h.spawn((
                     Text::new(status),
@@ -248,7 +236,7 @@ pub(crate) fn update_dev_spawn_panel(
                         font_size: 13.0,
                         ..default()
                     },
-                    TextColor(TEXT_DIM),
+                    TextColor(theme::TEXT_DIM),
                 ));
             });
     }
@@ -278,38 +266,38 @@ pub(crate) fn update_dev_spawn_panel(
                                 font_size: 16.0,
                                 ..default()
                             },
-                            TextColor(TEXT_DIM),
+                            TextColor(theme::TEXT_DIM),
                         ));
                     return;
                 }
 
                 // Position indicator
                 list.spawn((
-                    Node {
-                        padding: UiRect::new(
-                            Val::Px(14.0),
-                            Val::Px(14.0),
-                            Val::Px(3.0),
-                            Val::Px(3.0),
-                        ),
-                        border: UiRect::bottom(Val::Px(1.0)),
-                        ..default()
-                    },
-                    BorderColor::all(DIVIDER),
-                ))
+                            Node {
+                                padding: UiRect::new(
+                                    Val::Px(14.0),
+                                    Val::Px(14.0),
+                                    Val::Px(3.0),
+                                    Val::Px(3.0),
+                                ),
+                                border: UiRect::bottom(Val::Px(1.0)),
+                                ..default()
+                            },
+                            BorderColor::all(theme::DIVIDER),
+                        ))
                 .with_child((
                     Text::new(format!("{} / {}", focus.index + 1, total)),
                     TextFont {
                         font_size: 11.0,
                         ..default()
                     },
-                    TextColor(TEXT_DIM),
+                    TextColor(theme::TEXT_DIM),
                 ));
 
                 for i in scroll_start..scroll_end {
                     let entry = &filtered[i];
                     let is_focused = i == focus.index;
-                    let row_bg = if is_focused { ITEM_FOCUS_BG } else { ITEM_BG };
+                    let row_bg = if is_focused { theme.item_focus_bg() } else { theme::ITEM_BG };
 
                     list.spawn((
                         Node {
@@ -320,7 +308,7 @@ pub(crate) fn update_dev_spawn_panel(
                             ..default()
                         },
                         BackgroundColor(row_bg),
-                        BorderColor::all(DIVIDER),
+                        BorderColor::all(theme::DIVIDER),
                     ))
                     .with_children(|row| {
                         row.spawn((
@@ -329,7 +317,7 @@ pub(crate) fn update_dev_spawn_panel(
                                 font_size: 15.0,
                                 ..default()
                             },
-                            TextColor(TEXT_BRIGHT),
+                            TextColor(theme::TEXT_BRIGHT),
                         ));
                         row.spawn((
                             Text::new(entry.def_id.clone()),
@@ -337,7 +325,7 @@ pub(crate) fn update_dev_spawn_panel(
                                 font_size: 11.0,
                                 ..default()
                             },
-                            TextColor(TEXT_ID),
+                            TextColor(theme::TEXT_ID),
                         ));
                     });
                 }
@@ -367,7 +355,7 @@ pub(crate) fn update_dev_spawn_panel(
                             font_size: 16.0,
                             ..default()
                         },
-                        TextColor(TEXT_DIM),
+                        TextColor(theme::TEXT_DIM),
                     ));
                     return;
                 };
@@ -378,7 +366,7 @@ pub(crate) fn update_dev_spawn_panel(
     // ── Filter bar ────────────────────────────────────────────────────────
     if let Ok(filt_e) = filter_bar.single() {
         let filter_bg = if focus.filtering {
-            FILTER_ACTIVE_BG
+            theme::FILTER_ACTIVE_BG
         } else {
             Color::NONE
         };
@@ -397,9 +385,9 @@ pub(crate) fn update_dev_spawn_panel(
                 ..default()
             },
             TextColor(if focus.filtering {
-                TEXT_BRIGHT
+                theme::TEXT_BRIGHT
             } else {
-                TEXT_DIM
+                theme::TEXT_DIM
             }),
         ));
     }

@@ -1,64 +1,48 @@
-//! Message types for decoupled system communication.
+//! Event and Message types for decoupled system communication.
 //!
-//! Moved here from `cdda_core::sim::events` to break circular dependencies
-//! when extracting subsystems into separate crates.
+//! ## Observer-based Events (immediate)
+//!
+//! Re-exported from the `cdda_events` crate.  These are triggered via
+//! `commands.trigger()` and handled immediately by observer systems.
+//! Use these for immediate, reactive communication (UI feedback,
+//! entity damage reactions, death handling).
+//!
+//! ## Buffered Messages (batch)
+//!
+//! Defined here.  These use `MessageWriter`/`MessageReader` for
+//! batched, frame-delayed communication.  Use these for bulk
+//! processing (inventory moves, AI sensory input, spawning).
+
+// ── Observer-based Event re-exports ──────────────────────────────────────
+
+pub use cdda_events::{DeathCause, GameEvent, MoveLocation};
+pub use cdda_events::{DamageEvent, DeathEvent, EquipEvent, UnequipEvent, UseItemEvent};
+
+// ── Buffered Message types ───────────────────────────────────────────────
 
 use bevy_ecs::entity::Entity;
 use bevy_ecs::message::Message;
 use cdda_core_types::core::coords::WorldPos;
 use cdda_core_types::core::id::{DefCategory, DefIdx, FactionId, MonsterId};
-use cdda_core_types::core::Damage;
 
-// ---------------------------------------------------------------------------
-// Trade / Inventory
-// ---------------------------------------------------------------------------
-
+/// An item moved between locations (ground, container, wielded, worn).
+///
+/// Buffered message — processed in batch by `process_item_move_events`.
 #[derive(Message, Debug, Clone)]
 pub struct ItemMoveEvent {
     /// The item entity being moved.
     pub item: Entity,
     /// Where the item was (entity container or WorldPos on ground).
-    pub from: MoveLocation,
+    pub from: super::events::MoveLocation,
     /// Where the item is going (entity container or WorldPos on ground).
-    pub to: MoveLocation,
+    pub to: super::events::MoveLocation,
     /// How many items in the stack were moved.
     pub count: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MoveLocation {
-    /// Item is on the ground at this world position.
-    Ground(WorldPos),
-    /// Item is inside a container entity.
-    Container(Entity),
-    /// Item is wielded by an entity.
-    Wielded(Entity),
-    /// Item is worn by an entity.
-    Worn(Entity),
-}
-
-// ---------------------------------------------------------------------------
-// Damage / Death
-// ---------------------------------------------------------------------------
-
-#[derive(Message, Debug, Clone)]
-pub struct DamageEvent {
-    pub target: Entity,
-    pub damage: Damage,
-    pub source: Option<Entity>,
-}
-
-#[derive(Message, Debug, Clone)]
-pub struct DeathEvent {
-    pub entity: Entity,
-    pub cause: DeathCause,
-    pub position: WorldPos,
-}
-
-// ---------------------------------------------------------------------------
-// Sensory events — AI reacts to these
-// ---------------------------------------------------------------------------
-
+/// A sound was produced in the world (AI reacts to these).
+///
+/// Buffered message — processed in batch by AI sensory systems.
 #[derive(Message, Debug, Clone)]
 pub struct SoundEvent {
     pub position: WorldPos,
@@ -66,6 +50,9 @@ pub struct SoundEvent {
     pub description: String,
 }
 
+/// An entity was seen by an observer.
+///
+/// Buffered message — processed in batch by AI sensory systems.
 #[derive(Message, Debug, Clone)]
 pub struct SightEvent {
     pub observer: Entity,
@@ -73,10 +60,9 @@ pub struct SightEvent {
     pub position: WorldPos,
 }
 
-// ---------------------------------------------------------------------------
-// Spawning
-// ---------------------------------------------------------------------------
-
+/// A new creature should be spawned into the world.
+///
+/// Buffered message — processed in batch by the spawning system.
 #[derive(Message, Debug, Clone)]
 pub struct SpawnEvent {
     pub template_id: MonsterId,
@@ -84,46 +70,12 @@ pub struct SpawnEvent {
     pub faction: FactionId,
 }
 
-// ---------------------------------------------------------------------------
-// Definition hot-reload (T1)
-// ---------------------------------------------------------------------------
-
+/// One or more definitions changed (e.g. hot-reload).
+///
+/// Buffered message — processed in batch to reload assets.
 #[derive(Message, Debug, Clone)]
 pub struct DefChangedEvent {
     pub category: DefCategory,
     /// Numeric indices of changed definitions.
     pub ids: Vec<DefIdx>,
-}
-
-#[derive(Message, Debug, Clone)]
-pub struct EquipEvent {
-    pub wielder: Entity,
-    pub item: Entity,
-}
-
-#[derive(Message, Debug, Clone)]
-pub struct UnequipEvent {
-    pub wielder: Entity,
-    pub item: Entity,
-}
-
-#[derive(Message, Debug, Clone)]
-pub struct UseItemEvent {
-    pub user: Entity,
-    pub item: Entity,
-}
-
-// ---------------------------------------------------------------------------
-// Supporting enums
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DeathCause {
-    Combat(Entity),
-    Hunger,
-    Thirst,
-    Asphyxiation,
-    Bleeding,
-    Fall,
-    Other,
 }

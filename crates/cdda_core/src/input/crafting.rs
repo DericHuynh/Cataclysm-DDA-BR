@@ -7,11 +7,6 @@ use bevy_ecs::message::MessageReader;
 use bevy_ecs::prelude::*;
 use bevy_input::keyboard::{Key, KeyboardInput};
 use bevy_input::ButtonState;
-use bevy_state::prelude::NextState;
-
-use crate::context::ctx::Ctx;
-use crate::context::nav::{pop_ctx, FocusedCommandIndex};
-use crate::context::ContextStack;
 use crate::crafting::systems::{
     build_craft_state, find_dev_player, start_craft, CategoryIndex, CraftEntry, CraftState,
     PendingCraft,
@@ -34,9 +29,6 @@ pub fn crafting_menu_input(
     mut keyboard: MessageReader<KeyboardInput>,
     mut craft_state: ResMut<CraftState>,
     mut cat_index: ResMut<CategoryIndex>,
-    mut stack: ResMut<ContextStack>,
-    mut next_ctx: ResMut<NextState<Ctx>>,
-    mut focused: ResMut<FocusedCommandIndex>,
     mut pending: ResMut<PendingCraft>,
     mut input_ctx: ResMut<InputContextStack>,
 ) {
@@ -359,7 +351,6 @@ pub fn crafting_menu_input(
             // ── Back ────────────────────────────────────────────────────
             GameAction::Cancel => {
                 craft_state.last_message = None;
-                pop_ctx(&mut stack, &mut next_ctx, &mut focused);
             }
 
             _ => {}

@@ -12,17 +12,20 @@ the patterns that are easy to get wrong. Read it before touching any ECS code.
 ## Table of Contents
 
 1. [Relationships](#1-relationships)
-2. [Query Filters vs Option](#2-query-filters-vs-option)
+2.[Query Filters vs Option](#2-query-filters-vs-option)
 3. [Tag Components](#3-tag-components)
 4. [Immutable Components](#4-immutable-components)
 5. [Required Components](#5-required-components)
 6. [Component Hooks](#6-component-hooks)
-7. [Hierarchy — ChildOf / Children](#7-hierarchy--childof--children)
+7.[Hierarchy — ChildOf / Children](#7-hierarchy--childof--children)
 8. [Change Detection](#8-change-detection)
-9. [Error Handling in Systems](#9-error-handling-in-systems)
-10. [Entity Cloning](#10-entity-cloning)
-11. [Common Pitfalls](#11-common-pitfalls)
-12. [bevy_lunex UI](#12-bevy_lunex-ui)
+9. [Mutating Components](#9-mutating-components)
+10.[Error Handling in Systems](#10-error-handling-in-systems)
+11. [Entity Cloning](#11-entity-cloning)
+12. [Commands vs Queries](#12-commands-vs-queries)
+13. [Messages (Triggers) vs Events](#13-messages-triggers-vs-events)
+14. [Common Pitfalls](#14-common-pitfalls)
+15.[bevy_ui](#15-bevy_ui)
 
 ---
 
@@ -471,7 +474,49 @@ why.
 
 ---
 
-## 9. Error Handling in Systems
+## 9. Mutating Components
+
+Querying for `&mut T` gives you mutable access to a component, but it comes with hidden costs. You should only mutate components when strictly necessary. 
+
+### The Scheduler Lock
+Bevy's multi-threading scheduler analyzes your system signatures to determine what can run in parallel. If a system queries `&mut Health`, the scheduler will block **all other systems** from reading or writing `Health` until that system finishes.
+*   **Rule:** Never query `&mut T` if you only intend to read it. Always use `&T`.
+*   If mutation is rare, consider querying `&T`, and then applying updates via `Commands` or specific events, so you don't hold an exclusive lock on the component archetype for the entire system execution.
+
+### Unintentional Change Detection
+In Bevy, modifying a value via `&mut T` immediately flags the component as `Changed<T>`. This forces all downstream systems listening for `Changed<T>` to re-run.
+
+If you overwrite a component with the *exact same value*, Bevy still marks it as changed because the `Mut<T>` deref occurred.
+
+**Use `set_if_neq`:**
+To avoid false change detection spam, always verify the value is actually different before mutating. Bevy provides the `.set_if_neq()` method for components that derive `PartialEq`.
+
+```rust
+// BAD — Triggers Changed<PlayerState> every frame, destroying performance downstream
+fn update_state(mut q: Query<&mut PlayerState>) {
+    for mut state in &mut q {
+        state.0 = State::Idle;
+    }
+}
+
+// GOOD — Only triggers Changed<PlayerState> once, when the state actually shifts
+fn update_state(mut q: Query<&mut PlayerState>) {
+    for mut state in &mut q {
+        state.set_if_neq(PlayerState(State::Idle));
+    }
+}
+```
+
+### When is it OK to mutate?
+| Component Type | Guideline |
+|---|---|
+| **Continuous State** (`Transform`, `Velocity`, `Timer`) | Change every frame. Mutate freely inside loops using `&mut T`. |
+| **Discrete State** (`Health`, `Faction`, `Name`) | Change rarely. Mutate exclusively via `.set_if_neq()` or by replacing the component via `Commands` to ensure change detection only fires on actual modification. |
+| **Relational State** (`InsideContainer`) | **Never** mutate directly via `&mut T`. Mutating a raw field bypasses component hooks. Always use `commands.entity().insert()`. |
+
+---
+
+## 10. Error Handling in Systems
 
 As of **0.16**, systems can return `Result`. Bevy logs errors returned from
 systems automatically.
@@ -508,7 +553,7 @@ Use `Query::get_many()` instead, which returns `Result` rather than panicking.
 
 ---
 
-## 10. Entity Cloning
+## 11. Entity Cloning
 
 As of **0.16**, entity cloning is supported natively. Add `#[derive(Clone)]`
 to a component to make it cloneable.
@@ -531,12 +576,54 @@ that explicitly.
 
 ---
 
-## 11. Common Pitfalls
+## 12. Commands vs Queries
+
+These represent the two fundamental ways to interact with the Bevy ECS World. Do not use them interchangeably.
+
+### Queries (`Query<&T>`, `Query<&mut T>`)
+Queries are for **immediate, synchronous data access**. When you mutate data via `&mut T` in a system loop, the change happens instantly at that line of code.
+*   **Use when:** Reading or modifying the internal values of a component on entities that already exist.
+*   **Performance:** Extremely fast, iterating directly over contiguous memory archetypes.
+
+### Commands (`Commands`)
+Commands are for **deferred, structural changes** to the ECS World. When you call a command, nothing happens immediately. Instead, Bevy queues the operation and applies it at the end of the schedule (the "command flush").
+*   **Use when:** Spawning or despawning entities, inserting or removing components, or triggering observers.
+*   **Performance:** Slower than queries because it allocates command objects and requires exclusive World access later to apply them.
+
+### The Golden Rule
+Never use `Commands` to change a component's internal state if a `Query` can do it. Use Commands only when the *structure* of the entity is changing (e.g., adding/removing the component entirely), unless the component is marked `#[component(immutable)]`.
+
+---
+
+## 13. Messages (Triggers) vs Events
+
+Bevy provides two distinct mechanisms for systems to communicate and trigger logic without direct coupling.
+
+### Events (`EventWriter<T>` / `EventReader<T>`)
+Events are **global broadcasts**. Think of them as announcements over a loudspeaker: "Something happened, anyone who cares can react."
+*   **Mechanism:** Written to a global queue. Read later in the frame by any number of systems using `EventReader`.
+*   **Best for:** Game-wide occurrences where multiple unlinked systems must react independently (e.g., `TimeChanged`, `GameSaved`, `SoundEffectRequested`).
+*   **Warning:** Events buffer in memory until consumed or the frame ends. Checking events requires iterating the reader in every system that listens, which is inefficient if the event is only meant for one specific entity.
+
+### Messages / Triggers (Observers)
+Messages (built on Bevy's Observer system) are **targeted interactions**. Think of them as direct mail: "Hey Entity X, execute this logic."
+*   **Mechanism:** Fired via `commands.trigger(MyMessage)` or `commands.entity(e).trigger(MyMessage)`. Handled immediately (or on flush) by an `Observer` system attached to that entity or the world.
+*   **Best for:** Entity-to-entity interactions (e.g., `TakeDamage`, `OpenContainer`), UI input (`Pointer<Click>`), or component lifecycle logic.
+*   **Why use them?** They route logic directly to the entity that is being targeted. This skips the need for a global system to loop through every `DamageEvent` and match entity IDs.
+
+| Scenario | Pattern | Implementation |
+|---|---|---|
+| The sun sets. Plants, zombies, and solar panels need to update. | **Event** | `EventWriter<NightFall>` |
+| Zombie attacks a specific door. | **Message** | `commands.entity(door).trigger(TakeDamage)` |
+| User clicks a UI button. | **Message** | Built-in `Pointer<Click>` observer on the button |
+
+---
+
+## 14. Common Pitfalls
 
 ### Multiple components of the same type per entity — impossible
 
-Bevy silently overwrites a component if you insert the same type twice on the
-same entity. If you need multiple instances of something, either:
+Bevy silently overwrites a component if you insert the same type twice on the same entity. If you need multiple instances of something, either:
 - Store a `Vec` inside the component (with change detection caveats above)
 - Make each instance its own entity via a relationship
 
@@ -628,204 +715,165 @@ should be despawned. Enforce this with a private field and a constructor.
 
 ---
 
-## 12. bevy_lunex UI
+## 15. bevy_ui
 
-`bevy_lunex` is a retained-mode ECS UI library. Every UI node is a real Bevy
-entity. Layout is controlled by `UiLayout` components. Read this section before
-writing any UI code.
+`bevy_ui` is Bevy's built-in, native ECS user interface system. It is powered by Taffy and primarily uses Flexbox and CSS Grid paradigms. Every UI element is a standard Bevy entity with a `Node` component.
 
 ### Root setup
 
-Every UI tree needs a root entity with `UiLayoutRoot::new_2d()` and
-`UiFetchFromCamera::<0>` (or whichever camera index your UI camera uses).
-Always use `with_children` to build the tree — it is cleaner and avoids the
-`ChildOf(root)` pattern which requires manually tracking the root entity id.
+Every UI tree requires a root node. Because UI nodes are required components, you no longer spawn "bundles". You simply spawn a `Node` and configure its layout properties.
+
+Always use `with_children` to build the tree. Ensure your root node covers the whole screen by setting width and height to 100%.
 
 ```rust
 commands.spawn((
-    UiLayoutRoot::new_2d(),
-    UiFetchFromCamera::<0>,
+    Node {
+        width: Val::Percent(100.0),
+        height: Val::Percent(100.0),
+        justify_content: JustifyContent::Center,
+        align_items: AlignItems::Center,
+        ..default()
+    },
     MySceneMarker,
 )).with_children(|ui| {
-    // all UI nodes go here
+    // all child UI nodes go here
 });
 ```
 
-### Layout types
+### Layout types (Flexbox & Grid)
 
-`bevy_lunex` has three layout types. Pick the right one or nothing will render
-where you expect.
+`bevy_ui` supports two layout specifications, controlled via the `display` field:
 
 | Layout | When to use |
 |---|---|
-| `UiLayout::window()` | Free positioning inside a parent. Most UI nodes. |
-| `UiLayout::solid()` | Aspect-ratio-locked container. Use for backgrounds and panels that must not stretch. |
-| `UiLayout::boundary()` | Two-point layout (top-left + bottom-right corners). Useful for overlay regions. |
+| `Display::Flex` | (Default) Stacking children in a row or column. Used for 90% of UI elements. |
+| `Display::Grid` | Complex 2D layouts. Aligns children into defined rows and columns. |
+| `Display::None` | Visually hides the node and removes it from the layout calculations entirely. |
 
-### Units
+### Units (Val)
+
+The `Val` enum dictates how dimensions are calculated. Always match the unit to your responsive design needs.
 
 | Unit | Meaning |
 |---|---|
-| `Rl(v)` | `v`% of the **parent node's** width or height |
-| `Rh(v)` | `v`% of the **node's own height** — use for `UiTextSize` |
-| `Rw(v)` | `v`% of the **node's own width` |
-| `Ab(v)` | Absolute pixels |
-
-`Rh` is the correct unit for `UiTextSize`. It scales text relative to the
-height of the node the text lives in.
+| `Val::Px(v)` | Absolute physical pixels. |
+| `Val::Percent(v)` | Percentage of the **parent node's** dimension. |
+| `Val::Vw(v)` / `Val::Vh(v)` | Percentage of the total viewport width/height. |
+| `Val::Auto` | Sizes based on the element's content (e.g., wrapping text). |
 
 ### Text rendering — critical rules
 
-`Text2d` is a **world-space** Bevy component. Without correct setup it renders
-at world scale and appears enormous or off-screen. Follow these rules exactly:
+Text in Bevy UI is a native ECS component attached directly to a `Node`. You do not use `Text2d` (which is for world-space text).
 
-**1. Never set `Transform::from_scale` on text entities managed by lunex.**
-Lunex manages the transform. Adding your own scale fights it.
+**1. Use `Text::new()` alongside `TextFont`.**
+If you do not specify a `TextFont`, Bevy will use a default built-in font. 
 
-**2. Always give text an `Anchor` via the layout.**
-`UiLayout::window().pos(...).anchor(Anchor::CenterLeft)` or
-`anchor(Anchor::TopCenter)` etc. Without an anchor, the node's origin is its
-top-left corner and text appears offset from where you intend.
-
-**3. Text must live inside a sized container.**
-`UiTextSize::from(Rh(60.0))` measures against the node's own height. If the
-node has no size, the text has nothing to measure against and may render at
-zero or enormous size. Always give the parent container an explicit
-`.size(Rl((w, h)))`.
-
-**4. Use `font_size` only as a hint, not for sizing.**
-Set `TextFont { font_size: 64.0, ..default() }` as the rasterisation resolution.
-The actual rendered size is controlled entirely by `UiTextSize`. A higher
-`font_size` gives sharper glyphs at large sizes; it does not make text bigger.
+**2. Text wrapping requires boundaries.**
+If text is bleeding off the screen or refusing to wrap, it means its parent `Node` has no constraints. You must set a `max_width` or `width` on the parent container, and ensure text wrapping is enabled on the `TextLayout`.
 
 ```rust
-// CORRECT — text inside a sized boundary node, anchored, sized via UiTextSize
+// CORRECT — Text component embedded in a standard node spawn
 ui.spawn((
-    UiLayout::window()
-        .pos(Rl((50.0, 10.0)))
-        .anchor(Anchor::TopCenter)   // <-- required
-        .pack(),
-    UiColor::from(Color::srgb(0.9, 0.2, 0.2)),
-    UiTextSize::from(Rh(6.0)),       // 6% of this node's height
-    Text2d::new("MY TITLE"),
-    TextFont { font_size: 64.0, ..default() },
-));
-
-// WRONG — no anchor, text appears offset; no container size, Rh is unmeasured
-ui.spawn((
-    UiLayout::window().pos(Rl((50.0, 10.0))).pack(),  // missing anchor
-    UiTextSize::from(Rh(6.0)),
-    Text2d::new("MY TITLE"),
-    Transform::from_scale(Vec3::splat(0.02)),  // fighting lunex — remove this
+    Text::new("START GAME"),
+    TextFont { font_size: 32.0, ..default() },
+    TextColor(Color::srgb(0.9, 0.9, 0.9)),
+    Node {
+        margin: UiRect::all(Val::Px(10.0)),
+        ..default()
+    },
 ));
 ```
 
-### Positioning and centering
+### Positioning: Relative vs Absolute
 
-`UiLayout::window().pos(Rl((x, y)))` places the node's **anchor point** at
-`(x%, y%)` of the parent. The anchor defaults to top-left, so a node at
-`pos(Rl((50.0, 10.0)))` without `.anchor(Anchor::TopCenter)` will have its
-top-left corner at 50% — not its center.
+The `position_type` field dictates whether a node respects its parent's Flexbox/Grid flow.
 
-To center a node horizontally:
+- **`PositionType::Relative` (Default):** The node is pushed around by its siblings and parent `justify_content` rules.
+- **`PositionType::Absolute`:** The node ignores siblings entirely. It positions itself relative to its closest explicitly sized parent using the `left`, `right`, `top`, and `bottom` fields. Useful for overlay badges, tooltips, or floating windows.
+
 ```rust
-// Option A — use anchor (preferred for text)
-UiLayout::window()
-    .pos(Rl((50.0, y)))
-    .anchor(Anchor::TopCenter)
-    .pack()
-
-// Option B — offset by half the width (for background panels)
-UiLayout::window()
-    .pos(Rl((30.0, y)))   // 50 - (width/2) = 50 - 20 = 30 for a 40%-wide node
-    .size(Rl((40.0, h)))
-    .pack()
+// An absolute badge anchored to the top-right of its parent
+ui.spawn((
+    Node {
+        position_type: PositionType::Absolute,
+        top: Val::Px(5.0),
+        right: Val::Px(5.0),
+        ..default()
+    },
+    BackgroundColor(Color::RED),
+));
 ```
 
-### Hierarchy and sizing
+### Interaction and Observers (Hover / Click)
 
-Use `with_children` to nest nodes. A parent with `UiLayout::solid()` or an
-explicit `.size()` gives children a concrete space to measure `Rl`/`Rh` against.
-A root-level node with no size has the full viewport as its reference.
+Do not constantly poll UI state in global systems. Instead, attach an Observer to the UI entity to handle input events directly. This is extremely fast and cleanly decouples logic.
 
 ```rust
-// Solid boundary — locks aspect ratio, children measure against 1920×1080
 ui.spawn((
-    UiLayout::solid().size((1920.0, 1080.0)).scaling(Scaling::Fill).pack(),
-)).with_children(|ui| {
-    // Rl(50.0) here means 50% of 1920px wide
-    ui.spawn((
-        UiLayout::window().pos(Rl((50.0, 10.0))).anchor(Anchor::TopCenter).pack(),
-        UiTextSize::from(Rh(6.0)),
-        Text2d::new("TITLE"),
-        TextFont { font_size: 64.0, ..default() },
-    ));
+    Node {
+        width: Val::Px(150.0),
+        height: Val::Px(50.0),
+        justify_content: JustifyContent::Center,
+        align_items: AlignItems::Center,
+        ..default()
+    },
+    BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+))
+// Trigger logic when clicked
+.observe(|trigger: Trigger<Pointer<Click>>, mut commands: Commands| {
+    commands.trigger(StartGameMessage); // Route logic via Message
+})
+// Visual hover states
+.observe(|trigger: Trigger<Pointer<Over>>, mut queries: Query<&mut BackgroundColor>| {
+    if let Ok(mut bg) = queries.get_mut(trigger.entity()) {
+        bg.0 = Color::srgb(0.4, 0.4, 0.4);
+    }
+})
+.observe(|trigger: Trigger<Pointer<Out>>, mut queries: Query<&mut BackgroundColor>| {
+    if let Ok(mut bg) = queries.get_mut(trigger.entity()) {
+        bg.0 = Color::srgb(0.2, 0.2, 0.2);
+    }
 });
-```
-
-### Hover states
-
-`bevy_lunex` supports multi-state layouts and colors via `UiHover` and
-`UiLayout::new(vec![...])`. Wire hover on/off with observers:
-
-```rust
-ui.spawn((
-    Name::new("MyButton"),
-    UiLayout::window().y(Rl(offset)).size(Rl((100.0, size))).pack(),
-)).with_children(|ui| {
-    ui.spawn((
-        UiLayout::new(vec![
-            (UiBase::id(), UiLayout::window().full()),
-            (UiHover::id(), UiLayout::window().x(Rl(5.0)).full()),
-        ]),
-        UiHover::new().forward_speed(20.0).backward_speed(4.0),
-        UiColor::new(vec![
-            (UiBase::id(), Color::srgb(0.8, 0.1, 0.1).with_alpha(0.15)),
-            (UiHover::id(), Color::srgb(1.0, 0.9, 0.0)),
-        ]),
-        Sprite { .. },
-        Pickable::IGNORE,
-    ));
-}).observe(hover_set::<Pointer<Over>, true>)
-  .observe(hover_set::<Pointer<Out>, false>);
 ```
 
 ### Picking / hit testing
 
-Nodes participate in picking by default. Add `Pickable::IGNORE` to visual-only
-child nodes (backgrounds, labels) so they do not steal click events from the
-logical button parent.
+By default, any UI node with a `BackgroundColor` or `Image` will block clicks from passing through to the entities behind it.
+
+If you have a full-screen semi-transparent overlay or a decorative visual element that should not intercept clicks, attach `PickingBehavior::IGNORE`.
+
+```rust
+ui.spawn((
+    Node { width: Val::Percent(100.0), height: Val::Percent(100.0), ..default() },
+    BackgroundColor(Color::BLACK.with_alpha(0.5)),
+    PickingBehavior::IGNORE, // Clicks will pass right through this node
+));
+```
 
 ### Scene lifecycle
 
-Mark the root entity with a scene component and despawn by querying for it:
+Mark the root entity with a scene component and despawn by querying for it when changing screens:
 
 ```rust
 #[derive(Component)]
-pub struct MyScene;
+pub struct MainMenuScene;
 
 // Spawn
-commands.spawn((UiLayoutRoot::new_2d(), UiFetchFromCamera::<0>, MyScene))
-    .with_children(|ui| { /* ... */ });
+commands.spawn((
+    Node { width: Val::Percent(100.0), height: Val::Percent(100.0), ..default() },
+    MainMenuScene
+)).with_children(|ui| { /* ... */ });
 
 // Despawn (on state exit or screen change)
-fn despawn_my_scene(mut commands: Commands, q: Query<Entity, With<MyScene>>) {
-    for e in &q { commands.entity(e).despawn(); }
+fn despawn_main_menu(mut commands: Commands, q: Query<Entity, With<MainMenuScene>>) {
+    for e in &q { 
+        commands.entity(e).despawn_recursive(); 
+    }
 }
 ```
 
-### Common bevy_lunex pitfalls
+### Common bevy_ui pitfalls
 
-- **Text is world-scale** — if text appears enormous, you are missing `UiTextSize`
-  or have added a manual `Transform::from_scale`. Remove the scale; add
-  `UiTextSize`.
-- **Everything renders off-screen to the right** — you used `pos(Rl((50.0, y)))`
-  without `.anchor(Anchor::TopCenter)`. The node's top-left is at 50%, so it
-  extends rightward off-screen.
-- **`Rh` resolves to zero** — the node has no explicit height. Give the node or
-  its parent an explicit `.size(...)`.
-- **Clicks not registering** — a child visual node is covering the parent's
-  pickable area. Add `Pickable::IGNORE` to all visual-only children.
-- **`ChildOf(root)` vs `with_children`** — both work, but `with_children` is
-  preferred. If you use `ChildOf(root)` you must track the root entity id
-  manually and it is easy to attach nodes to the wrong parent.
+- **Using `ZIndex` to fix layout bugs:** If you find yourself slapping `ZIndex(100)` onto nodes to force them to the front, your tree hierarchy is likely wrong. Sibling order dictates render order. Only use `GlobalZIndex` for things like floating tooltips or detached context menus.
+- **`Transform` manipulation:** Do not add a `Transform` component to scale or move UI nodes. `bevy_ui` manages positions exclusively through the `Node` properties.
+- **Forgetting `despawn_recursive()`:** If you call `.despawn()` on a UI parent, it leaves all the child UI nodes orphaned and broken on the screen. Always use `despawn_recursive()` or rely on custom hierarchical relationships.

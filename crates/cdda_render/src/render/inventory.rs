@@ -20,32 +20,11 @@ use crate::core::components::item::{
 };
 use crate::input::ActiveKeybindings;
 use crate::input::BindableAction;
-use crate::render::theme;
+use crate::render::theme::{self, UiTheme};
 use crate::render::tiles::TileRegistry;
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
 use cdda_components::dev::{DevGroundItemName, DevPlayer};
-
-// ---------------------------------------------------------------------------
-// Fixed colours (match dev_spawn palette exactly)
-// ---------------------------------------------------------------------------
-
-const BG: Color = theme::BG;
-const HEADER_BG: Color = theme::HEADER_BG;
-const PANEL_BG: Color = theme::PANEL_BG;
-const ITEM_BG: Color = theme::ITEM_BG;
-const ITEM_CRAFT_BG: Color = Color::srgb(0.18, 0.12, 0.05);
-const TEXT_BRIGHT: Color = theme::TEXT_BRIGHT;
-const TEXT_CRAFT: Color = Color::srgb(0.85, 0.65, 0.20);
-const TEXT_DIM: Color = theme::TEXT_DIM;
-const DIVIDER: Color = theme::DIVIDER;
-const ICON_BG: Color = Color::srgb(0.12, 0.12, 0.16);
-const ICON_TEXT: Color = Color::srgb(0.90, 0.85, 0.25);
-// Accent colours — match dev_spawn blue
-const ACCENT: Color = Color::srgb(0.30, 0.70, 1.00);
-const ACCENT2: Color = Color::srgb(0.85, 0.60, 0.15);
-const ITEM_FOCUS_BG: Color = Color::srgb(0.12, 0.35, 0.55);
-const PANEL_HEADER_BG: Color = Color::srgb(0.09, 0.09, 0.13);
 
 // ---------------------------------------------------------------------------
 // Markers
@@ -96,6 +75,7 @@ impl CddaScreen for InventoryScreen {
 // ---------------------------------------------------------------------------
 
 pub fn spawn_inventory_screen(world: &mut World) {
+    let theme = world.resource::<UiTheme>().clone();
     let active_keys = world.resource::<ActiveKeybindings>();
     let cancel_key_str = active_keys.key_for(BindableAction::Cancel);
     let mut hints = format!("[{}] close", cancel_key_str);
@@ -105,10 +85,10 @@ pub fn spawn_inventory_screen(world: &mut World) {
     }
     let font_handle = world.resource::<super::UiFontHandle>().0.clone();
     let mut cmds = world.commands();
-    spawn_inventory_ui(&mut cmds, &hints, &font_handle);
+    spawn_inventory_ui(&mut cmds, &hints, &font_handle, &theme);
 }
 
-fn spawn_inventory_ui(commands: &mut Commands, hints: &str, ui_font: &Option<Handle<Font>>) {
+fn spawn_inventory_ui(commands: &mut Commands, hints: &str, ui_font: &Option<Handle<Font>>, theme: &UiTheme) {
     commands
         .spawn((
             DespawnOnExit(Ctx::Inventory),
@@ -118,7 +98,7 @@ fn spawn_inventory_ui(commands: &mut Commands, hints: &str, ui_font: &Option<Han
                 flex_direction: FlexDirection::Column,
                 ..default()
             },
-            BackgroundColor(BG),
+            BackgroundColor(theme::BG),
         ))
         .with_children(|root| {
             // ── Title bar ─────────────────────────────────────────────────
@@ -136,7 +116,7 @@ fn spawn_inventory_ui(commands: &mut Commands, hints: &str, ui_font: &Option<Han
                     align_items: AlignItems::Center,
                     ..default()
                 },
-                BackgroundColor(HEADER_BG),
+                BackgroundColor(theme::HEADER_BG),
             ))
             .with_children(|h| {
                 h.spawn((
@@ -145,7 +125,7 @@ fn spawn_inventory_ui(commands: &mut Commands, hints: &str, ui_font: &Option<Han
                         font_size: 22.0,
                         ..default()
                     },
-                    TextColor(ACCENT),
+                    TextColor(theme.accent()),
                 ));
             });
 
@@ -169,7 +149,7 @@ fn spawn_inventory_ui(commands: &mut Commands, hints: &str, ui_font: &Option<Han
                             overflow: Overflow::clip(),
                             ..default()
                         },
-                        BorderColor::all(DIVIDER),
+                        BorderColor::all(theme::DIVIDER),
                     ))
                     .with_children(|left| {
                         // Column header
@@ -185,8 +165,8 @@ fn spawn_inventory_ui(commands: &mut Commands, hints: &str, ui_font: &Option<Han
                                 border: UiRect::bottom(Val::Px(1.0)),
                                 ..default()
                             },
-                            BackgroundColor(PANEL_HEADER_BG),
-                            BorderColor::all(DIVIDER),
+                            BackgroundColor(theme::PANEL_HEADER_BG),
+                            BorderColor::all(theme::DIVIDER),
                         ))
                         .with_child((
                             Text::new("ITEMS"),
@@ -194,7 +174,7 @@ fn spawn_inventory_ui(commands: &mut Commands, hints: &str, ui_font: &Option<Han
                                 font_size: 13.0,
                                 ..default()
                             },
-                            TextColor(TEXT_DIM),
+                            TextColor(theme::TEXT_DIM),
                         ));
 
                         left.spawn((
@@ -227,8 +207,8 @@ fn spawn_inventory_ui(commands: &mut Commands, hints: &str, ui_font: &Option<Han
                                         border: UiRect::bottom(Val::Px(1.0)),
                                         ..default()
                                     },
-                                    BorderColor::all(DIVIDER),
-                                    BackgroundColor(PANEL_BG),
+                                    BorderColor::all(theme::DIVIDER),
+                                    BackgroundColor(theme::PANEL_BG),
                                 ))
                                 .with_children(|wp| {
                                     wp.spawn((
@@ -243,8 +223,8 @@ fn spawn_inventory_ui(commands: &mut Commands, hints: &str, ui_font: &Option<Han
                                             border: UiRect::bottom(Val::Px(1.0)),
                                             ..default()
                                         },
-                                        BackgroundColor(PANEL_HEADER_BG),
-                                        BorderColor::all(DIVIDER),
+                                        BackgroundColor(theme::PANEL_HEADER_BG),
+                                        BorderColor::all(theme::DIVIDER),
                                     ))
                                     .with_child((
                                         Text::new("WIELDED"),
@@ -252,7 +232,7 @@ fn spawn_inventory_ui(commands: &mut Commands, hints: &str, ui_font: &Option<Han
                                             font_size: 13.0,
                                             ..default()
                                         },
-                                        TextColor(ACCENT2),
+                                        TextColor(theme.accent2()),
                                     ));
 
                                     wp.spawn((
@@ -275,7 +255,7 @@ fn spawn_inventory_ui(commands: &mut Commands, hints: &str, ui_font: &Option<Han
                                         flex_grow: 1.0,
                                         ..default()
                                     },
-                                    BackgroundColor(PANEL_BG),
+                                    BackgroundColor(theme::PANEL_BG),
                                 ))
                                 .with_children(|worn| {
                                     worn.spawn((
@@ -290,8 +270,8 @@ fn spawn_inventory_ui(commands: &mut Commands, hints: &str, ui_font: &Option<Han
                                             border: UiRect::bottom(Val::Px(1.0)),
                                             ..default()
                                         },
-                                        BackgroundColor(PANEL_HEADER_BG),
-                                        BorderColor::all(DIVIDER),
+                                        BackgroundColor(theme::PANEL_HEADER_BG),
+                                        BorderColor::all(theme::DIVIDER),
                                     ))
                                     .with_child((
                                         Text::new("WORN"),
@@ -299,7 +279,7 @@ fn spawn_inventory_ui(commands: &mut Commands, hints: &str, ui_font: &Option<Han
                                             font_size: 13.0,
                                             ..default()
                                         },
-                                        TextColor(ACCENT2),
+                                        TextColor(theme.accent2()),
                                     ));
 
                                     worn.spawn((
@@ -324,13 +304,13 @@ fn spawn_inventory_ui(commands: &mut Commands, hints: &str, ui_font: &Option<Han
                     border: UiRect::top(Val::Px(1.0)),
                     ..default()
                 },
-                BackgroundColor(HEADER_BG),
-                BorderColor::all(DIVIDER),
+                BackgroundColor(theme::HEADER_BG),
+                BorderColor::all(theme::DIVIDER),
             ))
             .with_child((
                 Text::new(hints),
                 super::ui_font(ui_font, 13.0),
-                TextColor(TEXT_DIM),
+                TextColor(theme::TEXT_DIM),
                 FooterHint,
             ));
         });
@@ -422,6 +402,7 @@ fn build_item_panel_from_data(
     focus_index: usize,
     compact: bool,
     registry: &TileRegistry,
+    theme: &UiTheme,
 ) {
     if items.is_empty() {
         return;
@@ -436,13 +417,13 @@ fn build_item_panel_from_data(
         let is_crafting = data.craft_display.is_some();
 
         let row_bg = if is_focused {
-            ITEM_FOCUS_BG
+            theme.item_focus_bg()
         } else if is_crafting {
-            ITEM_CRAFT_BG
+            theme::ITEM_CRAFT_BG
         } else {
-            ITEM_BG
+            theme::ITEM_BG
         };
-        let text_color = if is_crafting { TEXT_CRAFT } else { TEXT_BRIGHT };
+        let text_color = if is_crafting { theme::TEXT_CRAFT } else { theme::TEXT_BRIGHT };
 
         let has_sprite = !data.cdda_id.is_empty() && registry.has_tile(&data.cdda_id);
 
@@ -464,7 +445,7 @@ fn build_item_panel_from_data(
                     ..default()
                 },
                 BackgroundColor(row_bg),
-                BorderColor::all(DIVIDER),
+                BorderColor::all(theme::DIVIDER),
             ))
             .with_children(|row| {
                 if has_sprite {
@@ -493,7 +474,7 @@ fn build_item_panel_from_data(
                             justify_content: JustifyContent::Center,
                             ..default()
                         },
-                        BackgroundColor(ICON_BG),
+                        BackgroundColor(theme::ICON_BG),
                     ))
                     .with_child((
                         Text::new(data.sym.to_string()),
@@ -501,7 +482,7 @@ fn build_item_panel_from_data(
                             font_size: font_size - 2.0,
                             ..default()
                         },
-                        TextColor(ICON_TEXT),
+                        TextColor(theme::ICON_TEXT),
                     ));
                 }
 
@@ -522,6 +503,7 @@ pub(crate) fn update_inventory_screen(world: &mut World) {
     // ── Phase 1: Extract all query data into local variables ────────────
 
     // Resources
+    let theme = world.resource::<UiTheme>().clone();
     let (focus_panel, focus_index) = {
         let focus = world.resource::<InventoryFocus>();
         (focus.panel, focus.index)
@@ -643,6 +625,7 @@ pub(crate) fn update_inventory_screen(world: &mut World) {
         focus_index,
         false,
         &registry,
+        &theme,
     );
 
     if pocket_data.is_empty() {
@@ -657,7 +640,7 @@ pub(crate) fn update_inventory_screen(world: &mut World) {
                         font_size: 15.0,
                         ..default()
                     },
-                    TextColor(TEXT_DIM),
+                    TextColor(theme::TEXT_DIM),
                 ));
         });
     }
@@ -675,7 +658,7 @@ pub(crate) fn update_inventory_screen(world: &mut World) {
                         font_size: 14.0,
                         ..default()
                     },
-                    TextColor(TEXT_DIM),
+                    TextColor(theme::TEXT_DIM),
                 ));
         });
     } else {
@@ -687,6 +670,7 @@ pub(crate) fn update_inventory_screen(world: &mut World) {
             focus_index,
             true,
             &registry,
+            &theme,
         );
     }
 
@@ -703,7 +687,7 @@ pub(crate) fn update_inventory_screen(world: &mut World) {
                         font_size: 14.0,
                         ..default()
                     },
-                    TextColor(TEXT_DIM),
+                    TextColor(theme::TEXT_DIM),
                 ));
         });
     } else {
@@ -715,6 +699,7 @@ pub(crate) fn update_inventory_screen(world: &mut World) {
             0,
             true,
             &registry,
+            &theme,
         );
     }
 }

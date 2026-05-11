@@ -4,13 +4,13 @@
 //! system reads `GameAction` events, checks the focused command index,
 //! and dispatches transitions (Push, Replace, Pop, Quit, Event).
 
-use bevy_ecs::message::{MessageReader, MessageWriter};
+use bevy_ecs::message::MessageReader;
 use bevy_ecs::prelude::*;
 use bevy_state::prelude::*;
 
+pub use cdda_events::GameEvent;
+pub use cdda_components::context::{Ctx, ContextStack, FocusedCommandIndex, push_ctx, pop_ctx};
 use crate::input::{GameAction, InputAction};
-
-use crate::context::ctx::{ContextStack, Ctx};
 use crate::context::overlay::OverlayStack;
 
 // ---------------------------------------------------------------------------
@@ -56,92 +56,8 @@ pub struct ScreenDefinition {
     pub commands: Vec<ScreenCommand>,
 }
 
-// ---------------------------------------------------------------------------
-// GameEvent
-// ---------------------------------------------------------------------------
-
-/// Cross-cutting game events that transcend screen navigation.
-///
-/// For example, when the player clicks "Start Game" on the character
-/// confirm screen, the command emits `GameEvent::StartNewGame` rather
-/// than navigating to a new screen. An application-level system listens
-/// for this event and transitions `AppState`.
-#[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GameEvent {
-    /// Player confirmed character creation — begin loading + worldgen.
-    StartNewGame,
-    /// Save and exit to main menu.
-    SaveAndQuit,
-}
-
-// ---------------------------------------------------------------------------
-// FocusedCommandIndex
-// ---------------------------------------------------------------------------
-
-/// Tracks the focused command index **per screen** so that returning via
-/// Escape restores the cursor to where it was left.
-///
-/// Renderers call `current()` to know what to highlight.
-/// Only `handle_navigation_input` writes to this resource.
-#[derive(Resource, Default, Debug, Clone)]
-pub struct FocusedCommandIndex {
-    history: std::collections::HashMap<crate::context::ctx::Ctx, usize>,
-    current: usize,
-}
-
-impl FocusedCommandIndex {
-    /// The focused index for the current screen.
-    pub fn current(&self) -> usize {
-        self.current
-    }
-
-    /// Move focus within the current screen.
-    pub fn set(&mut self, idx: usize) {
-        self.current = idx;
-    }
-
-    /// Save focus for `from`, load saved focus for `to` (0 if first visit).
-    pub fn on_push(&mut self, from: crate::context::ctx::Ctx, to: crate::context::ctx::Ctx) {
-        self.history.insert(from, self.current);
-        self.current = *self.history.get(&to).unwrap_or(&0);
-    }
-
-    /// Restore saved focus for `to` (the screen we are returning to).
-    pub fn on_pop(&mut self, to: crate::context::ctx::Ctx) {
-        self.current = *self.history.get(&to).unwrap_or(&0);
-    }
-}
-
-// ---------------------------------------------------------------------------
-// push_ctx / pop_ctx
-// ---------------------------------------------------------------------------
-
-/// Push a child screen. Saves current focus for `current`, restores saved
-/// focus for `next_screen`. Always call this instead of touching
-/// `ContextStack`, `NextState`, and `FocusedCommandIndex` separately.
-pub fn push_ctx(
-    current: Ctx,
-    next_screen: Ctx,
-    stack: &mut ContextStack,
-    next: &mut NextState<Ctx>,
-    focused: &mut FocusedCommandIndex,
-) {
-    focused.on_push(current, next_screen);
-    stack.0.push(current);
-    next.set(next_screen);
-}
-
-/// Pop back to the parent screen, restoring saved focus. No-op if empty.
-pub fn pop_ctx(
-    stack: &mut ContextStack,
-    next: &mut NextState<Ctx>,
-    focused: &mut FocusedCommandIndex,
-) {
-    if let Some(parent) = stack.0.pop() {
-        focused.on_pop(parent);
-        next.set(parent);
-    }
-}
+// FocusedCommandIndex, push_ctx, pop_ctx, Ctx, and ContextStack are now
+// defined in cdda_components::context and re-exported above.
 
 // ---------------------------------------------------------------------------
 // screen_def — static navigation data for every screen
@@ -285,7 +201,7 @@ fn dispatch(
     stack: &mut ContextStack,
     next: &mut NextState<Ctx>,
     focused: &mut FocusedCommandIndex,
-    game_events: &mut MessageWriter<GameEvent>,
+    commands: &mut Commands,
 ) {
     match target {
         TransitionTarget::Push(s) => push_ctx(current, *s, stack, next, focused),
@@ -293,7 +209,7 @@ fn dispatch(
         TransitionTarget::Pop => pop_ctx(stack, next, focused),
         TransitionTarget::Quit => std::process::exit(0),
         TransitionTarget::Event(e) => {
-            let _ = game_events.write(*e);
+            commands.trigger(*e);
         }
     }
 }
@@ -309,11 +225,11 @@ fn dispatch(
 /// `TransitionTarget`.
 pub fn handle_navigation_input(
     mut reader: MessageReader<InputAction>,
+    mut commands: Commands,
     mut stack: ResMut<ContextStack>,
     mut next: ResMut<NextState<Ctx>>,
     mut focused: ResMut<FocusedCommandIndex>,
     state: Res<State<Ctx>>,
-    mut game_events: MessageWriter<GameEvent>,
     overlays: Res<OverlayStack>,
     list_items: Query<(), (With<super::ScreenListItem>,)>,
 ) {
@@ -367,14 +283,14 @@ pub fn handle_navigation_input(
                         &mut stack,
                         &mut next,
                         &mut focused,
-                        &mut game_events,
+                        &mut commands,
                     );
                 }
             }
             GameAction::Cancel => {
-                // Some screens handle Cancel in their own input systems (crafting
-                // menu calls pop_ctx itself).  Don't double-pop for those.
-                let screen_handles_cancel = matches!(current, Ctx::CraftingMenu | Ctx::ItemExamine);
+                // ItemExamine handles Cancel in its own input system.
+                // Don't double-pop for it.
+                let screen_handles_cancel = matches!(current, Ctx::ItemExamine);
                 if !screen_handles_cancel {
                     pop_ctx(&mut stack, &mut next, &mut focused);
                 }
@@ -394,7 +310,7 @@ pub fn handle_navigation_input(
                         &mut stack,
                         &mut next,
                         &mut focused,
-                        &mut game_events,
+                        &mut commands,
                     );
                 }
             }

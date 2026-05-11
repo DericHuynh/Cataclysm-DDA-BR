@@ -167,6 +167,13 @@ impl MountedPockets {
 pub struct IsPocket;
 
 /// On a pocket entity: the character who owns this pocket.
+///
+/// This is intentionally a **one-way** component (not a bidirectional
+/// relationship).  The reverse lookup (finding all pockets for a creature)
+/// uses `MountedPockets` instead.  Keeping `PocketOf` one-way avoids the
+/// complexity of synchronizing two relationship halves for a simple
+/// ownership pointer.
+///
 /// Follows the chain: item → InsideContainer(pocket) → PocketOf(player).
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 pub struct PocketOf(pub Entity);

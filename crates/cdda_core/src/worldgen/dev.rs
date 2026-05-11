@@ -60,7 +60,7 @@ struct BuildingExtent {
     width: i32,
     /// Depth in OMT units (max y - min y + 1).
     depth: i32,
-    /// Height in z-levels (max z - min z + 1).
+    /// Height in z-levels (max z - min z + 1).  Used only in tests.
     #[allow(dead_code)]
     height: i32,
     /// Offset to the origin (typically [0, 0, 0]).

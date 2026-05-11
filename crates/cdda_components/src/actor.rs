@@ -215,6 +215,8 @@ impl CreatureMutations {
 #[derive(Component, Debug, Clone, Reflect)]
 pub struct MutationEntry {
     pub id: crate::MutationId,
+    /// TODO: convert this `bool` to a `Visible` / `Hidden` tag component
+    /// so it's archetype-queryable (consistent with the AGENTS.md tag pattern).
     pub visible: bool,
 }
 
@@ -271,6 +273,8 @@ impl InstalledBionics {
 #[derive(Component, Debug, Clone, Reflect)]
 pub struct Bionic {
     pub bionic_id: crate::BionicId,
+    /// TODO: convert this `bool` to an `Active` / `Inactive` tag component
+    /// so it's archetype-queryable (consistent with the AGENTS.md tag pattern).
     pub active: bool,
     pub power_used: crate::Energy,
 }

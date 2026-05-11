@@ -13,6 +13,7 @@ clap.workspace = true
 cdda_core.workspace = true
 cdda_components.workspace = true
 cdda_activity.workspace = true
+cdda_events.workspace = true
 cdda_render.workspace = true
 bevy = { workspace = true, features = ["3d"] }
 bevy-inspector-egui.workspace = true

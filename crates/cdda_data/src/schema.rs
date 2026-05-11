@@ -69,7 +69,7 @@ pub fn validate_against_schema<T: schemars::JsonSchema + serde::de::DeserializeO
 /// Returns a map of def_id → validation errors.
 pub fn validate_all<T: schemars::JsonSchema + serde::de::DeserializeOwned>(
     type_name: &str,
-    raw_defs: &HashMap<String, Vec<crate::data::loader::RawDef>>,
+    raw_defs: &HashMap<String, Vec<crate::loader::RawDef>>,
 ) -> HashMap<String, Vec<String>> {
     let mut results = HashMap::new();
 
@@ -115,7 +115,7 @@ pub fn validate_all<T: schemars::JsonSchema + serde::de::DeserializeOwned>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::raw_defs::ItemDef;
+    use cdda_core_types::core::raw_defs::ItemDef;
     use serde_json::json;
 
     // -----------------------------------------------------------------------
@@ -179,7 +179,7 @@ mod tests {
     #[test]
     fn validate_all_empty_raws_is_empty() {
         // Arrange
-        let raw_defs: HashMap<String, Vec<crate::data::loader::RawDef>> = HashMap::new();
+        let raw_defs: HashMap<String, Vec<crate::loader::RawDef>> = HashMap::new();
 
         // Act
         let results = validate_all::<ItemDef>("ITEM", &raw_defs);

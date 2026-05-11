@@ -23,25 +23,7 @@ use crate::input::BindableAction;
 use crate::crafting::systems::{CategoryIndex, CraftEntry, CraftState};
 use crate::data::def_world::DefinitionWorld;
 use crate::render::item_detail::{spawn_item_detail, ItemDetailQueries};
-
-// ---------------------------------------------------------------------------
-// Colours — adapted from render/dev_spawn.rs palette
-// ---------------------------------------------------------------------------
-
-const BG: Color = Color::srgb(0.04, 0.04, 0.06);
-const HEADER_BG: Color = Color::srgb(0.10, 0.10, 0.14);
-const ITEM_BG: Color = Color::srgb(0.07, 0.07, 0.10);
-const ITEM_FOCUS_BG: Color = Color::srgb(0.12, 0.35, 0.55);
-const ACCENT: Color = Color::srgb(0.30, 0.70, 1.00);
-const ACCENT_CRAFTABLE: Color = Color::srgb(0.40, 0.85, 0.40);
-const TEXT_BRIGHT: Color = Color::srgb(0.95, 0.95, 0.95);
-const TEXT_DIM: Color = Color::srgb(0.55, 0.55, 0.55);
-const TEXT_RED: Color = Color::srgb(0.85, 0.30, 0.30);
-const TEXT_ID: Color = Color::srgb(0.50, 0.65, 0.50);
-const DIVIDER: Color = Color::srgb(0.20, 0.20, 0.25);
-const TAB_BG: Color = Color::srgb(0.08, 0.08, 0.14);
-const TAB_ACTIVE_BG: Color = Color::srgb(0.15, 0.25, 0.40);
-const PANEL_BG: Color = Color::srgb(0.06, 0.06, 0.10);
+use crate::render::theme::{self, UiTheme};
 
 /// Number of recipe rows visible at once in the scroll window.
 const VISIBLE_ROWS: usize = 22;
@@ -94,11 +76,13 @@ impl CddaScreen for CraftingScreen {
     ];
 
     fn spawn(world: &mut World) {
-        spawn_crafting_ui(world.commands());
+        let theme = world.resource::<UiTheme>().clone();
+        spawn_crafting_ui(world.commands(), &theme);
     }
 
     fn update(_world: &mut World) {
-        // Original update_crafting_ui system handles updates for now.
+        // Handled by update_crafting_ui in mod.rs.
+        // TODO: migrate that system into this method.
     }
 }
 
@@ -126,7 +110,7 @@ pub struct CraftingContainers<'w, 's> {
 
 /// Spawn the persistent root wrapper for the crafting menu.
 /// Content is rebuilt each frame by `update_crafting_ui`.
-pub fn spawn_crafting_ui(mut commands: Commands) {
+pub fn spawn_crafting_ui(mut commands: Commands, _theme: &UiTheme) {
     commands
         .spawn((
             DespawnOnExit(Ctx::CraftingMenu),
@@ -137,7 +121,7 @@ pub fn spawn_crafting_ui(mut commands: Commands) {
                 flex_direction: FlexDirection::Column,
                 ..default()
             },
-            BackgroundColor(BG),
+            BackgroundColor(theme::BG),
         ))
         .with_children(|root| {
             // ── 1. Header ─────────────────────────────────────────────────
@@ -148,7 +132,7 @@ pub fn spawn_crafting_ui(mut commands: Commands) {
                     padding: UiRect::axes(Val::Px(16.0), Val::Px(8.0)),
                     ..default()
                 },
-                BackgroundColor(HEADER_BG),
+                BackgroundColor(theme::HEADER_BG),
             ));
 
             // ── 2. Top-level category tabs ────────────────────────────────
@@ -162,7 +146,7 @@ pub fn spawn_crafting_ui(mut commands: Commands) {
                     overflow: Overflow::clip_x(),
                     ..default()
                 },
-                BackgroundColor(TAB_BG),
+                BackgroundColor(theme::TAB_BG),
             ));
 
             // ── 3. Subcategory tabs ───────────────────────────────────────
@@ -176,7 +160,7 @@ pub fn spawn_crafting_ui(mut commands: Commands) {
                     overflow: Overflow::clip_x(),
                     ..default()
                 },
-                BackgroundColor(Color::srgb(0.06, 0.06, 0.12)),
+                BackgroundColor(theme::SUBTAB_BG),
             ));
 
             // ── 4. Body: recipe list + detail panel ───────────────────────
@@ -201,7 +185,7 @@ pub fn spawn_crafting_ui(mut commands: Commands) {
                             overflow: Overflow::clip(),
                             ..default()
                         },
-                        BackgroundColor(PANEL_BG),
+                        BackgroundColor(theme::ITEM_BG),
                     ));
 
                     // Middle: crafting detail panel
@@ -215,7 +199,7 @@ pub fn spawn_crafting_ui(mut commands: Commands) {
                             overflow: Overflow::clip(),
                             ..default()
                         },
-                        BackgroundColor(PANEL_BG),
+                        BackgroundColor(theme::ITEM_BG),
                     ));
 
                     // Right: item detail panel
@@ -229,7 +213,7 @@ pub fn spawn_crafting_ui(mut commands: Commands) {
                             overflow: Overflow::clip(),
                             ..default()
                         },
-                        BackgroundColor(PANEL_BG),
+                        BackgroundColor(theme::ITEM_BG),
                     ));
                 });
 
@@ -241,7 +225,7 @@ pub fn spawn_crafting_ui(mut commands: Commands) {
                     padding: UiRect::axes(Val::Px(12.0), Val::Px(6.0)),
                     ..default()
                 },
-                BackgroundColor(HEADER_BG),
+                BackgroundColor(theme::HEADER_BG),
             ));
 
             // ── 6. Footer ─────────────────────────────────────────────────
@@ -253,8 +237,8 @@ pub fn spawn_crafting_ui(mut commands: Commands) {
                     border: UiRect::top(Val::Px(1.0)),
                     ..default()
                 },
-                BackgroundColor(HEADER_BG),
-                BorderColor::all(DIVIDER),
+                BackgroundColor(theme::HEADER_BG),
+                BorderColor::all(theme::DIVIDER),
             ))
             .with_child((
                 Text::new(""),
@@ -262,7 +246,7 @@ pub fn spawn_crafting_ui(mut commands: Commands) {
                     font_size: 12.0,
                     ..default()
                 },
-                TextColor(TEXT_DIM),
+                TextColor(theme::TEXT_DIM),
                 FooterHint,
             ));
         });
@@ -280,6 +264,7 @@ pub fn update_crafting_ui(
     def_world: Res<DefinitionWorld>,
     containers: CraftingContainers,
     defs: ItemDetailQueries,
+    theme: Res<UiTheme>,
 ) {
     let Ok(_root) = containers.root.single() else {
         return;
@@ -370,7 +355,7 @@ pub fn update_crafting_ui(
                     font_size: 22.0,
                     ..default()
                 },
-                TextColor(ACCENT),
+                TextColor(theme.accent()),
             ));
             let status = if total_in_cat > 0 {
                 let sub_focus = if focus < total_in_cat {
@@ -401,7 +386,7 @@ pub fn update_crafting_ui(
                     font_size: 13.0,
                     ..default()
                 },
-                TextColor(TEXT_DIM),
+                TextColor(theme::TEXT_DIM),
             ));
         });
 
@@ -414,13 +399,13 @@ pub fn update_crafting_ui(
                 let is_active = i == sel_top;
                 let zone_highlight = focus_zone == 1 && is_active;
                 let tab_bg = if zone_highlight {
-                    Color::srgb(0.15, 0.30, 0.45)
+                    theme::ZONE_HIGHLIGHT_BG
                 } else if is_active {
-                    TAB_ACTIVE_BG
+                    theme.tab_active_bg()
                 } else {
                     Color::NONE
                 };
-                let text_color = if is_active { ACCENT } else { TEXT_DIM };
+                let text_color = if is_active { theme.accent() } else { theme::TEXT_DIM };
                 tabs.spawn((
                     Node {
                         padding: UiRect::axes(Val::Px(10.0), Val::Px(4.0)),
@@ -432,7 +417,7 @@ pub fn update_crafting_ui(
                         ..default()
                     },
                     BackgroundColor(tab_bg),
-                    BorderColor::all(if is_active { ACCENT } else { Color::NONE }),
+                    BorderColor::all(if is_active { theme.accent() } else { Color::NONE }),
                 ))
                 .with_child((
                     Text::new(cat_name.clone()),
@@ -454,13 +439,13 @@ pub fn update_crafting_ui(
                 let is_active = i == sel_sub;
                 let zone_highlight = focus_zone == 2 && is_active;
                 let tab_bg = if zone_highlight {
-                    Color::srgb(0.15, 0.30, 0.45)
+                    theme::ZONE_HIGHLIGHT_BG
                 } else if is_active {
-                    Color::srgb(0.10, 0.18, 0.28)
+                    theme::SUBTAB_ACTIVE_BG
                 } else {
                     Color::NONE
                 };
-                let text_color = if is_active { TEXT_BRIGHT } else { TEXT_DIM };
+                let text_color = if is_active { theme::TEXT_BRIGHT } else { theme::TEXT_DIM };
                 tabs.spawn((
                     Node {
                         padding: UiRect::axes(Val::Px(8.0), Val::Px(3.0)),
@@ -496,7 +481,7 @@ pub fn update_crafting_ui(
                             font_size: 14.0,
                             ..default()
                         },
-                        TextColor(TEXT_DIM),
+                        TextColor(theme::TEXT_DIM),
                     ));
                 return;
             }
@@ -522,7 +507,7 @@ pub fn update_crafting_ui(
                         font_size: 13.0,
                         ..default()
                     },
-                    TextColor(TEXT_DIM),
+                    TextColor(theme::TEXT_DIM),
                 ));
 
             // Recipe rows
@@ -532,7 +517,7 @@ pub fn update_crafting_ui(
             {
                 let abs_index = scroll_start + i;
                 let is_focused = abs_index == focus_clamped;
-                let row_bg = if is_focused { ITEM_FOCUS_BG } else { ITEM_BG };
+                let row_bg = if is_focused { theme.item_focus_bg() } else { theme::PANEL_BG };
 
                 let mark = if entry.craftable { "+" } else { "-" };
                 let row_label = if entry.result_count > 1 {
@@ -553,7 +538,7 @@ pub fn update_crafting_ui(
                             ..default()
                         },
                         BackgroundColor(row_bg),
-                        BorderColor::all(DIVIDER),
+                        BorderColor::all(theme::DIVIDER),
                     ))
                     .with_children(|row| {
                         row.spawn((
@@ -562,7 +547,7 @@ pub fn update_crafting_ui(
                                 font_size: 15.0,
                                 ..default()
                             },
-                            TextColor(TEXT_BRIGHT),
+                            TextColor(theme::TEXT_BRIGHT),
                             Node {
                                 flex_grow: 1.0,
                                 ..default()
@@ -574,7 +559,7 @@ pub fn update_crafting_ui(
                                 font_size: 13.0,
                                 ..default()
                             },
-                            TextColor(TEXT_ID),
+                            TextColor(theme::TEXT_ID),
                         ));
                     });
             }
@@ -601,7 +586,7 @@ pub fn update_crafting_ui(
                         font_size: 18.0,
                         ..default()
                     },
-                    TextColor(ACCENT),
+                    TextColor(theme.accent()),
                 ));
 
                 // ID
@@ -611,7 +596,7 @@ pub fn update_crafting_ui(
                         font_size: 12.0,
                         ..default()
                     },
-                    TextColor(TEXT_ID),
+                    TextColor(theme::TEXT_ID),
                 ));
 
                 // Craftability
@@ -622,7 +607,7 @@ pub fn update_crafting_ui(
                             font_size: 13.0,
                             ..default()
                         },
-                        TextColor(ACCENT_CRAFTABLE),
+                        TextColor(theme::TEXT_GREEN),
                     ));
                 }
 
@@ -634,7 +619,7 @@ pub fn update_crafting_ui(
                             font_size: 13.0,
                             ..default()
                         },
-                        TextColor(TEXT_DIM),
+                        TextColor(theme::TEXT_DIM),
                     ));
                 }
 
@@ -646,7 +631,7 @@ pub fn update_crafting_ui(
                         margin: UiRect::vertical(Val::Px(4.0)),
                         ..default()
                     },
-                    BackgroundColor(DIVIDER),
+                    BackgroundColor(theme::DIVIDER),
                 ));
 
                 // Components
@@ -656,7 +641,7 @@ pub fn update_crafting_ui(
                         font_size: 13.0,
                         ..default()
                     },
-                    TextColor(TEXT_DIM),
+                    TextColor(theme::TEXT_DIM),
                 ));
                 if entry.components_text.is_empty() {
                     det.spawn((
@@ -665,7 +650,7 @@ pub fn update_crafting_ui(
                             font_size: 12.0,
                             ..default()
                         },
-                        TextColor(TEXT_DIM),
+                        TextColor(theme::TEXT_DIM),
                     ));
                 } else {
                     for line in &entry.components_text {
@@ -675,7 +660,7 @@ pub fn update_crafting_ui(
                                 font_size: 12.0,
                                 ..default()
                             },
-                            TextColor(TEXT_BRIGHT),
+                            TextColor(theme::TEXT_BRIGHT),
                         ));
                     }
                 }
@@ -688,7 +673,7 @@ pub fn update_crafting_ui(
                             font_size: 13.0,
                             ..default()
                         },
-                        TextColor(TEXT_DIM),
+                        TextColor(theme::TEXT_DIM),
                     ));
                     for line in &entry.qualities_text {
                         det.spawn((
@@ -697,7 +682,7 @@ pub fn update_crafting_ui(
                                 font_size: 12.0,
                                 ..default()
                             },
-                            TextColor(TEXT_BRIGHT),
+                            TextColor(theme::TEXT_BRIGHT),
                         ));
                     }
                 }
@@ -714,7 +699,7 @@ pub fn update_crafting_ui(
                                 font_size: 13.0,
                                 ..default()
                             },
-                            TextColor(TEXT_RED),
+                            TextColor(theme::TEXT_RED),
                         ));
                 }
 
@@ -731,7 +716,7 @@ pub fn update_crafting_ui(
                                 font_size: 13.0,
                                 ..default()
                             },
-                            TextColor(ACCENT_CRAFTABLE),
+                            TextColor(theme::TEXT_GREEN),
                         ));
                 }
             } else {
@@ -741,7 +726,7 @@ pub fn update_crafting_ui(
                         font_size: 14.0,
                         ..default()
                     },
-                    TextColor(TEXT_DIM),
+                    TextColor(theme::TEXT_DIM),
                 ));
             }
         });
@@ -768,7 +753,7 @@ pub fn update_crafting_ui(
                         font_size: 14.0,
                         ..default()
                     },
-                    TextColor(TEXT_DIM),
+                    TextColor(theme::TEXT_DIM),
                 ));
                 return;
             };
@@ -786,7 +771,7 @@ pub fn update_crafting_ui(
         .despawn_children()
         .with_children(|fb| {
             let filter_bg = if filtering {
-                Color::srgb(0.08, 0.18, 0.30)
+                theme::FILTER_ACTIVE_BG
             } else {
                 Color::NONE
             };
@@ -811,7 +796,7 @@ pub fn update_crafting_ui(
                     font_size: 13.0,
                     ..default()
                 },
-                TextColor(if filtering { TEXT_BRIGHT } else { TEXT_DIM }),
+                TextColor(if filtering { theme::TEXT_BRIGHT } else { theme::TEXT_DIM }),
             ));
         });
 }

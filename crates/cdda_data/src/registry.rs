@@ -1,11 +1,11 @@
-use crate::core::raw_defs::*;
-use crate::core::id::DefId;
+use cdda_core_types::core::raw_defs::*;
+use cdda_core_types::core::id::DefId;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 /// The single authoritative read-only store of all game definitions.
 ///
-/// Populated by the two-pass loader (`crate::data::loader`) and made available to
+/// Populated by the two-pass loader (`crate::loader`) and made available to
 /// all other crates. After loading, this is immutable for the lifetime of
 /// the game session.
 ///

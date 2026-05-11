@@ -6,8 +6,11 @@ description = "ECS components for actors, items, definitions, and spatial data."
 
 [dependencies]
 bevy_ecs.workspace = true
+bevy_state.workspace = true
 bevy_reflect.workspace = true
 serde.workspace = true
 schemars.workspace = true
+leafwing-input-manager.workspace = true
 fixedbitset = "0.5.7"
 cdda_core_types = { path = "../cdda_core_types" }
+cdda_events = { path = "../cdda_events" }

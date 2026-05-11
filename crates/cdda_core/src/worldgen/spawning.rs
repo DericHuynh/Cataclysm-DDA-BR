@@ -65,7 +65,10 @@ pub fn spawn_from_group(
 /// Reads the `SpawnEvent` message buffer, resolves each event's
 /// template_id to a def entity, and calls `spawn_monster` / `spawn_item`.
 ///
-/// STUB: no-op until spawning implemented
+/// STUB: no-op until spawning implemented.
+///
+/// Registered in  but not yet functional.
+/// Registered in SimSet::Spawning but not yet functional.
 pub fn spawning_phase(world: &mut World) {
     let _ = world;
 }

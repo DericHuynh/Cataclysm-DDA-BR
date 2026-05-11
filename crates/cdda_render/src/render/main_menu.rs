@@ -8,24 +8,13 @@ use crate::context::ctx::Ctx;
 use crate::context::nav::{ctx_def, FocusedCommandIndex};
 use crate::context::InputFocus;
 use crate::input::ActiveKeybindings;
+use crate::render::theme::{self, UiTheme};
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
 
 /// Marks a command button, storing its index into the screen_def command list.
 #[derive(Component)]
 pub struct CommandButton(usize);
-
-// ---------------------------------------------------------------------------
-// Colours
-// ---------------------------------------------------------------------------
-
-const BG: Color = Color::srgb(0.05, 0.05, 0.07);
-const ITEM_BG: Color = Color::srgb(0.08, 0.08, 0.10);
-const ITEM_FOCUS_BG: Color = Color::srgb(0.25, 0.55, 0.15);
-const ACCENT: Color = Color::srgb(0.85, 0.6, 0.15);
-const TEXT_BRIGHT: Color = Color::srgb(0.95, 0.95, 0.95);
-const TEXT_DIM: Color = Color::srgb(0.6, 0.6, 0.6);
-const FOCUSED_BORDER: Color = Color::srgb(0.95, 0.95, 0.95);
 
 // ---------------------------------------------------------------------------
 // Spawn
@@ -36,6 +25,7 @@ pub fn spawn(
     focused: Res<FocusedCommandIndex>,
     active_keys: Res<ActiveKeybindings>,
     ui_font_handle: Res<super::UiFontHandle>,
+    theme: Res<UiTheme>,
 ) {
     let def = ctx_def(Ctx::MainMenu);
 
@@ -52,7 +42,7 @@ pub fn spawn(
                 padding: UiRect::all(Val::Px(32.0)),
                 ..default()
             },
-            BackgroundColor(BG),
+            BackgroundColor(theme::MENU_BG),
         ))
         .with_children(|parent| {
             // Title
@@ -62,7 +52,7 @@ pub fn spawn(
                     font_size: 42.0,
                     ..default()
                 },
-                TextColor(ACCENT),
+                TextColor(theme.accent2()),
                 TextLayout::new_with_justify(Justify::Center),
                 Node {
                     margin: UiRect::bottom(Val::Px(48.0)),
@@ -92,9 +82,9 @@ pub fn spawn(
                             border: UiRect::all(Val::Px(2.0)),
                             ..default()
                         },
-                        BackgroundColor(if is_focused { ITEM_FOCUS_BG } else { ITEM_BG }),
+                        BackgroundColor(if is_focused { theme::BUTTON_FOCUS_BG } else { theme::BUTTON_BG }),
                         BorderColor::all(if is_focused {
-                            FOCUSED_BORDER
+                            theme::TEXT_BRIGHT
                         } else {
                             Color::NONE
                         }),
@@ -105,7 +95,7 @@ pub fn spawn(
                             font_size: 28.0,
                             ..default()
                         },
-                        TextColor(TEXT_BRIGHT),
+                        TextColor(theme::TEXT_BRIGHT),
                     ));
             }
 
@@ -119,7 +109,7 @@ pub fn spawn(
             parent.spawn((
                 Text::new(hints),
                 super::ui_font(&ui_font_handle.0, 18.0),
-                TextColor(TEXT_DIM),
+                TextColor(theme::TEXT_DIM),
                 FooterHint,
                 TextLayout::new_with_justify(Justify::Center),
                 Node {
@@ -139,6 +129,7 @@ pub fn sync_focus(
     mut input_focus: ResMut<InputFocus>,
     active_keys: Res<ActiveKeybindings>,
     _ui_font_handle: Res<super::UiFontHandle>,
+    _theme: Res<UiTheme>,
     mut footer_hint_q: Query<&mut Text, With<FooterHint>>,
     mut buttons: Query<(
         Entity,
@@ -160,14 +151,15 @@ pub fn sync_focus(
     let current = focused.current();
     for (entity, btn, mut bg, mut border) in &mut buttons {
         if btn.0 == current {
-            bg.0 = ITEM_FOCUS_BG;
-            border.top = FOCUSED_BORDER;
-            border.right = FOCUSED_BORDER;
-            border.bottom = FOCUSED_BORDER;
-            border.left = FOCUSED_BORDER;
+            bg.set_if_neq(BackgroundColor(theme::BUTTON_FOCUS_BG));
+            let c = theme::TEXT_BRIGHT;
+            border.top = c;
+            border.right = c;
+            border.bottom = c;
+            border.left = c;
             input_focus.entity = Some(entity);
         } else {
-            bg.0 = ITEM_BG;
+            bg.set_if_neq(BackgroundColor(theme::BUTTON_BG));
             border.top = Color::NONE;
             border.right = Color::NONE;
             border.bottom = Color::NONE;

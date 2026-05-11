@@ -14,6 +14,7 @@ use crate::core::components::item::WieldedItems;
 use crate::core::components::item::{Inventory, FLOOR_CAP_ML};
 use crate::core::components::sim::WorldPosition;
 use crate::map::WorldMap;
+use crate::render::theme::{self, UiTheme};
 use crate::render::tiles::TileRegistry;
 use crate::worldgen::setup::WorldMapResource;
 use bevy::prelude::*;
@@ -22,18 +23,6 @@ use bevy_state::state_scoped::DespawnOnExit;
 use cdda_components::dev::{DevCamera, DevGroundItemName, DevPlayer};
 use std::collections::HashMap;
 use tracing::info;
-
-// ---------------------------------------------------------------------------
-// Colours
-// ---------------------------------------------------------------------------
-
-const BG: Color = Color::srgb(0.05, 0.05, 0.07);
-const ITEM_BG: Color = Color::srgb(0.08, 0.08, 0.10);
-const ITEM_FOCUS_BG: Color = Color::srgb(0.25, 0.55, 0.15);
-const ACCENT: Color = Color::srgb(0.85, 0.6, 0.15);
-const TEXT_BRIGHT: Color = Color::srgb(0.95, 0.95, 0.95);
-const TEXT_DIM: Color = Color::srgb(0.6, 0.6, 0.6);
-const FOCUSED_BORDER: Color = Color::srgb(0.95, 0.95, 0.95);
 
 // Viewport size in OMT tiles
 
@@ -54,7 +43,7 @@ pub const VIEW_ROWS: usize = 24;
 // DevWorldgen menu screen
 // ---------------------------------------------------------------------------
 
-pub fn spawn_dev_menu(mut commands: Commands, focused: Res<FocusedCommandIndex>) {
+pub fn spawn_dev_menu(mut commands: Commands, focused: Res<FocusedCommandIndex>, theme: Res<UiTheme>) {
     let def = ctx_def(Screen::DevWorldgen);
 
     commands
@@ -70,13 +59,13 @@ pub fn spawn_dev_menu(mut commands: Commands, focused: Res<FocusedCommandIndex>)
                 padding: UiRect::all(Val::Px(32.0)),
                 ..default()
             },
-            BackgroundColor(BG),
+            BackgroundColor(theme::MENU_BG),
         ))
         .with_children(|parent| {
             parent.spawn((
                 Text::new(def.title),
                 TextFont { font_size: 34.0, ..default() },
-                TextColor(ACCENT),
+                TextColor(theme.accent2()),
                 TextLayout::new_with_justify(Justify::Center),
                 Node { margin: UiRect::bottom(Val::Px(48.0)), ..default() },
             ));
@@ -84,7 +73,7 @@ pub fn spawn_dev_menu(mut commands: Commands, focused: Res<FocusedCommandIndex>)
             parent.spawn((
                 Text::new("Generates a showcase world with one of every city building.\nArrow keys navigate, Enter to start."),
                 TextFont { font_size: 18.0, ..default() },
-                TextColor(TEXT_DIM),
+                TextColor(theme::TEXT_DIM),
                 TextLayout::new_with_justify(Justify::Center),
                 Node { margin: UiRect::bottom(Val::Px(32.0)), ..default() },
             ));
@@ -109,13 +98,13 @@ pub fn spawn_dev_menu(mut commands: Commands, focused: Res<FocusedCommandIndex>)
                         border: UiRect::all(Val::Px(2.0)),
                         ..default()
                     },
-                    BackgroundColor(if is_focused { ITEM_FOCUS_BG } else { ITEM_BG }),
-                    BorderColor::all(if is_focused { FOCUSED_BORDER } else { Color::NONE }),
+                    BackgroundColor(if is_focused { theme::BUTTON_FOCUS_BG } else { theme::BUTTON_BG }),
+                    BorderColor::all(if is_focused { theme::TEXT_BRIGHT } else { Color::NONE }),
                 ))
                 .with_child((
                     Text::new(display),
                     TextFont { font_size: 28.0, ..default() },
-                    TextColor(TEXT_BRIGHT),
+                    TextColor(theme::TEXT_BRIGHT),
                 ));
             }
         });
@@ -123,19 +112,20 @@ pub fn spawn_dev_menu(mut commands: Commands, focused: Res<FocusedCommandIndex>)
 
 pub(crate) fn sync_dev_menu_focus(
     focused: Res<FocusedCommandIndex>,
+    _theme: Res<UiTheme>,
     mut buttons: Query<(&DevCmdButton, &mut BackgroundColor, &mut BorderColor)>,
 ) {
     let current = focused.current();
     for (btn, mut bg, mut border) in &mut buttons {
         if btn.0 == current {
-            bg.0 = ITEM_FOCUS_BG;
-            let c = FOCUSED_BORDER;
+            bg.0 = theme::BUTTON_FOCUS_BG;
+            let c = theme::TEXT_BRIGHT;
             border.top = c;
             border.right = c;
             border.bottom = c;
             border.left = c;
         } else {
-            bg.0 = ITEM_BG;
+            bg.0 = theme::BUTTON_BG;
             border.top = Color::NONE;
             border.right = Color::NONE;
             border.bottom = Color::NONE;

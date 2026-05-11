@@ -175,7 +175,7 @@ impl Plugin for CddaRenderPlugin {
 }
 
 fn render_setup(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let font_handle: Handle<Font> = asset_server.load("fonts/ShareTechMono-Regular.ttf");
+    let font_handle: Handle<Font> = asset_server.load("fonts/Inter-VariableFont.ttf");
     commands.insert_resource(UiFontHandle(Some(font_handle)));
 
     commands.spawn((

@@ -190,6 +190,8 @@ pub fn spawn(
                     ContentPanel,
                     Node {
                         width: Val::Percent(80.0),
+                        flex_grow: 1.0,
+                        min_height: Val::Px(0.0),
                         flex_direction: FlexDirection::Column,
                         padding: UiRect::all(Val::Px(16.0)),
                         border: UiRect::all(Val::Px(1.0)),
@@ -198,6 +200,7 @@ pub fn spawn(
                     },
                     BackgroundColor(PANEL),
                     BorderColor::all(Color::srgba(0.2, 0.2, 0.3, 0.5)),
+                    ScrollPosition::default(),
                 ))
                 .id();
         });
@@ -565,6 +568,7 @@ pub fn handle_confirm(
             if state.active_tab == SettingsTab::Keybindings {
                 if let Some((ctx, action)) = find_binding_at_row(&state, &bindings) {
                     state.rebinding_action = Some((ctx, action.clone()));
+                    state.tab_changed = true;
                     rebind_capture.pending = Some(RebindCaptureInner {
                         context: ctx,
                         action: action.clone(),
@@ -574,6 +578,7 @@ pub fn handle_confirm(
         } else if event.action == crate::input::GameAction::Cancel {
             if state.rebinding_action.is_some() {
                 state.rebinding_action = None;
+                state.tab_changed = true;
                 rebind_capture.pending.take();
             }
         }
@@ -589,6 +594,7 @@ pub fn detect_rebind_complete(
         // cleared RebindCapture).  Clear the UI state so the row returns
         // to normal display.
         state.rebinding_action = None;
+        state.tab_changed = true;
     }
 }
 
@@ -602,10 +608,10 @@ pub fn sync_tab_highlight(
 ) {
     for (tab, mut bg, mut border) in &mut tabs {
         if tab.0 == state.active_tab {
-            bg.0 = TAB_ACTIVE;
+            bg.set_if_neq(BackgroundColor(TAB_ACTIVE));
             *border = BorderColor::all(HIGHLIGHT);
         } else {
-            bg.0 = TAB_INACTIVE;
+            bg.set_if_neq(BackgroundColor(TAB_INACTIVE));
             *border = BorderColor::all(Color::NONE);
         }
     }
@@ -619,10 +625,10 @@ pub fn sync_item_highlight(
     const ROW_HEIGHT_PX: f32 = 40.0;
     for (item, mut bg, mut border) in &mut items {
         if item.0 == state.focused_row {
-            bg.0 = ITEM_FOCUS_BG;
+            bg.set_if_neq(BackgroundColor(ITEM_FOCUS_BG));
             *border = BorderColor::all(HIGHLIGHT);
         } else {
-            bg.0 = ITEM_BG;
+            bg.set_if_neq(BackgroundColor(ITEM_BG));
             *border = BorderColor::all(Color::NONE);
         }
     }
@@ -679,7 +685,7 @@ fn current_tab_row_count(state: &SettingsState, bindings: &ContextInputMaps) -> 
             for ctx in contexts {
                 let n = bindings.list_bindings(ctx).len();
                 if n > 0 {
-                    count += 1 + n; // header + rows
+                    count += n;
                 }
             }
             count
@@ -704,7 +710,7 @@ fn find_binding_at_row(
         if pairs.is_empty() {
             continue;
         }
-        row += 1; // header
+
         for (action, _) in &pairs {
             if row == state.focused_row {
                 return Some((*ctx, *action));

@@ -10,8 +10,8 @@
 //! 3. Mod definitions override core definitions by ID.
 //! 4. Each mod gets its own `ModShard` in the numeric ID space.
 
-use crate::data::loader::Loader;
-use crate::data::registry::DefRegistry;
+use crate::loader::Loader;
+use crate::registry::DefRegistry;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -43,7 +43,7 @@ pub struct ModLoadResult {
     /// The mod that was loaded.
     pub mod_info: ModInfo,
     /// The mod's raw definitions (before copy-from resolution).
-    pub raw_defs: HashMap<String, Vec<crate::data::loader::RawDef>>,
+    pub raw_defs: HashMap<String, Vec<crate::loader::RawDef>>,
     /// The merged registry after applying this mod's definitions.
     pub registry: DefRegistry,
 }
@@ -338,7 +338,7 @@ pub fn load_with_mods(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::DefRegistry;
+    use crate::DefRegistry;
     use std::path::PathBuf;
 
     // -----------------------------------------------------------------------
