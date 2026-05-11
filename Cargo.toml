@@ -1,3 +1,8 @@
+[package]
+name = "cataclysm_dda_br"
+version = "0.1.0"
+edition = "2021"
+
 [workspace]
 resolver = "2"
 members = [
@@ -63,6 +68,24 @@ cdda_sim = { path = "crates/cdda_sim" }
 cdda_replay = { path = "crates/cdda_replay" }
 cdda_item = { path = "crates/cdda_item" }
 cdda_activity = { path = "crates/cdda_activity" }
+
+[dev-dependencies]
+cdda_core = { path = "crates/cdda_core" }
+cdda_sim = { path = "crates/cdda_sim" }
+cdda_components = { path = "crates/cdda_components" }
+cdda_core_types = { path = "crates/cdda_core_types" }
+cdda_actor = { path = "crates/cdda_actor" }
+cdda_combat = { path = "crates/cdda_combat" }
+cdda_equipment = { path = "crates/cdda_equipment" }
+cdda_map = { path = "crates/cdda_map" }
+cdda_item = { path = "crates/cdda_item" }
+cdda_replay = { path = "crates/cdda_replay" }
+cdda_activity = { path = "crates/cdda_activity" }
+bevy_ecs.workspace = true
+bevy_app.workspace = true
+bevy_state.workspace = true
+serde_json.workspace = true
+tempfile = "3.27.0"
 
 [profile.dev]
 opt-level = 0

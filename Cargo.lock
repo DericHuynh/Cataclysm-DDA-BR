@@ -2039,6 +2039,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "cataclysm_dda_br"
+version = "0.1.0"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_state",
+ "cdda_activity",
+ "cdda_actor",
+ "cdda_combat",
+ "cdda_components",
+ "cdda_core",
+ "cdda_core_types",
+ "cdda_equipment",
+ "cdda_item",
+ "cdda_map",
+ "cdda_replay",
+ "cdda_sim",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "cc"
 version = "1.2.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2073,6 +2095,7 @@ dependencies = [
  "bevy_reflect",
  "cdda_components",
  "cdda_core_types",
+ "cdda_sim",
  "tracing",
 ]
 
@@ -2122,7 +2145,9 @@ dependencies = [
  "bevy_ecs",
  "bevy_reflect",
  "cdda_components",
+ "cdda_core",
  "cdda_core_types",
+ "cdda_sim",
 ]
 
 [[package]]
@@ -2182,6 +2207,7 @@ version = "0.1.0"
 dependencies = [
  "bevy_ecs",
  "bevy_reflect",
+ "cdda_components",
  "rand",
  "schemars",
  "serde",
@@ -2245,6 +2271,7 @@ dependencies = [
  "cdda_core_types",
  "postcard",
  "serde",
+ "tempfile",
  "tracing",
 ]
 

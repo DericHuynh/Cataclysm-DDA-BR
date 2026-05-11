@@ -15,3 +15,6 @@ cdda_components = { path = "../cdda_components" }
 serde.workspace = true
 postcard.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+tempfile = "3.27.0"

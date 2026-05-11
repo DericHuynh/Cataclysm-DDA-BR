@@ -12,3 +12,6 @@ bevy_ecs.workspace = true
 bevy_reflect.workspace = true
 thiserror.workspace = true
 rand.workspace = true
+
+[dev-dependencies]
+cdda_components = { path = "../cdda_components" }
