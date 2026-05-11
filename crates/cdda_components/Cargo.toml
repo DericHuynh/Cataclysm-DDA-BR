@@ -1,0 +1,13 @@
+[package]
+name = "cdda_components"
+version = "0.1.0"
+edition = "2021"
+description = "ECS components for actors, items, definitions, and spatial data."
+
+[dependencies]
+bevy_ecs.workspace = true
+bevy_reflect.workspace = true
+serde.workspace = true
+schemars.workspace = true
+fixedbitset = "0.5.7"
+cdda_core_types = { path = "../cdda_core_types" }

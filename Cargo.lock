@@ -2051,6 +2051,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "cdda_actor"
+version = "0.1.0"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_reflect",
+ "cdda_components",
+ "cdda_core_types",
+ "tracing",
+]
+
+[[package]]
+name = "cdda_ai"
+version = "0.1.0"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "cdda_core_types",
+]
+
+[[package]]
 name = "cdda_app"
 version = "0.1.0"
 dependencies = [
@@ -2078,6 +2099,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "cdda_combat"
+version = "0.1.0"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_reflect",
+ "cdda_components",
+ "cdda_core_types",
+]
+
+[[package]]
+name = "cdda_components"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "bevy_reflect",
+ "cdda_core_types",
+ "fixedbitset",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cdda_core"
 version = "0.1.0"
 dependencies = [
@@ -2089,7 +2133,12 @@ dependencies = [
  "bevy_state",
  "bevy_ui",
  "bidimap",
+ "cdda_actor",
+ "cdda_ai",
+ "cdda_combat",
+ "cdda_components",
  "cdda_core_types",
+ "cdda_equipment",
  "dyn-clone",
  "fixedbitset",
  "indexmap",
@@ -2117,6 +2166,14 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "cdda_equipment"
+version = "0.1.0"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
 ]
 
 [[package]]

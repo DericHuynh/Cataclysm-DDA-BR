@@ -5,7 +5,7 @@
 //! combat (`CombatStats`, `Vision`), bionics, morale, status effects,
 //! body parts, status markers, and turn scheduling (`Speed`, `MovePoints`).
 //!
-//! Depends only on `cdda_core` and `bevy_ecs`.  No item, map, or sim deps.
+//! Depends only on `cdda_components`, `cdda_core_types`, and `bevy_ecs`.
 
 pub mod bionics;
 pub mod effects;

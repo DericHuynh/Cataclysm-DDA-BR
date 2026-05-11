@@ -9,13 +9,12 @@
 //! 3. Each action costs AP (walk=100, pickup=100, wield=100, craft tick=100, …)
 //! 4. When all actors fall below `MP_MIN_FLOOR`, the next turn begins
 
-use crate::core::components::actor::{ActionPoints, IsAlive};
-use crate::core::components::def::IsDef;
 use bevy_ecs::message::MessageWriter;
 use bevy_ecs::prelude::*;
+use cdda_components::actor::{ActionPoints, IsAlive};
+use cdda_components::def::IsDef;
+use cdda_components::sim::{GameTime, TurnAdvanced};
 use std::cmp::Ordering;
-
-use crate::messages::TurnAdvanced;
 
 // ---------------------------------------------------------------------------
 // Action cost constants
@@ -115,7 +114,7 @@ impl TurnQueue {
 pub fn tick_move_points(
     mut query: Query<(Entity, &mut ActionPoints), (With<IsAlive>, Without<IsDef>)>,
     mut queue: ResMut<TurnQueue>,
-    mut game_time: ResMut<crate::sim::state::GameTime>,
+    mut game_time: ResMut<GameTime>,
     mut turn_writer: MessageWriter<TurnAdvanced>,
 ) {
     queue.actors.clear();

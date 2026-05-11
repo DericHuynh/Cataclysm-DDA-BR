@@ -24,6 +24,11 @@ bevy_ui = "0.18"
 leafwing-input-manager.workspace = true
 postcard.workspace = true
 cdda_core_types = { path = "../cdda_core_types" }
+cdda_components = { path = "../cdda_components" }
+cdda_ai = { path = "../cdda_ai" }
+cdda_equipment = { path = "../cdda_equipment" }
+cdda_combat = { path = "../cdda_combat" }
+cdda_actor = { path = "../cdda_actor" }
 dyn-clone = "1.0.20"
 fixedbitset = "0.5.7"
 bidimap = "0.7.0"

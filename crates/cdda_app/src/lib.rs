@@ -100,7 +100,7 @@ pub fn start_game_on_event(
 // ---------------------------------------------------------------------------
 
 fn register_reflect_types(app: &mut App) {
-    use cdda_core::core::components::{InFlight, Solid, Velocity, WorldPosition};
+    use cdda_core::core::components::sim::{InFlight, Solid, Velocity, WorldPosition};
 
     app.register_type::<WorldPosition>();
     app.register_type::<Solid>();
@@ -194,7 +194,9 @@ impl Plugin for CddaPlugin {
         app.add_plugins(ScreenPlugin::<cdda_render::render::crafting::CraftingScreen>::default());
         app.add_plugins(ScreenPlugin::<cdda_render::render::dev_spawn::DevSpawnScreen>::default());
         app.add_plugins(ScreenPlugin::<cdda_render::render::examine::ExamineScreen>::default());
-        app.add_plugins(ScreenPlugin::<cdda_render::render::character::CharacterScreen>::default());
+        app.add_plugins(ScreenPlugin::<
+            cdda_render::render::character::CharacterScreen,
+        >::default());
 
         app.add_plugins(cdda_render::render::CddaRenderPlugin);
         app.add_plugins(cdda_core::input::CddaInputPlugin);

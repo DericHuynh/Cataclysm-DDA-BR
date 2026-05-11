@@ -7,7 +7,7 @@
 //! accuracy) and other gameplay systems.
 
 use bevy_ecs::prelude::*;
-use crate::Time;
+use cdda_components::Time;
 
 // ---------------------------------------------------------------------------
 // Public API

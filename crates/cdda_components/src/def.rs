@@ -64,9 +64,6 @@ pub struct ItemColor(pub String);
 #[derive(Component, Debug, Clone)]
 pub struct ItemMaterials(pub Vec<String>);
 
-/// Bitflag component — see `crate::data::flags::ItemFlagList`.
-pub type ItemFlagList = crate::data::flags::ItemFlagList;
-
 /// Phase of matter.
 #[derive(Component, Debug, Clone, Copy)]
 pub enum Phase {

@@ -53,26 +53,8 @@ pub enum TurnState {
 // GameTime — in-game clock
 // ---------------------------------------------------------------------------
 
-#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GameTime {
-    pub turn: u64,
-}
-
-impl Default for GameTime {
-    fn default() -> Self {
-        Self { turn: 0 }
-    }
-}
-
-impl GameTime {
-    pub fn advance(&mut self) {
-        self.turn += 1;
-    }
-    pub fn hours_elapsed(&self) -> u64 {
-        (self.turn * 6) / 3600
-    }
-    pub const TURNS_PER_DAY: u64 = 14400;
-}
+/// Re-exported from `cdda_components::sim`.
+pub use cdda_components::sim::GameTime;
 
 // ---------------------------------------------------------------------------
 // LoadingStatus

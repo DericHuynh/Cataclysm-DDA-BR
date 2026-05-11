@@ -6,8 +6,7 @@
 //! and terrain opacity data from `WorldMap` for line-of-sight blocking.
 
 use bevy_ecs::prelude::*;
-use crate::core::components::actor::*;
-
+use cdda_components::actor::*;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -32,7 +31,7 @@ pub fn calculate_vision_range(
     has_night_vision: bool,
 ) -> i32 {
     let _ = (creature_vision, time_of_day, light_level, has_night_vision);
-    todo!("vision range formula: day/night base × light level multiplier")
+    todo!("vision range formula: day/night base x light level multiplier")
 }
 
 /// Check whether `observer` can see `target`.

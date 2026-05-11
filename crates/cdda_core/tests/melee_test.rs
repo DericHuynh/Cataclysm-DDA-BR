@@ -4,8 +4,8 @@
 //! melee damage, to-hit, moves, reach, and crit chance.
 
 use cdda_core::core::components::def::{
-    ItemCategory, ItemFlagList, ItemMaterials, ItemName, ItemPrice, ItemStackSize, ItemVolume,
-    ItemWeight, WeaponData,
+    ItemCategory, ItemMaterials, ItemName, ItemPrice, ItemStackSize, ItemVolume, ItemWeight,
+    WeaponData,
 };
 use cdda_core::sim::test_utils::TestBed;
 
@@ -64,7 +64,7 @@ fn weapon_combat_knife() {
     test.register::<ItemPrice>();
     test.register::<ItemStackSize>();
     test.register::<ItemCategory>();
-    test.register::<ItemFlagList>();
+    test.register::<cdda_core::data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
 
     let e = test.spawn((
@@ -114,7 +114,7 @@ fn weapon_heavy_hammer() {
     test.register::<ItemPrice>();
     test.register::<ItemStackSize>();
     test.register::<ItemCategory>();
-    test.register::<ItemFlagList>();
+    test.register::<cdda_core::data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
 
     let e = test.spawn((
@@ -164,7 +164,7 @@ fn weapon_spear() {
     test.register::<ItemPrice>();
     test.register::<ItemStackSize>();
     test.register::<ItemCategory>();
-    test.register::<ItemFlagList>();
+    test.register::<cdda_core::data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
 
     let e = test.spawn((
@@ -208,7 +208,7 @@ fn weapon_no_techniques() {
     test.register::<ItemPrice>();
     test.register::<ItemStackSize>();
     test.register::<ItemCategory>();
-    test.register::<ItemFlagList>();
+    test.register::<cdda_core::data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
 
     let e = test.spawn((
@@ -249,7 +249,7 @@ fn weapon_negative_to_hit() {
     test.register::<ItemPrice>();
     test.register::<ItemStackSize>();
     test.register::<ItemCategory>();
-    test.register::<ItemFlagList>();
+    test.register::<cdda_core::data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
 
     let e = test.spawn((
@@ -290,7 +290,7 @@ fn weapon_zero_damage() {
     test.register::<ItemPrice>();
     test.register::<ItemStackSize>();
     test.register::<ItemCategory>();
-    test.register::<ItemFlagList>();
+    test.register::<cdda_core::data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
 
     let e = test.spawn((
@@ -335,7 +335,7 @@ fn weapon_high_dice() {
     test.register::<ItemPrice>();
     test.register::<ItemStackSize>();
     test.register::<ItemCategory>();
-    test.register::<ItemFlagList>();
+    test.register::<cdda_core::data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
 
     let e = test.spawn((
@@ -377,7 +377,7 @@ fn weapon_many_techniques() {
     test.register::<ItemPrice>();
     test.register::<ItemStackSize>();
     test.register::<ItemCategory>();
-    test.register::<ItemFlagList>();
+    test.register::<cdda_core::data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
 
     let e = test.spawn((

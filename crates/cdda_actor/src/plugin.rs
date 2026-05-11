@@ -1,5 +1,5 @@
-use crate::core::components::actor::*;
 use bevy_app::{App, Plugin};
+use cdda_components::actor::*;
 
 pub struct ActorPlugin;
 

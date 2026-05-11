@@ -8,13 +8,13 @@
 //! - `crafting_test.cpp`    (proficiency gain)
 //! - `reading_test.cpp`     (book mastery)
 
+use bevy_ecs::prelude::*;
 use cdda_core::core::components::actor::{
     CreatureProficiencies, CreatureSkills, ProficiencyEntry, ProficiencyOf, SkillEntry, SkillOf,
     MAX_SKILL,
 };
-use cdda_core::core::stats::{StatBonuses, Stats, STAT_DEFAULT, STAT_MAX, STAT_MIN};
+use cdda_core::core::components::stats::{StatBonuses, Stats, STAT_DEFAULT, STAT_MAX, STAT_MIN};
 use cdda_core::sim::test_utils::TestBed;
-use bevy_ecs::prelude::*;
 
 // ---------------------------------------------------------------------------
 // Helpers

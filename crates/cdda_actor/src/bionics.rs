@@ -7,7 +7,7 @@
 //! creature.
 
 use bevy_ecs::prelude::*;
-use crate::Energy;
+use cdda_components::Energy;
 
 // ---------------------------------------------------------------------------
 // Public API

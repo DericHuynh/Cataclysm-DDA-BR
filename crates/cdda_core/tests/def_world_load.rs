@@ -12,8 +12,9 @@ use cdda_core::core::components::actor::Health;
 use cdda_core::core::components::def::*;
 use cdda_core::core::id::DefId;
 use cdda_core::core::raw_defs::{FurnitureDef, ItemDef, MonsterDef, StringOrArray, TerrainDef};
-use cdda_core::data::loader::Loader;
 use cdda_core::data::def_world::build_def_world;
+use cdda_core::data::flags::ItemFlagList;
+use cdda_core::data::loader::Loader;
 use std::sync::Arc;
 
 /// Helper: create a World, get Commands, call build_def_world, return (World, DefinitionWorld).

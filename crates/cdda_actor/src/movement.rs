@@ -5,7 +5,7 @@
 //! `MovePoints` based on terrain, furniture, and creature state.
 
 use bevy_ecs::prelude::*;
-use crate::core::coords::WorldPos;
+use cdda_core_types::core::coords::WorldPos;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -71,7 +71,7 @@ pub fn calculate_move_cost(
 /// Checks passability at the target position, deducts move points, updates `WorldPosition`.
 pub fn attempt_move(world: &mut World, entity: Entity, dx: i32, dy: i32, dz: i8) -> MoveResult {
     let _ = (world, entity, dx, dy, dz);
-    todo!("movement attempt resolution: if dz != 0 check transition tile → check passability at target → calc cost → spend MP → update WorldPosition")
+    todo!("movement attempt resolution: if dz != 0 check transition tile => check passability at target => calc cost => spend MP => update WorldPosition")
 }
 
 /// Spend move points for an entity. Returns remaining MP after deduction.

@@ -1,5 +1,5 @@
+use crate::systems::combat_phase;
 use bevy_app::{App, Plugin};
-use crate::combat::systems::combat_phase;
 
 pub struct CombatPlugin;
 

@@ -10,7 +10,7 @@
 //! - Personality traits (NpcPersonality for NPCs, MonsterFlags for monsters)
 
 use bevy_ecs::prelude::*;
-use crate::core::coords::WorldPos;
+use cdda_core_types::core::coords::WorldPos;
 
 // ---------------------------------------------------------------------------
 // Types

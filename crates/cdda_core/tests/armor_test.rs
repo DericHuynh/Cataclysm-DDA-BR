@@ -5,8 +5,8 @@
 //! environmental protection.
 
 use cdda_core::core::components::def::{
-    ArmourData, ArmourPart, ItemFlagList, ItemInsulation, ItemMaterials, ItemName, ItemPrice,
-    ItemStackSize, ItemVolume, ItemWeight,
+    ArmourData, ArmourPart, ItemInsulation, ItemMaterials, ItemName, ItemPrice, ItemStackSize,
+    ItemVolume, ItemWeight,
 };
 use cdda_core::sim::test_utils::TestBed;
 
@@ -64,7 +64,7 @@ fn armour_single_part() {
     test.register::<ItemVolume>();
     test.register::<ItemPrice>();
     test.register::<ItemInsulation>();
-    test.register::<ItemFlagList>();
+    test.register::<cdda_core::data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
     test.register::<ItemStackSize>();
 
@@ -113,7 +113,7 @@ fn armour_multi_part() {
     test.register::<ItemVolume>();
     test.register::<ItemPrice>();
     test.register::<ItemInsulation>();
-    test.register::<ItemFlagList>();
+    test.register::<cdda_core::data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
     test.register::<ItemStackSize>();
 
@@ -170,7 +170,7 @@ fn armour_full_coverage() {
     test.register::<ItemVolume>();
     test.register::<ItemPrice>();
     test.register::<ItemInsulation>();
-    test.register::<ItemFlagList>();
+    test.register::<cdda_core::data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
     test.register::<ItemStackSize>();
 
@@ -212,7 +212,7 @@ fn armour_no_coverage() {
     test.register::<ItemVolume>();
     test.register::<ItemPrice>();
     test.register::<ItemInsulation>();
-    test.register::<ItemFlagList>();
+    test.register::<cdda_core::data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
     test.register::<ItemStackSize>();
 
@@ -254,7 +254,7 @@ fn armour_encumbrance() {
     test.register::<ItemVolume>();
     test.register::<ItemPrice>();
     test.register::<ItemInsulation>();
-    test.register::<ItemFlagList>();
+    test.register::<cdda_core::data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
     test.register::<ItemStackSize>();
 
@@ -296,7 +296,7 @@ fn armour_warmth() {
     test.register::<ItemVolume>();
     test.register::<ItemPrice>();
     test.register::<ItemInsulation>();
-    test.register::<ItemFlagList>();
+    test.register::<cdda_core::data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
     test.register::<ItemStackSize>();
 
@@ -368,7 +368,7 @@ fn armour_material_thickness() {
     test.register::<ItemVolume>();
     test.register::<ItemPrice>();
     test.register::<ItemInsulation>();
-    test.register::<ItemFlagList>();
+    test.register::<cdda_core::data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
     test.register::<ItemStackSize>();
 
@@ -390,7 +390,10 @@ fn armour_material_thickness() {
                 warmth: 25,
                 layers: vec![],
                 specifically_covers: vec![],
-                material: vec![("steel".to_string(), 0.5, 100.0), ("kevlar".to_string(), 0.5, 100.0)],
+                material: vec![
+                    ("steel".to_string(), 0.5, 100.0),
+                    ("kevlar".to_string(), 0.5, 100.0),
+                ],
             }],
             material_thickness: 2.5,
             env_protection: [2, 1, 0, 0, 5],
@@ -415,7 +418,7 @@ fn armour_env_protection() {
     test.register::<ItemVolume>();
     test.register::<ItemPrice>();
     test.register::<ItemInsulation>();
-    test.register::<ItemFlagList>();
+    test.register::<cdda_core::data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
     test.register::<ItemStackSize>();
 

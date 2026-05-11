@@ -11,14 +11,14 @@
 #![allow(unexpected_cfgs)]
 
 pub mod activity;
-pub mod actor;
-pub mod ai;
-pub mod combat;
+pub use cdda_actor as actor;
+pub use cdda_ai as ai;
+pub use cdda_combat as combat;
 pub mod context;
 pub mod core;
 pub mod crafting;
 pub mod data;
-pub mod equipment;
+pub use cdda_equipment as equipment;
 pub mod input;
 pub mod inventory;
 pub mod item;
@@ -30,6 +30,7 @@ pub mod sim;
 pub mod worldgen;
 
 // Re-export key types — all point to cdda_core_types for the canonical definitions
+pub use cdda_components::stats::Stats;
 pub use cdda_core_types::core::coords::{
     BubblePos, OmPos, OmtPos, Pos, SubmapLocal, SubmapPos, WorldPos,
 };
@@ -59,6 +60,5 @@ pub use cdda_core_types::rng;
 pub use cdda_core_types::rng::SeededRng;
 pub use cdda_core_types::sim_id::SimId;
 pub use cdda_core_types::wyrand::WyRand;
-pub use core::stats::Stats;
 pub use messages::TurnAdvanced;
 pub use schedule::{GameSet, SimSet};

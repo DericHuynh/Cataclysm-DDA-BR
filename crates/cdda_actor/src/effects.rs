@@ -7,9 +7,8 @@
 //! applied by other systems reading the `StatusEffect` components.
 
 use bevy_ecs::prelude::*;
-use crate::{EffectId, Time};
-use crate::core::components::actor::*;
-
+use cdda_components::actor::*;
+use cdda_components::{EffectId, Time};
 
 // ---------------------------------------------------------------------------
 // Public API
