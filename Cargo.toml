@@ -5,6 +5,7 @@ members = [
     "crates/cdda_core",
     "crates/cdda_app",
     "crates/cdda_render",
+    "crates/cdda_core_types",
 ]
 
 [workspace.dependencies]
@@ -41,6 +42,7 @@ cdda_core   = { path = "crates/cdda_core" }
 cdda_cli = { path = "crates/cdda_cli" }
 cdda_app     = { path = "crates/cdda_app" }
 cdda_render  = { path = "crates/cdda_render" }
+cdda_core_types = { path = "crates/cdda_core_types" }
 
 [profile.dev]
 opt-level = 0

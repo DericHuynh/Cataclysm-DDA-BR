@@ -1,4 +1,6 @@
-use cdda_core::context::config::{CharacterCreationState, FullscreenMode, GameSettings, WorldCreationSettings};
+use cdda_core::context::config::{
+    CharacterCreationState, FullscreenMode, GameSettings, WorldCreationSettings,
+};
 
 #[test]
 fn game_settings_default_auto_save() {

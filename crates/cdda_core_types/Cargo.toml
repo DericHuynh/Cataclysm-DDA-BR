@@ -1,0 +1,14 @@
+[package]
+name = "cdda_core_types"
+version = "0.1.0"
+edition = "2021"
+description = "CDDA core value types — coords, units, ids, damage, stats, flags."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+schemars.workspace = true
+bevy_ecs.workspace = true
+bevy_reflect.workspace = true
+thiserror.workspace = true
+rand.workspace = true

@@ -25,33 +25,40 @@ pub mod item;
 pub mod map;
 pub mod messages;
 pub mod replay;
-pub mod rng;
 pub mod schedule;
 pub mod sim;
-pub mod sim_id;
 pub mod worldgen;
-pub mod wyrand;
 
-// Re-export key types — all point to core:: for the canonical definitions
-pub use core::coords::{BubblePos, OmPos, OmtPos, Pos, SubmapLocal, SubmapPos, WorldPos};
-pub use core::coords::{Direction, Facing, ZLevel};
-pub use core::coords::{VehicleMapPos, VehicleMountPos};
-pub use core::damage::Damage;
-pub use core::error::CoreError;
-pub use core::flags::FlagSet;
-pub use core::id::{AmmoTypeId, BodyPartId, DamageTypeId, MaterialId, SpeciesId, VitaminId};
-pub use core::id::{BionicId, EffectId, FactionId, SkillId};
-pub use core::id::{DefCategory, DefIdx, GenId};
-pub use core::id::{FieldId, ItemGroupId, MutationCategoryId, MutationId, TraitGroupId};
-pub use core::id::{FurnitureId, ItemId, MonsterId, RecipeId, TerrainId};
-pub use core::id::{MapgenPaletteId, OvermapSpecialId, OvermapTerrainId};
-pub use core::id::{OvermapConnectionId, OvermapLandUseCodeId, OvermapLocationId};
-pub use core::id::{ProfessionId, ProficiencyId, QualityId};
-pub use core::id::{ScenarioId, SpecialAttackId, StartLocationId, TechniqueId, TrapId};
-pub use core::id::{VehiclePartCategoryId, VehiclePartId, VehiclePartLocationId};
+// Re-export key types — all point to cdda_core_types for the canonical definitions
+pub use cdda_core_types::core::coords::{
+    BubblePos, OmPos, OmtPos, Pos, SubmapLocal, SubmapPos, WorldPos,
+};
+pub use cdda_core_types::core::coords::{Direction, Facing, ZLevel};
+pub use cdda_core_types::core::coords::{VehicleMapPos, VehicleMountPos};
+pub use cdda_core_types::core::damage::Damage;
+pub use cdda_core_types::core::error::CoreError;
+pub use cdda_core_types::core::flags::FlagSet;
+pub use cdda_core_types::core::id::{
+    AmmoTypeId, BodyPartId, DamageTypeId, MaterialId, SpeciesId, VitaminId,
+};
+pub use cdda_core_types::core::id::{BionicId, EffectId, FactionId, SkillId};
+pub use cdda_core_types::core::id::{DefCategory, DefIdx, GenId};
+pub use cdda_core_types::core::id::{
+    FieldId, ItemGroupId, MutationCategoryId, MutationId, TraitGroupId,
+};
+pub use cdda_core_types::core::id::{FurnitureId, ItemId, MonsterId, RecipeId, TerrainId};
+pub use cdda_core_types::core::id::{MapgenPaletteId, OvermapSpecialId, OvermapTerrainId};
+pub use cdda_core_types::core::id::{OvermapConnectionId, OvermapLandUseCodeId, OvermapLocationId};
+pub use cdda_core_types::core::id::{ProfessionId, ProficiencyId, QualityId};
+pub use cdda_core_types::core::id::{
+    ScenarioId, SpecialAttackId, StartLocationId, TechniqueId, TrapId,
+};
+pub use cdda_core_types::core::id::{VehiclePartCategoryId, VehiclePartId, VehiclePartLocationId};
+pub use cdda_core_types::core::units::{Energy, Length, Time, Volume, Weight};
+pub use cdda_core_types::rng;
+pub use cdda_core_types::rng::SeededRng;
+pub use cdda_core_types::sim_id::SimId;
+pub use cdda_core_types::wyrand::WyRand;
 pub use core::stats::Stats;
-pub use core::units::{Energy, Length, Time, Volume, Weight};
 pub use messages::TurnAdvanced;
 pub use schedule::{GameSet, SimSet};
-pub use sim_id::SimId;
-pub use wyrand::WyRand;

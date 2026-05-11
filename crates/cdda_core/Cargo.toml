@@ -23,6 +23,7 @@ bevy_input = { version = "0.18", features = ["keyboard"] }
 bevy_ui = "0.18"
 leafwing-input-manager.workspace = true
 postcard.workspace = true
+cdda_core_types = { path = "../cdda_core_types" }
 dyn-clone = "1.0.20"
 fixedbitset = "0.5.7"
 bidimap = "0.7.0"

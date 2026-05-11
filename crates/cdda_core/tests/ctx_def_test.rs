@@ -1,5 +1,5 @@
-use cdda_core::context::nav::{ctx_def as screen_def, GameEvent, TransitionTarget};
 use cdda_core::context::ctx::Ctx as Screen;
+use cdda_core::context::nav::{ctx_def as screen_def, GameEvent, TransitionTarget};
 
 // ---------------------------------------------------------------------------
 // MainMenu
@@ -30,36 +30,62 @@ fn main_menu_has_new_game_command() {
 #[test]
 fn main_menu_quit_command_has_hotkey_q() {
     let def = screen_def(Screen::MainMenu);
-    let quit = def.commands.iter().find(|c| c.label == "Quit").expect("Quit command");
+    let quit = def
+        .commands
+        .iter()
+        .find(|c| c.label == "Quit")
+        .expect("Quit command");
     assert_eq!(quit.hotkey, Some('q'));
 }
 
 #[test]
 fn main_menu_quit_target_is_quit() {
     let def = screen_def(Screen::MainMenu);
-    let quit = def.commands.iter().find(|c| c.label == "Quit").expect("Quit command");
+    let quit = def
+        .commands
+        .iter()
+        .find(|c| c.label == "Quit")
+        .expect("Quit command");
     assert!(matches!(quit.target, TransitionTarget::Quit));
 }
 
 #[test]
 fn main_menu_settings_pushes_settings_screen() {
     let def = screen_def(Screen::MainMenu);
-    let settings = def.commands.iter().find(|c| c.label == "Settings").expect("Settings");
-    assert!(matches!(settings.target, TransitionTarget::Push(Screen::SettingsMenu)));
+    let settings = def
+        .commands
+        .iter()
+        .find(|c| c.label == "Settings")
+        .expect("Settings");
+    assert!(matches!(
+        settings.target,
+        TransitionTarget::Push(Screen::SettingsMenu)
+    ));
 }
 
 #[test]
 fn main_menu_new_game_pushes_new_game_hub() {
     let def = screen_def(Screen::MainMenu);
-    let ng = def.commands.iter().find(|c| c.label == "New Game").expect("New Game");
-    assert!(matches!(ng.target, TransitionTarget::Push(Screen::NewGameHub)));
+    let ng = def
+        .commands
+        .iter()
+        .find(|c| c.label == "New Game")
+        .expect("New Game");
+    assert!(matches!(
+        ng.target,
+        TransitionTarget::Push(Screen::NewGameHub)
+    ));
 }
 
 #[test]
 fn main_menu_all_commands_have_hotkeys() {
     let def = screen_def(Screen::MainMenu);
     for cmd in &def.commands {
-        assert!(cmd.hotkey.is_some(), "command '{}' missing hotkey", cmd.label);
+        assert!(
+            cmd.hotkey.is_some(),
+            "command '{}' missing hotkey",
+            cmd.label
+        );
     }
 }
 
@@ -70,15 +96,29 @@ fn main_menu_all_commands_have_hotkeys() {
 #[test]
 fn new_game_hub_has_start_game_event() {
     let def = screen_def(Screen::NewGameHub);
-    let start = def.commands.iter().find(|c| c.label == "Start Game").expect("Start Game");
-    assert!(matches!(start.target, TransitionTarget::Event(GameEvent::StartNewGame)));
+    let start = def
+        .commands
+        .iter()
+        .find(|c| c.label == "Start Game")
+        .expect("Start Game");
+    assert!(matches!(
+        start.target,
+        TransitionTarget::Event(GameEvent::StartNewGame)
+    ));
 }
 
 #[test]
 fn new_game_hub_character_pushes_scenario_select() {
     let def = screen_def(Screen::NewGameHub);
-    let chr = def.commands.iter().find(|c| c.label == "Character").expect("Character");
-    assert!(matches!(chr.target, TransitionTarget::Push(Screen::ScenarioSelect)));
+    let chr = def
+        .commands
+        .iter()
+        .find(|c| c.label == "Character")
+        .expect("Character");
+    assert!(matches!(
+        chr.target,
+        TransitionTarget::Push(Screen::ScenarioSelect)
+    ));
 }
 
 // ---------------------------------------------------------------------------
@@ -88,14 +128,25 @@ fn new_game_hub_character_pushes_scenario_select() {
 #[test]
 fn character_confirm_start_game_emits_event() {
     let def = screen_def(Screen::CharacterConfirm);
-    let start = def.commands.iter().find(|c| c.label == "Start Game").expect("Start Game");
-    assert!(matches!(start.target, TransitionTarget::Event(GameEvent::StartNewGame)));
+    let start = def
+        .commands
+        .iter()
+        .find(|c| c.label == "Start Game")
+        .expect("Start Game");
+    assert!(matches!(
+        start.target,
+        TransitionTarget::Event(GameEvent::StartNewGame)
+    ));
 }
 
 #[test]
 fn character_confirm_go_back_pops() {
     let def = screen_def(Screen::CharacterConfirm);
-    let back = def.commands.iter().find(|c| c.label == "Go Back").expect("Go Back");
+    let back = def
+        .commands
+        .iter()
+        .find(|c| c.label == "Go Back")
+        .expect("Go Back");
     assert!(matches!(back.target, TransitionTarget::Pop));
 }
 
@@ -106,14 +157,25 @@ fn character_confirm_go_back_pops() {
 #[test]
 fn world_menu_create_pushes_world_settings() {
     let def = screen_def(Screen::WorldMenu);
-    let create = def.commands.iter().find(|c| c.label == "Create World").expect("Create World");
-    assert!(matches!(create.target, TransitionTarget::Push(Screen::WorldSettings)));
+    let create = def
+        .commands
+        .iter()
+        .find(|c| c.label == "Create World")
+        .expect("Create World");
+    assert!(matches!(
+        create.target,
+        TransitionTarget::Push(Screen::WorldSettings)
+    ));
 }
 
 #[test]
 fn world_settings_save_pops() {
     let def = screen_def(Screen::WorldSettings);
-    let save = def.commands.iter().find(|c| c.label == "Save & Return").expect("Save & Return");
+    let save = def
+        .commands
+        .iter()
+        .find(|c| c.label == "Save & Return")
+        .expect("Save & Return");
     assert!(matches!(save.target, TransitionTarget::Pop));
 }
 
@@ -124,14 +186,25 @@ fn world_settings_save_pops() {
 #[test]
 fn dev_worldgen_start_emits_start_new_game_event() {
     let def = screen_def(Screen::DevWorldgen);
-    let start = def.commands.iter().find(|c| c.label == "Start Showcase").expect("Start Showcase");
-    assert!(matches!(start.target, TransitionTarget::Event(GameEvent::StartNewGame)));
+    let start = def
+        .commands
+        .iter()
+        .find(|c| c.label == "Start Showcase")
+        .expect("Start Showcase");
+    assert!(matches!(
+        start.target,
+        TransitionTarget::Event(GameEvent::StartNewGame)
+    ));
 }
 
 #[test]
 fn dev_worldgen_go_back_pops() {
     let def = screen_def(Screen::DevWorldgen);
-    let back = def.commands.iter().find(|c| c.label == "Go Back").expect("Go Back");
+    let back = def
+        .commands
+        .iter()
+        .find(|c| c.label == "Go Back")
+        .expect("Go Back");
     assert!(matches!(back.target, TransitionTarget::Pop));
 }
 
@@ -148,15 +221,26 @@ fn gameplay_has_inventory_command() {
 #[test]
 fn gameplay_inventory_hotkey_is_i() {
     let def = screen_def(Screen::Gameplay);
-    let inv = def.commands.iter().find(|c| c.label == "Inventory").expect("Inventory");
+    let inv = def
+        .commands
+        .iter()
+        .find(|c| c.label == "Inventory")
+        .expect("Inventory");
     assert_eq!(inv.hotkey, Some('i'));
 }
 
 #[test]
 fn gameplay_inventory_pushes_inventory_screen() {
     let def = screen_def(Screen::Gameplay);
-    let inv = def.commands.iter().find(|c| c.label == "Inventory").expect("Inventory");
-    assert!(matches!(inv.target, TransitionTarget::Push(Screen::Inventory)));
+    let inv = def
+        .commands
+        .iter()
+        .find(|c| c.label == "Inventory")
+        .expect("Inventory");
+    assert!(matches!(
+        inv.target,
+        TransitionTarget::Push(Screen::Inventory)
+    ));
 }
 
 // ---------------------------------------------------------------------------

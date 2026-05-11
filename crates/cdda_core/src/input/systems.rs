@@ -22,11 +22,12 @@ use bevy_input::{ButtonInput, ButtonState};
 use leafwing_input_manager::prelude::{ActionState, ButtonlikeChord, InputMap, ModifierKey};
 use leafwing_input_manager::user_input::Buttonlike;
 
-use crate::context::ctx::Ctx;
 use crate::input::actions::{ActionSource, BindableAction, GameAction, InputAction};
 use crate::input::bindings::ContextInputMaps;
 use crate::input::context::{InputContextId, InputContextStack};
 use bevy_state::prelude::State;
+
+use crate::context::ctx::Ctx;
 
 // ---------------------------------------------------------------------------
 // RebindCapture

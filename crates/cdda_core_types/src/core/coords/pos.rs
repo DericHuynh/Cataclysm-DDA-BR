@@ -206,7 +206,7 @@ impl Pos<Om, Abs> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::WorldPos;
+    use crate::core::WorldPos;
 
     #[test]
     fn test_worldpos_to_submap_positive() {

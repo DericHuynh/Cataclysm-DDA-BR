@@ -1,23 +1,7 @@
+// Re-export the pure types from cdda_core_types (coords, units, ids, damage, error, flags, raw_defs).
+// Using `pub use cdda_core_types::core::*;` so that submodules like `crate::core::coords` resolve.
+pub use cdda_core_types::core::*;
+
+// ECS components — only in cdda_core (uses bevy_ecs).
 pub mod components;
-pub mod coords;
-pub mod damage;
-pub mod error;
-pub mod flags;
-pub mod id;
-pub mod raw_defs;
-pub mod raw_types;
 pub mod stats;
-pub mod units;
-
-// Re-export the most common types at the core level
-pub use damage::Damage;
-pub use error::CoreError;
-pub use flags::FlagSet;
-pub use id::{DefCategory, DefId, DefIdx, GenId};
-pub use stats::Stats;
-
-// Re-export common unit and coordinate types
-pub use coords::{BubblePos, OmPos, OmtPos, Pos, SubmapLocal, SubmapPos, WorldPos};
-pub use coords::{Direction, Facing, ZLevel};
-pub use coords::{VehicleMapPos, VehicleMountPos};
-pub use units::{Energy, Length, Time, Volume, Weight};
