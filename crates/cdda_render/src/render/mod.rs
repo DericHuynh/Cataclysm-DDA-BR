@@ -126,8 +126,7 @@ impl Plugin for CddaRenderPlugin {
                 .run_if(in_state(Screen::SettingsMenu)),
         );
 
-        // ── Crafting menu ────────────────────────────────────────────────
-        app.add_systems(OnEnter(Screen::CraftingMenu), crafting::spawn_crafting_ui);
+        // ── Crafting menu spawn via CddaScreen; Update still here ────
         app.add_systems(
             Update,
             crafting::update_crafting_ui.run_if(in_state(Screen::CraftingMenu)),
@@ -143,21 +142,13 @@ impl Plugin for CddaRenderPlugin {
             dev_spawn::update_dev_spawn_panel.run_if(in_state(Screen::DevSpawnPanel)),
         );
 
-        // ── Inventory screen ──────────────────────────────────────────────
-        app.add_systems(
-            OnEnter(Screen::Inventory),
-            inventory::spawn_inventory_screen,
-        );
+        // ── Inventory screen spawn via CddaScreen; Update still here ──
         app.add_systems(
             Update,
             inventory::update_inventory_screen.run_if(in_state(Screen::Inventory)),
         );
 
-        // ── Character sheet ───────────────────────────────────────────────
-        app.add_systems(
-            OnEnter(Screen::CharacterSheet),
-            character::spawn_character_sheet_screen,
-        );
+        // ── Character sheet spawn via CddaScreen; Update still here ───
         app.add_systems(
             Update,
             (
@@ -167,8 +158,7 @@ impl Plugin for CddaRenderPlugin {
                 .run_if(in_state(Screen::CharacterSheet)),
         );
 
-        // ── Item Examine overlay ──────────────────────────────────────────
-        app.add_systems(OnEnter(Screen::ItemExamine), examine::spawn_examine_overlay);
+        // ── Item Examine overlay spawn via CddaScreen ──────────────────
 
         // ── Dev worldgen ───────────────────────────────────────────────────
         app.add_systems(OnEnter(Screen::DevWorldgen), dev_worldgen::spawn_dev_menu);

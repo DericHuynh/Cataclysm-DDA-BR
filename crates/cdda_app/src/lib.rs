@@ -16,11 +16,8 @@ use bevy_state::prelude::OnEnter;
 use bevy_state::state::NextState;
 use std::time::Duration;
 
-use cdda_core::context::actions::{
-    on_enter_character_actions, on_enter_crafting_actions, on_enter_dev_spawn_actions,
-    on_enter_examine_actions, on_enter_inventory_actions,
-};
 use cdda_core::context::ctx::Ctx as Screen;
+use cdda_core::context::screen::Screen as ScreenPlugin;
 use cdda_core::{GameSet, SimSet};
 
 use cdda_core::activity::plugin::ActivityPlugin;
@@ -35,6 +32,9 @@ use cdda_core::actor::turn::{debug_turn_queue, tick_move_points};
 use cdda_core::actor::vision::update_vision;
 use cdda_core::ai::systems::ai_phase;
 use cdda_core::combat::systems::combat_phase;
+use cdda_core::context::overlay::{
+    cleanup_activity_overlay, handle_overlay_cancel, sync_activity_overlay,
+};
 use cdda_core::crafting::plugin::CraftingPlugin;
 use cdda_core::crafting::systems::on_examine_item_changed;
 use cdda_core::data::assets::CddaAssetsPlugin;
@@ -188,11 +188,13 @@ impl Plugin for CddaPlugin {
         //
         // MUST run before CddaRenderPlugin's OnEnter systems so that
         // ContextActions is populated when renderers spawn UI.
-        app.add_systems(OnEnter(Screen::Inventory), on_enter_inventory_actions);
-        app.add_systems(OnEnter(Screen::CraftingMenu), on_enter_crafting_actions);
-        app.add_systems(OnEnter(Screen::DevSpawnPanel), on_enter_dev_spawn_actions);
-        app.add_systems(OnEnter(Screen::ItemExamine), on_enter_examine_actions);
-        app.add_systems(OnEnter(Screen::CharacterSheet), on_enter_character_actions);
+        app.add_plugins(ScreenPlugin::<
+            cdda_render::render::inventory::InventoryScreen,
+        >::default());
+        app.add_plugins(ScreenPlugin::<cdda_render::render::crafting::CraftingScreen>::default());
+        app.add_plugins(ScreenPlugin::<cdda_render::render::dev_spawn::DevSpawnScreen>::default());
+        app.add_plugins(ScreenPlugin::<cdda_render::render::examine::ExamineScreen>::default());
+        app.add_plugins(ScreenPlugin::<cdda_render::render::character::CharacterScreen>::default());
 
         app.add_plugins(cdda_render::render::CddaRenderPlugin);
         app.add_plugins(cdda_core::input::CddaInputPlugin);
@@ -294,6 +296,27 @@ impl Plugin for CddaPlugin {
                 .after(dev_spawn_panel_input)
                 .run_if(in_state(AppState::InGame))
                 .run_if(in_state(Screen::DevSpawnPanel)),
+        );
+
+        // Exclusive: handle overlay Cancel (Esc to dismiss).
+        app.add_systems(
+            Update,
+            handle_overlay_cancel.run_if(in_state(AppState::InGame)),
+        );
+
+        // Exclusive: sync overlay state with PlayerActivity lifecycle.
+        app.add_systems(
+            Update,
+            sync_activity_overlay
+                .in_set(SimSet::Activity)
+                .run_if(in_state(AppState::InGame)),
+        );
+        app.add_systems(
+            Update,
+            cleanup_activity_overlay
+                .in_set(SimSet::Activity)
+                .after(sync_activity_overlay)
+                .run_if(in_state(AppState::InGame)),
         );
 
         // Exclusive system: item examine overlay actions (drop, wield, resume craft).

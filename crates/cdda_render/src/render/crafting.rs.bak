@@ -19,9 +19,9 @@ use bevy_state::state_scoped::DespawnOnExit;
 use super::FooterHint;
 use crate::context::ctx::Ctx;
 use crate::context::screen::CddaScreen;
-use crate::input::BindableAction;
 use crate::crafting::systems::{CategoryIndex, CraftEntry, CraftState};
 use crate::data::def_world::DefinitionWorld;
+use crate::input::BindableAction;
 use crate::render::item_detail::{spawn_item_detail, ItemDetailQueries};
 
 // ---------------------------------------------------------------------------
@@ -94,11 +94,12 @@ impl CddaScreen for CraftingScreen {
     ];
 
     fn spawn(world: &mut World) {
-        spawn_crafting_ui(world.commands());
+        let mut cmds = world.commands();
+        spawn_crafting_ui_world(&mut cmds);
     }
 
-    fn update(_world: &mut World) {
-        // Original update_crafting_ui system handles updates for now.
+    fn update(world: &mut World) {
+        update_crafting_ui_world(world);
     }
 }
 
@@ -127,6 +128,10 @@ pub struct CraftingContainers<'w, 's> {
 /// Spawn the persistent root wrapper for the crafting menu.
 /// Content is rebuilt each frame by `update_crafting_ui`.
 pub fn spawn_crafting_ui(mut commands: Commands) {
+    spawn_crafting_ui_inner(&mut commands);
+}
+
+fn spawn_crafting_ui_inner_orig(commands: &mut Commands) {
     commands
         .spawn((
             DespawnOnExit(Ctx::CraftingMenu),
@@ -267,6 +272,14 @@ pub fn spawn_crafting_ui(mut commands: Commands) {
             ));
         });
 }
+
+/// World-based spawn wrapper (used by CddaScreen trait).
+fn spawn_crafting_ui_world(commands: &mut Commands) {
+    spawn_crafting_ui_inner(commands);
+}
+
+/// Shared spawn impl (used by both system-based and world-based paths).
+fn spawn_crafting_ui_inner(commands: &mut Commands) {
 
 // ---------------------------------------------------------------------------
 // update_crafting_ui — regular Update system

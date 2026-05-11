@@ -14,6 +14,8 @@ pub mod cursor;
 pub mod focus;
 pub mod menu;
 pub mod nav;
+pub mod overlay;
+pub mod screen;
 pub mod systems;
 
 // ----- Re-exports ---------------------------------------------------------
@@ -32,6 +34,10 @@ pub use nav::{
     FocusedCommandIndex, GameEvent, ScreenCommand, ScreenDefinition, ScreenListItem,
     TransitionTarget,
 };
+pub use overlay::{
+    cleanup_activity_overlay, is_input_blocked, sync_activity_overlay, Overlay, OverlayStack,
+};
+pub use screen::{CddaScreen, Screen};
 pub use systems::{ctx_and_cursor, menu_navigation};
 
 // ----- Plugin -------------------------------------------------------------
@@ -50,6 +56,7 @@ impl Plugin for ContextPlugin {
 
         // Resources
         app.insert_resource(ContextActions::default());
+        app.insert_resource(OverlayStack::default());
         app.insert_resource(ContextStack::default());
         app.insert_resource(FocusedCommandIndex::default());
         app.insert_resource(InputFocus::default());

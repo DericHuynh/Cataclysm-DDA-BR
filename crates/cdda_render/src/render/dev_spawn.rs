@@ -12,6 +12,8 @@ use bevy_state::state_scoped::DespawnOnExit;
 
 use super::FooterHint;
 use crate::context::ctx::Ctx;
+use crate::context::screen::CddaScreen;
+use crate::input::BindableAction;
 use crate::context::ContextActions;
 use crate::input::ActiveKeybindings;
 use crate::render::item_detail::{spawn_item_detail, ItemDetailQueries};
@@ -61,6 +63,31 @@ pub(crate) struct SpawnFilterBar;
 // ---------------------------------------------------------------------------
 // Spawn (OnEnter) — full layout skeleton, built once
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// CddaScreen trait impl
+// ---------------------------------------------------------------------------
+
+pub struct DevSpawnScreen;
+
+impl CddaScreen for DevSpawnScreen {
+    const CTX: Ctx = Ctx::DevSpawnPanel;
+    const ACTIONS: &'static [(&'static str, BindableAction)] = &[
+        ("navigate", BindableAction::NavigateUp),
+        ("page", BindableAction::NavigatePageUp),
+        ("first/last", BindableAction::NavigateHome),
+        ("filter", BindableAction::Filter),
+        ("spawn", BindableAction::Confirm),
+    ];
+
+    fn spawn(_world: &mut World) {
+        // Spawn handled by original system in mod.rs for now.
+    }
+
+    fn update(_world: &mut World) {
+        // Original update_dev_spawn_panel system handles updates for now.
+    }
+}
 
 pub fn spawn_dev_spawn_panel(
     mut commands: Commands,

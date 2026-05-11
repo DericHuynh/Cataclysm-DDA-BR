@@ -11,6 +11,7 @@ use bevy_state::prelude::*;
 use crate::input::{GameAction, InputAction};
 
 use crate::context::ctx::{ContextStack, Ctx};
+use crate::context::overlay::OverlayStack;
 
 // ---------------------------------------------------------------------------
 // TransitionTarget
@@ -313,9 +314,22 @@ pub fn handle_navigation_input(
     mut focused: ResMut<FocusedCommandIndex>,
     state: Res<State<Ctx>>,
     mut game_events: MessageWriter<GameEvent>,
+    overlays: Res<OverlayStack>,
     list_items: Query<(), (With<super::ScreenListItem>,)>,
 ) {
     let current = *state.get();
+
+    // If an overlay is active, only process Cancel (to dismiss it).
+    // The actual pop happens via commands in the next frame.
+    if overlays.input_blocked {
+        for event in reader.read() {
+            if matches!(&event.action, GameAction::Cancel) {
+                // Signal to dismiss — exclusive system handles the rest.
+            }
+        }
+        return;
+    }
+
     let def = ctx_def(current);
     let item_count = list_items.iter().count();
     let total_items = def.commands.len() + item_count;

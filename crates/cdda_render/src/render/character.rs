@@ -12,6 +12,7 @@ use bevy_state::state_scoped::DespawnOnExit;
 
 use super::FooterHint;
 use crate::context::ctx::Ctx;
+use crate::context::screen::CddaScreen;
 use crate::context::ContextActions;
 use crate::core::components::actor::Stats;
 use crate::core::components::actor::{
@@ -20,7 +21,7 @@ use crate::core::components::actor::{
     PlayerData, ProficiencyEntry, SkillEntry, StatusEffect, Stunned, Vision, Wetness,
 };
 use crate::input::ActiveKeybindings;
-use crate::input::{GameAction, InputAction};
+use crate::input::{BindableAction, GameAction, InputAction};
 use crate::worldgen::dev::DevPlayer;
 
 // ---------------------------------------------------------------------------
@@ -106,7 +107,146 @@ pub struct CharSheetLeftContainer;
 pub struct CharSheetContentContainer;
 
 // ---------------------------------------------------------------------------
-// Spawn (OnEnter)
+// CddaScreen trait impl
+// ---------------------------------------------------------------------------
+
+pub struct CharacterScreen;
+
+impl CddaScreen for CharacterScreen {
+    const CTX: Ctx = Ctx::CharacterSheet;
+    const ACTIONS: &'static [(&'static str, BindableAction)] = &[
+        ("switch tab", BindableAction::NavigateNextTab),
+        ("scroll", BindableAction::NavigateUp),
+    ];
+
+    fn spawn(world: &mut World) {
+        spawn_character_from_world(world);
+    }
+
+    fn update(_world: &mut World) {
+        // Original systems in mod.rs handle actual updates for now.
+    }
+}
+
+fn spawn_character_from_world(world: &mut World) {
+    // Reset state on every open
+    *world.resource_mut::<CharacterSheetState>() = CharacterSheetState::default();
+
+    let ctx_actions = world.resource::<ContextActions>().clone();
+    let active_keys = world.resource::<ActiveKeybindings>().clone();
+    let font_handle = world.resource::<super::UiFontHandle>().0.clone();
+
+    let cancel_key = active_keys.key_for(BindableAction::Cancel);
+    let mut hints = format!("[{}] close", cancel_key);
+    for entry in &ctx_actions.actions {
+        let key = active_keys.key_for(entry.action);
+        hints.push_str(&format!("  [{}] {}", key, entry.label));
+    }
+
+    let mut cmds = world.commands();
+    cmds.spawn((
+        DespawnOnExit(Ctx::CharacterSheet),
+        Node {
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
+            flex_direction: FlexDirection::Column,
+            ..default()
+        },
+        BackgroundColor(BG),
+    ))
+    .with_children(|root| {
+        // ── Title bar ─────────────────────────────────────────────────
+        root.spawn((
+            Node {
+                width: Val::Percent(100.0),
+                padding: UiRect::axes(Val::Px(24.0), Val::Px(12.0)),
+                ..default()
+            },
+            BackgroundColor(HEADER_BG),
+        ))
+        .with_child((
+            Text::new("CHARACTER SHEET"),
+            TextFont {
+                font_size: 26.0,
+                ..default()
+            },
+            TextColor(ACCENT),
+        ));
+
+        // ── Main body ─────────────────────────────────────────────────
+        root.spawn((Node {
+            flex_direction: FlexDirection::Row,
+            width: Val::Percent(100.0),
+            flex_grow: 1.0,
+            ..default()
+        },))
+            .with_children(|main| {
+                // ── LEFT PANEL (overview) ─────────────────────────────────
+                main.spawn((
+                    Node {
+                        flex_direction: FlexDirection::Column,
+                        width: Val::Px(360.0),
+                        flex_shrink: 0.0,
+                        border: UiRect::right(Val::Px(1.0)),
+                        overflow: Overflow::clip_y(),
+                        ..default()
+                    },
+                    BackgroundColor(LEFT_BG),
+                    BorderColor::all(DIVIDER),
+                ))
+                .with_children(|left| {
+                    left.spawn((
+                        CharSheetLeftContainer,
+                        Node {
+                            flex_direction: FlexDirection::Column,
+                            width: Val::Percent(100.0),
+                            flex_grow: 1.0,
+                            ..default()
+                        },
+                    ));
+                });
+
+                // ── RIGHT PANEL (tabs) ────────────────────────────────────
+                main.spawn((Node {
+                    flex_direction: FlexDirection::Column,
+                    flex_grow: 1.0,
+                    ..default()
+                },))
+                    .with_children(|right| {
+                        right.spawn((
+                            CharSheetContentContainer,
+                            Node {
+                                flex_direction: FlexDirection::Column,
+                                width: Val::Percent(100.0),
+                                flex_grow: 1.0,
+                                overflow: Overflow::clip_y(),
+                                ..default()
+                            },
+                        ));
+                    });
+            });
+
+        // ── Footer ────────────────────────────────────────────────────
+        root.spawn((
+            Node {
+                width: Val::Percent(100.0),
+                padding: UiRect::axes(Val::Px(24.0), Val::Px(8.0)),
+                border: UiRect::top(Val::Px(1.0)),
+                ..default()
+            },
+            BackgroundColor(HEADER_BG),
+            BorderColor::all(DIVIDER),
+        ))
+        .with_child((
+            Text::new(hints),
+            super::ui_font(&font_handle, 13.0),
+            TextColor(TEXT_DIM),
+            FooterHint,
+        ));
+    });
+}
+
+// Spawn (OnEnter) — original system, kept for backward compat
 // ---------------------------------------------------------------------------
 
 pub fn spawn_character_sheet_screen(
