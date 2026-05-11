@@ -381,7 +381,6 @@ pub fn spawn_item_detail(
 /// Snapshot of all item detail fields extracted from a def entity.
 /// Use `extract(world, entity)` to build from `&World`, then
 /// `spawn_into(parent)` to render.
-#[allow(dead_code)]
 pub(crate) struct ItemDetailSnapshot {
     pub description: Option<String>,
     pub weight_g: u32,
@@ -545,8 +544,11 @@ impl ItemDetailSnapshot {
             .ok()
             .map(|q| q.0.clone());
 
-        let weapon = world.query::<&WeaponData>().get(world, def).ok().map(|w| {
-            WeaponSnapshot {
+        let weapon = world
+            .query::<&WeaponData>()
+            .get(world, def)
+            .ok()
+            .map(|w| WeaponSnapshot {
                 damage_bash: w.damage_bash,
                 damage_cut: w.damage_cut,
                 damage_stab: w.damage_stab,
@@ -554,30 +556,33 @@ impl ItemDetailSnapshot {
                 moves_per_attack: w.moves_per_attack,
                 reach: w.reach as i32,
                 techniques: w.techniques.clone(),
-            }
-        });
+            });
 
-        let gun = world.query::<&GunData>().get(world, def).ok().map(|g| {
-            GunSnapshot {
+        let gun = world
+            .query::<&GunData>()
+            .get(world, def)
+            .ok()
+            .map(|g| GunSnapshot {
                 skill: g.skill.clone(),
                 ammo_type: g.ammo_type.clone(),
                 clip_size: g.clip_size,
                 reload_time: g.reload_time,
                 dispersion: g.dispersion,
                 burst: g.burst as i32,
-            }
-        });
+            });
 
-        let ammo = world.query::<&AmmoData>().get(world, def).ok().map(|a| {
-            AmmoSnapshot {
+        let ammo = world
+            .query::<&AmmoData>()
+            .get(world, def)
+            .ok()
+            .map(|a| AmmoSnapshot {
                 ammo_type: a.ammo_type.clone(),
                 damage: a.damage,
                 pierce: a.pierce,
                 range: a.range,
                 count: a.count,
                 effects: a.effects.clone(),
-            }
-        });
+            });
 
         let magazine = world
             .query::<&MagazineData>()
@@ -602,14 +607,21 @@ impl ItemDetailSnapshot {
                         layers: p.layers.clone(),
                         coverage: p.coverage as i32,
                         encumbrance: p.encumbrance,
-                        material: p.material.iter().map(|(a,b,c)| (a.clone(), *b as f32, *c as f32)).collect(),
+                        material: p
+                            .material
+                            .iter()
+                            .map(|(a, b, c)| (a.clone(), *b as f32, *c as f32))
+                            .collect(),
                         specifically_covers: p.specifically_covers.clone(),
                     })
                     .collect(),
             });
 
-        let food = world.query::<&FoodData>().get(world, def).ok().map(|f| {
-            FoodSnapshot {
+        let food = world
+            .query::<&FoodData>()
+            .get(world, def)
+            .ok()
+            .map(|f| FoodSnapshot {
                 comestible_type: f.comestible_type.clone(),
                 calories: f.calories,
                 quench: f.quench,
@@ -617,17 +629,18 @@ impl ItemDetailSnapshot {
                 healthy: f.healthy,
                 stim: f.stim,
                 spoils_in: f.spoils_in as i32,
-            }
-        });
+            });
 
-        let tool = world.query::<&ToolData>().get(world, def).ok().map(|t| {
-            ToolSnapshot {
+        let tool = world
+            .query::<&ToolData>()
+            .get(world, def)
+            .ok()
+            .map(|t| ToolSnapshot {
                 max_charges: t.max_charges,
                 charges_per_use: t.charges_per_use,
                 ammo_type: t.ammo_type.clone(),
                 revert_to: t.revert_to.clone(),
-            }
-        });
+            });
 
         let container = world
             .query::<&ContainerData>()
@@ -650,8 +663,11 @@ impl ItemDetailSnapshot {
                     .collect(),
             });
 
-        let book = world.query::<&BookData>().get(world, def).ok().map(|b| {
-            BookSnapshot {
+        let book = world
+            .query::<&BookData>()
+            .get(world, def)
+            .ok()
+            .map(|b| BookSnapshot {
                 skill: b.skill.clone(),
                 required_level: b.required_level as i32,
                 max_level: b.max_level as i32,
@@ -660,8 +676,7 @@ impl ItemDetailSnapshot {
                 time: b.time as i32,
                 martial_art: b.martial_art.clone(),
                 chapters: b.chapters as i32,
-            }
-        });
+            });
 
         Self {
             description,

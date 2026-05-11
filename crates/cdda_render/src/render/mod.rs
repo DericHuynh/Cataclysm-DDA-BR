@@ -142,11 +142,7 @@ impl Plugin for CddaRenderPlugin {
             dev_spawn::update_dev_spawn_panel.run_if(in_state(Screen::DevSpawnPanel)),
         );
 
-        // ── Inventory screen spawn via CddaScreen; Update still here ──
-        app.add_systems(
-            Update,
-            inventory::update_inventory_screen.run_if(in_state(Screen::Inventory)),
-        );
+        // ── Inventory screen — spawn and update handled by CddaScreen trait ──
 
         // ── Character sheet spawn via CddaScreen; Update still here ───
         app.add_systems(

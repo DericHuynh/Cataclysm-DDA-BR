@@ -120,7 +120,7 @@ impl CddaScreen for CharacterScreen {
     ];
 
     fn spawn(world: &mut World) {
-        spawn_character_from_world(world);
+        spawn_character_sheet_screen(world);
     }
 
     fn update(_world: &mut World) {
@@ -128,7 +128,7 @@ impl CddaScreen for CharacterScreen {
     }
 }
 
-fn spawn_character_from_world(world: &mut World) {
+pub fn spawn_character_sheet_screen(world: &mut World) {
     // Reset state on every open
     *world.resource_mut::<CharacterSheetState>() = CharacterSheetState::default();
 
@@ -244,130 +244,6 @@ fn spawn_character_from_world(world: &mut World) {
             FooterHint,
         ));
     });
-}
-
-// Spawn (OnEnter) — original system, kept for backward compat
-// ---------------------------------------------------------------------------
-
-pub fn spawn_character_sheet_screen(
-    mut commands: Commands,
-    mut state: ResMut<CharacterSheetState>,
-    ctx_actions: Res<ContextActions>,
-    active_keys: Res<ActiveKeybindings>,
-    ui_font_handle: Res<super::UiFontHandle>,
-) {
-    // Reset state on every open.
-    *state = CharacterSheetState::default();
-
-    commands
-        .spawn((
-            DespawnOnExit(Ctx::CharacterSheet),
-            Node {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                flex_direction: FlexDirection::Column,
-                ..default()
-            },
-            BackgroundColor(BG),
-        ))
-        .with_children(|root| {
-            // ── Title bar ─────────────────────────────────────────────────
-            root.spawn((
-                Node {
-                    width: Val::Percent(100.0),
-                    padding: UiRect::axes(Val::Px(24.0), Val::Px(12.0)),
-                    ..default()
-                },
-                BackgroundColor(HEADER_BG),
-            ))
-            .with_child((
-                Text::new("CHARACTER SHEET"),
-                TextFont {
-                    font_size: 26.0,
-                    ..default()
-                },
-                TextColor(ACCENT),
-            ));
-
-            // ── Main body ─────────────────────────────────────────────────
-            root.spawn((Node {
-                flex_direction: FlexDirection::Row,
-                width: Val::Percent(100.0),
-                flex_grow: 1.0,
-                ..default()
-            },))
-                .with_children(|main| {
-                    // ── LEFT PANEL (overview) ─────────────────────────────────
-                    main.spawn((
-                        Node {
-                            flex_direction: FlexDirection::Column,
-                            width: Val::Px(360.0),
-                            flex_shrink: 0.0,
-                            border: UiRect::right(Val::Px(1.0)),
-                            overflow: Overflow::clip_y(),
-                            ..default()
-                        },
-                        BackgroundColor(LEFT_BG),
-                        BorderColor::all(DIVIDER),
-                    ))
-                    .with_children(|left| {
-                        left.spawn((
-                            CharSheetLeftContainer,
-                            Node {
-                                flex_direction: FlexDirection::Column,
-                                width: Val::Percent(100.0),
-                                flex_grow: 1.0,
-                                ..default()
-                            },
-                        ));
-                    });
-
-                    // ── RIGHT PANEL (tabs) ────────────────────────────────────
-                    main.spawn((Node {
-                        flex_direction: FlexDirection::Column,
-                        flex_grow: 1.0,
-                        ..default()
-                    },))
-                        .with_children(|right| {
-                            // Tab bar — placeholder, rebuilt in update_character_sheet_screen.
-                            // We create the content container here; the tab bar is rebuilt as sibling.
-                            right.spawn((
-                                CharSheetContentContainer,
-                                Node {
-                                    flex_direction: FlexDirection::Column,
-                                    width: Val::Percent(100.0),
-                                    flex_grow: 1.0,
-                                    overflow: Overflow::clip_y(),
-                                    ..default()
-                                },
-                            ));
-                        });
-                });
-
-            // ── Footer ────────────────────────────────────────────────────
-            let cancel_key = active_keys.key_for(crate::input::BindableAction::Cancel);
-            let mut hints = format!("[{}] close", cancel_key);
-            for entry in &ctx_actions.actions {
-                let key = active_keys.key_for(entry.action);
-                hints.push_str(&format!("  [{}] {}", key, entry.label));
-            }
-            root.spawn((
-                Node {
-                    width: Val::Percent(100.0),
-                    padding: UiRect::axes(Val::Px(24.0), Val::Px(8.0)),
-                    border: UiRect::top(Val::Px(1.0)),
-                    ..default()
-                },
-                BackgroundColor(HEADER_BG),
-                BorderColor::all(DIVIDER),
-            ))
-            .with_child((
-                Text::new(hints),
-                super::ui_font(&ui_font_handle.0, 13.0),
-                TextColor(TEXT_DIM),
-                FooterHint,
-            ));
-        });
 }
 
 // ---------------------------------------------------------------------------

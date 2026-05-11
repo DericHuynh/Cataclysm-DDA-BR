@@ -83,11 +83,11 @@ impl CddaScreen for InventoryScreen {
     ];
 
     fn spawn(world: &mut World) {
-        spawn_inventory_screen_from_world(world);
+        spawn_inventory_screen(world);
     }
 
     fn update(world: &mut World) {
-        update_inventory_screen_from_world(world);
+        update_inventory_screen(world);
     }
 }
 
@@ -95,22 +95,7 @@ impl CddaScreen for InventoryScreen {
 // Spawn (OnEnter)
 // ---------------------------------------------------------------------------
 
-pub fn spawn_inventory_screen(
-    ctx_actions: Res<ContextActions>,
-    active_keys: Res<ActiveKeybindings>,
-    ui_font_handle: Res<super::UiFontHandle>,
-    mut commands: Commands,
-) {
-    let cancel_key_str = active_keys.key_for(BindableAction::Cancel);
-    let mut hints = format!("[{}] close", cancel_key_str);
-    for entry in &ctx_actions.actions {
-        let key = active_keys.key_for(entry.action);
-        hints.push_str(&format!("  [{}] {}", key, entry.label));
-    }
-    spawn_inventory_ui(&mut commands, &hints, &ui_font_handle.0);
-}
-
-fn spawn_inventory_screen_from_world(world: &mut World) {
+pub fn spawn_inventory_screen(world: &mut World) {
     let active_keys = world.resource::<ActiveKeybindings>();
     let cancel_key_str = active_keys.key_for(BindableAction::Cancel);
     let mut hints = format!("[{}] close", cancel_key_str);
@@ -352,200 +337,7 @@ fn spawn_inventory_ui(commands: &mut Commands, hints: &str, ui_font: &Option<Han
 }
 
 // ---------------------------------------------------------------------------
-// Update — rebuild item rows each frame
-// ---------------------------------------------------------------------------
-
-pub(crate) fn update_inventory_screen(
-    mut commands: Commands,
-    focus: Res<InventoryFocus>,
-    registry: Res<TileRegistry>,
-    player_query: Query<
-        (
-            Entity,
-            &Inventory,
-            Option<&MountedPockets>,
-            Option<&WieldedItems>,
-            Option<&WornBy>,
-        ),
-        With<DevPlayer>,
-    >,
-    item_names: Query<&DevGroundItemName>,
-    item_name_fallback: Query<&ItemName>,
-    item_counts: Query<&StackCount>,
-    item_type_ids: Query<&ItemTypeId>,
-    item_symbols: Query<&ItemSymbol>,
-    in_progress_crafts: Query<&InProgressCraft>,
-    invlet_q: Query<&Invlet>,
-    wielded_by_check: Query<Entity, With<WieldedBy>>,
-    pocket_contents_q: Query<&ContainerContents>,
-    container: Query<Entity, With<InvListContainer>>,
-    wielded_container: Query<Entity, With<InvWieldedContainer>>,
-    worn_container: Query<Entity, With<InvWornContainer>>,
-) {
-    let Ok(container_entity) = container.single() else {
-        return;
-    };
-    let Ok(wielded_entity) = wielded_container.single() else {
-        return;
-    };
-    let Ok(worn_entity) = worn_container.single() else {
-        return;
-    };
-    let Ok((_player_entity, inv, mounted_pockets, wielded_items, worn_by)) = player_query.single()
-    else {
-        return;
-    };
-
-    commands.entity(container_entity).despawn_children();
-    commands.entity(wielded_entity).despawn_children();
-    commands.entity(worn_entity).despawn_children();
-
-    // ── Build pocket item list ─────────────────────────────────────────────
-    let mut pocket_items: Vec<(char, Entity)> = Vec::new();
-
-    if let Some(pockets) = mounted_pockets {
-        for pocket in pockets.iter() {
-            if let Ok(cc) = pocket_contents_q.get(pocket) {
-                for item in cc.iter() {
-                    let c = invlet_q.get(item).map(|i| i.0).unwrap_or('?');
-                    pocket_items.push((c, item));
-                }
-            }
-        }
-    }
-
-    // Fallback: items in inv.invlets not wielded and not already listed
-    for (&c, &e) in &inv.invlets {
-        let already_listed = pocket_items.iter().any(|(_, ent)| *ent == e);
-        if !already_listed && wielded_by_check.get(e).is_err() {
-            pocket_items.push((c, e));
-        }
-    }
-    pocket_items.sort_by_key(|(c, _)| *c);
-
-    // ── Left panel rows ────────────────────────────────────────────────────
-    spawn_item_panel(
-        &mut commands,
-        container_entity,
-        &pocket_items,
-        focus.panel == 0,
-        focus.index,
-        false,
-        &item_names,
-        &item_name_fallback,
-        &item_counts,
-        &item_type_ids,
-        &item_symbols,
-        &in_progress_crafts,
-        &registry,
-    );
-
-    if pocket_items.is_empty() {
-        commands.entity(container_entity).with_children(|p| {
-            p.spawn((Node {
-                padding: UiRect::axes(Val::Px(14.0), Val::Px(14.0)),
-                ..default()
-            },))
-                .with_child((
-                    Text::new("(empty)"),
-                    TextFont {
-                        font_size: 15.0,
-                        ..default()
-                    },
-                    TextColor(TEXT_DIM),
-                ));
-        });
-    }
-
-    // ── Wielded panel rows ─────────────────────────────────────────────────
-    let wielded: Vec<(char, Entity)> = {
-        let mut v: Vec<(char, Entity)> = wielded_items
-            .map(|wi| {
-                wi.iter()
-                    .map(|e| (invlet_q.get(e).map(|i| i.0).unwrap_or('?'), e))
-                    .collect()
-            })
-            .unwrap_or_default();
-        v.sort_by_key(|(c, _)| *c);
-        v
-    };
-
-    if wielded.is_empty() {
-        commands.entity(wielded_entity).with_children(|p| {
-            p.spawn((Node {
-                padding: UiRect::axes(Val::Px(14.0), Val::Px(8.0)),
-                ..default()
-            },))
-                .with_child((
-                    Text::new("(nothing wielded)"),
-                    TextFont {
-                        font_size: 14.0,
-                        ..default()
-                    },
-                    TextColor(TEXT_DIM),
-                ));
-        });
-    } else {
-        spawn_item_panel(
-            &mut commands,
-            wielded_entity,
-            &wielded,
-            focus.panel == 1,
-            focus.index,
-            true,
-            &item_names,
-            &item_name_fallback,
-            &item_counts,
-            &item_type_ids,
-            &item_symbols,
-            &in_progress_crafts,
-            &registry,
-        );
-    }
-
-    // ── Worn panel rows ────────────────────────────────────────────────────
-    let worn_list: Vec<Entity> = worn_by.map(|wb| wb.iter().collect()).unwrap_or_default();
-
-    if worn_list.is_empty() {
-        commands.entity(worn_entity).with_children(|p| {
-            p.spawn((Node {
-                padding: UiRect::axes(Val::Px(14.0), Val::Px(8.0)),
-                ..default()
-            },))
-                .with_child((
-                    Text::new("(nothing worn)"),
-                    TextFont {
-                        font_size: 14.0,
-                        ..default()
-                    },
-                    TextColor(TEXT_DIM),
-                ));
-        });
-    } else {
-        let worn_with_chars: Vec<(char, Entity)> = worn_list
-            .iter()
-            .map(|&e| (invlet_q.get(e).map(|i| i.0).unwrap_or('?'), e))
-            .collect();
-        spawn_item_panel(
-            &mut commands,
-            worn_entity,
-            &worn_with_chars,
-            false,
-            0,
-            true,
-            &item_names,
-            &item_name_fallback,
-            &item_counts,
-            &item_type_ids,
-            &item_symbols,
-            &in_progress_crafts,
-            &registry,
-        );
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Update (world-based) — for CddaScreen trait
+// Update — for CddaScreen trait
 // ---------------------------------------------------------------------------
 
 /// Pre-collected item display data, extracted from ECS queries before
@@ -726,7 +518,7 @@ fn build_item_panel_from_data(
     }
 }
 
-fn update_inventory_screen_from_world(world: &mut World) {
+pub(crate) fn update_inventory_screen(world: &mut World) {
     // ── Phase 1: Extract all query data into local variables ────────────
 
     // Resources
@@ -812,7 +604,7 @@ fn update_inventory_screen_from_world(world: &mut World) {
     let pocket_data = collect_item_display_data(&pocket_items, world);
 
     // ── Build wielded item list ─────────────────────────────────────────
-    let mut wielded: Vec<(char, Entity)> = {
+    let wielded: Vec<(char, Entity)> = {
         let mut invlet_q = world.query::<&Invlet>();
         let mut v: Vec<(char, Entity)> = wielded_items_entities
             .iter()
@@ -930,145 +722,3 @@ fn update_inventory_screen_from_world(world: &mut World) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-#[allow(clippy::too_many_arguments)]
-fn spawn_item_panel(
-    commands: &mut Commands,
-    container: Entity,
-    items: &[(char, Entity)],
-    has_focus: bool,
-    focus_index: usize,
-    compact: bool,
-    item_names: &Query<&DevGroundItemName>,
-    item_name_fallback: &Query<&ItemName>,
-    item_counts: &Query<&StackCount>,
-    item_type_ids: &Query<&ItemTypeId>,
-    item_symbols: &Query<&ItemSymbol>,
-    in_progress_crafts: &Query<&InProgressCraft>,
-    registry: &TileRegistry,
-) {
-    if items.is_empty() {
-        return;
-    }
-
-    let font_size = if compact { 14.0 } else { 15.0 };
-    let icon_size = if compact { 20.0 } else { 24.0 };
-    let pad_v = if compact { 4.0 } else { 5.0 };
-
-    for (i, &(invlet_char, item_entity)) in items.iter().enumerate() {
-        let craft = in_progress_crafts.get(item_entity).ok();
-        let craft_display = craft.map(|c| c.display_name());
-        let name: &str = if let Some(ref s) = craft_display {
-            s.as_str()
-        } else {
-            item_names
-                .get(item_entity)
-                .ok()
-                .map(|n| n.0.as_str())
-                .or_else(|| {
-                    item_name_fallback
-                        .get(item_entity)
-                        .ok()
-                        .map(|n| n.0.as_str())
-                })
-                .unwrap_or("?")
-        };
-        let qty = item_counts.get(item_entity).map(|s| s.get()).unwrap_or(1);
-        let is_focused = has_focus && i == focus_index;
-        let is_crafting = craft.is_some();
-
-        let row_bg = if is_focused {
-            ITEM_FOCUS_BG
-        } else if is_crafting {
-            ITEM_CRAFT_BG
-        } else {
-            ITEM_BG
-        };
-        let text_color = if is_crafting { TEXT_CRAFT } else { TEXT_BRIGHT };
-
-        let cdda_id = item_type_ids
-            .get(item_entity)
-            .map(|t| t.0.clone())
-            .unwrap_or_default();
-        let has_sprite = !cdda_id.is_empty() && registry.has_tile(&cdda_id);
-        let sym: char = item_symbols
-            .get(item_entity)
-            .map(|s| s.0)
-            .or_else(|_| {
-                item_names
-                    .get(item_entity)
-                    .map(|n| n.0.chars().next().unwrap_or('?'))
-            })
-            .unwrap_or('?');
-
-        let label = format!("{:<4}  {:<28}  {}", invlet_char, name, qty);
-
-        commands.entity(container).with_children(|p| {
-            p.spawn((
-                Node {
-                    width: Val::Percent(100.0),
-                    flex_direction: FlexDirection::Row,
-                    align_items: AlignItems::Center,
-                    padding: UiRect::new(
-                        Val::Px(10.0),
-                        Val::Px(10.0),
-                        Val::Px(pad_v),
-                        Val::Px(pad_v),
-                    ),
-                    border: UiRect::bottom(Val::Px(1.0)),
-                    ..default()
-                },
-                BackgroundColor(row_bg),
-                BorderColor::all(DIVIDER),
-            ))
-            .with_children(|row| {
-                if has_sprite {
-                    let info = registry.tile_info(&cdda_id);
-                    row.spawn((
-                        Node {
-                            width: Val::Px(icon_size),
-                            height: Val::Px(icon_size),
-                            flex_shrink: 0.0,
-                            margin: UiRect::right(Val::Px(8.0)),
-                            ..default()
-                        },
-                        ImageNode {
-                            image: info.image.clone(),
-                            ..default()
-                        },
-                    ));
-                } else {
-                    row.spawn((
-                        Node {
-                            width: Val::Px(icon_size),
-                            height: Val::Px(icon_size),
-                            flex_shrink: 0.0,
-                            margin: UiRect::right(Val::Px(8.0)),
-                            align_items: AlignItems::Center,
-                            justify_content: JustifyContent::Center,
-                            ..default()
-                        },
-                        BackgroundColor(ICON_BG),
-                    ))
-                    .with_child((
-                        Text::new(sym.to_string()),
-                        TextFont {
-                            font_size: font_size - 2.0,
-                            ..default()
-                        },
-                        TextColor(ICON_TEXT),
-                    ));
-                }
-
-                row.spawn((
-                    Text::new(label),
-                    TextFont {
-                        font_size,
-                        ..default()
-                    },
-                    TextColor(text_color),
-                ));
-            });
-        });
-    }
-}
