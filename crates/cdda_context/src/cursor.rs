@@ -12,5 +12,5 @@ use bevy_ecs::prelude::Resource;
 /// `None` means no cursor is active (default gameplay mode).
 #[derive(Resource, Default, Debug, Clone, Copy)]
 pub struct ExamineCursor {
-    pub tile: Option<crate::core::coords::WorldPos>,
+    pub tile: Option<cdda_core_types::core::coords::WorldPos>,
 }

@@ -9,17 +9,17 @@
 //! enqueues a def-entity, and the exclusive `dev_spawn_flush` system drains the
 //! queue and calls `spawn_item` with full world access.
 
-use crate::core::coords::WorldPos;
-use crate::input::context::{InputContextId, InputContextStack};
-use crate::input::{GameAction, InputAction};
-use crate::ZLevel;
+use cdda_core_types::core::coords::WorldPos;
+use cdda_components::input::{InputContextId, InputContextStack};
+use cdda_components::input::{GameAction, InputAction};
+use cdda_core_types::core::coords::ZLevel;
 use bevy_ecs::message::MessageReader;
 use bevy_ecs::prelude::*;
 use bevy_input::keyboard::{Key, KeyboardInput};
 use bevy_input::ButtonState;
 
-use crate::core::components::def::{DefStrId, IsDef, ItemName};
-use crate::core::components::item::ItemTypeId;
+use cdda_components::def::{DefStrId, IsDef, ItemName};
+use cdda_components::item::ItemTypeId;
 use cdda_components::dev::{DevCamera, DevGroundItemName};
 
 // ---------------------------------------------------------------------------
@@ -241,7 +241,7 @@ pub fn dev_spawn_flush(world: &mut World) {
             .map(|d| d.0.clone())
             .unwrap_or_default();
 
-        let spawned = crate::worldgen::spawning::spawn_item(world, def_entity, pos, 1);
+        let spawned = crate::spawning::spawn_item(world, def_entity, pos, 1);
 
         // Make the item visible in ground rendering and interactable via pickup.
         world

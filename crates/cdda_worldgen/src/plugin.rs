@@ -1,5 +1,5 @@
-use crate::worldgen::dev::DevWorldgenConfig;
-use crate::worldgen::setup::WorldMapResource;
+use crate::dev::DevWorldgenConfig;
+use crate::setup::WorldMapResource;
 use bevy_app::{App, Plugin};
 
 pub struct WorldgenPlugin;

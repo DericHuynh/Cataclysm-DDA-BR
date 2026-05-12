@@ -6,8 +6,8 @@
 //!
 //! The player spawns at the top-left of the grid.
 
-use crate::core::raw_defs::city_building::{CityBuildingDef, CityBuildingOvermap};
-use crate::map::WorldMap;
+use cdda_core_types::core::raw_defs::city_building::{CityBuildingDef, CityBuildingOvermap};
+use cdda_map::WorldMap;
 use bevy_ecs::prelude::Resource;
 
 use std::collections::HashMap;
@@ -116,7 +116,7 @@ fn compute_extent(overmaps: &[CityBuildingOvermap]) -> BuildingExtent {
 pub fn generate_dev_worldmap(
     world_map: &mut WorldMap,
     city_buildings: &HashMap<
-        crate::core::id::DefId<CityBuildingDef>,
+        cdda_core_types::core::id::DefId<CityBuildingDef>,
         std::sync::Arc<CityBuildingDef>,
     >,
     config: &DevWorldgenConfig,
@@ -202,7 +202,7 @@ pub fn generate_dev_worldmap(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::id::DefId;
+    use cdda_core_types::core::id::DefId;
 
     fn make_def_id(s: &str) -> DefId<CityBuildingDef> {
         DefId::new(s.to_string())

@@ -3,28 +3,28 @@
 use bevy_ecs::prelude::Resource;
 use bevy_ecs::world::World;
 
-use crate::actor::turn::TurnQueue;
-use crate::core::components::actor::*;
-use crate::core::components::item::*;
-use crate::core::components::item::{
+use cdda_actor::turn::TurnQueue;
+use cdda_components::actor::*;
+use cdda_components::item::*;
+use cdda_components::item::{
     Inventory, InventoryBin, InventoryFocus, Invlet, InvletFavorites,
 };
-use crate::core::components::sim::{InFlight, Solid, Velocity, WorldPosition};
-use crate::map::spatial::EntitySpatialIndex;
-use crate::sim::state::*;
-use crate::worldgen::dev::DevWorldgenConfig;
-use crate::worldgen::dev_spawn::{DevSpawnFocus, DevSpawnQueue};
+use cdda_components::sim::{InFlight, Solid, Velocity, WorldPosition};
+use cdda_map::spatial::EntitySpatialIndex;
+use cdda_sim::state::*;
+use crate::dev::DevWorldgenConfig;
+use crate::dev_spawn::{DevSpawnFocus, DevSpawnQueue};
 use cdda_components::dev::{DevCamera, DevGroundItemName, DevPlayer};
 
-/// Wrapper to store `crate::map::WorldMap` as a Bevy resource.
+/// Wrapper to store `cdda_map::WorldMap` as a Bevy resource.
 /// `WorldMap` lives in the zero-bevy `cdda_map` crate, so it cannot
 /// derive `Resource` directly.
 #[derive(Resource, Debug, Clone)]
-pub struct WorldMapResource(pub crate::map::WorldMap);
+pub struct WorldMapResource(pub cdda_map::WorldMap);
 
 impl Default for WorldMapResource {
     fn default() -> Self {
-        Self(crate::map::WorldMap::new())
+        Self(cdda_map::WorldMap::new())
     }
 }
 
@@ -49,7 +49,7 @@ pub fn setup_world(world: &mut World) {
     world.insert_resource(DevWorldgenConfig::default());
     world.insert_resource(DevCamera::default());
     world.insert_resource(InventoryBin::default());
-    world.insert_resource(crate::inventory::examine_resource::ExaminedItem::default());
+    world.insert_resource(cdda_inventory::examine_resource::ExaminedItem::default());
 
     // --- Spatial ---
     world.register_component::<WorldPosition>();
@@ -139,7 +139,7 @@ pub fn setup_world(world: &mut World) {
     world.register_component::<Invlet>();
     world.register_component::<DevPlayer>();
     world.register_component::<DevGroundItemName>();
-    world.register_component::<crate::core::components::item::InProgressCraft>();
+    world.register_component::<cdda_components::item::InProgressCraft>();
 
     // --- Turn scheduling ---
     world.register_component::<ActionPoints>();
@@ -152,22 +152,22 @@ pub fn setup_world(world: &mut World) {
     world.register_component::<OnFire>();
 
     // --- Body part def components ---
-    world.register_component::<crate::core::components::def::BodyPartDefId>();
-    world.register_component::<crate::core::components::def::ItemName>();
-    world.register_component::<crate::core::components::def::BodyPartHitSize>();
-    world.register_component::<crate::core::components::def::BodyPartHitDifficulty>();
-    world.register_component::<crate::core::components::def::BodyPartBaseHp>();
-    world.register_component::<crate::core::components::def::BodyPartDrenchCapacity>();
-    world.register_component::<crate::core::components::def::BodyPartSide>();
-    world.register_component::<crate::core::components::def::BodyPartLegacyId>();
-    world.register_component::<crate::core::components::def::IsVital>();
-    world.register_component::<crate::core::components::def::CanGrasp>();
-    world.register_component::<crate::core::components::def::CanWalk>();
-    world.register_component::<crate::core::components::def::CanSee>();
-    world.register_component::<crate::core::components::def::CanBite>();
-    world.register_component::<crate::core::components::def::CanFly>();
-    world.register_component::<crate::core::components::def::SubParts>();
-    world.register_component::<crate::core::components::def::ParentPart>();
+    world.register_component::<cdda_components::def::BodyPartDefId>();
+    world.register_component::<cdda_components::def::ItemName>();
+    world.register_component::<cdda_components::def::BodyPartHitSize>();
+    world.register_component::<cdda_components::def::BodyPartHitDifficulty>();
+    world.register_component::<cdda_components::def::BodyPartBaseHp>();
+    world.register_component::<cdda_components::def::BodyPartDrenchCapacity>();
+    world.register_component::<cdda_components::def::BodyPartSide>();
+    world.register_component::<cdda_components::def::BodyPartLegacyId>();
+    world.register_component::<cdda_components::def::IsVital>();
+    world.register_component::<cdda_components::def::CanGrasp>();
+    world.register_component::<cdda_components::def::CanWalk>();
+    world.register_component::<cdda_components::def::CanSee>();
+    world.register_component::<cdda_components::def::CanBite>();
+    world.register_component::<cdda_components::def::CanFly>();
+    world.register_component::<cdda_components::def::SubParts>();
+    world.register_component::<cdda_components::def::ParentPart>();
 
     // --- Body part instance components ---
     world.register_component::<BodyPartOf>();

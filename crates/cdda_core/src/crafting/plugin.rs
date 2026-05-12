@@ -6,7 +6,7 @@ use crate::context::ctx::Ctx;
 use crate::crafting::systems::{
     build_craft_state, complete_craft, CategoryIndex, CraftState, PendingCraft, RecipeIndex,
 };
-use crate::input::crafting::{crafting_menu_input, process_pending_craft};
+use crate::crafting::input::{crafting_menu_input, process_pending_craft};
 use cdda_components::schedule::SimSet;
 
 pub struct CraftingPlugin;

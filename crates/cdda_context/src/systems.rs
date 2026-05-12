@@ -15,12 +15,12 @@ use bevy_ecs::message::MessageReader;
 use bevy_ecs::prelude::*;
 use bevy_state::prelude::*;
 
-use crate::core::coords::WorldPos;
-use crate::input::{GameAction, InputAction};
+use cdda_core_types::core::coords::WorldPos;
+use cdda_components::input::{GameAction, InputAction};
 
-use crate::context::cursor::ExamineCursor;
-use crate::context::menu::{MenuItem, SelectedIndex};
-use crate::context::ctx::Ctx;
+use crate::cursor::ExamineCursor;
+use crate::menu::{MenuItem, SelectedIndex};
+use crate::ctx::Ctx;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -132,7 +132,7 @@ pub fn ctx_and_cursor(
                 let current =
                     cursor
                         .tile
-                        .unwrap_or(WorldPos::new(0, 0, crate::core::coords::ZLevel::new(0)));
+                        .unwrap_or(WorldPos::new(0, 0, cdda_core_types::core::coords::ZLevel::new(0)));
                 cursor.tile = Some(WorldPos::new(current.x + dx, current.y + dy, current.z));
             }
         }
@@ -147,14 +147,14 @@ pub fn ctx_and_cursor(
 fn movement_delta(action: &GameAction) -> Option<(i32, i32)> {
     match action {
         GameAction::Move(dir) => match dir {
-            crate::input::Direction::North => Some((0, -1)),
-            crate::input::Direction::South => Some((0, 1)),
-            crate::input::Direction::West => Some((-1, 0)),
-            crate::input::Direction::East => Some((1, 0)),
-            crate::input::Direction::NorthWest => Some((-1, -1)),
-            crate::input::Direction::NorthEast => Some((1, -1)),
-            crate::input::Direction::SouthWest => Some((-1, 1)),
-            crate::input::Direction::SouthEast => Some((1, 1)),
+            cdda_components::input::Direction::North => Some((0, -1)),
+            cdda_components::input::Direction::South => Some((0, 1)),
+            cdda_components::input::Direction::West => Some((-1, 0)),
+            cdda_components::input::Direction::East => Some((1, 0)),
+            cdda_components::input::Direction::NorthWest => Some((-1, -1)),
+            cdda_components::input::Direction::NorthEast => Some((1, -1)),
+            cdda_components::input::Direction::SouthWest => Some((-1, 1)),
+            cdda_components::input::Direction::SouthEast => Some((1, 1)),
             _ => None,
         },
         _ => None,

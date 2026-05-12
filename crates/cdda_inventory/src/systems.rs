@@ -26,6 +26,7 @@ use cdda_components::actor::{
     ActionPoints, Gender, HandCount, Health, IsAlive, PlayerData, Stats,
 };
 use cdda_components::context::{ContextStack, Ctx, FocusedCommandIndex, push_ctx};
+use cdda_components::input::{GameAction, InputAction};
 use cdda_components::def::ItemVolume;
 use cdda_components::dev::{DevCamera, DevGroundItemName, DevPlayer};
 use cdda_components::events::{ItemMoveEvent, MoveLocation};
@@ -1082,3 +1083,16 @@ mod tests {
             DefStrId("knife".into()),
             ItemName("knife".into()),
             StackCount::new(1),
+            ItemDamage(1),
+            DefOrigin(10),
+            ItemVolume(250),
+            ItemWeight(100),
+        ));
+        t.world_mut().entity_mut(a).insert(DefOrigin(10));
+        t.world_mut().entity_mut(b).insert(DefOrigin(10));
+        add_to_inventory(&mut t.world_mut(), &mut inv, a, None);
+        add_to_inventory(&mut t.world_mut(), &mut inv, b, None);
+        // Different damage levels prevent stacking
+        assert_eq!(inv.len(), 2);
+    }
+}

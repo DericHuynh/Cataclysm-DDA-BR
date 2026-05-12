@@ -10,8 +10,8 @@ use bevy_state::prelude::*;
 
 pub use cdda_events::GameEvent;
 pub use cdda_components::context::{Ctx, ContextStack, FocusedCommandIndex, push_ctx, pop_ctx};
-use crate::input::{GameAction, InputAction};
-use crate::context::overlay::OverlayStack;
+use cdda_components::input::{GameAction, InputAction};
+use crate::overlay::OverlayStack;
 
 // ---------------------------------------------------------------------------
 // TransitionTarget
@@ -231,7 +231,7 @@ pub fn handle_navigation_input(
     mut focused: ResMut<FocusedCommandIndex>,
     state: Res<State<Ctx>>,
     overlays: Res<OverlayStack>,
-    list_items: Query<(), (With<super::ScreenListItem>,)>,
+    list_items: Query<(), (With<ScreenListItem>,)>,
 ) {
     let current = *state.get();
 
@@ -410,10 +410,10 @@ pub struct ScreenListItem {
 /// System that synchronises `InputContextStack` to match the current screen.
 /// Runs on state transitions so keyboard bindings switch with the screen.
 pub fn sync_input_context(
-    mut stack: ResMut<crate::input::context::InputContextStack>,
+    mut stack: ResMut<cdda_components::input::InputContextStack>,
     screen: Res<State<Ctx>>,
 ) {
-    use crate::input::InputContextId;
+    use cdda_components::input::InputContextId;
     use Ctx::*;
 
     let ctx = match *screen.get() {

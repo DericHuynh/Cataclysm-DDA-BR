@@ -41,9 +41,10 @@ use cdda_core::crafting::systems::on_examine_item_changed;
 use cdda_core::data::assets::CddaAssetsPlugin;
 use cdda_core::startup::load_data_system;
 use cdda_core::inventory::systems::{
-    assign_invlets_system, build_inventory_bins, dev_pickup_drop_system, examine_item_input,
-    inventory_screen_input, process_item_move_events, spawn_dev_world,
+    assign_invlets_system, build_inventory_bins, dev_pickup_drop_system,
+    inventory_screen_input, process_item_move_events,
 };
+use cdda_core::startup::{examine_item_input, spawn_dev_world};
 use cdda_core::item::plugin::ItemPlugin;
 use cdda_core::map::spatial_systems::update_spatial_index;
 use cdda_core::sim::state::AppState;

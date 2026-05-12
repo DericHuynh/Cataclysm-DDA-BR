@@ -13,8 +13,8 @@
 //! with manually constructed definition entities.
 
 use bevy_ecs::prelude::*;
-use crate::core::coords::WorldPos;
-use crate::{FactionId, ItemGroupId};
+use cdda_core_types::core::coords::WorldPos;
+use cdda_core_types::core::id::{FactionId, ItemGroupId};
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -32,7 +32,7 @@ pub fn spawn_monster(
     position: WorldPos,
     faction: FactionId,
 ) -> Entity {
-    crate::worldgen::spawning_impl::spawn_creature_from_def(world, def_entity, position, faction)
+    crate::spawning_impl::spawn_creature_from_def(world, def_entity, position, faction)
 }
 
 /// Spawn an item from a definition entity at the given position.
@@ -41,7 +41,7 @@ pub fn spawn_monster(
 /// `EntityCloner` to clone the def entity and inserts `WorldPosition`,
 /// `StackCount(count)`, and `CurrentCharges(0)`.
 pub fn spawn_item(world: &mut World, def_entity: Entity, position: WorldPos, count: u32) -> Entity {
-    crate::worldgen::spawning_impl::spawn_item_from_def(world, def_entity, position, count)
+    crate::spawning_impl::spawn_item_from_def(world, def_entity, position, count)
 }
 
 /// Spawn one or more items from an item group definition.

@@ -7,7 +7,7 @@
 
 use bevy_ecs::prelude::*;
 
-use crate::input::BindableAction;
+use cdda_components::input::BindableAction;
 
 // ---------------------------------------------------------------------------
 // ContextAction

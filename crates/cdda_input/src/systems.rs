@@ -22,9 +22,9 @@ use bevy_input::{ButtonInput, ButtonState};
 use leafwing_input_manager::prelude::{ActionState, ButtonlikeChord, InputMap, ModifierKey};
 use leafwing_input_manager::user_input::Buttonlike;
 
-use crate::input::actions::{ActionSource, BindableAction, GameAction, InputAction};
-use crate::input::bindings::ContextInputMaps;
-use crate::input::context::{InputContextId, InputContextStack};
+use crate::actions::{ActionSource, BindableAction, GameAction, InputAction};
+use crate::bindings::{format_wrapper, ActiveKeybindings, ContextInputMaps};
+use cdda_components::input::{InputContextId, InputContextStack};
 
 // ---------------------------------------------------------------------------
 // RebindCapture
@@ -279,8 +279,8 @@ fn key_to_user_input(key: KeyCode, shift: bool, ctrl: bool, alt: bool) -> Box<dy
 /// current key for an action instead of hardcoding key labels.
 pub fn refresh_active_keybindings(
     query: Query<&InputMap<BindableAction>, With<GlobalInputEntity>>,
-    mut active: ResMut<crate::input::bindings::ActiveKeybindings>,
-    context_maps: Res<crate::input::bindings::ContextInputMaps>,
+    mut active: ResMut<ActiveKeybindings>,
+    context_maps: Res<ContextInputMaps>,
     context_stack: Res<InputContextStack>,
 ) {
     if !context_stack.is_changed() && !context_maps.is_changed() && !active.is_changed() {
@@ -295,9 +295,7 @@ pub fn refresh_active_keybindings(
     for action in BindableAction::all() {
         if let Some(inputs) = map.get(&action) {
             if !inputs.is_empty() {
-                active
-                    .keys
-                    .insert(action, crate::input::bindings::format_wrapper(&inputs[0]));
+                active.keys.insert(action, format_wrapper(&inputs[0]));
             }
         }
     }

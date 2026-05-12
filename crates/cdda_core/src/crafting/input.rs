@@ -1,5 +1,6 @@
 //! Crafting menu — input handling.
 //!
+//! Moved here from `input/crafting.rs` during crate extraction.
 //! - `crafting_menu_input` — keyboard navigation and filter text entry
 //! - `process_pending_craft` — drains the PendingCraft queue and executes craft
 
@@ -7,23 +8,18 @@ use bevy_ecs::message::MessageReader;
 use bevy_ecs::prelude::*;
 use bevy_input::keyboard::{Key, KeyboardInput};
 use bevy_input::ButtonState;
+
 use crate::crafting::systems::{
     build_craft_state, find_dev_player, start_craft, CategoryIndex, CraftEntry, CraftState,
     PendingCraft,
 };
-use crate::input::context::{InputContextId, InputContextStack};
-use crate::input::{GameAction, InputAction};
+use cdda_components::input::{GameAction, InputAction, InputContextId, InputContextStack};
 
 // ---------------------------------------------------------------------------
 // crafting_menu_input — regular per-frame system
 // ---------------------------------------------------------------------------
 
 /// Handles keyboard navigation for the crafting menu.
-/// - Arrow keys / j/k: navigate recipe list or switch tabs
-/// - Enter: confirm craft
-/// - /: open filter text input
-/// - a: toggle all/craftable
-/// - Esc: back
 pub fn crafting_menu_input(
     mut reader: MessageReader<InputAction>,
     mut keyboard: MessageReader<KeyboardInput>,
@@ -42,7 +38,6 @@ pub fn crafting_menu_input(
             }
             match &ev.logical_key {
                 Key::Character(ch) if !ch.chars().any(|c| c.is_control()) => {
-                    // Skip '/' if filter just opened (it was the toggle key)
                     if ch == "/" && craft_state.filter.is_empty() {
                         continue;
                     }
@@ -80,15 +75,12 @@ pub fn crafting_menu_input(
 
     for action in actions {
         match action {
-            // ── Filter ───────────────────────────────────────────────────
             GameAction::Filter => {
                 if !craft_state.filtering {
                     craft_state.filtering = true;
                     input_ctx.push(InputContextId::TextInput);
                 }
             }
-
-            // ── Tab cycle focus zones ────────────────────────────────────
             GameAction::NavigateNextTab => {
                 cat_index.focus_zone = (cat_index.focus_zone + 1) % 3;
                 craft_state.focus = 0;
@@ -101,8 +93,6 @@ pub fn crafting_menu_input(
                 };
                 craft_state.focus = 0;
             }
-
-            // ── Zone-aware navigation ────────────────────────────────────
             GameAction::NavigateLeft => {
                 if cat_index.focus_zone == 1 {
                     let n = cat_index.top_categories.len();
@@ -162,7 +152,6 @@ pub fn crafting_menu_input(
                     }
                 }
             }
-
             GameAction::NavigateUp => {
                 if cat_index.focus_zone == 0 {
                     let current_top = cat_index
@@ -227,7 +216,6 @@ pub fn crafting_menu_input(
                     cat_index.focus_zone = 0;
                 }
             }
-
             GameAction::NavigateHome => {
                 craft_state.focus = 0;
             }
@@ -309,8 +297,6 @@ pub fn crafting_menu_input(
                 let max = cat_visible.len().saturating_sub(1);
                 craft_state.focus = (craft_state.focus + 10).min(max);
             }
-
-            // ── Craft ───────────────────────────────────────────────────
             GameAction::Confirm => {
                 let current_top = cat_index
                     .top_categories
@@ -338,8 +324,6 @@ pub fn crafting_menu_input(
                     }
                 }
             }
-
-            // ── Toggle all/craftable ─────────────────────────────────────
             GameAction::HotkeyPress('a') => {
                 craft_state.show_all = !craft_state.show_all;
                 let max = craft_state.visible_count().saturating_sub(1);
@@ -347,12 +331,9 @@ pub fn crafting_menu_input(
                     craft_state.focus = max;
                 }
             }
-
-            // ── Back ────────────────────────────────────────────────────
             GameAction::Cancel => {
                 craft_state.last_message = None;
             }
-
             _ => {}
         }
     }
@@ -362,9 +343,10 @@ pub fn crafting_menu_input(
 // process_pending_craft — exclusive per-frame system
 // ---------------------------------------------------------------------------
 
-/// Drain `PendingCraft`, execute the craft, and rebuild `CraftState` so the
-/// recipe list reflects the updated inventory.
+/// Drain `PendingCraft`, execute the craft, and rebuild `CraftState`.
 pub fn process_pending_craft(world: &mut World) {
+    use tracing;
+
     let recipe_entity = {
         let mut pending = world.resource_mut::<PendingCraft>();
         pending.0.take()
@@ -380,7 +362,7 @@ pub fn process_pending_craft(world: &mut World) {
     match start_craft(world, player, recipe_entity) {
         Ok(craft_e) => {
             let result_name = world
-                .get::<crate::core::components::item::InProgressCraft>(craft_e)
+                .get::<cdda_components::item::InProgressCraft>(craft_e)
                 .map(|c| c.result_name.clone())
                 .unwrap_or_else(|| "item".to_string());
             tracing::info!("Started crafting: {}", result_name);
@@ -396,6 +378,5 @@ pub fn process_pending_craft(world: &mut World) {
         }
     }
 
-    // Rebuild craft state so craftability reflects the updated inventory.
     build_craft_state(world);
 }

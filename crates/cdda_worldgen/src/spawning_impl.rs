@@ -5,13 +5,13 @@
 //! operation. No manual component enumeration — any component with
 //! `#[derive(Clone)]` on a def entity automatically propagates to spawns.
 
-use crate::core::components::sim::{Solid, WorldPosition};
-use crate::core::components::def::*;
+use cdda_components::sim::{Solid, WorldPosition};
+use cdda_components::def::*;
 use bevy_ecs::entity::EntityCloner;
 use bevy_ecs::prelude::*;
-use crate::core::components::actor::{BodyPartDef, BodyPartSlot, Faction, Health, IsAlive};
-use crate::core::coords::WorldPos;
-use crate::core::components::item::{CurrentCharges, DefOrigin, StackCount};
+use cdda_components::actor::{BodyPartDef, BodyPartSlot, Faction, Health, IsAlive};
+use cdda_core_types::core::coords::WorldPos;
+use cdda_components::item::{CurrentCharges, DefOrigin, StackCount};
 
 /// Spawn a gameplay item entity by cloning a definition entity.
 ///
@@ -51,7 +51,7 @@ pub fn spawn_creature_from_def(
     world: &mut World,
     def_entity: Entity,
     pos: WorldPos,
-    faction: crate::FactionId,
+    faction: cdda_core_types::core::id::FactionId,
 ) -> Entity {
     let mut builder = EntityCloner::build_opt_out(world);
     builder.deny::<IsDef>();
@@ -84,7 +84,7 @@ pub fn spawn_creature_from_def(
 /// Spawn body part instances for a creature by cloning body part defs.
 pub fn spawn_body_parts_for_creature(
     world: &mut World,
-    def_world: &crate::data::def_world::DefinitionWorld,
+    def_world: &cdda_data::def_world::DefinitionWorld,
     body_part_ids: &[&str],
 ) -> Vec<Entity> {
     use std::collections::HashMap;
@@ -104,8 +104,8 @@ pub fn spawn_body_parts_for_creature(
 
         // Clone the def entity into a body part instance
         let mut builder = EntityCloner::build_opt_out(world);
-        builder.deny::<crate::core::components::def::IsDef>();
-        builder.deny::<crate::core::components::def::DefStrId>();
+        builder.deny::<cdda_components::def::IsDef>();
+        builder.deny::<cdda_components::def::DefStrId>();
         builder.linked_cloning(true);
         let mut cloner = builder.finish();
         let instance = cloner.spawn_clone(world, def_entity);

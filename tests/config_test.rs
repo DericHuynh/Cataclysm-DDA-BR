@@ -17,13 +17,13 @@ fn game_settings_default_not_fullscreen() {
 #[test]
 fn game_settings_default_music_volume() {
     let s = GameSettings::default();
-    assert!(s.music_volume > 0);
+    assert!(s.music_volume > 0.0);
 }
 
 #[test]
 fn game_settings_default_sfx_volume() {
     let s = GameSettings::default();
-    assert!(s.sfx_volume > 0);
+    assert!(s.sfx_volume > 0.0);
 }
 
 #[test]
@@ -31,8 +31,8 @@ fn game_settings_mutation_works() {
     let mut s = GameSettings::default();
     s.auto_save = false;
     assert!(!s.auto_save);
-    s.music_volume = 50;
-    assert_eq!(s.music_volume, 50);
+    s.music_volume = 50.0;
+    assert_eq!(s.music_volume, 50.0);
 }
 
 // ---------------------------------------------------------------------------

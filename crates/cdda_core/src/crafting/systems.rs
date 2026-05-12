@@ -4,7 +4,7 @@ use bevy_ecs::prelude::*;
 
 use crate::activity::actor::{ActivityActor, CraftActor};
 use crate::activity::components::{ActivityPhase, PlayerActivity};
-use crate::context::ContextActions;
+use cdda_context::ContextActions;
 use crate::core::components::def::{
     ItemName, RecipeCategory, RecipeComponents, RecipeQualities, RecipeResult, RecipeResultCount,
     RecipeSubcategory, RecipeTime,
@@ -863,4 +863,3 @@ fn slot_has_alternatives(world: &World, re: Entity, first_id: &str) -> bool {
         })
         .unwrap_or(false)
 }
-

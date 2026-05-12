@@ -14,19 +14,19 @@ pub use cdda_activity as activity;
 pub use cdda_actor as actor;
 pub use cdda_ai as ai;
 pub use cdda_combat as combat;
-pub mod context;
+pub use cdda_context as context;
 pub mod core;
 pub mod crafting;
 pub use cdda_data as data;
 pub use cdda_equipment as equipment;
-pub mod input;
-pub mod inventory;
+pub use cdda_input as input;
+pub use cdda_inventory as inventory;
 pub use cdda_item as item;
 pub use cdda_map as map;
 pub use cdda_replay as replay;
 pub use cdda_sim as sim;
 pub mod startup;
-pub mod worldgen;
+pub use cdda_worldgen as worldgen;
 
 // Re-export key types — all point to cdda_core_types for the canonical definitions
 pub use cdda_components::stats::Stats;

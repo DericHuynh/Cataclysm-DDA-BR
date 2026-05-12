@@ -12,7 +12,6 @@
 pub mod actions;
 pub mod bindings;
 pub mod context;
-pub mod crafting;
 pub mod systems;
 
 // ----- Re-exports ---------------------------------------------------------

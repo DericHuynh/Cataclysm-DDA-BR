@@ -40,10 +40,17 @@ pub use systems::{ctx_and_cursor, menu_navigation};
 // ----- Plugin -------------------------------------------------------------
 
 use bevy_app::{App, Plugin, Update};
-use bevy_ecs::schedule::IntoScheduleConfigs;
 use bevy_state::app::AppExtStates;
 
 /// Registers context navigation resources, events, systems.
+///
+/// ## Ordering note
+///
+/// The navigation systems (`handle_navigation_input`, `handle_panel_openers`)
+/// consume `InputAction` messages written by `bridge_actionstate` in the
+/// `cdda_core::input` crate.  Ordering is guaranteed by `GameSet` labels
+/// (`Input → Sim`) — the parent app's schedule config ensures input dispatch
+/// runs before context navigation.  No `.after()` constraint is needed here.
 pub struct ContextPlugin;
 
 impl Plugin for ContextPlugin {
@@ -57,21 +64,21 @@ impl Plugin for ContextPlugin {
         app.insert_resource(ContextStack::default());
         app.insert_resource(FocusedCommandIndex::default());
         app.insert_resource(InputFocus::default());
-        app.insert_resource(crate::context::cursor::ExamineCursor::default());
-        app.insert_resource(crate::context::config::GameSettings::default());
-        app.insert_resource(crate::context::config::CharacterCreationState::default());
-        app.insert_resource(crate::context::config::WorldCreationSettings::default());
+        app.insert_resource(crate::cursor::ExamineCursor::default());
+        app.insert_resource(crate::config::GameSettings::default());
+        app.insert_resource(crate::config::CharacterCreationState::default());
+        app.insert_resource(crate::config::WorldCreationSettings::default());
 
         // Core navigation — processes InputAction messages and dispatches transitions.
-        // Runs in Update so it sees messages written by bridge_actionstate (also Update).
+        // Ordering relative to bridge_actionstate is handled by GameSet labels
+        // in the parent app's schedule configuration.
         app.add_systems(
             Update,
-            (handle_navigation_input, handle_panel_openers)
-                .after(crate::input::systems::bridge_actionstate),
+            (handle_navigation_input, handle_panel_openers),
         );
 
         // Sync input context with current context
-        app.add_systems(Update, crate::context::nav::sync_input_context);
+        app.add_systems(Update, crate::nav::sync_input_context);
 
         // Menu scroll and cursor movement
         app.add_systems(Update, (menu_navigation, ctx_and_cursor));

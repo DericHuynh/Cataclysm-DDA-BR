@@ -22,27 +22,27 @@ impl TemperatureUnit {
 pub enum SpeedUnit { #[default] Mph, Kmh, TilesPerTurn }
 impl SpeedUnit {
     pub const ALL: &'static [Self] = &[Self::Mph, Self::Kmh, Self::TilesPerTurn];
-    pub fn label(self) -> &'static str { match self { Self::Mph => "mph", Self::Kmh => "km/h", Self::TilesPerTurn => "t/t" } }
+    pub fn label(self) -> &'static str { match self { Self::Mph => "Mph", Self::Kmh => "Km/h", Self::TilesPerTurn => "Tiles/Turn" } }
     pub fn next(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + 1) % Self::ALL.len()] }
     pub fn prev(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()] }
 }
 
-/// Mass display unit.
+/// Weight display unit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WeightUnit { #[default] Lbs, Kg }
 impl WeightUnit {
     pub const ALL: &'static [Self] = &[Self::Lbs, Self::Kg];
-    pub fn label(self) -> &'static str { match self { Self::Lbs => "lbs", Self::Kg => "kg" } }
+    pub fn label(self) -> &'static str { match self { Self::Lbs => "Lbs", Self::Kg => "Kg" } }
     pub fn next(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + 1) % Self::ALL.len()] }
     pub fn prev(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()] }
 }
 
 /// Volume display unit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum VolumeUnit { Cup, #[default] Liter, Quart }
+pub enum VolumeUnit { #[default] Cup, Liter, Quart }
 impl VolumeUnit {
     pub const ALL: &'static [Self] = &[Self::Cup, Self::Liter, Self::Quart];
-    pub fn label(self) -> &'static str { match self { Self::Cup => "cups", Self::Liter => "liters", Self::Quart => "quarts" } }
+    pub fn label(self) -> &'static str { match self { Self::Cup => "Cup", Self::Liter => "Liter", Self::Quart => "Quart" } }
     pub fn next(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + 1) % Self::ALL.len()] }
     pub fn prev(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()] }
 }
@@ -59,15 +59,15 @@ impl DistanceUnit {
 
 /// Time display format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum TimeFormat { #[default] TwelveHour, Military, TwentyFourHour }
+pub enum TimeFormat { TwelveHour, #[default] Military, TwentyFourHour }
 impl TimeFormat {
     pub const ALL: &'static [Self] = &[Self::TwelveHour, Self::Military, Self::TwentyFourHour];
-    pub fn label(self) -> &'static str { match self { Self::TwelveHour => "12h", Self::Military => "Military", Self::TwentyFourHour => "24h" } }
+    pub fn label(self) -> &'static str { match self { Self::TwelveHour => "12 hour", Self::Military => "24 hour (no am/pm)", Self::TwentyFourHour => "24 hour (am/pm)" } }
     pub fn next(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + 1) % Self::ALL.len()] }
     pub fn prev(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()] }
 }
 
-/// Auto-pulp/butcher mode.
+/// Auto-pulp / auto-butcher mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AutoPulpMode { #[default] Off, Pulp, PulpAdjacent, Butcher }
 impl AutoPulpMode {
@@ -87,12 +87,12 @@ impl AutoForagingMode {
     pub fn prev(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()] }
 }
 
-/// Dangerous terrain warning prompt mode.
+/// Dangerous terrain warning mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DangerousTerrainWarning { #[default] Always, Running, Crouching, Never }
 impl DangerousTerrainWarning {
     pub const ALL: &'static [Self] = &[Self::Always, Self::Running, Self::Crouching, Self::Never];
-    pub fn label(self) -> &'static str { match self { Self::Always => "Always", Self::Running => "Running", Self::Crouching => "Crouching", Self::Never => "Never" } }
+    pub fn label(self) -> &'static str { match self { Self::Always => "Always", Self::Running => "Running only", Self::Crouching => "Crouch walking only", Self::Never => "Never" } }
     pub fn next(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + 1) % Self::ALL.len()] }
     pub fn prev(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()] }
 }
@@ -102,14 +102,14 @@ impl DangerousTerrainWarning {
 pub enum DropEmptyMode { #[default] No, Watertight, All }
 impl DropEmptyMode {
     pub const ALL: &'static [Self] = &[Self::No, Self::Watertight, Self::All];
-    pub fn label(self) -> &'static str { match self { Self::No => "No", Self::Watertight => "Watertight", Self::All => "All" } }
+    pub fn label(self) -> &'static str { match self { Self::No => "No", Self::Watertight => "Watertight only", Self::All => "All" } }
     pub fn next(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + 1) % Self::ALL.len()] }
     pub fn prev(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()] }
 }
 
 /// Death cam mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum DeathCamMode { Always, #[default] Ask, Never }
+pub enum DeathCamMode { #[default] Always, Ask, Never }
 impl DeathCamMode {
     pub const ALL: &'static [Self] = &[Self::Always, Self::Ask, Self::Never];
     pub fn label(self) -> &'static str { match self { Self::Always => "Always", Self::Ask => "Ask", Self::Never => "Never" } }
@@ -117,7 +117,7 @@ impl DeathCamMode {
     pub fn prev(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()] }
 }
 
-/// Action when the world ends (character dies with no backup).
+/// World end mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WorldEndMode { #[default] Reset, Delete, Query, Keep }
 impl WorldEndMode {
@@ -139,15 +139,15 @@ impl SidebarPosition {
 
 /// Message log flow direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum MessageLogFlow { NewTop, #[default] NewBottom }
+pub enum MessageLogFlow { #[default] NewTop, NewBottom }
 impl MessageLogFlow {
     pub const ALL: &'static [Self] = &[Self::NewTop, Self::NewBottom];
-    pub fn label(self) -> &'static str { match self { Self::NewTop => "New on top", Self::NewBottom => "New on bottom" } }
+    pub fn label(self) -> &'static str { match self { Self::NewTop => "New at Top", Self::NewBottom => "New at Bottom" } }
     pub fn next(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + 1) % Self::ALL.len()] }
     pub fn prev(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()] }
 }
 
-/// Inventory highlight style.
+/// Inventory highlight mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum InventoryHighlight { #[default] Symbol, Highlight, Disabled }
 impl InventoryHighlight {
@@ -157,7 +157,7 @@ impl InventoryHighlight {
     pub fn prev(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()] }
 }
 
-/// Item health display style.
+/// Item health display mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ItemHealthDisplay { #[default] Bars, Descriptions, Both }
 impl ItemHealthDisplay {
@@ -167,9 +167,9 @@ impl ItemHealthDisplay {
     pub fn prev(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()] }
 }
 
-/// Auto inventory letter assignment.
+/// Auto inventory assignment mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum AutoInvAssign { Disabled, #[default] Enabled, Favorites }
+pub enum AutoInvAssign { #[default] Disabled, Enabled, Favorites }
 impl AutoInvAssign {
     pub const ALL: &'static [Self] = &[Self::Disabled, Self::Enabled, Self::Favorites];
     pub fn label(self) -> &'static str { match self { Self::Disabled => "Disabled", Self::Enabled => "Enabled", Self::Favorites => "Favorites" } }
@@ -177,9 +177,9 @@ impl AutoInvAssign {
     pub fn prev(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()] }
 }
 
-/// Aim accuracy display style.
+/// Accuracy display mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum AccuracyDisplay { Numbers, #[default] Bars }
+pub enum AccuracyDisplay { #[default] Numbers, Bars }
 impl AccuracyDisplay {
     pub const ALL: &'static [Self] = &[Self::Numbers, Self::Bars];
     pub fn label(self) -> &'static str { match self { Self::Numbers => "Numbers", Self::Bars => "Bars" } }
@@ -187,17 +187,17 @@ impl AccuracyDisplay {
     pub fn prev(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()] }
 }
 
-/// Achievement notification popup mode.
+/// Achievement popup mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum AchievementPopup { Never, Always, #[default] FirstTime }
+pub enum AchievementPopup { #[default] Never, Always, FirstTime }
 impl AchievementPopup {
     pub const ALL: &'static [Self] = &[Self::Never, Self::Always, Self::FirstTime];
-    pub fn label(self) -> &'static str { match self { Self::Never => "Never", Self::Always => "Always", Self::FirstTime => "First time" } }
+    pub fn label(self) -> &'static str { match self { Self::Never => "Never", Self::Always => "Always", Self::FirstTime => "First Time" } }
     pub fn next(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + 1) % Self::ALL.len()] }
     pub fn prev(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()] }
 }
 
-/// Lookaround panel position.
+/// Lookaround position.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LookaroundPosition { Left, #[default] Right }
 impl LookaroundPosition {
@@ -207,7 +207,7 @@ impl LookaroundPosition {
     pub fn prev(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()] }
 }
 
-/// Morale display style.
+/// Morale style.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MoraleStyle { #[default] Vertical, Horizontal }
 impl MoraleStyle {
@@ -217,9 +217,9 @@ impl MoraleStyle {
     pub fn prev(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()] }
 }
 
-/// Pixel minimap dot/fill mode.
+/// Pixel minimap display mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum PixelMinimapMode { Solid, Squares, #[default] Dots }
+pub enum PixelMinimapMode { #[default] Solid, Squares, Dots }
 impl PixelMinimapMode {
     pub const ALL: &'static [Self] = &[Self::Solid, Self::Squares, Self::Dots];
     pub fn label(self) -> &'static str { match self { Self::Solid => "Solid", Self::Squares => "Squares", Self::Dots => "Dots" } }
@@ -227,12 +227,12 @@ impl PixelMinimapMode {
     pub fn prev(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()] }
 }
 
-/// Memory map color overlay preset.
+/// Memory map display mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum MemoryMapMode { #[default] SepiaLight, SepiaDark, BlueDark, DarkenColor }
+pub enum MemoryMapMode { SepiaLight, SepiaDark, #[default] BlueDark, DarkenColor }
 impl MemoryMapMode {
     pub const ALL: &'static [Self] = &[Self::SepiaLight, Self::SepiaDark, Self::BlueDark, Self::DarkenColor];
-    pub fn label(self) -> &'static str { match self { Self::SepiaLight => "Sepia light", Self::SepiaDark => "Sepia dark", Self::BlueDark => "Blue dark", Self::DarkenColor => "Darken color" } }
+    pub fn label(self) -> &'static str { match self { Self::SepiaLight => "Sepia (Light)", Self::SepiaDark => "Sepia (Dark)", Self::BlueDark => "Blue (Dark)", Self::DarkenColor => "Darken colors" } }
     pub fn next(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + 1) % Self::ALL.len()] }
     pub fn prev(self) -> Self { let i = Self::ALL.iter().position(|v| *v == self).unwrap_or(0); Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()] }
 }
@@ -270,7 +270,7 @@ pub struct GameSettings {
     pub auto_safe_mode: bool,
     pub auto_safe_mode_turns: u32,
     pub safe_mode_ignore_turns: u32,
-    pub turn_duration: f32,
+    pub turn_duration: u32,
     pub auto_save: bool,
     pub auto_save_turns: u32,
     pub auto_save_minutes: u32,
@@ -284,7 +284,7 @@ pub struct GameSettings {
     pub world_end: WorldEndMode,
     pub meta_progress: bool,
 
-    // ── Interface ────────────────────────────────────────────────────────────
+    // ── Graphics / UI ────────────────────────────────────────────────────────
     pub temperature_unit: TemperatureUnit,
     pub speed_unit: SpeedUnit,
     pub weight_unit: WeightUnit,
@@ -320,7 +320,7 @@ pub struct GameSettings {
     pub item_symbols: bool,
     pub item_bodygraph: bool,
     pub vehicle_armor_color: bool,
-    pub driving_view_offset: bool,
+    pub driving_view_offset: u32,
     pub menu_scroll: bool,
     pub enable_mouse: bool,
     pub log_items_on_ground: bool,
@@ -338,61 +338,58 @@ pub struct GameSettings {
     pub enable_ascii_art: bool,
     pub pixel_minimap: bool,
     pub pixel_minimap_mode: PixelMinimapMode,
-    pub pixel_minimap_brightness: u32,
+    pub pixel_minimap_brightness: f32,
     pub pixel_minimap_height: u32,
     pub pixel_minimap_beacon_size: u32,
-    pub pixel_minimap_blink: u32,
+    pub pixel_minimap_blink: bool,
     pub nv_green_toggle: bool,
     pub memory_map_mode: MemoryMapMode,
 
-    // ── Sound ────────────────────────────────────────────────────────────────
+    // ── Audio ────────────────────────────────────────────────────────────────
     pub sound_enabled: bool,
-    pub music_volume: u32,
-    pub sfx_volume: u32,
-    pub ambient_sound_volume: u32,
+    pub music_volume: f32,
+    pub sfx_volume: f32,
+    pub ambient_sound_volume: f32,
     pub soundpack: String,
 }
 
 impl Default for GameSettings {
     fn default() -> Self {
         Self {
-            // General
             default_char_name: String::new(),
-            auto_pickup: false,
+            auto_pickup: true,
             auto_pickup_adjacent: false,
             auto_pickup_safemode: false,
             auto_pickup_weight_limit: 0,
             auto_pickup_volume_limit: 0,
-            auto_features: false,
-            auto_pulp_butcher: AutoPulpMode::Off,
-            auto_foraging: AutoForagingMode::Off,
-            dangerous_terrain_warning: DangerousTerrainWarning::Always,
-            safe_mode_proximity: 0,
-            safe_mode_driving: false,
-            auto_safe_mode: false,
+            auto_features: true,
+            auto_pulp_butcher: AutoPulpMode::default(),
+            auto_foraging: AutoForagingMode::default(),
+            dangerous_terrain_warning: DangerousTerrainWarning::default(),
+            safe_mode_proximity: 50,
+            safe_mode_driving: true,
+            auto_safe_mode: true,
             auto_safe_mode_turns: 50,
-            safe_mode_ignore_turns: 200,
-            turn_duration: 0.0,
+            safe_mode_ignore_turns: 1,
+            turn_duration: 6,
             auto_save: true,
-            auto_save_turns: 50,
-            auto_save_minutes: 5,
-            auto_notes: false,
-            auto_notes_stairs: false,
-            auto_notes_map_extras: false,
+            auto_save_turns: 1,
+            auto_save_minutes: 10,
+            auto_notes: true,
+            auto_notes_stairs: true,
+            auto_notes_map_extras: true,
             auto_notes_dropped_favorites: false,
             circular_distance: true,
-            drop_empty: DropEmptyMode::No,
-            death_cam: DeathCamMode::Ask,
-            world_end: WorldEndMode::Reset,
+            drop_empty: DropEmptyMode::default(),
+            death_cam: DeathCamMode::default(),
+            world_end: WorldEndMode::default(),
             meta_progress: true,
-
-            // Interface
-            temperature_unit: TemperatureUnit::Celsius,
-            speed_unit: SpeedUnit::Kmh,
-            weight_unit: WeightUnit::Kg,
-            volume_unit: VolumeUnit::Liter,
-            distance_unit: DistanceUnit::Metric,
-            time_format: TimeFormat::TwentyFourHour,
+            temperature_unit: TemperatureUnit::default(),
+            speed_unit: SpeedUnit::default(),
+            weight_unit: WeightUnit::default(),
+            volume_unit: VolumeUnit::default(),
+            distance_unit: DistanceUnit::default(),
+            time_format: TimeFormat::default(),
             show_day_month: true,
             show_vitamin_mass: true,
             force_capital_yn: true,
@@ -400,36 +397,34 @@ impl Default for GameSettings {
             aim_after_firing: true,
             query_disassemble: true,
             query_deconstruct: true,
-            query_keybind_removal: true,
-            inventory_highlight: InventoryHighlight::Symbol,
+            query_keybind_removal: false,
+            inventory_highlight: InventoryHighlight::default(),
             highlight_unread_recipes: true,
             highlight_unread_items: true,
-            sidebar_position: SidebarPosition::Right,
-            sidebar_spacers: false,
-            message_log_flow: MessageLogFlow::NewBottom,
-            message_ttl: 0,
-            message_cooldown: 0,
-            message_limit: 255,
+            sidebar_position: SidebarPosition::default(),
+            sidebar_spacers: true,
+            message_log_flow: MessageLogFlow::default(),
+            message_ttl: 10,
+            message_cooldown: 2,
+            message_limit: 256,
             no_unknown_cmd_msg: false,
-            achievement_popup: AchievementPopup::FirstTime,
-            lookaround_position: LookaroundPosition::Right,
-            accuracy_display: AccuracyDisplay::Bars,
-            morale_style: MoraleStyle::Vertical,
-            move_view_offset: 1,
-            fast_scroll_offset: 5,
-            auto_inv_assign: AutoInvAssign::Favorites,
-            item_health_display: ItemHealthDisplay::Bars,
-            item_symbols: false,
+            achievement_popup: AchievementPopup::default(),
+            lookaround_position: LookaroundPosition::default(),
+            accuracy_display: AccuracyDisplay::default(),
+            morale_style: MoraleStyle::default(),
+            move_view_offset: 3,
+            fast_scroll_offset: 3,
+            auto_inv_assign: AutoInvAssign::default(),
+            item_health_display: ItemHealthDisplay::default(),
+            item_symbols: true,
             item_bodygraph: true,
             vehicle_armor_color: true,
-            driving_view_offset: true,
+            driving_view_offset: 3,
             menu_scroll: true,
             enable_mouse: true,
             log_items_on_ground: true,
             log_monster_movement: true,
-
-            // Graphics
-            fullscreen: FullscreenMode::Windowed,
+            fullscreen: FullscreenMode::default(),
             animations: true,
             animation_rain: true,
             animation_projectiles: true,
@@ -439,20 +434,18 @@ impl Default for GameSettings {
             force_redraw: true,
             enable_ascii_art: true,
             pixel_minimap: true,
-            pixel_minimap_mode: PixelMinimapMode::Dots,
-            pixel_minimap_brightness: 100,
-            pixel_minimap_height: 0,
-            pixel_minimap_beacon_size: 2,
-            pixel_minimap_blink: 10,
+            pixel_minimap_mode: PixelMinimapMode::default(),
+            pixel_minimap_brightness: 0.5,
+            pixel_minimap_height: 200,
+            pixel_minimap_beacon_size: 3,
+            pixel_minimap_blink: true,
             nv_green_toggle: true,
-            memory_map_mode: MemoryMapMode::SepiaLight,
-
-            // Sound
+            memory_map_mode: MemoryMapMode::default(),
             sound_enabled: true,
-            music_volume: 100,
-            sfx_volume: 100,
-            ambient_sound_volume: 100,
-            soundpack: "CC-Sounds".into(),
+            music_volume: 100.0,
+            sfx_volume: 80.0,
+            ambient_sound_volume: 100.0,
+            soundpack: "basic".into(),
         }
     }
 }

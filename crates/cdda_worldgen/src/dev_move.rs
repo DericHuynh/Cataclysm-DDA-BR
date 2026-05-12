@@ -3,7 +3,7 @@
 //! Simple 2D camera panning over the OMT grid. The camera position
 //! is stored as a resource and read by the ASCII renderer.
 
-use crate::input::{Direction, GameAction, InputAction};
+use cdda_components::input::{Direction, GameAction, InputAction};
 use bevy_ecs::message::MessageReader;
 use bevy_ecs::prelude::*;
 use cdda_components::dev::DevCamera;

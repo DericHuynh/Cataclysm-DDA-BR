@@ -72,7 +72,7 @@ impl OverlayStack {
 /// Push an `ActivityProgress` overlay when a `PlayerActivity` becomes active.
 /// Runs after `start_pending_activities`.
 pub fn sync_activity_overlay(world: &mut World) {
-    use crate::activity::components::{ActivityPhase, PlayerActivity};
+    use cdda_activity::components::{ActivityPhase, PlayerActivity};
 
     let mut to_push: Vec<(Entity, String, u32)> = Vec::new();
     {
@@ -107,7 +107,7 @@ pub fn sync_activity_overlay(world: &mut World) {
 
 /// Remove `ActivityProgress` overlays when no active `PlayerActivity` exists.
 pub fn cleanup_activity_overlay(world: &mut World) {
-    use crate::activity::components::{ActivityPhase, PlayerActivity};
+    use cdda_activity::components::{ActivityPhase, PlayerActivity};
 
     let has_active = {
         let mut q = world.query::<&PlayerActivity>();
@@ -143,7 +143,7 @@ pub fn pop_overlay(world: &mut World) {
 /// one is active.  Registered as an exclusive system so it can call
 /// `pop_overlay` with `&mut World` access.
 pub fn handle_overlay_cancel(world: &mut World) {
-    use crate::input::{GameAction, InputAction};
+    use cdda_components::input::{GameAction, InputAction};
     use bevy_ecs::message::Messages;
 
     if !world.resource::<OverlayStack>().input_blocked {

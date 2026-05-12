@@ -11,8 +11,8 @@ use bevy_input::keyboard::KeyCode;
 use leafwing_input_manager::prelude::{ButtonlikeChord, InputMap, ModifierKey, UserInputWrapper};
 use leafwing_input_manager::user_input::Buttonlike;
 
-use crate::input::actions::BindableAction;
-use crate::input::context::InputContextId;
+use crate::actions::BindableAction;
+use cdda_components::input::InputContextId;
 
 // ---------------------------------------------------------------------------
 // ContextInputMaps

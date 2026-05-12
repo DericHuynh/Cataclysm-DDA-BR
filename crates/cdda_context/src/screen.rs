@@ -10,9 +10,9 @@ use bevy_state::condition::in_state;
 use bevy_state::state::OnEnter;
 use std::marker::PhantomData;
 
-use crate::context::actions::ContextActions;
-use crate::context::ctx::Ctx;
-use crate::input::BindableAction;
+use crate::actions::ContextActions;
+use crate::ctx::Ctx;
+use cdda_components::input::BindableAction;
 
 // ---------------------------------------------------------------------------
 // CddaScreen trait
