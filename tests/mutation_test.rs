@@ -5,7 +5,7 @@
 //! removal, and querying without touching the creature entity.
 
 use bevy_ecs::prelude::*;
-use cdda_core::core::components::actor::{CreatureMutations, MutationEntry, MutationOf};
+use cdda_components::actor::{CreatureMutations, MutationEntry, MutationOf};
 use cdda_core::sim::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------
@@ -45,7 +45,7 @@ fn mutations_single() {
     let creature = test.spawn(());
     test.spawn((
         MutationOf(creature),
-        MutationEntry { id: cdda_core::MutationId::from(0u32), visible: true },
+        MutationEntry { id: cdda_core_types::core::id::MutationId::from(0u32), visible: true },
     ));
 
     let mutations = mutations_for(&mut test, creature);
@@ -63,11 +63,11 @@ fn mutations_multiple() {
     let creature = test.spawn(());
     test.spawn((
         MutationOf(creature),
-        MutationEntry { id: cdda_core::MutationId::from(0u32), visible: true },
+        MutationEntry { id: cdda_core_types::core::id::MutationId::from(0u32), visible: true },
     ));
     test.spawn((
         MutationOf(creature),
-        MutationEntry { id: cdda_core::MutationId::from(1u32), visible: false },
+        MutationEntry { id: cdda_core_types::core::id::MutationId::from(1u32), visible: false },
     ));
 
     assert_eq!(mutations_for(&mut test, creature).len(), 2);
@@ -87,11 +87,11 @@ fn mutations_visible_flag() {
     let creature = test.spawn(());
     test.spawn((
         MutationOf(creature),
-        MutationEntry { id: cdda_core::MutationId::from(0u32), visible: true },
+        MutationEntry { id: cdda_core_types::core::id::MutationId::from(0u32), visible: true },
     ));
     test.spawn((
         MutationOf(creature),
-        MutationEntry { id: cdda_core::MutationId::from(1u32), visible: false },
+        MutationEntry { id: cdda_core_types::core::id::MutationId::from(1u32), visible: false },
     ));
 
     let mutations = mutations_for(&mut test, creature);
@@ -115,13 +115,13 @@ fn mutations_add_one() {
     let creature = test.spawn(());
     test.spawn((
         MutationOf(creature),
-        MutationEntry { id: cdda_core::MutationId::from(0u32), visible: true },
+        MutationEntry { id: cdda_core_types::core::id::MutationId::from(0u32), visible: true },
     ));
 
     // Add a second mutation
     test.spawn((
         MutationOf(creature),
-        MutationEntry { id: cdda_core::MutationId::from(1u32), visible: false },
+        MutationEntry { id: cdda_core_types::core::id::MutationId::from(1u32), visible: false },
     ));
 
     assert_eq!(mutations_for(&mut test, creature).len(), 2);
@@ -137,11 +137,11 @@ fn mutations_remove_one() {
     let creature = test.spawn(());
     test.spawn((
         MutationOf(creature),
-        MutationEntry { id: cdda_core::MutationId::from(0u32), visible: true },
+        MutationEntry { id: cdda_core_types::core::id::MutationId::from(0u32), visible: true },
     ));
     let hidden = test.spawn((
         MutationOf(creature),
-        MutationEntry { id: cdda_core::MutationId::from(1u32), visible: false },
+        MutationEntry { id: cdda_core_types::core::id::MutationId::from(1u32), visible: false },
     ));
 
     // Remove the hidden mutation
@@ -149,7 +149,7 @@ fn mutations_remove_one() {
 
     let mutations = mutations_for(&mut test, creature);
     assert_eq!(mutations.len(), 1);
-    assert_eq!(mutations[0].id, cdda_core::MutationId::from(0u32));
+    assert_eq!(mutations[0].id, cdda_core_types::core::id::MutationId::from(0u32));
 }
 
 #[test]
@@ -160,10 +160,10 @@ fn mutations_retain_order() {
         .register::<MutationEntry>();
 
     let creature = test.spawn(());
-    let a_id = cdda_core::MutationId::from(0u32);
-    let b_id = cdda_core::MutationId::from(1u32);
-    let c_id = cdda_core::MutationId::from(2u32);
-    let d_id = cdda_core::MutationId::from(3u32);
+    let a_id = cdda_core_types::core::id::MutationId::from(0u32);
+    let b_id = cdda_core_types::core::id::MutationId::from(1u32);
+    let c_id = cdda_core_types::core::id::MutationId::from(2u32);
+    let d_id = cdda_core_types::core::id::MutationId::from(3u32);
 
     test.spawn((MutationOf(creature), MutationEntry { id: a_id, visible: true }));
     test.spawn((MutationOf(creature), MutationEntry { id: b_id, visible: true }));
@@ -189,14 +189,14 @@ fn mutation_id_stored() {
         .register::<MutationEntry>();
 
     let creature = test.spawn(());
-    let id = cdda_core::MutationId::from(42u32);
+    let id = cdda_core_types::core::id::MutationId::from(42u32);
     test.spawn((
         MutationOf(creature),
         MutationEntry { id, visible: false },
     ));
 
     let mutations = mutations_for(&mut test, creature);
-    assert_eq!(mutations[0].id, cdda_core::MutationId::from(42u32));
+    assert_eq!(mutations[0].id, cdda_core_types::core::id::MutationId::from(42u32));
 }
 
 #[test]
@@ -208,7 +208,7 @@ fn mutations_no_duplicate_check() {
 
     // ECS does not enforce uniqueness — callers must prevent duplicates.
     let creature = test.spawn(());
-    let id = cdda_core::MutationId::from(5u32);
+    let id = cdda_core_types::core::id::MutationId::from(5u32);
     test.spawn((MutationOf(creature), MutationEntry { id, visible: true }));
     test.spawn((MutationOf(creature), MutationEntry { id, visible: true }));
 
@@ -225,23 +225,23 @@ fn mutations_replace_all() {
     let creature = test.spawn(());
     let old = test.spawn((
         MutationOf(creature),
-        MutationEntry { id: cdda_core::MutationId::from(0u32), visible: true },
+        MutationEntry { id: cdda_core_types::core::id::MutationId::from(0u32), visible: true },
     ));
 
     // Replace: despawn old, spawn new set
     test.world_mut().despawn(old);
     test.spawn((
         MutationOf(creature),
-        MutationEntry { id: cdda_core::MutationId::from(10u32), visible: false },
+        MutationEntry { id: cdda_core_types::core::id::MutationId::from(10u32), visible: false },
     ));
     test.spawn((
         MutationOf(creature),
-        MutationEntry { id: cdda_core::MutationId::from(11u32), visible: true },
+        MutationEntry { id: cdda_core_types::core::id::MutationId::from(11u32), visible: true },
     ));
 
     let mutations = mutations_for(&mut test, creature);
     assert_eq!(mutations.len(), 2);
     let ids: Vec<_> = mutations.iter().map(|m| m.id).collect();
-    assert!(ids.contains(&cdda_core::MutationId::from(10u32)));
-    assert!(ids.contains(&cdda_core::MutationId::from(11u32)));
+    assert!(ids.contains(&cdda_core_types::core::id::MutationId::from(10u32)));
+    assert!(ids.contains(&cdda_core_types::core::id::MutationId::from(11u32)));
 }

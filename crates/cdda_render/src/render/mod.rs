@@ -22,6 +22,7 @@ pub mod examine;
 pub mod inventory;
 pub mod item_detail;
 pub mod main_menu;
+pub mod overmap;
 pub mod settings;
 pub mod theme;
 pub mod tiles;
@@ -85,6 +86,7 @@ impl Plugin for CddaRenderPlugin {
         app.init_resource::<settings::SettingsState>();
         app.init_resource::<theme::UiTheme>();
         app.init_resource::<character::CharacterSheetState>();
+        app.init_resource::<dev_spawn::DevSpawnFocus>();
         app.init_resource::<UiFontHandle>();
 
         app.add_systems(Startup, (render_setup, tiles::load_tiles));
@@ -156,6 +158,21 @@ impl Plugin for CddaRenderPlugin {
 
         // ── Item Examine overlay spawn via CddaScreen ──────────────────
 
+        // ── Overmap viewer ────────────────────────────────────────────────
+        app.add_systems(OnEnter(Screen::Overmap), overmap::spawn_overmap_viewer);
+        app.add_systems(
+            Update,
+            overmap::overmap_camera_input.run_if(in_state(Screen::Overmap)),
+        );
+        app.add_systems(
+            Update,
+            overmap::update_overmap_tiles.run_if(in_state(Screen::Overmap)),
+        );
+        app.add_systems(
+            Update,
+            overmap::update_overmap_info_panel.run_if(in_state(Screen::Overmap)),
+        );
+
         // ── Dev worldgen ───────────────────────────────────────────────────
         app.add_systems(OnEnter(Screen::DevWorldgen), dev_worldgen::spawn_dev_menu);
         app.add_systems(
@@ -165,11 +182,7 @@ impl Plugin for CddaRenderPlugin {
         app.add_systems(OnEnter(Screen::Gameplay), dev_worldgen::spawn_ascii_view);
         app.add_systems(
             Update,
-            (
-                dev_worldgen::update_ascii_view,
-                crate::worldgen::dev_move::dev_camera_move,
-            )
-                .run_if(in_state(Screen::Gameplay)),
+            dev_worldgen::update_ascii_view.run_if(in_state(Screen::Gameplay)),
         );
     }
 }

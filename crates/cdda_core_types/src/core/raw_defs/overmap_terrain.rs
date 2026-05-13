@@ -152,6 +152,39 @@ pub struct OmtConnection {
 /// Overmap special definition from JSON type `"overmap_special"`.
 ///
 /// Defines a special placement of OMTs (e.g. a "mansion" that spans multiple tiles).
+/// A connection defined within an overmap special (e.g. road connection).
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct SpecialConnection {
+    /// Position offset from special origin [dx, dy, dz].
+    pub point: [i32; 3],
+    /// Terrain to place for the connection (e.g. "road").
+    #[serde(default)]
+    pub terrain: Option<String>,
+    /// Connection type ID (e.g. "local_road").
+    #[serde(default)]
+    pub connection: Option<String>,
+    /// Hint direction from [dx, dy, dz].
+    #[serde(default)]
+    pub from: Option<[i32; 3]>,
+    /// Whether the connection already exists at this location.
+    #[serde(default)]
+    pub existing: bool,
+}
+
+/// Monster spawn configuration within an overmap special.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct SpecialSpawns {
+    /// Monster group to spawn.
+    #[serde(default)]
+    pub group: Option<String>,
+    /// Population range [min, max].
+    #[serde(default)]
+    pub population: Option<[i32; 2]>,
+    /// Radius range [min, max].
+    #[serde(default)]
+    pub radius: Option<[i32; 2]>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct OvermapSpecialDef {
     /// Unique identifier.
@@ -193,7 +226,46 @@ pub struct OvermapSpecialDef {
     /// CDDA can use a single string or an array of strings.
     #[serde(default)]
     pub rotations: StringOrArray,
+
+    /// Connections to roads/railroads from this special.
+    /// Each connection specifies a point, terrain, and connection type.
+    #[serde(default)]
+    pub connections: Option<Vec<SpecialConnection>>,
+
+    /// Subtype: "fixed" (default) or "mutable" for procedural placement.
+    #[serde(default)]
+    pub subtype: Option<String>,
+
+    /// Mutable special: join definitions (array of join objects/strings).
+    #[serde(default)]
+    pub joins: Option<RawValue>,
+
+    /// Mutable special: name of the root overmap entry in `overmaps`.
+    #[serde(default)]
+    pub root: Option<String>,
+
+    /// Mutable special: phases (array of phase objects, each with `rules`).
+    #[serde(default)]
+    pub phases: Option<RawValue>,
+
+    /// Priority for placement ordering (lower = earlier).
+    #[serde(default)]
+    pub priority: Option<i32>,
+
+    /// Whether rotation is allowed.
+    #[serde(default = "default_rotate")]
+    pub rotate: bool,
+
+    /// Monster spawns associated with this special.
+    #[serde(default)]
+    pub spawns: Option<SpecialSpawns>,
+
+    /// Effect-on-condition triggered on placement.
+    #[serde(default)]
+    pub eoc: Option<RawValue>,
 }
+
+fn default_rotate() -> bool { true }
 
 /// A single OMT reference within an overmap special.
 /// CDDA can use a plain string (OMT ID) or an object with `overmap` and `point`.

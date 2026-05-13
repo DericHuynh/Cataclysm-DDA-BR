@@ -4,7 +4,7 @@
 //! are executed.  Each test spawns an entity with one or more recipe
 //! components, reads them back, and asserts field values.
 
-use cdda_core::core::components::def::*;
+use cdda_components::def::*;
 use cdda_core::sim::test_utils::TestBed;
 
 // ============================================================================

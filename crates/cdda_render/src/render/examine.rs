@@ -7,7 +7,7 @@
 use crate::context::ctx::Ctx;
 use crate::context::screen::CddaScreen;
 use crate::context::ContextActions;
-use crate::core::components::item::{ItemTypeId, StackCount};
+use cdda_components::item::{ItemTypeId, StackCount};
 use crate::data::def_world::DefinitionWorld;
 use crate::input::{ActiveKeybindings, BindableAction};
 use crate::inventory::examine_resource::ExaminedItem;

@@ -12,4 +12,5 @@ cdda_core_types = { path = "../cdda_core_types" }
 cdda_components = { path = "../cdda_components" }
 cdda_activity = { path = "../cdda_activity" }
 cdda_events = { path = "../cdda_events" }
+cdda_sim = { path = "../cdda_sim" }
 tracing.workspace = true

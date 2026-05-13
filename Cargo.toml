@@ -16,7 +16,9 @@ members = [
     "crates/cdda_equipment",
     "crates/cdda_combat",
     "crates/cdda_actor",
-    "crates/cdda_map",
+    "crates/cdda_noise",
+    "crates/cdda_overmap",
+    "crates/cdda_overmap_gen",
     "crates/cdda_sim",
     "crates/cdda_replay",
     "crates/cdda_item",
@@ -25,8 +27,8 @@ members = [
     "crates/cdda_events",
     "crates/cdda_inventory",
     "crates/cdda_data",
-    "crates/cdda_worldgen",
     "crates/cdda_input",
+    "crates/cdda_crafting",
 ]
 
 [workspace.dependencies]
@@ -69,7 +71,9 @@ cdda_ai = { path = "crates/cdda_ai" }
 cdda_equipment = { path = "crates/cdda_equipment" }
 cdda_combat = { path = "crates/cdda_combat" }
 cdda_actor = { path = "crates/cdda_actor" }
-cdda_map = { path = "crates/cdda_map" }
+cdda_noise = { path = "crates/cdda_noise" }
+cdda_overmap = { path = "crates/cdda_overmap" }
+cdda_overmap_gen = { path = "crates/cdda_overmap_gen" }
 cdda_sim = { path = "crates/cdda_sim" }
 cdda_replay = { path = "crates/cdda_replay" }
 cdda_item = { path = "crates/cdda_item" }
@@ -77,8 +81,9 @@ cdda_activity = { path = "crates/cdda_activity" }
 cdda_context = { path = "crates/cdda_context" }
 cdda_events = { path = "crates/cdda_events" }
 cdda_data = { path = "crates/cdda_data" }
-cdda_worldgen = { path = "crates/cdda_worldgen" }
 cdda_input = { path = "crates/cdda_input" }
+cdda_crafting = { path = "crates/cdda_crafting" }
+cdda_inventory = { path = "crates/cdda_inventory" }
 
 [dev-dependencies]
 cdda_core = { path = "crates/cdda_core" }
@@ -88,7 +93,6 @@ cdda_core_types = { path = "crates/cdda_core_types" }
 cdda_actor = { path = "crates/cdda_actor" }
 cdda_combat = { path = "crates/cdda_combat" }
 cdda_equipment = { path = "crates/cdda_equipment" }
-cdda_map = { path = "crates/cdda_map" }
 cdda_item = { path = "crates/cdda_item" }
 cdda_replay = { path = "crates/cdda_replay" }
 cdda_activity = { path = "crates/cdda_activity" }
@@ -98,6 +102,8 @@ bevy_state.workspace = true
 serde_json.workspace = true
 cdda_data.workspace = true
 cdda_input.workspace = true
+cdda_crafting.workspace = true
+cdda_inventory.workspace = true
 tempfile = "3.27.0"
 
 [profile.dev]

@@ -4,7 +4,7 @@
 //! and preservation tag markers.
 
 use cdda_core::{ItemId, Time};
-use cdda_core::core::components::item::*;
+use cdda_components::item::*;
 use cdda_core::sim::test_utils::TestBed;
 
 // ===========================================================================

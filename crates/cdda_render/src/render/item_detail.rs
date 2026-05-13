@@ -11,12 +11,12 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
-use crate::core::components::def::{
+use cdda_components::def::{
     AmmoData, ArmourData, BookData, ContainerData, FoodData, GunData, ItemCategory, ItemColor,
     ItemDescription, ItemMaterials, ItemPhase, ItemSymbol, ItemVolume, ItemWeight, MagazineData,
     Phase, ToolData, WeaponData,
 };
-use crate::core::components::item::ItemQualities;
+use cdda_components::item::ItemQualities;
 
 // ---------------------------------------------------------------------------
 // Bundled queries — a SystemParam to avoid Bevy's 16-query limit

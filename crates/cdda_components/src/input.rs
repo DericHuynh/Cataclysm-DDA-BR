@@ -602,6 +602,8 @@ pub enum InputContextId {
     QuantityInput,
     /// Vehicle interaction / driving controls.
     VehicleInteraction,
+    /// Overmap viewer (pan / zoom).
+    Overmap,
     /// Extensible fallback for mod-specific contexts.
     Custom(u32),
 }

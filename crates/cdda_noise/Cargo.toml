@@ -1,0 +1,7 @@
+[package]
+name = "cdda_noise"
+version = "0.1.0"
+edition = "2021"
+description = "3D simplex noise matching CDDA master — bit-identical terrain generation"
+
+[dependencies]

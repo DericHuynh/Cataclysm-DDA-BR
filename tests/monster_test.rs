@@ -8,7 +8,7 @@
 use cdda_core::sim::test_utils::TestBed;
 
 // Use def component types
-use cdda_core::core::components::def::*;
+use cdda_components::def::*;
 
 // ---------------------------------------------------------------------------
 // Name / MonsterDescription

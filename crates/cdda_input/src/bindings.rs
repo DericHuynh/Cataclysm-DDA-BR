@@ -192,6 +192,41 @@ pub fn default_bindings() -> ContextInputMaps {
     );
     maps.contexts.insert(InputContextId::Gameplay, gameplay);
 
+// -- Overmap ------------------------------------------------------------
+    // Arrow keys pan the camera.  Shift pans 5 tiles.
+    // < > change z-level.  Escape returns to gameplay.
+    let mut overmap = InputMap::new([
+        (BindableAction::NavigateUp, KeyCode::ArrowUp),
+        (BindableAction::NavigateUp, KeyCode::KeyK),
+        (BindableAction::NavigateDown, KeyCode::ArrowDown),
+        (BindableAction::NavigateDown, KeyCode::KeyJ),
+        (BindableAction::NavigateLeft, KeyCode::ArrowLeft),
+        (BindableAction::NavigateLeft, KeyCode::KeyH),
+        (BindableAction::NavigateRight, KeyCode::ArrowRight),
+        (BindableAction::NavigateRight, KeyCode::KeyL),
+        (BindableAction::Custom1, KeyCode::Comma),
+        (BindableAction::Custom2, KeyCode::Period),
+        (BindableAction::Cancel, KeyCode::Escape),
+        (BindableAction::Cancel, KeyCode::KeyQ),
+    ]);
+    overmap.insert(
+        BindableAction::NavigateRight,
+        ButtonlikeChord::modified(ModifierKey::Shift, KeyCode::KeyL),
+    );
+    overmap.insert(
+        BindableAction::NavigateLeft,
+        ButtonlikeChord::modified(ModifierKey::Shift, KeyCode::KeyH),
+    );
+    overmap.insert(
+        BindableAction::NavigateDown,
+        ButtonlikeChord::modified(ModifierKey::Shift, KeyCode::KeyJ),
+    );
+    overmap.insert(
+        BindableAction::NavigateUp,
+        ButtonlikeChord::modified(ModifierKey::Shift, KeyCode::KeyK),
+    );
+    maps.contexts.insert(InputContextId::Overmap, overmap);
+
     // -- MainMenu -----------------------------------------------------------
     let main_menu = InputMap::new([
         (BindableAction::NavigateUp, KeyCode::ArrowUp),

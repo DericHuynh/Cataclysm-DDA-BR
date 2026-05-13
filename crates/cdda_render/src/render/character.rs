@@ -14,8 +14,8 @@ use super::FooterHint;
 use crate::context::ctx::Ctx;
 use crate::context::screen::CddaScreen;
 use crate::context::ContextActions;
-use crate::core::components::actor::Stats;
-use crate::core::components::actor::{
+use cdda_components::actor::Stats;
+use cdda_components::actor::{
     ActionPoints, ActiveEffects, Bionic, Bleeding, BodyTemperature, CombatStats, CreatureMutations,
     CreatureProficiencies, CreatureSkills, Health, InstalledBionics, Morale, MutationEntry, OnFire,
     PlayerData, ProficiencyEntry, SkillEntry, StatusEffect, Stunned, Vision, Wetness,
@@ -311,10 +311,10 @@ pub fn update_character_sheet_screen(
         if let Some(pd) = pdata {
             spawn_info_row(left, "Name", &pd.name, theme::TEXT_BRIGHT, 0);
             let gender_str = match &pd.gender {
-                crate::core::components::actor::Gender::Male => "male",
-                crate::core::components::actor::Gender::Female => "female",
-                crate::core::components::actor::Gender::NonBinary => "non-binary",
-                crate::core::components::actor::Gender::Custom(s) => s.as_str(),
+                cdda_components::actor::Gender::Male => "male",
+                cdda_components::actor::Gender::Female => "female",
+                cdda_components::actor::Gender::NonBinary => "non-binary",
+                cdda_components::actor::Gender::Custom(s) => s.as_str(),
             };
             spawn_info_row(left, "Gender", gender_str, theme::TEXT_BRIGHT, 1);
             spawn_info_row(left, "Age", &format!("{}", pd.age), theme::TEXT_BRIGHT, 0);

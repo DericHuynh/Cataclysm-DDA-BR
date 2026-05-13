@@ -1,0 +1,22 @@
+[package]
+name = "cdda_overmap_gen"
+version = "0.1.0"
+edition = "2021"
+description = "Overmap generation pipeline — Bevy ECS systems"
+
+[dependencies]
+bevy_ecs.workspace = true
+bevy_app.workspace = true
+bevy_state.workspace = true
+serde.workspace = true
+tracing.workspace = true
+cdda_core_types = { path = "../cdda_core_types" }
+cdda_components = { path = "../cdda_components" }
+cdda_data = { path = "../cdda_data" }
+cdda_noise = { path = "../cdda_noise" }
+cdda_overmap = { path = "../cdda_overmap" }
+cdda_sim = { path = "../cdda_sim" }
+
+[dev-dependencies]
+bevy_ecs.workspace = true
+cdda_noise = { path = "../cdda_noise" }

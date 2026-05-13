@@ -2051,11 +2051,12 @@ dependencies = [
  "cdda_components",
  "cdda_core",
  "cdda_core_types",
+ "cdda_crafting",
  "cdda_data",
  "cdda_equipment",
  "cdda_input",
+ "cdda_inventory",
  "cdda_item",
- "cdda_map",
  "cdda_replay",
  "cdda_sim",
  "serde_json",
@@ -2123,6 +2124,7 @@ dependencies = [
  "cdda_components",
  "cdda_core",
  "cdda_events",
+ "cdda_overmap",
  "cdda_render",
  "clap",
  "tracing",
@@ -2179,6 +2181,7 @@ dependencies = [
  "cdda_components",
  "cdda_core_types",
  "cdda_events",
+ "cdda_sim",
  "tracing",
 ]
 
@@ -2201,16 +2204,18 @@ dependencies = [
  "cdda_components",
  "cdda_context",
  "cdda_core_types",
+ "cdda_crafting",
  "cdda_data",
  "cdda_equipment",
  "cdda_events",
  "cdda_input",
  "cdda_inventory",
  "cdda_item",
- "cdda_map",
+ "cdda_noise",
+ "cdda_overmap",
+ "cdda_overmap_gen",
  "cdda_replay",
  "cdda_sim",
- "cdda_worldgen",
  "dyn-clone",
  "fixedbitset",
  "indexmap",
@@ -2239,6 +2244,25 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "cdda_crafting"
+version = "0.1.0"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_input",
+ "bevy_state",
+ "cdda_activity",
+ "cdda_components",
+ "cdda_context",
+ "cdda_core_types",
+ "cdda_data",
+ "cdda_events",
+ "cdda_inventory",
+ "cdda_overmap_gen",
+ "tracing",
 ]
 
 [[package]]
@@ -2320,13 +2344,36 @@ dependencies = [
 ]
 
 [[package]]
-name = "cdda_map"
+name = "cdda_noise"
+version = "0.1.0"
+
+[[package]]
+name = "cdda_overmap"
 version = "0.1.0"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
+ "bytemuck",
+ "cdda_core_types",
+ "cdda_noise",
+ "serde",
+]
+
+[[package]]
+name = "cdda_overmap_gen"
+version = "0.1.0"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_state",
  "cdda_components",
  "cdda_core_types",
+ "cdda_data",
+ "cdda_noise",
+ "cdda_overmap",
+ "cdda_sim",
+ "serde",
+ "tracing",
 ]
 
 [[package]]
@@ -2338,6 +2385,7 @@ dependencies = [
  "bevy_state",
  "cdda_components",
  "cdda_core",
+ "cdda_overmap",
  "leafwing-input-manager",
  "serde",
  "serde_json",
@@ -2367,25 +2415,6 @@ dependencies = [
  "cdda_actor",
  "cdda_components",
  "cdda_core_types",
-]
-
-[[package]]
-name = "cdda_worldgen"
-version = "0.1.0"
-dependencies = [
- "bevy_app",
- "bevy_ecs",
- "bevy_input",
- "bevy_state",
- "cdda_actor",
- "cdda_components",
- "cdda_core_types",
- "cdda_data",
- "cdda_inventory",
- "cdda_map",
- "cdda_sim",
- "rand",
- "tracing",
 ]
 
 [[package]]

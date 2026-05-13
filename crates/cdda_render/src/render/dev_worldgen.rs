@@ -6,17 +6,15 @@
 
 use crate::context::ctx::Ctx as Screen;
 use crate::context::nav::{ctx_def, FocusedCommandIndex};
-use crate::core::components::actor::HandCount;
-use crate::core::components::def::ItemSymbol;
-use crate::core::components::def::ItemVolume;
-use crate::core::components::item::ItemTypeId;
-use crate::core::components::item::WieldedItems;
-use crate::core::components::item::{Inventory, FLOOR_CAP_ML};
-use crate::core::components::sim::WorldPosition;
-use crate::map::WorldMap;
+use cdda_components::actor::HandCount;
+use cdda_components::def::ItemSymbol;
+use cdda_components::def::ItemVolume;
+use cdda_components::item::ItemTypeId;
+use cdda_components::item::WieldedItems;
+use cdda_components::item::{Inventory, FLOOR_CAP_ML};
+use cdda_components::sim::WorldPosition;
 use crate::render::theme::{self, UiTheme};
 use crate::render::tiles::TileRegistry;
-use crate::worldgen::setup::WorldMapResource;
 use bevy::prelude::*;
 use bevy::text::LineBreak;
 use bevy_state::state_scoped::DespawnOnExit;
@@ -156,22 +154,17 @@ pub fn spawn_ascii_view(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     camera: Res<DevCamera>,
-    world_map: Res<WorldMapResource>,
 ) {
     // Tiles and ground items are spawned on first update_ascii_view call,
     // then updated in-place every frame.  No initial spawn here.
 
-    info!(
-        "Dev-worldgen sprites: bubbles={} placements={}",
-        world_map.0.bubble_count(),
-        world_map.0.placements.len(),
-    );
+    info!("Dev-worldgen sprites: viewport initialised");
 
     let font_handle: Handle<Font> = asset_server.load("fonts/ShareTechMono-Regular.ttf");
     commands.spawn((
         DevStatusBar,
         DespawnOnExit(Screen::Gameplay),
-        Text2d::new(status_text(&world_map.0, camera.x, camera.y, camera.z)),
+        Text2d::new(status_text(camera.x, camera.y, camera.z)),
         TextFont {
             font: font_handle,
             font_size: 13.0,
@@ -186,8 +179,6 @@ pub fn spawn_ascii_view(
 // Grass-green for empty loaded bubbles; building tiles use their real image.
 // Cursor cross-hair tint.
 const COLOR_CURSOR: Color = Color::srgb(1.0, 0.3, 0.3);
-/// Dark grey background for OMT tiles that have no tileset sprite.
-const COLOR_NO_TILE: Color = Color::srgb(0.18, 0.18, 0.22);
 /// Bright yellow for item ASCII glyphs rendered in the world viewport.
 const COLOR_ITEM_GLYPH: Color = Color::srgb(0.95, 0.85, 0.10);
 /// Light stone/concrete for empty floor tiles (all non-building positions).
@@ -201,8 +192,7 @@ const COLOR_FLOOR: Color = Color::srgb(0.22, 0.22, 0.20);
 fn place_terrain_tile(
     commands: &mut Commands,
     entity: Option<Entity>,
-    registry: &TileRegistry,
-    wm: &WorldMap,
+    _registry: &TileRegistry,
     cx: i32,
     cy: i32,
     cz: i32,
@@ -212,118 +202,30 @@ fn place_terrain_tile(
     let bx = cx + col;
     let by = cy - row;
     let is_cursor = bx == cx && by == cy;
-    let placement = wm.placements.get(&(bx, by, cz));
     let base_x = col as f32 * TILE_SIZE;
     let base_y = row as f32 * TILE_SIZE;
     let cell = DevTileCell { col, row, z: cz };
 
-    if let Some(p) = placement {
-        if registry.has_tile(&p.omt_id) {
-            // Real tileset sprite
-            let info = registry.tile_info(&p.omt_id);
-            let color = if is_cursor {
-                COLOR_CURSOR
-            } else {
-                Color::WHITE
-            };
-            let sprite = Sprite {
-                image: info.image.clone(),
-                custom_size: Some(info.sprite_size()),
-                color,
-                ..default()
-            };
-            let transform = Transform::from_translation(Vec3::new(
-                base_x + info.bevy_offset().x,
-                base_y + info.bevy_offset().y,
-                0.0,
-            ));
-            if let Some(e) = entity {
-                commands
-                    .entity(e)
-                    .insert(cell)
-                    .insert(sprite)
-                    .insert(transform);
-                commands.entity(e).despawn_related::<Children>();
-                e
-            } else {
-                commands
-                    .spawn((cell, DespawnOnExit(Screen::Gameplay), sprite, transform))
-                    .id()
-            }
-        } else {
-            // ASCII fallback: coloured background sprite + child text glyph
-            let bg_color = if is_cursor {
-                COLOR_CURSOR
-            } else {
-                COLOR_NO_TILE
-            };
-            let sprite = Sprite {
-                custom_size: Some(Vec2::splat(TILE_SIZE)),
-                color: bg_color,
-                ..default()
-            };
-            let transform = Transform::from_translation(Vec3::new(base_x, base_y, 0.0));
-            let sym = omt_symbol(&p.omt_id);
-
-            if let Some(e) = entity {
-                commands
-                    .entity(e)
-                    .insert(cell)
-                    .insert(sprite)
-                    .insert(transform);
-                commands.entity(e).despawn_related::<Children>();
-                commands.entity(e).with_children(|parent| {
-                    parent.spawn((
-                        Text2d::new(sym.to_string()),
-                        TextFont {
-                            font_size: 22.0,
-                            ..default()
-                        },
-                        TextColor(Color::WHITE),
-                        Transform::from_translation(Vec3::new(0.0, 0.0, 0.5)),
-                    ));
-                });
-                e
-            } else {
-                let e = commands
-                    .spawn((cell, DespawnOnExit(Screen::Gameplay), sprite, transform))
-                    .id();
-                commands.entity(e).with_children(|parent| {
-                    parent.spawn((
-                        Text2d::new(sym.to_string()),
-                        TextFont {
-                            font_size: 22.0,
-                            ..default()
-                        },
-                        TextColor(Color::WHITE),
-                        Transform::from_translation(Vec3::new(0.0, 0.0, 0.5)),
-                    ));
-                });
-                e
-            }
-        }
+    // WorldMap was deleted — render empty floor tiles for now.
+    let color = if is_cursor { COLOR_CURSOR } else { COLOR_FLOOR };
+    let sprite = Sprite {
+        custom_size: Some(Vec2::splat(TILE_SIZE)),
+        color,
+        ..default()
+    };
+    let transform = Transform::from_translation(Vec3::new(base_x, base_y, 0.0));
+    if let Some(e) = entity {
+        commands
+            .entity(e)
+            .insert(cell)
+            .insert(sprite)
+            .insert(transform);
+        commands.entity(e).despawn_related::<Children>();
+        e
     } else {
-        // Empty floor tile
-        let color = if is_cursor { COLOR_CURSOR } else { COLOR_FLOOR };
-        let sprite = Sprite {
-            custom_size: Some(Vec2::splat(TILE_SIZE)),
-            color,
-            ..default()
-        };
-        let transform = Transform::from_translation(Vec3::new(base_x, base_y, 0.0));
-        if let Some(e) = entity {
-            commands
-                .entity(e)
-                .insert(cell)
-                .insert(sprite)
-                .insert(transform);
-            commands.entity(e).despawn_related::<Children>();
-            e
-        } else {
-            commands
-                .spawn((cell, DespawnOnExit(Screen::Gameplay), sprite, transform))
-                .id()
-        }
+        commands
+            .spawn((cell, DespawnOnExit(Screen::Gameplay), sprite, transform))
+            .id()
     }
 }
 
@@ -339,7 +241,7 @@ fn place_ground_item_tile(
     registry: &TileRegistry,
     type_id: Option<&ItemTypeId>,
     symbol: Option<&ItemSymbol>,
-    name: &DevGroundItemName,
+    name: Option<&DevGroundItemName>,
     col: i32,
     row: i32,
 ) -> Entity {
@@ -376,7 +278,7 @@ fn place_ground_item_tile(
     } else {
         let sym = symbol
             .map(|s| s.0)
-            .or_else(|| name.0.chars().next())
+            .or_else(|| name.and_then(|n| n.0.chars().next()))
             .unwrap_or('?');
         let text = Text2d::new(sym.to_string());
         let font = TextFont {
@@ -411,7 +313,6 @@ fn place_ground_item_tile(
 
 pub(crate) fn update_ascii_view(
     camera: Res<DevCamera>,
-    world_map: Res<WorldMapResource>,
     registry: Res<TileRegistry>,
     terrain_query: Query<(Entity, &DevTileCell)>,
     ground_visual_query: Query<(Entity, &DevGroundItemVisual)>,
@@ -423,7 +324,7 @@ pub(crate) fn update_ascii_view(
         Option<&ItemTypeId>,
         Option<&ItemSymbol>,
         Option<&ItemVolume>,
-        &DevGroundItemName,
+        Option<&DevGroundItemName>,
     )>,
     player_inv: Query<&Inventory, With<DevPlayer>>,
     item_names: Query<&DevGroundItemName>,
@@ -445,7 +346,6 @@ pub(crate) fn update_ascii_view(
                 &mut commands,
                 entity,
                 &registry,
-                &world_map.0,
                 camera.x,
                 camera.y,
                 cz,
@@ -466,7 +366,7 @@ pub(crate) fn update_ascii_view(
         existing_ground.insert(src.0, visual_e);
     }
 
-    for (item_e, wp, type_id, symbol, _vol, name) in &ground_items {
+    for (item_e, wp, type_id, symbol, _vol, name) in ground_items.iter() {
         let omt_x = wp.0.x.div_euclid(24);
         let omt_y = wp.0.y.div_euclid(24);
         let omt_z = wp.0.z.0 as i32;
@@ -504,7 +404,6 @@ pub(crate) fn update_ascii_view(
     // ── Status bar ──
     if let Ok(mut t) = status_query.single_mut() {
         *t = Text2d::new(status_text_with_items(
-            &world_map.0,
             camera.x,
             camera.y,
             cz,
@@ -516,7 +415,7 @@ pub(crate) fn update_ascii_view(
     }
 }
 
-fn _render_viewport(wm: &WorldMap, cx: i32, cy: i32, cz: i32) -> String {
+fn _render_viewport(cx: i32, cy: i32, _cz: i32) -> String {
     let half_cols = (VIEW_COLS / 2) as i32;
     let half_rows = (VIEW_ROWS / 2) as i32;
     let start_x = cx - half_cols;
@@ -536,10 +435,6 @@ fn _render_viewport(wm: &WorldMap, cx: i32, cy: i32, cz: i32) -> String {
             let by = start_y + row as i32;
             if bx == cx && by == cy {
                 r.push('@');
-            } else if let Some(p) = wm.placements.get(&(bx, by, cz)) {
-                r.push(omt_symbol(&p.omt_id));
-            } else if wm.bubble(bx, by, cz).is_some() {
-                r.push('.');
             } else {
                 r.push(' ');
             }
@@ -555,25 +450,13 @@ fn _render_viewport(wm: &WorldMap, cx: i32, cy: i32, cz: i32) -> String {
     r
 }
 
-fn omt_symbol(omt_id: &str) -> char {
-    omt_id.chars().next().unwrap_or('?')
-}
-
-fn status_text(wm: &WorldMap, cx: i32, cy: i32, cz: i32) -> String {
-    let building_name = wm
-        .placements
-        .get(&(cx, cy, cz))
-        .map(|p| format!("{} (omt: {})", p.building_id, p.omt_id))
-        .unwrap_or_else(|| "none".to_string());
+fn status_text(cx: i32, cy: i32, cz: i32) -> String {
     format!(
-        "Pos: ({cx}, {cy}, z={cz}) | Building: {building_name} | Bubbles: {} | Placements: {}",
-        wm.bubble_count(),
-        wm.placements.len(),
+        "Pos: ({cx}, {cy}, z={cz}) | Building: n/a | Bubbles: n/a | Placements: n/a"
     )
 }
 
 fn status_text_with_items(
-    wm: &WorldMap,
     cx: i32,
     cy: i32,
     cz: i32,
@@ -583,13 +466,13 @@ fn status_text_with_items(
         Option<&ItemTypeId>,
         Option<&ItemSymbol>,
         Option<&ItemVolume>,
-        &DevGroundItemName,
+        Option<&DevGroundItemName>,
     )>,
     player_inv: &Query<&Inventory, With<DevPlayer>>,
     item_names: &Query<&DevGroundItemName>,
     player_hands: &Query<(&HandCount, Option<&WieldedItems>), With<DevPlayer>>,
 ) -> String {
-    let base = status_text(wm, cx, cy, cz);
+    let base = status_text(cx, cy, cz);
 
     // Items at current tile
     let at_tile: Vec<(&str, u32)> = ground_items
@@ -597,7 +480,7 @@ fn status_text_with_items(
         .filter(|(_, wp, _, _, _, _)| {
             wp.0.x.div_euclid(24) == cx && wp.0.y.div_euclid(24) == cy && wp.0.z.0 as i32 == cz
         })
-        .map(|(_, _, _, _, vol, name)| (name.0.as_str(), vol.map(|v| v.0).unwrap_or(0)))
+        .map(|(_, _, _, _, vol, name)| (name.map(|n| n.0.as_str()).unwrap_or("?"), vol.map(|v| v.0).unwrap_or(0)))
         .collect();
 
     let floor_vol_ml: u32 = at_tile.iter().map(|(_, v)| *v).sum();

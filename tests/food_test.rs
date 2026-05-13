@@ -3,7 +3,7 @@
 //!
 //! Translated from CDDA's various comestible/drug balance tests.
 
-use cdda_core::core::components::def::{DrugData, FoodData};
+use cdda_components::def::{DrugData, FoodData};
 use cdda_core::sim::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------

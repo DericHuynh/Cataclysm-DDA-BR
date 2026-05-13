@@ -68,13 +68,18 @@ pub enum MoveLocation {
 /// Triggered by the navigation system when a screen command targets
 /// `TransitionTarget::Event(...)`.  Application-level observers react
 /// to these (e.g. transitioning `AppState` on `StartNewGame`).
-#[derive(Event, Debug, Clone, Copy)]
+#[derive(Event, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameEvent {
     /// Start a new game (from the main menu).
     StartNewGame,
     /// Save the current game and quit to desktop.
     SaveAndQuit,
 }
+
+/// Resource used to dispatch GameEvents from the navigation system.
+/// Inserted by `nav::dispatch`, consumed by `cdda_app`.
+#[derive(bevy_ecs::prelude::Resource, Debug, Clone, Copy)]
+pub struct GameEventDispatch(pub GameEvent);
 
 // ---------------------------------------------------------------------------
 // EntityEvent types — targeted at a specific entity

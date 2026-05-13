@@ -18,10 +18,46 @@ use crate::context::ContextActions;
 use crate::input::ActiveKeybindings;
 use crate::render::item_detail::{spawn_item_detail, ItemDetailQueries};
 use crate::render::theme::{self, UiTheme};
-use crate::worldgen::dev_spawn::DevSpawnFocus;
 
 // Rows visible at once in the list (controls centered-scroll window).
 const VISIBLE_ROWS: usize = 22;
+
+// ---------------------------------------------------------------------------
+// Dev spawn focus — migrated from the old cdda_worldgen crate
+// ---------------------------------------------------------------------------
+
+/// Entry in the dev-spawn item catalog.
+#[derive(Debug, Clone)]
+pub struct DevCatalogEntry {
+    pub def_entity: Entity,
+    pub name: String,
+    pub def_id: String,
+}
+
+/// Tracks focus index and sorted item catalog for the debug spawn panel.
+#[derive(Resource, Debug, Default)]
+pub struct DevSpawnFocus {
+    pub index: usize,
+    pub catalog: Vec<DevCatalogEntry>,
+    pub filter: String,
+    pub filtering: bool,
+}
+
+impl DevSpawnFocus {
+    pub fn filtered_entries(&self) -> Vec<&DevCatalogEntry> {
+        if self.filter.is_empty() {
+            self.catalog.iter().collect()
+        } else {
+            let q = self.filter.to_lowercase();
+            self.catalog
+                .iter()
+                .filter(|e| {
+                    e.name.to_lowercase().contains(&q) || e.def_id.to_lowercase().contains(&q)
+                })
+                .collect()
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Persistent-skeleton markers

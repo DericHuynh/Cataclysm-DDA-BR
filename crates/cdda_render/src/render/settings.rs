@@ -665,6 +665,7 @@ fn ctx_label(ctx: &InputContextId) -> String {
         InputContextId::QuantityInput => "Quantity".into(),
         InputContextId::VehicleInteraction => "Vehicle".into(),
         InputContextId::Custom(id) => format!("Custom({})", id),
+        InputContextId::Overmap => "Overmap".to_string(),
     }
 }
 

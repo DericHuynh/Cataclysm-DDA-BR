@@ -5,7 +5,7 @@
 
 use bevy_ecs::prelude::*;
 use cdda_core::sim::test_utils::TestBed;
-use cdda_core::Damage;
+use cdda_core_types::core::Damage;
 
 // ---------------------------------------------------------------------------
 // Damage profile
@@ -21,7 +21,7 @@ fn damage_zero_is_empty() {
 #[test]
 fn damage_add_types() {
     let mut d = Damage::ZERO;
-    use cdda_core::core::id::{DamageTypeId, DefIdx};
+    use cdda_core_types::core::id::{DamageTypeId, DefIdx};
     let bash = DamageTypeId(DefIdx(0));
     let cut = DamageTypeId(DefIdx(1));
 
@@ -33,7 +33,7 @@ fn damage_add_types() {
 
 #[test]
 fn damage_merge_same_type() {
-    use cdda_core::core::id::{DamageTypeId, DefIdx};
+    use cdda_core_types::core::id::{DamageTypeId, DefIdx};
     let bash = DamageTypeId(DefIdx(0));
     let mut d = Damage::ZERO;
     d.add(bash, 5);
@@ -44,7 +44,7 @@ fn damage_merge_same_type() {
 
 #[test]
 fn damage_zero_amount_not_stored() {
-    use cdda_core::core::id::{DamageTypeId, DefIdx};
+    use cdda_core_types::core::id::{DamageTypeId, DefIdx};
     let bash = DamageTypeId(DefIdx(0));
     let mut d = Damage::ZERO;
     d.add(bash, 0);
@@ -53,7 +53,7 @@ fn damage_zero_amount_not_stored() {
 
 #[test]
 fn damage_merge_profiles() {
-    use cdda_core::core::id::{DamageTypeId, DefIdx};
+    use cdda_core_types::core::id::{DamageTypeId, DefIdx};
     let bash = DamageTypeId(DefIdx(0));
     let cut = DamageTypeId(DefIdx(1));
 
@@ -77,17 +77,17 @@ fn damage_merge_profiles() {
 #[test]
 fn creature_health_initialized() {
     let mut test = TestBed::new();
-    test.register::<cdda_core::core::components::actor::Health>();
+    test.register::<cdda_components::actor::Health>();
 
     let e = test.spawn((
-        cdda_core::core::components::actor::Health {
+        cdda_components::actor::Health {
             current: 100,
             max: 100,
         },
-        cdda_core::core::components::actor::IsAlive,
+        cdda_components::actor::IsAlive,
     ));
     let health = test
-        .get::<cdda_core::core::components::actor::Health>(e)
+        .get::<cdda_components::actor::Health>(e)
         .unwrap();
     assert_eq!(health.current, 100);
     assert_eq!(health.max, 100);
@@ -96,21 +96,21 @@ fn creature_health_initialized() {
 #[test]
 fn creature_health_damage_reduces() {
     let mut test = TestBed::new();
-    test.register::<cdda_core::core::components::actor::Health>();
+    test.register::<cdda_components::actor::Health>();
 
-    let e = test.spawn((cdda_core::core::components::actor::Health {
+    let e = test.spawn((cdda_components::actor::Health {
         current: 100,
         max: 100,
     },));
     let mut health = test
         .world_mut()
-        .get_mut::<cdda_core::core::components::actor::Health>(e)
+        .get_mut::<cdda_components::actor::Health>(e)
         .unwrap();
     health.current = 70;
     drop(health);
 
     let health = test
-        .get::<cdda_core::core::components::actor::Health>(e)
+        .get::<cdda_components::actor::Health>(e)
         .unwrap();
     assert_eq!(health.current, 70);
     assert_eq!(health.max, 100);
@@ -119,14 +119,14 @@ fn creature_health_damage_reduces() {
 #[test]
 fn creature_health_zero_is_dead() {
     let mut test = TestBed::new();
-    test.register::<cdda_core::core::components::actor::Health>();
+    test.register::<cdda_components::actor::Health>();
 
-    let e = test.spawn((cdda_core::core::components::actor::Health {
+    let e = test.spawn((cdda_components::actor::Health {
         current: 0,
         max: 100,
     },));
     let health = test
-        .get::<cdda_core::core::components::actor::Health>(e)
+        .get::<cdda_components::actor::Health>(e)
         .unwrap();
     assert_eq!(health.current, 0);
     // current = 0 should correspond to death
@@ -140,11 +140,11 @@ fn creature_health_zero_is_dead() {
 #[test]
 fn creature_has_default_stats() {
     let mut test = TestBed::new();
-    test.register::<cdda_core::core::components::actor::Stats>();
+    test.register::<cdda_components::actor::Stats>();
 
-    let e = test.spawn((cdda_core::Stats::new(8, 8, 8, 8),));
+    let e = test.spawn((cdda_components::stats::Stats::new(8, 8, 8, 8),));
     let stats = test
-        .get::<cdda_core::core::components::actor::Stats>(e)
+        .get::<cdda_components::actor::Stats>(e)
         .unwrap();
     assert_eq!(stats.strength, 8);
     assert_eq!(stats.dexterity, 8);
@@ -158,20 +158,20 @@ fn creature_has_default_stats() {
 
 #[test]
 fn speed_default_is_one_hundred() {
-    let ap = cdda_core::core::components::actor::ActionPoints::default();
+    let ap = cdda_components::actor::ActionPoints::default();
     assert_eq!(ap.speed, 100);
 }
 
 #[test]
 fn move_points_default_is_zero() {
     let mut test = TestBed::new();
-    test.register::<cdda_core::core::components::actor::ActionPoints>();
+    test.register::<cdda_components::actor::ActionPoints>();
 
     let e = test.spawn((
-        cdda_core::core::components::actor::ActionPoints { current: 0, speed: 100 },
+        cdda_components::actor::ActionPoints { current: 0, speed: 100 },
     ));
     let ap = test
-        .get::<cdda_core::core::components::actor::ActionPoints>(e)
+        .get::<cdda_components::actor::ActionPoints>(e)
         .unwrap();
     assert_eq!(ap.current, 0);
 }
@@ -183,9 +183,9 @@ fn move_points_default_is_zero() {
 #[test]
 fn damage_reduces_health() {
     let mut test = TestBed::new();
-    test.register::<cdda_core::core::components::actor::Health>();
+    test.register::<cdda_components::actor::Health>();
 
-    let e = test.spawn((cdda_core::core::components::actor::Health {
+    let e = test.spawn((cdda_components::actor::Health {
         current: 100,
         max: 100,
     },));
@@ -193,13 +193,13 @@ fn damage_reduces_health() {
     // Apply 30 damage
     let mut health = test
         .world_mut()
-        .get_mut::<cdda_core::core::components::actor::Health>(e)
+        .get_mut::<cdda_components::actor::Health>(e)
         .unwrap();
     health.current = (health.current - 30).max(0);
     drop(health);
 
     let health = test
-        .get::<cdda_core::core::components::actor::Health>(e)
+        .get::<cdda_components::actor::Health>(e)
         .unwrap();
     assert_eq!(health.current, 70);
 }
@@ -207,22 +207,22 @@ fn damage_reduces_health() {
 #[test]
 fn damage_doubled_does_not_go_below_zero() {
     let mut test = TestBed::new();
-    test.register::<cdda_core::core::components::actor::Health>();
+    test.register::<cdda_components::actor::Health>();
 
-    let e = test.spawn((cdda_core::core::components::actor::Health {
+    let e = test.spawn((cdda_components::actor::Health {
         current: 50,
         max: 100,
     },));
 
     let mut health = test
         .world_mut()
-        .get_mut::<cdda_core::core::components::actor::Health>(e)
+        .get_mut::<cdda_components::actor::Health>(e)
         .unwrap();
     health.current = (health.current - 200).max(0);
     drop(health);
 
     let health = test
-        .get::<cdda_core::core::components::actor::Health>(e)
+        .get::<cdda_components::actor::Health>(e)
         .unwrap();
     assert_eq!(health.current, 0);
 }

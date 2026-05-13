@@ -29,7 +29,9 @@ cdda_ai = { path = "../cdda_ai" }
 cdda_equipment = { path = "../cdda_equipment" }
 cdda_combat = { path = "../cdda_combat" }
 cdda_actor = { path = "../cdda_actor" }
-cdda_map = { path = "../cdda_map" }
+cdda_noise = { path = "../cdda_noise" }
+cdda_overmap = { path = "../cdda_overmap" }
+cdda_overmap_gen = { path = "../cdda_overmap_gen" }
 cdda_sim = { path = "../cdda_sim" }
 cdda_replay = { path = "../cdda_replay" }
 cdda_item = { path = "../cdda_item" }
@@ -37,9 +39,10 @@ cdda_activity = { path = "../cdda_activity" }
 cdda_context = { path = "../cdda_context" }
 cdda_events = { path = "../cdda_events" }
 cdda_data = { path = "../cdda_data" }
-cdda_worldgen = { path = "../cdda_worldgen" }
+
 cdda_input = { path = "../cdda_input" }
 cdda_inventory = { path = "../cdda_inventory" }
+cdda_crafting = { path = "../cdda_crafting" }
 dyn-clone = "1.0.20"
 fixedbitset = "0.5.7"
 bidimap = "0.7.0"

@@ -10,11 +10,11 @@
 //! because our system passes item entity slices rather than a heap-allocated inventory.
 
 use bevy_ecs::prelude::*;
-use cdda_core::core::components::item::{ItemQualities, ItemTypeId, StackCount};
+use cdda_components::item::{ItemQualities, ItemTypeId, StackCount};
 use cdda_core::crafting::systems::{
     check_can_craft, count_available, has_quality,
 };
-use cdda_core::core::components::def::{RecipeComponentEntry, RecipeComponents, RecipeQualities};
+use cdda_components::def::{RecipeComponentEntry, RecipeComponents, RecipeQualities};
 use cdda_core::sim::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------

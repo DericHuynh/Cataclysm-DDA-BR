@@ -9,6 +9,7 @@ use bevy_ecs::prelude::*;
 use bevy_state::prelude::*;
 
 pub use cdda_events::GameEvent;
+pub use cdda_events::GameEventDispatch;
 pub use cdda_components::context::{Ctx, ContextStack, FocusedCommandIndex, push_ctx, pop_ctx};
 use cdda_components::input::{GameAction, InputAction};
 use crate::overlay::OverlayStack;
@@ -82,9 +83,10 @@ pub fn ctx_def(screen: Ctx) -> ScreenDefinition {
             commands: vec![
                 cmd("MOTD", Some('m'), Push(Ctx::Custom(0))),
                 cmd("New Game", Some('n'), Push(NewGameHub)),
+                cmd("Special", Some('s'), Push(Ctx::DevWorldgen)),
                 cmd("Load Game", Some('l'), Push(Ctx::Custom(1))),
                 cmd("World", Some('w'), Push(WorldMenu)),
-                cmd("Special", Some('s'), Push(Ctx::DevWorldgen)),
+
                 cmd("Settings", Some('t'), Push(SettingsMenu)),
                 cmd("Help", Some('h'), Push(HelpScreen)),
                 cmd("Credits", Some('c'), Push(CreditsScreen)),
@@ -164,12 +166,14 @@ pub fn ctx_def(screen: Ctx) -> ScreenDefinition {
         },
 
         Inventory | ItemExamine | CraftingMenu | CharacterSheet | PauseMenu | ExamineLook
-        | Dialog | DirectionSelect | TextInput | QuantityInput | VehicleInteraction => {
+        | Dialog | DirectionSelect | TextInput | QuantityInput | VehicleInteraction
+        | Overmap => {
             ScreenDefinition {
                 title: "",
                 commands: Vec::new(),
             }
         }
+
 
         DevSpawnPanel => ScreenDefinition {
             title: "DEBUG: SPAWN ITEM",
@@ -202,6 +206,7 @@ fn dispatch(
     next: &mut NextState<Ctx>,
     focused: &mut FocusedCommandIndex,
     commands: &mut Commands,
+    app_next: &mut NextState<cdda_sim::state::AppState>,
 ) {
     match target {
         TransitionTarget::Push(s) => push_ctx(current, *s, stack, next, focused),
@@ -209,7 +214,15 @@ fn dispatch(
         TransitionTarget::Pop => pop_ctx(stack, next, focused),
         TransitionTarget::Quit => std::process::exit(0),
         TransitionTarget::Event(e) => {
-            commands.trigger(*e);
+            match e {
+                GameEvent::StartNewGame => {
+                    tracing::info!("dispatching StartNewGame → DataLoading");
+                    app_next.set(cdda_sim::state::AppState::DataLoading);
+                }
+                GameEvent::SaveAndQuit => {
+                    app_next.set(cdda_sim::state::AppState::MainMenu);
+                }
+            }
         }
     }
 }
@@ -229,6 +242,7 @@ pub fn handle_navigation_input(
     mut stack: ResMut<ContextStack>,
     mut next: ResMut<NextState<Ctx>>,
     mut focused: ResMut<FocusedCommandIndex>,
+    mut app_next: ResMut<NextState<cdda_sim::state::AppState>>,
     state: Res<State<Ctx>>,
     overlays: Res<OverlayStack>,
     list_items: Query<(), (With<ScreenListItem>,)>,
@@ -284,6 +298,7 @@ pub fn handle_navigation_input(
                         &mut next,
                         &mut focused,
                         &mut commands,
+                        &mut app_next,
                     );
                 }
             }
@@ -311,6 +326,7 @@ pub fn handle_navigation_input(
                         &mut next,
                         &mut focused,
                         &mut commands,
+                        &mut app_next,
                     );
                 }
             }
@@ -380,6 +396,9 @@ pub fn handle_panel_openers(
             GameAction::OpenWorldMenu => {
                 push_ctx(current, Ctx::WorldMenu, &mut stack, &mut next, &mut focused);
             }
+            GameAction::OpenMap => {
+                push_ctx(current, Ctx::Overmap, &mut stack, &mut next, &mut focused);
+            }
             // Custom(1) opens the debug spawn panel (bound to F2 in gameplay context).
             GameAction::Custom(1) if current == Ctx::Gameplay => {
                 push_ctx(
@@ -432,6 +451,7 @@ pub fn sync_input_context(
         QuantityInput => InputContextId::QuantityInput,
         PauseMenu => InputContextId::PauseMenu,
         VehicleInteraction => InputContextId::VehicleInteraction,
+        Overmap => InputContextId::Overmap,
         Gameplay => InputContextId::Gameplay,
     };
     stack.replace_top(ctx);

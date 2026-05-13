@@ -1,27 +1,27 @@
 //! Startup systems — data loading and worldgen entry points.
-//!
-//! These were extracted from `cdda_core::data::def_world` during the
-//! `data/ → cdda_data` crate extraction.  They reference `crate::worldgen`
-//! and `DefinitionWorld` directly, so they remain in `cdda_core` as the
-//! integration glue between subsystems.
 
 use bevy_ecs::prelude::*;
-use bevy_state::state::NextState;
+use bevy_state::state::{NextState, State};
 
 use cdda_data::def_world::{build_def_world, DefinitionWorld};
 use cdda_data::loader::Loader;
 
 use crate::sim::state::{AppState, GameTime, LoadingStatus, StartupConfig};
-use crate::core::coords::{WorldPos, ZLevel};
-use crate::core::raw_defs::city_building::CityBuildingDef;
-use crate::core::id::DefId;
+use cdda_core_types::core::coords::{WorldPos, ZLevel};
+use cdda_core_types::core::raw_defs::city_building::CityBuildingDef;
+use cdda_core_types::core::id::DefId;
+
+use cdda_overmap::registry::{TerrainHandle, TerrainFlags, TerrainRegistry};
+use cdda_overmap_gen::pipeline::{OvermapGenConfig, OvermapGenPhase};
+use cdda_overmap_gen::steps::city_buildings::CityBuildingCatalog;
+
+use std::sync::Arc;
 
 // ===========================================================================
 // CityBuildings — resource wrapper for worldgen access
 // ===========================================================================
 
 /// Thin wrapper to store city_building definitions as a Bevy resource.
-/// Extracted from `DefRegistry` after loading so worldgen can access them.
 #[derive(Resource, Debug, Clone)]
 pub struct CityBuildings(
     pub std::collections::HashMap<
@@ -40,9 +40,9 @@ pub fn load_data_system(world: &mut World) {
     info!("Data loading deferred until player starts game");
 
     let data_dirs = world.resource::<StartupConfig>().data_dirs.clone();
+    info!("Loading data from {:?}", data_dirs);
 
     world.resource_mut::<LoadingStatus>().current_phase = "Scanning JSON files...".into();
-    info!("Loading data from {:?}", data_dirs);
 
     let mut loader = Loader::new(data_dirs);
 
@@ -72,11 +72,49 @@ pub fn load_data_system(world: &mut World) {
                 registry.monsters.len(),
             );
 
-            // Store the city_buildings for dev-worldgen access
+            // --- Build TerrainRegistry from overmap_terrains ---
+            build_terrain_registry(world, &registry, &def_world);
+
+            // --- Build CityBuildingCatalog ---
+            let catalog = CityBuildingCatalog {
+                buildings: registry.city_buildings.values().cloned().collect(),
+            };
+            world.insert_resource(catalog);
+
             world.insert_resource(CityBuildings(registry.city_buildings.clone()));
+
+            // --- Build SpecialCatalog ---
+            let special_catalog =
+                cdda_overmap_gen::special_catalog::SpecialCatalog::from_registry(&registry);
+            world.insert_resource(special_catalog);
+
+            // --- Build ConnectionCatalog ---
+            let connection_catalog =
+                cdda_overmap_gen::connection_catalog::ConnectionCatalog::from_registry(
+                    &registry,
+                );
+            world.insert_resource(connection_catalog);
+
+            // --- Build MongroupCatalog ---
+            let mongroup_catalog =
+                cdda_overmap_gen::mongroup_catalog::MongroupCatalog::from_registry(&registry);
+            world.insert_resource(mongroup_catalog);
+
+            // --- Build OvermapRegionSettings from RegionSettingsDef ---
+            let region_settings = build_region_settings(&registry);
+            world.insert_resource(region_settings);
 
             world.insert_resource(def_world);
             world.insert_resource(GameTime::default());
+
+            // --- Configure overmap generation ---
+            let gen_config = OvermapGenConfig {
+                noise_seed: 1920237457,
+                om_x: 0,
+                om_y: 0,
+                region_id: "default".into(),
+            };
+            world.insert_resource(gen_config);
 
             world.resource_mut::<LoadingStatus>().current_phase = "Complete".into();
             world.resource_mut::<LoadingStatus>().total_defs = count;
@@ -100,88 +138,326 @@ pub fn load_data_system(world: &mut World) {
 }
 
 // ===========================================================================
-// Worldgen system - dev-worldgen: one of every building
+// Terrain registry builder
+// ===========================================================================
+
+fn build_terrain_registry(
+    world: &mut World,
+    registry: &cdda_data::DefRegistry,
+    def_world: &DefinitionWorld,
+) {
+    use tracing::info;
+    let mut treg = TerrainRegistry::empty();
+
+    for (def_id, terrain) in &registry.overmap_terrains {
+        // Determine flags from JSON flag strings.
+        let mut flags = TerrainFlags::empty();
+        let flag_strs: Vec<String> = match &terrain.flags {
+            cdda_core_types::core::raw_defs::cdda_types::StringOrArray::Single(s) => {
+                vec![s.clone()]
+            }
+            cdda_core_types::core::raw_defs::cdda_types::StringOrArray::Multi(v) => v.clone(),
+        };
+        for f in &flag_strs {
+            let upper = f.to_uppercase();
+            match upper.as_str() {
+                "RIVER" => flags.set(TerrainFlags::RIVER),
+                "LAKE" => flags.set(TerrainFlags::LAKE),
+                "LAKE_SHORE" => flags.set(TerrainFlags::LAKE),
+                "OCEAN" => flags.set(TerrainFlags::OCEAN),
+                "OCEAN_SHORE" => flags.set(TerrainFlags::OCEAN),
+                "ROAD" => flags.set(TerrainFlags::ROAD),
+                "HIGHWAY" => flags.set(TerrainFlags::HIGHWAY),
+                "LINE_DRAWING" => flags.set(TerrainFlags::LINE_DRAWING),
+                "IMPASSABLE" => flags.set(TerrainFlags::IMPASSABLE),
+                "UNDERGROUND" => flags.set(TerrainFlags::UNDERGROUND),
+                "BRIDGE" => flags.set(TerrainFlags::BRIDGE),
+                "SEWER" => flags.set(TerrainFlags::SEWER),
+                "SUBWAY" => flags.set(TerrainFlags::SUBWAY),
+                "RAILROAD" => flags.set(TerrainFlags::RAILROAD),
+                "MANHOLE" => flags.set(TerrainFlags::MANHOLE),
+                "FOREST" => flags.set(TerrainFlags::FOREST),
+                _ => {}
+            }
+        }
+
+        // Infer flags from terrain ID patterns (CDDA convention).
+        let id_lower = def_id.as_str().to_lowercase();
+        if id_lower.starts_with("forest") || id_lower.contains("_forest_") {
+            flags.set(TerrainFlags::FOREST);
+        }
+        if id_lower.starts_with("road_") || id_lower == "road" {
+            flags.set(TerrainFlags::ROAD);
+            flags.set(TerrainFlags::LINE_DRAWING);
+        }
+        if id_lower.starts_with("highway_") || id_lower.starts_with("hiway_") {
+            flags.set(TerrainFlags::HIGHWAY);
+            flags.set(TerrainFlags::LINE_DRAWING);
+        }
+        if id_lower.starts_with("railroad_") || id_lower.starts_with("rail_") {
+            flags.set(TerrainFlags::RAILROAD);
+            flags.set(TerrainFlags::LINE_DRAWING);
+        }
+        if id_lower.starts_with("river_") || id_lower == "river_center" {
+            flags.set(TerrainFlags::RIVER);
+            flags.set(TerrainFlags::LINE_DRAWING);
+        }
+        if id_lower.starts_with("lake_") || id_lower.contains("_lake_") {
+            flags.set(TerrainFlags::LAKE);
+        }
+        if id_lower.starts_with("ocean_") || id_lower.contains("_ocean_") {
+            flags.set(TerrainFlags::OCEAN);
+        }
+        if id_lower.starts_with("sewer_") || id_lower.contains("_sewer_") {
+            flags.set(TerrainFlags::SEWER);
+        }
+        if id_lower.starts_with("subway_") || id_lower.contains("_subway_") {
+            flags.set(TerrainFlags::SUBWAY);
+        }
+        if id_lower.contains("_bridge") || id_lower.ends_with("_bridge") {
+            flags.set(TerrainFlags::BRIDGE);
+        }
+        if id_lower.contains("manhole") {
+            flags.set(TerrainFlags::MANHOLE);
+        }
+        if id_lower.starts_with("field") || id_lower == "open_air" {
+            // field — default terrain
+        }
+        // Also tag well-known subtypes from the ID more broadly
+        if id_lower.contains("house_") || id_lower.contains("_house")
+            || id_lower.starts_with("house")
+        {
+            // building — no special flag needed
+        }
+
+        // Determine travel cost.
+        let travel_cost: u8 = match &terrain.travel_cost_type {
+            Some(cdda_core_types::core::raw_defs::cdda_types::RawValue::String(s)) => {
+                match s.to_lowercase().as_str() {
+                    "fast" => 1,
+                    "slow" => 5,
+                    "impassable" => 255,
+                    _ => 2,
+                }
+            }
+            Some(cdda_core_types::core::raw_defs::cdda_types::RawValue::Number(n)) => {
+                (*n as u8).max(1)
+            }
+            _ => 2,
+        };
+
+        // Determine mapgen ID.
+        let mapgen_id = terrain
+            .mapgen
+            .as_ref()
+            .and_then(|mg| mg.first())
+            .and_then(|raw| {
+                match raw {
+                    cdda_core_types::core::raw_defs::cdda_types::RawValue::String(s) => Some(s.clone()),
+                    cdda_core_types::core::raw_defs::cdda_types::RawValue::Object(obj) => {
+                        obj.get("builtin")
+                            .or_else(|| obj.get("method"))
+                            .and_then(|v| match v {
+                                cdda_core_types::core::raw_defs::cdda_types::RawValue::String(s) => Some(s.clone()),
+                                _ => None,
+                            })
+                    }
+                    _ => None,
+                }
+            })
+            .unwrap_or_else(|| def_id.as_str().to_string());
+
+        let idx = treg.register_no_entity(def_id.as_str(), flags, travel_cost, mapgen_id);
+
+        // Tag well-known terrain types.
+        match def_id.as_str() {
+            "field" => treg.field_index = idx,
+            "forest" => treg.forest_index = idx,
+            "forest_thick" => treg.forest_thick_index = idx,
+            "forest_water" => treg.forest_water_index = idx,
+            "road_ns" => treg.road_ns_index = idx,
+            "road_ew" => treg.road_ew_index = idx,
+            "road_nesw" => treg.road_nesw_index = idx,
+            "lake_surface" => treg.lake_surface_index = idx,
+            "lake_shore" => treg.lake_shore_index = idx,
+            "ocean" => treg.ocean_index = idx,
+            "river_center" => treg.river_center_index = idx,
+            _ => {}
+        }
+    }
+
+    // -- Generate directional variants for line-drawing terrains --
+    let count_before = treg.len();
+    let mut variants_to_create: Vec<(u32, String)> = Vec::new();
+
+    for idx in 1..count_before as u32 {
+        let handle = TerrainHandle::new(idx, 0);
+        let flags = treg.flags_for(handle);
+        if !flags.contains(TerrainFlags::LINE_DRAWING) {
+            continue;
+        }
+        let base_id = treg.string_id_for(handle).unwrap_or("").to_string();
+        let travel_cost = treg.travel_cost(handle);
+        let mapgen_id = treg.mapgen_id(handle).to_string();
+
+        // Create directional variants: _ns (vertical), _ew (horizontal), _nesw (intersection)
+        for suffix in &["_ns", "_ew", "_nesw"] {
+            let variant_id = format!("{}{}", base_id, suffix);
+            if treg.index_by_id(&variant_id).is_some() {
+                continue; // already exists
+            }
+            treg.register_no_entity(&variant_id, flags, travel_cost, mapgen_id.clone());
+            variants_to_create.push((idx, variant_id));
+        }
+    }
+
+    // Set up rotation: direction → variant
+    for (base_idx, variant_id) in &variants_to_create {
+        let variant_idx = treg.index_by_id(variant_id).unwrap();
+        let suffix = variant_id.rsplit('_').next().unwrap_or("");
+        match suffix {
+            "ns" => {
+                treg.register_rotation(*base_idx, 0, variant_idx); // north
+                treg.register_rotation(*base_idx, 2, variant_idx); // south
+            }
+            "ew" => {
+                treg.register_rotation(*base_idx, 1, variant_idx); // east
+                treg.register_rotation(*base_idx, 3, variant_idx); // west
+            }
+            "nesw" => {
+                // The _nesw variant is its own entry; look it up directly via handle_by_id.
+                // Its default self-rotation is already correct (all dirs → self).
+            }
+            _ => {}
+        }
+    }
+
+    // Tag well-known directional variants if they were generated.
+    if let Some(idx) = treg.index_by_id("road_ns") { treg.road_ns_index = idx; }
+    if let Some(idx) = treg.index_by_id("road_ew") { treg.road_ew_index = idx; }
+    if let Some(idx) = treg.index_by_id("road_nesw") { treg.road_nesw_index = idx; }
+
+    // Ensure field_index is set
+    if treg.field_index == 0 {
+        if let Some(idx) = treg.index_by_id("field") {
+            treg.field_index = idx;
+        } else {
+            // Find the first terrain with no special flags as default field
+            for idx in 1..treg.len() as u32 {
+                let flags = treg.flags_for(TerrainHandle::new(idx, 0));
+                // A basic field terrain has no line-drawing or biome flags
+                if !flags.contains(TerrainFlags::ROAD)
+                    && !flags.contains(TerrainFlags::RIVER)
+                    && !flags.contains(TerrainFlags::LAKE)
+                    && !flags.contains(TerrainFlags::OCEAN)
+                    && !flags.contains(TerrainFlags::FOREST)
+                    && !flags.contains(TerrainFlags::IMPASSABLE)
+                    && !flags.contains(TerrainFlags::UNDERGROUND)
+                {
+                    treg.field_index = idx;
+                    break;
+                }
+            }
+        }
+    }
+
+    info!(
+        "TerrainRegistry built: {} terrain types registered",
+        treg.len()
+    );
+    world.insert_resource(treg);
+}
+
+// ===========================================================================
+// Region settings builder
+// ===========================================================================
+
+/// Build an `OvermapRegionSettings` resource from the first `RegionSettingsDef`
+/// found in the registry, falling back to defaults if none is present.
+fn build_region_settings(
+    registry: &cdda_data::DefRegistry,
+) -> cdda_overmap_gen::region_settings::OvermapRegionSettings {
+    use cdda_overmap_gen::region_settings::OvermapRegionSettings;
+    use tracing::info;
+
+    // Try to find a region_settings def and parse the fields we care about.
+    // CDDA region_settings defs reference sub-settings by string ID;
+    // those sub-settings (river_settings, forest_settings, etc.) may be
+    // loaded as separate JSON types or inlined.  For now we use sensible
+    // defaults that work on overmap (0,0) without oceans or extreme forests.
+    if let Some(rs) = registry.region_settings.values().next() {
+        let mut settings = OvermapRegionSettings::default();
+
+        // If the region def has a city_size-like field, use it
+        // (the CDDA RegionSettingsDef has references like "cities": "default_city"
+        //  which resolve to city_settings objects; we don't resolve those yet)
+        info!(
+            "build_region_settings: using region '{}'",
+            rs.id.as_str()
+        );
+
+        // Ocean off by default unless region explicitly enables it.
+        // The ocean_start values come from a separate ocean_settings JSON
+        // type which we don't resolve yet, so keep them disabled.
+        settings.ocean_start = [None, None, None, None];
+
+        // Sensible forest thresholds for temperate regions.
+        // These produce ~25-35% forest coverage.
+        settings.forest_noise_threshold = 0.25;
+        settings.forest_noise_threshold_thick = 0.30;
+
+        // Enable standard features.
+        settings.place_roads = true;
+        settings.place_specials = true;
+
+        settings
+    } else {
+        OvermapRegionSettings::default()
+    }
+}
+
+// ===========================================================================
+// Worldgen system — triggers overmap generation
 // ===========================================================================
 
 pub fn worldgen_system(world: &mut World) {
     use tracing::info;
 
     let has_defs = world.get_resource::<DefinitionWorld>().is_some();
-
-    // --- Dev-worldgen: populate WorldMap with one of every city building ---
-    if has_defs {
-        let city_buildings = world.remove_resource::<CityBuildings>();
-        let config = world
-            .get_resource::<cdda_worldgen::dev::DevWorldgenConfig>()
-            .cloned()
-            .unwrap_or_default();
-
-        if let Some(cb) = city_buildings {
-            let building_count = cb.0.len();
-            info!(
-                "Dev-worldgen: generating showcase with {} city buildings...",
-                building_count
-            );
-
-            let mut world_map = world.resource_mut::<cdda_worldgen::setup::WorldMapResource>();
-            let placed =
-                cdda_worldgen::dev::generate_dev_worldmap(&mut world_map.0, &cb.0, &config);
-            info!(
-                "Dev-worldgen complete: {} buildings placed, {} bubbles created",
-                placed,
-                world_map.0.bubble_count(),
-            );
-        }
+    if !has_defs {
+        info!("Worldgen: no definitions loaded, skipping to InGame");
+        world.resource_mut::<NextState<AppState>>().set(AppState::InGame);
+        return;
     }
 
-    if has_defs {
-        use cdda_components::actor::*;
-        use cdda_components::sim::*;
-
-        let pos = WorldPos::new(0, 0, crate::ZLevel::new(0));
-        world.spawn((
-            PlayerData {
-                name: "Survivor".into(),
-                gender: Gender::Male,
-                age: 25,
-                height: 175,
-                blood_type: "O+".into(),
-                profession: None,
-                scenario: None,
-            },
-            IsAlive,
-            WorldPosition(pos),
-            Creature {
-                def_id: "player".into(),
-                name: "Survivor".into(),
-                species: crate::SpeciesId::from(0u32),
-                symbol: '@',
-            },
-            Health {
-                current: 100,
-                max: 100,
-            },
-            Faction {
-                id: crate::FactionId::from(0u32),
-            },
-            Solid,
-            ActionPoints {
-                current: 100,
-                speed: 100,
-            },
-        ));
-        info!("Spawned player at origin (0,0). Use the map to explore all buildings.");
+    // Check if TerrainRegistry exists.
+    let has_registry = world.get_resource::<TerrainRegistry>().is_some();
+    if !has_registry {
+        info!("Worldgen: no terrain registry, skipping to InGame");
+        world.resource_mut::<NextState<AppState>>().set(AppState::InGame);
+        return;
     }
+
+    // Kick off overmap generation by transitioning state.
+    // The OvermapGenPlugin's chained system sets will execute in order.
+    info!("Worldgen: starting overmap generation pipeline");
     world
-        .resource_mut::<NextState<AppState>>()
-        .set(AppState::InGame);
+        .resource_mut::<NextState<OvermapGenPhase>>()
+        .set(OvermapGenPhase::Generating);
+
+    // Wait for generation to complete, then transition to InGame.
+    // This is polled each frame until Complete.
+    let phase = world.resource::<State<OvermapGenPhase>>().get().clone();
+    if phase == OvermapGenPhase::Complete {
+        info!("Worldgen: overmap generation complete, transitioning to InGame");
+        world.resource_mut::<NextState<AppState>>().set(AppState::InGame);
+    }
 }
 
 // ===========================================================================
 // Constants
 // ===========================================================================
 
-/// Maximum total item volume on a single tile (in mL) before blocking drops.
 const FLOOR_CAP_ML: u32 = 4_000_000;
 
 // ===========================================================================
@@ -193,8 +469,8 @@ use cdda_components::dev::{DevCamera, DevPlayer, DevGroundItemName};
 use cdda_components::input::{GameAction, InputAction};
 use cdda_components::def::ItemVolume;
 use cdda_components::item::{
-    InsideContainer, Inventory, Invlet, ItemTypeId, MountedPockets,
-    StackCount, WieldedBy, WieldedItems,
+    InsideContainer, Inventory, Invlet, MountedPockets,
+    WieldedBy, WieldedItems,
 };
 use cdda_components::sim::WorldPosition;
 use cdda_context::{ContextStack, FocusedCommandIndex};
@@ -326,12 +602,9 @@ pub fn examine_item_input(world: &mut World) {
                 }
             }
             GameAction::HotkeyPress('r') => {
-                use tracing::{info, warn};
-                match crate::crafting::systems::resume_craft(
-                    world, player_entity, item_entity,
-                ) {
-                    Ok(()) => info!("Resumed craft on {:?}", item_entity),
-                    Err(e) => warn!("Cannot resume craft: {}", e),
+                match cdda_crafting::systems::resume_craft(world, player_entity, item_entity) {
+                    Ok(()) => {}
+                    Err(_e) => {}
                 }
                 *world.resource_mut::<ExaminedItem>() = ExaminedItem(None);
                 let parent = world.resource_mut::<ContextStack>().0.pop();
@@ -346,10 +619,12 @@ pub fn examine_item_input(world: &mut World) {
 }
 
 // ===========================================================================
-// Dev-world — spawn player and test items
+// Dev-world — spawn player at origin
 // ===========================================================================
 
 pub fn spawn_dev_world(world: &mut World) {
+    use tracing::info;
+
     let pos = WorldPos::new(0, 0, ZLevel::new(0));
 
     let player = world.spawn((
@@ -370,14 +645,25 @@ pub fn spawn_dev_world(world: &mut World) {
         cdda_components::actor::Creature {
             def_id: "player".to_string(),
             name: "Dev".to_string(),
-            species: crate::core::id::SpeciesId::from(0u32),
+            species: cdda_core_types::core::id::SpeciesId::from(0u32),
             symbol: '@',
         },
         cdda_components::sim::Solid,
     )).id();
 
     crate::inventory::pocket::spawn_body_pocket(world, player);
-    world.insert_resource(DevCamera::default());
-    world.insert_resource(cdda_worldgen::dev_spawn::DevSpawnFocus::default());
-    world.insert_resource(cdda_worldgen::dev_spawn::DevSpawnQueue::default());
+
+    let camera = DevCamera {
+        x: pos.x.div_euclid(24),
+        y: pos.y.div_euclid(24),
+        z: pos.z.0 as i32,
+    };
+    let cx = camera.x; let cy = camera.y; let cz = camera.z;
+    world.insert_resource(camera);
+    world.insert_resource(cdda_overmap_gen::pipeline::OvermapGenConfig::default());
+
+    // Dev-spawn resources from old worldgen — migrated here.
+    // These should eventually move to a dev_spawn crate.
+    info!("Dev world spawned: player at ({}, {}), camera at ({}, {}, {})",
+        pos.x, pos.y, cx, cy, cz);
 }

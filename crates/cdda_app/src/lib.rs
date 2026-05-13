@@ -12,16 +12,18 @@ use bevy::window::PresentMode;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_state::app::AppExtStates;
 use bevy_state::prelude::OnEnter;
-use bevy_state::state::NextState;
+use bevy_state::state::{NextState, State};
 use std::time::Duration;
 
 use cdda_core::context::ctx::Ctx as Screen;
 use cdda_core::context::screen::Screen as ScreenPlugin;
+use cdda_core::context::ContextStack;
 use cdda_core::{GameSet, SimSet};
 
-use cdda_components::events::ItemMoveEvent;
-use cdda_events::GameEvent;
 use cdda_activity::plugin::ActivityPlugin;
+use cdda_components::dev::DevPlayer;
+use cdda_components::events::ItemMoveEvent;
+use cdda_components::sim::WorldPosition;
 use cdda_core::actor::bionics::tick_bionics;
 use cdda_core::actor::effects::effects_phase;
 use cdda_core::actor::healing::healing_phase;
@@ -29,7 +31,7 @@ use cdda_core::actor::morale::tick_morale_decay;
 use cdda_core::actor::movement::movement_phase;
 use cdda_core::actor::plugin::ActorPlugin;
 use cdda_core::actor::temperature::temperature_phase;
-use cdda_core::actor::turn::{debug_turn_queue, tick_move_points};
+use cdda_core::actor::turn::{debug_turn_queue, tick_move_points, TurnQueue};
 use cdda_core::actor::vision::update_vision;
 use cdda_core::ai::systems::ai_phase;
 use cdda_core::combat::systems::combat_phase;
@@ -39,25 +41,24 @@ use cdda_core::context::overlay::{
 use cdda_core::crafting::plugin::CraftingPlugin;
 use cdda_core::crafting::systems::on_examine_item_changed;
 use cdda_core::data::assets::CddaAssetsPlugin;
-use cdda_core::startup::load_data_system;
 use cdda_core::inventory::systems::{
-    assign_invlets_system, build_inventory_bins, dev_pickup_drop_system,
-    inventory_screen_input, process_item_move_events,
+    assign_invlets_system, build_inventory_bins, dev_pickup_drop_system, inventory_screen_input,
+    process_item_move_events,
 };
-use cdda_core::startup::{examine_item_input, spawn_dev_world};
 use cdda_core::item::plugin::ItemPlugin;
-use cdda_core::map::spatial_systems::update_spatial_index;
-use cdda_core::sim::state::AppState;
-use cdda_core::worldgen::dev_spawn::{
-    build_dev_spawn_catalog, dev_spawn_flush, dev_spawn_panel_input,
-};
-use cdda_core::worldgen::spawning::spawning_phase;
+use cdda_core::overmap::spatial::EntitySpatialIndex;
+use cdda_core::overmap_gen::pipeline::OvermapGenPlugin;
+use cdda_core::overmap_gen::setup::register_game_components;
+use cdda_core::overmap_gen::spatial_systems::{cleanup_spatial_index, update_spatial_index};
+use cdda_core::sim::state::{AppState, StartupConfig};
+use cdda_core::startup::load_data_system;
+use cdda_core::startup::{examine_item_input, spawn_dev_world};
+use cdda_overmap::OvermapCamera;
 
 // ---------------------------------------------------------------------------
 // Startup config
 // ---------------------------------------------------------------------------
 
-/// Passed from CLI args to configure the app.
 #[derive(Resource, Clone)]
 pub struct CddaStartupConfig {
     pub world_seed: u64,
@@ -79,37 +80,37 @@ impl Default for CddaStartupConfig {
 }
 
 // ---------------------------------------------------------------------------
-// StartGame observer — reacts to GameEvent::StartNewGame immediately
+// Dev player movement
 // ---------------------------------------------------------------------------
 
-/// Observer that reacts to `GameEvent::StartNewGame` by transitioning
-/// `AppState` from `MainMenu` → `DataLoading`, kicking off JSON loading
-/// and worldgen.
-///
-/// This is an observer (not a polling system), so the transition happens
-/// immediately when the navigation system triggers the event — no frame
-/// delay.
-pub fn start_game_on_event(
-    event: On<GameEvent>,
-    mut next: ResMut<NextState<AppState>>,
+/// Move the dev player with arrow keys / hjkl.
+pub fn dev_player_move(
+    keys: Res<bevy::prelude::ButtonInput<bevy::prelude::KeyCode>>,
+    mut query: Query<&mut WorldPosition, With<DevPlayer>>,
+    mut camera: ResMut<cdda_overmap::OvermapCamera>,
 ) {
-    if matches!(*event, GameEvent::StartNewGame) {
-        info!("Player confirmed start game — transitioning to DataLoading");
-        next.set(AppState::DataLoading);
+    let dx = if keys.just_pressed(KeyCode::ArrowRight) || keys.just_pressed(KeyCode::KeyL) {
+        1
+    } else if keys.just_pressed(KeyCode::ArrowLeft) || keys.just_pressed(KeyCode::KeyH) {
+        -1
+    } else {
+        0
+    };
+    let dy = if keys.just_pressed(KeyCode::ArrowUp) || keys.just_pressed(KeyCode::KeyK) {
+        1
+    } else if keys.just_pressed(KeyCode::ArrowDown) || keys.just_pressed(KeyCode::KeyJ) {
+        -1
+    } else {
+        0
+    };
+
+    if dx != 0 || dy != 0 {
+        for mut pos in &mut query {
+            pos.0.x += dx * 24; // 24 tiles per OMT
+            pos.0.y += dy * 24;
+            camera.move_to(pos.0.x.div_euclid(24), pos.0.y.div_euclid(24));
+        }
     }
-}
-
-// ---------------------------------------------------------------------------
-// Reflect type registration
-// ---------------------------------------------------------------------------
-
-fn register_reflect_types(app: &mut App) {
-    use cdda_core::core::components::sim::{InFlight, Solid, Velocity, WorldPosition};
-
-    app.register_type::<WorldPosition>();
-    app.register_type::<Solid>();
-    app.register_type::<Velocity>();
-    app.register_type::<InFlight>();
 }
 
 // ---------------------------------------------------------------------------
@@ -120,6 +121,9 @@ pub struct CddaPlugin;
 
 impl Plugin for CddaPlugin {
     fn build(&self, app: &mut App) {
+        // Register ECS components first.
+        register_game_components(app.world_mut());
+
         app.add_plugins((
             ActivityPlugin,
             ActorPlugin,
@@ -128,37 +132,42 @@ impl Plugin for CddaPlugin {
             CraftingPlugin,
             cdda_core::data::flags::CddaDataPlugin,
         ));
-        cdda_core::worldgen::setup::setup_world(app.world_mut());
-        register_reflect_types(app);
+
+        // Entity spatial index for dynamic entity queries.
+        app.init_resource::<EntitySpatialIndex>();
+        app.init_resource::<OvermapCamera>();
+
+        // Overmap generation pipeline.
+        app.add_plugins(OvermapGenPlugin);
 
         app.init_state::<AppState>();
+        app.init_resource::<StartupConfig>();
+        app.init_resource::<TurnQueue>();
+        app.init_resource::<cdda_components::item::InventoryBin>();
+        app.init_resource::<cdda_core::inventory::examine_resource::ExaminedItem>();
+        app.init_resource::<cdda_components::dev::DevCamera>();
+        app.init_resource::<cdda_core::sim::state::LoadingStatus>();
+        app.init_resource::<cdda_core::sim::state::GameTime>();
 
-        // Fix #5: Drive Screen from AppState so sim and render never desync.
+        // ── Screen transitions ─────────────────────────────────────────
         app.add_systems(
             OnEnter(AppState::MainMenu),
-            |mut next: ResMut<NextState<Screen>>| {
-                next.set(Screen::MainMenu);
-            },
+            |mut next: ResMut<NextState<Screen>>| next.set(Screen::MainMenu),
         );
         app.add_systems(
             OnEnter(AppState::DataLoading),
-            |mut next: ResMut<NextState<Screen>>| {
-                next.set(Screen::DevWorldgen); // loading screen reuses devworldgen view
-            },
+            |mut next: ResMut<NextState<Screen>>| next.set(Screen::DevWorldgen),
         );
         app.add_systems(
             OnEnter(AppState::WorldGen),
-            |mut next: ResMut<NextState<Screen>>| {
-                next.set(Screen::DevWorldgen);
-            },
+            |mut next: ResMut<NextState<Screen>>| next.set(Screen::DevWorldgen),
         );
         app.add_systems(
             OnEnter(AppState::InGame),
-            |mut next: ResMut<NextState<Screen>>| {
-                next.set(Screen::Gameplay);
-            },
+            |mut next: ResMut<NextState<Screen>>| next.set(Screen::Gameplay),
         );
 
+        // ── System set ordering ────────────────────────────────────────
         app.configure_sets(
             Update,
             (GameSet::Input, GameSet::Sim, GameSet::Render).chain(),
@@ -188,18 +197,11 @@ impl Plugin for CddaPlugin {
         app.add_message::<ItemMoveEvent>();
         app.add_message::<cdda_components::messages::TurnAdvanced>();
 
-        // ── Observer: reacts to GameEvent (e.g. StartNewGame) immediately ──
-        app.add_observer(start_game_on_event);
-
-        // ── Context action registration — OnEnter (event-driven) ──────
-        //
-        // MUST run before CddaRenderPlugin's OnEnter systems so that
-        // ContextActions is populated when renderers spawn UI.
+        // ── Context action registration ────────────────────────────────
         app.add_plugins(ScreenPlugin::<
             cdda_render::render::inventory::InventoryScreen,
         >::default());
         app.add_plugins(ScreenPlugin::<cdda_render::render::crafting::CraftingScreen>::default());
-        app.add_plugins(ScreenPlugin::<cdda_render::render::dev_spawn::DevSpawnScreen>::default());
         app.add_plugins(ScreenPlugin::<cdda_render::render::examine::ExamineScreen>::default());
         app.add_plugins(ScreenPlugin::<
             cdda_render::render::character::CharacterScreen,
@@ -209,7 +211,7 @@ impl Plugin for CddaPlugin {
         app.add_plugins(cdda_core::input::CddaInputPlugin);
         app.add_plugins(cdda_core::context::ContextPlugin);
 
-        // Replay: record or replay based on startup config
+        // ── Replay ─────────────────────────────────────────────────────
         let config = app
             .world()
             .get_resource::<CddaStartupConfig>()
@@ -225,9 +227,7 @@ impl Plugin for CddaPlugin {
                     app.insert_resource(log);
                     app.add_plugins(cdda_core::replay::CddaReplayModePlugin);
                 }
-                Err(e) => {
-                    error!("Failed to load replay: {e}");
-                }
+                Err(e) => error!("Failed to load replay: {e}"),
             }
         } else if config.record_session {
             app.add_plugins(cdda_core::replay::CddaReplayPlugin {
@@ -235,9 +235,8 @@ impl Plugin for CddaPlugin {
             });
         }
 
+        // ── Startup systems ────────────────────────────────────────────
         app.add_systems(OnEnter(AppState::InGame), spawn_dev_world);
-        // Build spawn catalog the first time the debug panel is opened.
-        app.add_systems(OnEnter(Screen::DevSpawnPanel), build_dev_spawn_catalog);
         app.add_systems(
             Update,
             load_data_system.run_if(in_state(AppState::DataLoading)),
@@ -247,8 +246,7 @@ impl Plugin for CddaPlugin {
             cdda_core::startup::worldgen_system.run_if(in_state(AppState::WorldGen)),
         );
 
-        // Fix #6: Gate turn tick so MP isn't granted every frame.
-        // tick_move_points runs at most once per 100 ms (10 turns/sec real-time max).
+        // ── Turn tick ──────────────────────────────────────────────────
         app.add_systems(
             Update,
             tick_move_points
@@ -257,6 +255,7 @@ impl Plugin for CddaPlugin {
                 .run_if(on_timer(Duration::from_millis(100))),
         );
 
+        // ── Simulation systems ─────────────────────────────────────────
         app.add_systems(
             Update,
             (
@@ -269,62 +268,41 @@ impl Plugin for CddaPlugin {
                 tick_morale_decay.in_set(SimSet::Morale),
                 temperature_phase.in_set(SimSet::Temperature),
                 update_vision.in_set(SimSet::Vision),
-                spawning_phase.in_set(SimSet::Spawning),
-                // Inventory pipeline: pickup/drop → process moves → assign letters → rebuild bins
                 dev_pickup_drop_system
                     .in_set(SimSet::Inventory)
                     .run_if(in_state(Screen::Gameplay)),
                 process_item_move_events.in_set(SimSet::Inventory),
                 assign_invlets_system.in_set(SimSet::Inventory),
                 build_inventory_bins.in_set(SimSet::Inventory),
-                // Inventory screen navigation + drop-from-inventory
                 inventory_screen_input
                     .in_set(SimSet::Inventory)
                     .run_if(in_state(Screen::Inventory)),
-                // Debug spawn panel — navigation queues a def-entity
-                dev_spawn_panel_input
-                    .in_set(SimSet::Inventory)
-                    .run_if(in_state(Screen::DevSpawnPanel)),
+                // Spatial index updates track entity positions.
                 update_spatial_index.in_set(SimSet::SpatialUpdate),
+                cleanup_spatial_index.in_set(SimSet::SpatialUpdate),
                 debug_turn_queue.in_set(SimSet::SpatialUpdate),
             )
                 .run_if(in_state(AppState::InGame)),
         );
 
-        // Exclusive system: drain spawn queue and call EntityCloner-based spawn_item.
-        // Must be separate from the tuple above because exclusive systems can't be
-        // grouped with regular systems.
-        app.add_systems(
-            Update,
-            dev_spawn_flush
-                .in_set(SimSet::Inventory)
-                .after(dev_spawn_panel_input)
-                .run_if(in_state(AppState::InGame))
-                .run_if(in_state(Screen::DevSpawnPanel)),
-        );
+        // ── Dev player movement ────────────────────────────────────
+        app.add_systems(Update, dev_player_move.run_if(in_state(AppState::InGame)));
 
-        // Exclusive: handle overlay Cancel (Esc to dismiss).
+        // ── Overmap viewer toggle ─────────────────────────────────────
+        app.add_systems(Update, toggle_overmap.run_if(in_state(AppState::InGame)));
+
+        // ── UI overlay systems ─────────────────────────────────────────
         app.add_systems(
             Update,
             handle_overlay_cancel.run_if(in_state(AppState::InGame)),
         );
-
-        // Exclusive: sync overlay state with PlayerActivity lifecycle.
         app.add_systems(
             Update,
-            sync_activity_overlay
+            (sync_activity_overlay, cleanup_activity_overlay)
+                .chain()
                 .in_set(SimSet::Activity)
                 .run_if(in_state(AppState::InGame)),
         );
-        app.add_systems(
-            Update,
-            cleanup_activity_overlay
-                .in_set(SimSet::Activity)
-                .after(sync_activity_overlay)
-                .run_if(in_state(AppState::InGame)),
-        );
-
-        // Exclusive system: item examine overlay actions (drop, wield, resume craft).
         app.add_systems(
             Update,
             examine_item_input
@@ -332,8 +310,6 @@ impl Plugin for CddaPlugin {
                 .run_if(in_state(AppState::InGame))
                 .run_if(in_state(Screen::ItemExamine)),
         );
-
-        // Dynamic: re-check for resume-craft action when examined item changes.
         app.add_systems(
             Update,
             on_examine_item_changed
@@ -341,6 +317,35 @@ impl Plugin for CddaPlugin {
                 .run_if(in_state(AppState::InGame))
                 .run_if(in_state(Screen::ItemExamine)),
         );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Hotkey handlers
+// ---------------------------------------------------------------------------
+
+/// Toggle the overmap viewer with the M key.
+pub fn toggle_overmap(
+    keys: Res<bevy::prelude::ButtonInput<bevy::prelude::KeyCode>>,
+    state: Res<State<Screen>>,
+    mut next: ResMut<NextState<Screen>>,
+    mut stack: ResMut<ContextStack>,
+) {
+    if keys.just_pressed(bevy::prelude::KeyCode::KeyM) {
+        match state.get() {
+            Screen::Gameplay => {
+                stack.0.push(Screen::Gameplay);
+                next.set(Screen::Overmap);
+            }
+            Screen::Overmap => {
+                if let Some(prev) = stack.0.pop() {
+                    next.set(prev);
+                } else {
+                    next.set(Screen::Gameplay);
+                }
+            }
+            _ => {}
+        }
     }
 }
 
@@ -370,7 +375,6 @@ pub fn run() {
                 ..default()
             }),
     );
-    // Debug: inspector panel (toggle with F3 in windowed mode)
     app.add_plugins((
         bevy_egui::EguiPlugin::default(),
         WorldInspectorPlugin::new(),

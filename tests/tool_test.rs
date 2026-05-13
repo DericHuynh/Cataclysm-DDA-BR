@@ -1,6 +1,6 @@
 //! Tool, book, and gun mod tests — component data and utility formulas.
 
-use cdda_core::core::components::def::{BookData, GunModData, ToolData};
+use cdda_components::def::{BookData, GunModData, ToolData};
 use cdda_core::sim::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------

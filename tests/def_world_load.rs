@@ -8,10 +8,10 @@
 //! 5. No gameplay components leak into definitions
 
 use bevy_ecs::world::World;
-use cdda_core::core::components::actor::Health;
-use cdda_core::core::components::def::*;
-use cdda_core::core::id::DefId;
-use cdda_core::core::raw_defs::{FurnitureDef, ItemDef, MonsterDef, StringOrArray, TerrainDef};
+use cdda_components::actor::Health;
+use cdda_components::def::*;
+use cdda_core_types::core::id::DefId;
+use cdda_core_types::core::raw_defs::{FurnitureDef, ItemDef, MonsterDef, StringOrArray, TerrainDef};
 use cdda_core::data::def_world::build_def_world;
 use cdda_core::data::flags::ItemFlagList;
 use cdda_core::data::loader::Loader;

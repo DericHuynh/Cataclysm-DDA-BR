@@ -65,6 +65,8 @@ pub enum Ctx {
     VehicleInteraction,
     /// Dev-worldgen building showcase.
     DevWorldgen,
+    /// Overmap viewer — navigable terrain map.
+    Overmap,
     /// Debug item-spawn panel (press F2 in gameplay).
     DevSpawnPanel,
     /// Extensible fallback.

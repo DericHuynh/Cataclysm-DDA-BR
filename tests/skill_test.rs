@@ -5,7 +5,7 @@
 //! queried, modified, or deleted without touching the creature entity.
 
 use bevy_ecs::prelude::*;
-use cdda_core::core::components::actor::{CreatureSkills, SkillEntry, SkillOf};
+use cdda_components::actor::{CreatureSkills, SkillEntry, SkillOf};
 use cdda_core::sim::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------
@@ -21,7 +21,7 @@ fn skills_for(test: &mut TestBed, creature: Entity) -> Vec<SkillEntry> {
         .collect()
 }
 
-fn skill_level_for(test: &mut TestBed, creature: Entity, id: cdda_core::SkillId) -> Option<u32> {
+fn skill_level_for(test: &mut TestBed, creature: Entity, id: cdda_core_types::core::id::SkillId) -> Option<u32> {
     skills_for(test, creature)
         .into_iter()
         .find(|e| e.skill_id == id)
@@ -55,7 +55,7 @@ fn skill_set_one_skill() {
     let _skill = test.spawn((
         SkillOf(creature),
         SkillEntry {
-            skill_id: cdda_core::SkillId::from(0u32),
+            skill_id: cdda_core_types::core::id::SkillId::from(0u32),
             level: 5,
             exercise: 1000,
             ..Default::default()
@@ -78,11 +78,11 @@ fn skill_set_multiple() {
     let creature = test.spawn(());
     test.spawn((
         SkillOf(creature),
-        SkillEntry { skill_id: cdda_core::SkillId::from(0u32), level: 3, exercise: 500, knowledge_level: 3, knowledge_exercise: 0, rust_accumulator: 0 },
+        SkillEntry { skill_id: cdda_core_types::core::id::SkillId::from(0u32), level: 3, exercise: 500, knowledge_level: 3, knowledge_exercise: 0, rust_accumulator: 0 },
     ));
     test.spawn((
         SkillOf(creature),
-        SkillEntry { skill_id: cdda_core::SkillId::from(1u32), level: 5, exercise: 1000, knowledge_level: 5, knowledge_exercise: 0, rust_accumulator: 0 },
+        SkillEntry { skill_id: cdda_core_types::core::id::SkillId::from(1u32), level: 5, exercise: 1000, knowledge_level: 5, knowledge_exercise: 0, rust_accumulator: 0 },
     ));
 
     assert_eq!(skills_for(&mut test, creature).len(), 2);
@@ -94,28 +94,28 @@ fn skill_set_multiple() {
 
 #[test]
 fn skill_entry_access() {
-    let entry = SkillEntry { skill_id: cdda_core::SkillId::from(0u32), level: 7, exercise: 3000, knowledge_level: 7, knowledge_exercise: 0, rust_accumulator: 0 };
+    let entry = SkillEntry { skill_id: cdda_core_types::core::id::SkillId::from(0u32), level: 7, exercise: 3000, knowledge_level: 7, knowledge_exercise: 0, rust_accumulator: 0 };
     assert_eq!(entry.level, 7);
     assert_eq!(entry.exercise, 3000);
 }
 
 #[test]
 fn skill_entry_zero() {
-    let entry = SkillEntry { skill_id: cdda_core::SkillId::from(0u32), level: 0, exercise: 0, knowledge_level: 0, knowledge_exercise: 0, rust_accumulator: 0 };
+    let entry = SkillEntry { skill_id: cdda_core_types::core::id::SkillId::from(0u32), level: 0, exercise: 0, knowledge_level: 0, knowledge_exercise: 0, rust_accumulator: 0 };
     assert_eq!(entry.level, 0);
     assert_eq!(entry.exercise, 0);
 }
 
 #[test]
 fn skill_entry_high() {
-    let entry = SkillEntry { skill_id: cdda_core::SkillId::from(0u32), level: 10, exercise: 8000, knowledge_level: 10, knowledge_exercise: 0, rust_accumulator: 0 };
+    let entry = SkillEntry { skill_id: cdda_core_types::core::id::SkillId::from(0u32), level: 10, exercise: 8000, knowledge_level: 10, knowledge_exercise: 0, rust_accumulator: 0 };
     assert_eq!(entry.level, 10);
     assert_eq!(entry.exercise, 8000);
 }
 
 #[test]
 fn skill_entry_max() {
-    let entry = SkillEntry { skill_id: cdda_core::SkillId::from(0u32), level: 20, exercise: 0, knowledge_level: 20, knowledge_exercise: 0, rust_accumulator: 0 };
+    let entry = SkillEntry { skill_id: cdda_core_types::core::id::SkillId::from(0u32), level: 20, exercise: 0, knowledge_level: 20, knowledge_exercise: 0, rust_accumulator: 0 };
     assert_eq!(entry.level, 20);
 }
 
@@ -131,7 +131,7 @@ fn skill_set_get_skill() {
         .register::<SkillEntry>();
 
     let creature = test.spawn(());
-    let melee_id = cdda_core::SkillId::from(0u32);
+    let melee_id = cdda_core_types::core::id::SkillId::from(0u32);
     test.spawn((
         SkillOf(creature),
         SkillEntry { skill_id: melee_id, level: 5, exercise: 1000, ..Default::default() },
@@ -150,7 +150,7 @@ fn skill_set_update_level() {
         .register::<SkillEntry>();
 
     let creature = test.spawn(());
-    let skill_id = cdda_core::SkillId::from(0u32);
+    let skill_id = cdda_core_types::core::id::SkillId::from(0u32);
     let skill_entity = test.spawn((
         SkillOf(creature),
         SkillEntry { skill_id, level: 3, exercise: 500, ..Default::default() },
@@ -177,10 +177,10 @@ fn skill_set_missing_skill() {
     let creature = test.spawn(());
     test.spawn((
         SkillOf(creature),
-        SkillEntry { skill_id: cdda_core::SkillId::from(0u32), level: 5, exercise: 1000, knowledge_level: 5, knowledge_exercise: 0, rust_accumulator: 0 },
+        SkillEntry { skill_id: cdda_core_types::core::id::SkillId::from(0u32), level: 5, exercise: 1000, knowledge_level: 5, knowledge_exercise: 0, rust_accumulator: 0 },
     ));
 
-    let missing = skill_level_for(&mut test, creature, cdda_core::SkillId::from(99u32));
+    let missing = skill_level_for(&mut test, creature, cdda_core_types::core::id::SkillId::from(99u32));
     assert!(missing.is_none());
 }
 
@@ -194,11 +194,11 @@ fn skill_set_clear() {
     let creature = test.spawn(());
     let s0 = test.spawn((
         SkillOf(creature),
-        SkillEntry { skill_id: cdda_core::SkillId::from(0u32), level: 5, exercise: 1000, knowledge_level: 5, knowledge_exercise: 0, rust_accumulator: 0 },
+        SkillEntry { skill_id: cdda_core_types::core::id::SkillId::from(0u32), level: 5, exercise: 1000, knowledge_level: 5, knowledge_exercise: 0, rust_accumulator: 0 },
     ));
     let s1 = test.spawn((
         SkillOf(creature),
-        SkillEntry { skill_id: cdda_core::SkillId::from(1u32), level: 3, exercise: 500, knowledge_level: 3, knowledge_exercise: 0, rust_accumulator: 0 },
+        SkillEntry { skill_id: cdda_core_types::core::id::SkillId::from(1u32), level: 3, exercise: 500, knowledge_level: 3, knowledge_exercise: 0, rust_accumulator: 0 },
     ));
 
     // "Clear" = despawn all skill entities for this creature
@@ -222,16 +222,16 @@ fn skill_experience_independent() {
     let creature = test.spawn(());
     test.spawn((
         SkillOf(creature),
-        SkillEntry { skill_id: cdda_core::SkillId::from(0u32), level: 3, exercise: 500, knowledge_level: 3, knowledge_exercise: 0, rust_accumulator: 0 },
+        SkillEntry { skill_id: cdda_core_types::core::id::SkillId::from(0u32), level: 3, exercise: 500, knowledge_level: 3, knowledge_exercise: 0, rust_accumulator: 0 },
     ));
     test.spawn((
         SkillOf(creature),
-        SkillEntry { skill_id: cdda_core::SkillId::from(1u32), level: 5, exercise: 8000, knowledge_level: 5, knowledge_exercise: 0, rust_accumulator: 0 },
+        SkillEntry { skill_id: cdda_core_types::core::id::SkillId::from(1u32), level: 5, exercise: 8000, knowledge_level: 5, knowledge_exercise: 0, rust_accumulator: 0 },
     ));
 
     let skills = skills_for(&mut test, creature);
-    let e0 = skills.iter().find(|e| e.skill_id == cdda_core::SkillId::from(0u32)).unwrap();
-    let e1 = skills.iter().find(|e| e.skill_id == cdda_core::SkillId::from(1u32)).unwrap();
+    let e0 = skills.iter().find(|e| e.skill_id == cdda_core_types::core::id::SkillId::from(0u32)).unwrap();
+    let e1 = skills.iter().find(|e| e.skill_id == cdda_core_types::core::id::SkillId::from(1u32)).unwrap();
     assert_eq!(e0.exercise, 500);
     assert_eq!(e1.exercise, 8000);
     assert_ne!(e0.exercise, e1.exercise);

@@ -13,8 +13,8 @@ use super::FooterHint;
 use crate::context::ctx::Ctx;
 use crate::context::screen::CddaScreen;
 use crate::context::ContextActions;
-use crate::core::components::def::{ItemName, ItemSymbol};
-use crate::core::components::item::{
+use cdda_components::def::{ItemName, ItemSymbol};
+use cdda_components::item::{
     ContainerContents, InProgressCraft, Inventory, InventoryFocus, Invlet, ItemTypeId,
     MountedPockets, StackCount, WieldedBy, WieldedItems, WornBy,
 };

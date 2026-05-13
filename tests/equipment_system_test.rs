@@ -1,11 +1,13 @@
 #![allow(unused_imports)]
 
 use bevy_ecs::prelude::Entity;
-use cdda_core::core::components::actor::*;
-use cdda_core::*;
-use cdda_core::core::components::item::*;
-use cdda_core::core::components::sim::*;
-use cdda_core::core::components::def::*;
+use cdda_components::actor::*;
+use cdda_components::*;
+use cdda_core_types::core::*;
+use cdda_components::schedule::*;
+use cdda_components::item::*;
+use cdda_components::sim::*;
+use cdda_components::def::*;
 use cdda_core::equipment::systems::*;
 use cdda_core::sim::test_utils::TestBed;
 
@@ -344,8 +346,8 @@ fn wield_item_too_heavy() {
     // Item weighs 1000 kg -- too heavy
     // Strength-based weight limit would be str * 100 (grams) = 1000g = 1kg
     let str_score = 10;
-    let weight_limit = cdda_core::Weight::from_grams((str_score * 100) as u64);
-    let item_weight = cdda_core::Weight::from_kilograms_u64(1000);
+    let weight_limit = cdda_core_types::core::units::Weight::from_grams((str_score * 100) as u64);
+    let item_weight = cdda_core_types::core::units::Weight::from_kilograms_u64(1000);
 
     assert!(item_weight > weight_limit);
 

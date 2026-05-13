@@ -3,12 +3,12 @@
 //! Tests call the actual implementations in `cdda_core::sim::systems::inventory`
 //! and verify correct behaviour against CDDA's item-pocket rules.
 
-use cdda_core::core::units::*;
-use cdda_core::core::components::item::{
+use cdda_core_types::core::units::*;
+use cdda_components::item::{
     Container, ContainerContents, CurrentCharges, DefOrigin, InsideContainer, ItemDamage, Pocket,
     StackCount,
 };
-use cdda_core::core::components::def::{DefStrId, ItemLongestSide, ItemVolume, ItemWeight};
+use cdda_components::def::{DefStrId, ItemLongestSide, ItemVolume, ItemWeight};
 use cdda_core::inventory::systems::*;
 use cdda_core::sim::test_utils::TestBed;
 
@@ -50,7 +50,7 @@ fn small_item_fits_pocket() {
             max_weight: Weight::from_grams(5000),
             max_item_length: Length::from_millimeters(500),
             min_item_volume: Volume::ZERO,
-            pocket_type: cdda_core::core::components::item::PocketType::Container,
+            pocket_type: cdda_components::item::PocketType::Container,
         },
     ));
     let item = test.spawn((DefStrId("rock".into()), ItemVolume(250), ItemWeight(100)));
@@ -70,7 +70,7 @@ fn large_item_exceeds_pocket_volume() {
             max_weight: Weight::from_grams(5000),
             max_item_length: Length::from_millimeters(500),
             min_item_volume: Volume::ZERO,
-            pocket_type: cdda_core::core::components::item::PocketType::Container,
+            pocket_type: cdda_components::item::PocketType::Container,
         },
     ));
     let item = test.spawn((
@@ -94,7 +94,7 @@ fn heavy_item_exceeds_pocket_weight() {
             max_weight: Weight::from_grams(1000),
             max_item_length: Length::from_millimeters(500),
             min_item_volume: Volume::ZERO,
-            pocket_type: cdda_core::core::components::item::PocketType::Container,
+            pocket_type: cdda_components::item::PocketType::Container,
         },
     ));
     let item = test.spawn((DefStrId("anvil".into()), ItemVolume(100), ItemWeight(5000)));
@@ -114,7 +114,7 @@ fn short_item_fits_length_constraint() {
             max_weight: Weight::from_grams(5000),
             max_item_length: Length::from_millimeters(300),
             min_item_volume: Volume::ZERO,
-            pocket_type: cdda_core::core::components::item::PocketType::Container,
+            pocket_type: cdda_components::item::PocketType::Container,
         },
     ));
     let item = test.spawn((
@@ -139,7 +139,7 @@ fn long_item_exceeds_length() {
             max_weight: Weight::from_grams(5000),
             max_item_length: Length::from_millimeters(200),
             min_item_volume: Volume::ZERO,
-            pocket_type: cdda_core::core::components::item::PocketType::Container,
+            pocket_type: cdda_components::item::PocketType::Container,
         },
     ));
     let item = test.spawn((
@@ -164,7 +164,7 @@ fn item_below_min_volume_rejected() {
             max_weight: Weight::from_grams(5000),
             max_item_length: Length::from_millimeters(500),
             min_item_volume: Volume::from_milliliters(100),
-            pocket_type: cdda_core::core::components::item::PocketType::Container,
+            pocket_type: cdda_components::item::PocketType::Container,
         },
     ));
     let item = test.spawn((

@@ -1,9 +1,11 @@
 #![allow(unused_imports)]
 
 use bevy_ecs::prelude::Entity;
-use cdda_core::core::components::actor::*;
-use cdda_core::*;
-use cdda_core::core::components::sim::*;
+use cdda_components::actor::*;
+use cdda_components::*;
+use cdda_core_types::core::*;
+use cdda_components::schedule::*;
+use cdda_components::sim::*;
 use cdda_core::crafting::systems::*;
 use cdda_core::sim::test_utils::TestBed;
 
@@ -99,7 +101,7 @@ fn can_craft_missing_tools() {
 #[test]
 #[ignore = "crafting system not yet implemented"]
 fn craft_time_base_calculation() {
-    let base_time = cdda_core::Time::from_turns(600);
+    let base_time = cdda_core_types::core::units::Time::from_turns(600);
     assert_eq!(base_time.as_turns(), 600);
 }
 

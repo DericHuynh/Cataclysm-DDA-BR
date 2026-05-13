@@ -5,7 +5,7 @@
 
 use bevy_ecs::entity::Entity;
 use cdda_core::{Length, Volume, Weight};
-use cdda_core::core::components::item::*;
+use cdda_components::item::*;
 use cdda_core::sim::test_utils::TestBed;
 
 // ===========================================================================

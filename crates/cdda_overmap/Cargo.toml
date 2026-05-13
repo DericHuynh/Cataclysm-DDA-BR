@@ -1,0 +1,13 @@
+[package]
+name = "cdda_overmap"
+version = "0.1.0"
+edition = "2021"
+description = "Overmap chunk storage, terrain registry, spatial index, and serialization"
+
+[dependencies]
+bevy_ecs.workspace = true
+bevy_app.workspace = true
+serde.workspace = true
+bytemuck = "1"
+cdda_core_types = { path = "../cdda_core_types" }
+cdda_noise = { path = "../cdda_noise" }

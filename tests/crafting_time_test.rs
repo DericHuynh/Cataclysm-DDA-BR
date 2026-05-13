@@ -17,9 +17,9 @@
 use bevy_ecs::prelude::*;
 use cdda_components::dev::DevPlayer;
 use cdda_core::actor::turn::AP_COST_CRAFT_TICK;
-use cdda_core::core::components::actor::{ActionPoints, HandCount, IsAlive};
-use cdda_core::core::components::def::{ItemName, RecipeResult, RecipeResultCount, RecipeTime};
-use cdda_core::core::components::item::{
+use cdda_components::actor::{ActionPoints, HandCount, IsAlive};
+use cdda_components::def::{ItemName, RecipeResult, RecipeResultCount, RecipeTime};
+use cdda_components::item::{
     ContainerContents, InProgressCraft, InsideContainer, Inventory, InvletFavorites,
 };
 use cdda_core::crafting::systems::{continue_crafts, start_craft};
