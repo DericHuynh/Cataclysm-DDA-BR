@@ -6,12 +6,12 @@
 //! Each ravine is a greedy path from a random origin to a random offset,
 //! widened to `ravine_width`, then propagated down through z-levels.
 
-use bevy_ecs::prelude::*;
-use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, OMAP_DIM};
-use cdda_overmap::registry::{TerrainHandle, TerrainRegistry};
-use cdda_overmap::rng::XorShiftRng;
 use crate::pipeline::OvermapGenConfig;
 use crate::region_settings::OvermapRegionSettings;
+use bevy_ecs::prelude::*;
+use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, OMAP_DIM};
+use cdda_overmap::registry::{TerrainHandle, TerrainRegistry};
+use cdda_overmap::rng::XorShiftRng;
 use std::collections::HashSet;
 use tracing::info;
 
@@ -52,7 +52,8 @@ fn greedy_path(from: (i32, i32), to: (i32, i32), rng: &mut XorShiftRng) -> Vec<(
 /// 3. Place ravine/ravine_edge at z=0, then propagate down through z-levels
 ///    to ravine_depth, placing ravine_floor/ravine_floor_edge at the bottom.
 pub fn place_ravines(
-    mut chunks: Query<(&ChunkPosition, &mut OvermapChunk)>,
+    chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+    par_commands: ParallelCommands,
     config: Res<OvermapGenConfig>,
     registry: Res<TerrainRegistry>,
     settings: Res<OvermapRegionSettings>,
@@ -115,52 +116,82 @@ pub fn place_ravines(
         return;
     }
 
-    // Phase 2: classify rift vs edge points, then place terrain at z=0.
+    // Phase 2: classify rift vs edge points, precompute handles.
     let mut is_ravine = [[false; 180]; 180];
     for &(x, y) in &rift_points {
         is_ravine[x as usize][y as usize] = true;
     }
 
+    let mut surface_handles: [[Option<TerrainHandle>; 180]; 180] = [[None; 180]; 180];
+    let mut is_edge: [[bool; 180]; 180] = [[false; 180]; 180];
     for &(x, y) in &rift_points {
-        // Check 8 neighbors: if any is NOT in the rift set, this is an edge.
-        let is_edge = neighbors_8(x, y)
+        let edge = neighbors_8(x, y)
             .iter()
             .any(|&(nx, ny)| !is_ravine[nx as usize][ny as usize]);
-
-        let handle = if is_edge {
+        is_edge[x as usize][y as usize] = edge;
+        surface_handles[x as usize][y as usize] = Some(if edge {
             ravine_edge_handle
         } else {
             ravine_handle
-        };
-
-        write_tile_to_chunks(&mut chunks, x, y, 0, handle);
+        });
     }
 
-    // Phase 3: propagate down through z-levels.
-    // z=-1 to ravine_depth+1: ravine / ravine_edge (same as surface).
-    // z=ravine_depth: ravine_floor / ravine_floor_edge.
-    for &(x, y) in &rift_points {
-        let is_edge = neighbors_8(x, y)
-            .iter()
-            .any(|&(nx, ny)| !is_ravine[nx as usize][ny as usize]);
+    // Phase 3: write back using par_iter across all z-levels.
+    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
+        let z = chunk_pos.z.0 as i32;
+        let (ox, oy) = chunk_pos.omt_origin();
+        let mut modified = false;
+        let mut new_terrain = chunk.terrain.clone();
 
-        for z in (ravine_depth + 1)..0 {
-            let handle = if is_edge {
-                ravine_edge_handle
-            } else {
-                ravine_handle
-            };
-            write_tile_to_chunks(&mut chunks, x, y, z, handle);
+        for ly in 0u8..CHUNK_DIM as u8 {
+            for lx in 0u8..CHUNK_DIM as u8 {
+                let gx = (ox + lx as i32) as usize;
+                let gy = (oy + ly as i32) as usize;
+                if gx >= 180 || gy >= 180 {
+                    continue;
+                }
+                if !is_ravine[gx][gy] {
+                    continue;
+                }
+
+                let handle = if z == 0 {
+                    surface_handles[gx][gy]
+                } else if z > ravine_depth && z < 0 {
+                    // z=-1 down to ravine_depth+1: same as surface.
+                    Some(if is_edge[gx][gy] {
+                        ravine_edge_handle
+                    } else {
+                        ravine_handle
+                    })
+                } else if z == ravine_depth {
+                    // Bottom floor.
+                    Some(if is_edge[gx][gy] {
+                        ravine_floor_edge_handle
+                    } else {
+                        ravine_floor_handle
+                    })
+                } else {
+                    None
+                };
+
+                if let Some(new_handle) = handle {
+                    let idx = ly as usize * CHUNK_DIM as usize + lx as usize;
+                    if new_terrain[idx] != new_handle {
+                        new_terrain[idx] = new_handle;
+                        modified = true;
+                    }
+                }
+            }
         }
 
-        // Bottom floor.
-        let floor_handle = if is_edge {
-            ravine_floor_edge_handle
-        } else {
-            ravine_floor_handle
-        };
-        write_tile_to_chunks(&mut chunks, x, y, ravine_depth, floor_handle);
-    }
+        if modified {
+            par_commands.command_scope(|mut cmd| {
+                cmd.entity(entity).insert(OvermapChunk {
+                    terrain: new_terrain,
+                });
+            });
+        }
+    });
 
     info!(
         "Ravines placed: {} rift points for overmap ({}, {})",
@@ -168,28 +199,6 @@ pub fn place_ravines(
         config.om_x,
         config.om_y
     );
-}
-
-/// Write a terrain handle to the chunk that contains the given OMT coordinate.
-fn write_tile_to_chunks(
-    chunks: &mut Query<(&ChunkPosition, &mut OvermapChunk)>,
-    omt_x: i32,
-    omt_y: i32,
-    z: i32,
-    handle: TerrainHandle,
-) {
-    for (chunk_pos, mut chunk) in chunks {
-        if chunk_pos.z.0 != z as i8 {
-            continue;
-        }
-        let (ox, oy) = chunk_pos.omt_origin();
-        let lx = omt_x - ox;
-        let ly = omt_y - oy;
-        if lx >= 0 && lx < 32 && ly >= 0 && ly < 32 {
-            chunk.set(lx as u8, ly as u8, handle);
-            break;
-        }
-    }
 }
 
 fn neighbors_8(x: i32, y: i32) -> Vec<(i32, i32)> {

@@ -5,14 +5,14 @@
 //! Called once; iterates z=-1 downward to z=-10 and places sewer/subway
 //! tiles based on manholes and sub-stations at ground level.
 
+use crate::pipeline::OvermapGenConfig;
+use crate::region_settings::OvermapRegionSettings;
+use crate::steps::cities::City;
 use bevy_ecs::prelude::*;
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, OMAP_DIM};
 use cdda_overmap::connections::{connect_closest_points, line_between, ConnectionType};
 use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};
 use cdda_overmap::rng::XorShiftRng;
-use crate::pipeline::OvermapGenConfig;
-use crate::region_settings::OvermapRegionSettings;
-use crate::steps::cities::City;
 use tracing::info;
 
 /// Generate underground layers (sewers, subways).
@@ -29,15 +29,18 @@ use tracing::info;
 /// returns `true` to request the next level. This Rust port handles all
 /// z-levels in a single system invocation since Bevy systems run once.
 pub fn generate_sub(
-    mut chunks: Query<(&ChunkPosition, &mut OvermapChunk)>,
+    chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+    par_commands: ParallelCommands,
     _cities: Query<&City>,
     config: Res<OvermapGenConfig>,
     registry: Res<TerrainRegistry>,
     _settings: Res<OvermapRegionSettings>,
 ) {
+    // Collect all writes: (omt_x, omt_y, z, handle)
+    let mut all_writes: Vec<(i32, i32, i8, TerrainHandle)> = Vec::new();
+
     // Process each underground z-level sequentially.
-    // Range: -1 down to -10 (inclusive).  Rust requires start <= end in
-    // inclusive-range syntax, so we write (-10..=-1).rev().
+    // Range: -1 down to -10 (inclusive).
     for z in (-10i8..=-1i8).rev() {
         let mut sewer_points: Vec<(i32, i32)> = Vec::new();
         let mut subway_points: Vec<(i32, i32)> = Vec::new();
@@ -46,11 +49,11 @@ pub fn generate_sub(
         // Build dense 180×180 grids for this z-level, the level above,
         // and ground level.  We pack raw u32 type indices for fast lookup.
         // ------------------------------------------------------------------
-        let mut grid_z = [[0u32; 180]; 180];       // current z
-        let mut grid_above = [[0u32; 180]; 180];   // z + 1
-        let mut grid_ground = [[0u32; 180]; 180];  // z = 0
+        let mut grid_z = [[0u32; 180]; 180]; // current z
+        let mut grid_above = [[0u32; 180]; 180]; // z + 1
+        let mut grid_ground = [[0u32; 180]; 180]; // z = 0
 
-        for (chunk_pos, chunk) in &chunks {
+        for (_entity, chunk_pos, chunk) in &chunks {
             let (ox, oy) = chunk_pos.omt_origin();
             for ly in 0..CHUNK_DIM as u8 {
                 for lx in 0..CHUNK_DIM as u8 {
@@ -89,7 +92,7 @@ pub fn generate_sub(
                         // CDDA only places sewer_isolated directly below the
                         // manhole (i.e. at z=-1), not deeper.
                         if let Some(sewer) = registry.handle_by_id("sewer_isolated") {
-                            place_in_chunk(&mut chunks, x as i32, y as i32, z, sewer);
+                            all_writes.push((x as i32, y as i32, z, sewer));
                         }
                     }
                     sewer_points.push((x as i32, y as i32));
@@ -102,12 +105,12 @@ pub fn generate_sub(
                         if z == -1 {
                             // Directly below sub-station: sewer sub-station room.
                             if let Some(sewer_sub) = registry.handle_by_id("sewer_sub_station") {
-                                place_in_chunk(&mut chunks, x as i32, y as i32, z, sewer_sub);
+                                all_writes.push((x as i32, y as i32, z, sewer_sub));
                             }
                         } else if z == -2 {
                             // Two levels below: subway entrance.
                             if let Some(subway_iso) = registry.handle_by_id("subway_isolated") {
-                                place_in_chunk(&mut chunks, x as i32, y as i32, z, subway_iso);
+                                all_writes.push((x as i32, y as i32, z, subway_iso));
                             }
                             // Add three adjacent tiles for subway connectivity
                             // (CDDA adds the tile and its north/south neighbours).
@@ -124,7 +127,7 @@ pub fn generate_sub(
         // Connect sewer points into a network (MST + optional loop edges).
         // ------------------------------------------------------------------
         if sewer_points.len() >= 2 {
-            let mut rng = XorShiftRng::new(config.noise_seed as u64 + 100 + z as u64);
+            let mut rng = XorShiftRng::new((config.noise_seed as i64 + z as i64 + 100) as u64);
             connect_closest_points(
                 &sewer_points,
                 z as i32,
@@ -134,9 +137,7 @@ pub fn generate_sub(
                     if let Some(sewer) = registry.handle_by_id("sewer_ns") {
                         let path = line_between(from, to);
                         for &(px, py) in &path {
-                            place_in_chunk(
-                                &mut chunks, px, py, z_conn as i8, sewer,
-                            );
+                            all_writes.push((px, py, z_conn as i8, sewer));
                         }
                     }
                 },
@@ -147,7 +148,7 @@ pub fn generate_sub(
         // Connect subway points into a network.
         // ------------------------------------------------------------------
         if subway_points.len() >= 2 {
-            let mut rng = XorShiftRng::new(config.noise_seed as u64 + 200 + z as u64);
+            let mut rng = XorShiftRng::new((config.noise_seed as i64 + z as i64 + 200) as u64);
             connect_closest_points(
                 &subway_points,
                 z as i32,
@@ -157,9 +158,7 @@ pub fn generate_sub(
                     if let Some(subway) = registry.handle_by_id("subway_ns") {
                         let path = line_between(from, to);
                         for &(px, py) in &path {
-                            place_in_chunk(
-                                &mut chunks, px, py, z_conn as i8, subway,
-                            );
+                            all_writes.push((px, py, z_conn as i8, subway));
                         }
                     }
                 },
@@ -167,35 +166,45 @@ pub fn generate_sub(
         }
     }
 
+    // ------------------------------------------------------------------
+    // Write-back: apply all collected writes via par_iter
+    // ------------------------------------------------------------------
+    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
+        let z_chunk = chunk_pos.z.0;
+        // Only process underground z-levels
+        if z_chunk > 0 || z_chunk < -10 {
+            return;
+        }
+        let (ox, oy) = chunk_pos.omt_origin();
+        let mut modified = false;
+        let mut new_terrain = chunk.terrain.clone();
+
+        for &(wx, wy, wz, handle) in &all_writes {
+            if wz != z_chunk {
+                continue;
+            }
+            let lx = wx - ox;
+            let ly = wy - oy;
+            if lx >= 0 && lx < CHUNK_DIM as i32 && ly >= 0 && ly < CHUNK_DIM as i32 {
+                let idx = ly as usize * CHUNK_DIM + lx as usize;
+                if new_terrain[idx] != handle {
+                    new_terrain[idx] = handle;
+                    modified = true;
+                }
+            }
+        }
+
+        if modified {
+            par_commands.command_scope(|mut cmd| {
+                cmd.entity(entity).insert(OvermapChunk {
+                    terrain: new_terrain,
+                });
+            });
+        }
+    });
+
     info!(
         "Underground generated for overmap ({}, {})",
         config.om_x, config.om_y
     );
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/// Place a terrain handle at world-absolute OMT coordinates in the chunk
-/// that contains the point at the given z-level.
-fn place_in_chunk(
-    chunks: &mut Query<(&ChunkPosition, &mut OvermapChunk)>,
-    omt_x: i32,
-    omt_y: i32,
-    z: i8,
-    handle: TerrainHandle,
-) {
-    for (chunk_pos, mut chunk) in chunks {
-        if chunk_pos.z.0 != z {
-            continue;
-        }
-        let (ox, oy) = chunk_pos.omt_origin();
-        let lx = omt_x - ox;
-        let ly = omt_y - oy;
-        if lx >= 0 && lx < CHUNK_DIM as i32 && ly >= 0 && ly < CHUNK_DIM as i32 {
-            chunk.set(lx as u8, ly as u8, handle);
-            return;
-        }
-    }
 }

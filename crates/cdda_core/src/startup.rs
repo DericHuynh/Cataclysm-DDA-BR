@@ -438,12 +438,15 @@ pub fn worldgen_system(world: &mut World) {
         return;
     }
 
-    // Kick off overmap generation by transitioning state.
+    // Kick off overmap generation by transitioning state (only once).
     // The OvermapGenPlugin's chained system sets will execute in order.
-    info!("Worldgen: starting overmap generation pipeline");
-    world
-        .resource_mut::<NextState<OvermapGenPhase>>()
-        .set(OvermapGenPhase::Generating);
+    let phase = world.resource::<State<OvermapGenPhase>>().get().clone();
+    if phase == OvermapGenPhase::Idle {
+        info!("Worldgen: starting overmap generation pipeline");
+        world
+            .resource_mut::<NextState<OvermapGenPhase>>()
+            .set(OvermapGenPhase::Generating);
+    }
 
     // Wait for generation to complete, then transition to InGame.
     // This is polled each frame until Complete.

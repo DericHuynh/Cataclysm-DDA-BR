@@ -27,12 +27,12 @@ use tracing::info;
 
 /// Return a terrain handle at OMT coordinates (global 0..180).
 fn get_terrain_at(
-    chunks: &Query<(&ChunkPosition, &mut OvermapChunk)>,
+    chunks: &Query<(Entity, &ChunkPosition, &OvermapChunk)>,
     x: i32,
     y: i32,
     z: i8,
 ) -> TerrainHandle {
-    for (chunk_pos, chunk) in chunks {
+    for (_entity, chunk_pos, chunk) in chunks {
         if chunk_pos.z.0 != z {
             continue;
         }
@@ -40,7 +40,8 @@ fn get_terrain_at(
         let lx = x - ox;
         let ly = y - oy;
         if lx >= 0 && lx < CHUNK_DIM as i32 && ly >= 0 && ly < CHUNK_DIM as i32 {
-            return chunk.get(lx as u8, ly as u8);
+            let idx = ly as usize * CHUNK_DIM + lx as usize;
+            return chunk.terrain[idx];
         }
     }
     TerrainHandle::NULL
@@ -130,19 +131,31 @@ fn is_water(handle: TerrainHandle, registry: &TerrainRegistry) -> bool {
 ///    The build function uses `greedy_path` for A\* routing around obstacles.
 /// 5. Write road tiles back to chunks with correct NS/EW/intersection rotation.
 pub fn place_roads(
-    mut chunks: Query<(&ChunkPosition, &mut OvermapChunk)>,
+    chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+    par_commands: ParallelCommands,
     cities: Query<&City>,
     config: Res<OvermapGenConfig>,
     registry: Res<TerrainRegistry>,
     settings: Res<OvermapRegionSettings>,
 ) {
-    if !settings.place_roads {
+    // CDDA: no roads if there are no cities
+    let op_city_size = settings.city_size;
+    if op_city_size <= 0 || !settings.place_roads {
         return;
     }
 
     let mut rng = XorShiftRng::new(config.noise_seed as u64 + 3);
 
-    // ---- 1. Generate border exit points ----
+    // ---- 1. Get city centers ----
+    let mut city_centers: Vec<(i32, i32)> = Vec::new();
+    for city in &cities {
+        city_centers.push((city.omt_x, city.omt_y));
+    }
+    if city_centers.is_empty() {
+        return; // CDDA: no cities, no roads
+    }
+
+    // ---- 2. Generate border exit points ----
     let mut roads_out: Vec<(i32, i32)> = Vec::new();
 
     // Try N/E, S/W pairs for at least 3 exits, avoiding rivers.
@@ -187,13 +200,9 @@ pub fn place_roads(
     road_points.extend_from_slice(&roads_out);
 
     if city_centers.is_empty() {
-        // Fallback: random central point.
-        let fx = rng.range_i32(OMAP_DIM / 4, 3 * OMAP_DIM / 4);
-        let fy = rng.range_i32(OMAP_DIM / 4, 3 * OMAP_DIM / 4);
-        road_points.push((fx, fy));
-    } else {
-        road_points.extend_from_slice(&city_centers);
+        return; // no cities, no roads
     }
+    road_points.extend_from_slice(&city_centers);
 
     if road_points.len() < 2 {
         return;
@@ -201,7 +210,7 @@ pub fn place_roads(
 
     // ---- 3. Build dense terrain grid for the scoring function ----
     let mut terrain_grid = [[0u32; 180]; 180];
-    for (chunk_pos, chunk) in &chunks {
+    for (_entity, chunk_pos, chunk) in &chunks {
         if chunk_pos.z.0 != 0 {
             continue;
         }
@@ -211,7 +220,8 @@ pub fn place_roads(
                 let gx = (ox + lx as i32) as usize;
                 let gy = (oy + ly as i32) as usize;
                 if gx < 180 && gy < 180 {
-                    terrain_grid[gx][gy] = chunk.get(lx, ly).0;
+                    let idx = ly as usize * CHUNK_DIM + lx as usize;
+                    terrain_grid[gx][gy] = chunk.terrain[idx].0;
                 }
             }
         }
@@ -275,12 +285,21 @@ pub fn place_roads(
         .unwrap_or(TerrainHandle::NULL);
 
     let field_index = registry.field_index;
+    let forest_index = registry.forest_index;
+    let forest_thick_index = registry.forest_thick_index;
+    let forest_water_index = registry.forest_water_index;
+    let road_ns_idx = road_ns.type_index();
+    let road_ew_idx = road_ew.type_index();
+    let road_nesw_idx = road_nesw.type_index();
+    let reg = &*registry;
 
-    for (chunk_pos, mut chunk) in &mut chunks {
+    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
         if chunk_pos.z.0 != 0 {
-            continue;
+            return;
         }
         let (ox, oy) = chunk_pos.omt_origin();
+        let mut modified = false;
+        let mut new_terrain = chunk.terrain.clone();
 
         for ly in 0u8..CHUNK_DIM as u8 {
             for lx in 0u8..CHUNK_DIM as u8 {
@@ -290,22 +309,20 @@ pub fn place_roads(
                     continue;
                 }
 
-                let current = chunk.get(lx, ly);
+                let idx = ly as usize * CHUNK_DIM + lx as usize;
+                let current = chunk.terrain[idx];
                 let ct = current.type_index();
 
                 // Never overwrite water.
-                if is_water(current, &registry) {
+                if is_water(current, reg) {
                     continue;
                 }
 
                 // Only overwrite field, forest types, and existing roads.
                 let is_field = ct == field_index;
-                let is_forest = ct == registry.forest_index
-                    || ct == registry.forest_thick_index
-                    || ct == registry.forest_water_index;
-                let is_road = ct == road_ns.type_index()
-                    || ct == road_ew.type_index()
-                    || ct == road_nesw.type_index();
+                let is_forest =
+                    ct == forest_index || ct == forest_thick_index || ct == forest_water_index;
+                let is_road = ct == road_ns_idx || ct == road_ew_idx || ct == road_nesw_idx;
 
                 if !is_field && !is_forest && !is_road {
                     continue;
@@ -327,10 +344,18 @@ pub fn place_roads(
                 } else {
                     road_ns // vertical road (default for endpoints)
                 };
-                chunk.set(lx, ly, handle);
+                new_terrain[idx] = handle;
+                modified = true;
             }
         }
-    }
+        if modified {
+            par_commands.command_scope(|mut cmd| {
+                cmd.entity(entity).insert(OvermapChunk {
+                    terrain: new_terrain,
+                });
+            });
+        }
+    });
 
     info!(
         "Roads placed: {} road points, {} exit points for overmap ({}, {})",

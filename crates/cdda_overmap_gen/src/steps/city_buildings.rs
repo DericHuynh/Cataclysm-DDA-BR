@@ -3,13 +3,13 @@
 //! Port of CDDA master's `overmap::place_building()`.
 //! Reads `CityBuildingDef` from `DefRegistry` and places them near city centers.
 
-use bevy_ecs::prelude::*;
-use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, OMAP_DIM};
-use cdda_overmap::registry::TerrainRegistry;
-use cdda_core_types::core::raw_defs::city_building::CityBuildingDef;
-use cdda_overmap::rng::XorShiftRng;
 use crate::pipeline::OvermapGenConfig;
 use crate::steps::cities::City;
+use bevy_ecs::prelude::*;
+use cdda_core_types::core::raw_defs::city_building::CityBuildingDef;
+use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, OMAP_DIM};
+use cdda_overmap::registry::{TerrainHandle, TerrainRegistry};
+use cdda_overmap::rng::XorShiftRng;
 use std::sync::Arc;
 use tracing::info;
 
@@ -23,7 +23,8 @@ pub struct CityBuildingCatalog {
 /// Place buildings from the catalog around city centers.
 pub fn place_city_buildings(
     _commands: Commands,
-    mut chunks: Query<(&ChunkPosition, &mut OvermapChunk)>,
+    chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+    par_commands: ParallelCommands,
     cities: Query<&City>,
     config: Res<OvermapGenConfig>,
     registry: Res<TerrainRegistry>,
@@ -38,6 +39,7 @@ pub fn place_city_buildings(
     }
 
     let mut rng = XorShiftRng::new(config.noise_seed as u64 + 2);
+    let mut tile_writes: Vec<(i32, i32, i8, TerrainHandle)> = Vec::new();
 
     for city in &cities {
         let cx = city.omt_x;
@@ -70,20 +72,41 @@ pub fn place_city_buildings(
                 }
 
                 if let Some(handle) = registry.handle_by_id(&omt.overmap) {
-                    for (chunk_pos, mut chunk) in &mut chunks {
-                        if chunk_pos.z.0 != 0 { continue; }
-                        let (ox, oy) = chunk_pos.omt_origin();
-                        let lx = px - ox;
-                        let ly = py - oy;
-                        if lx >= 0 && lx < 32 && ly >= 0 && ly < 32 {
-                            chunk.set(lx as u8, ly as u8, handle);
-                            break;
-                        }
-                    }
+                    tile_writes.push((px, py, 0, handle));
                 }
             }
         }
     }
+
+    // Apply tile writes via par_iter.
+    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
+        if chunk_pos.z.0 != 0 {
+            return;
+        }
+        let mut modified = false;
+        let mut new_terrain = chunk.terrain.clone();
+        let (ox, oy) = chunk_pos.omt_origin();
+
+        for &(wx, wy, _wz, handle) in &tile_writes {
+            let lx = wx - ox;
+            let ly = wy - oy;
+            if lx >= 0 && lx < CHUNK_DIM as i32 && ly >= 0 && ly < CHUNK_DIM as i32 {
+                let idx = ly as usize * CHUNK_DIM as usize + lx as usize;
+                if new_terrain[idx] != handle {
+                    new_terrain[idx] = handle;
+                    modified = true;
+                }
+            }
+        }
+
+        if modified {
+            par_commands.command_scope(|mut cmd| {
+                cmd.entity(entity).insert(OvermapChunk {
+                    terrain: new_terrain,
+                });
+            });
+        }
+    });
 
     info!(
         "City buildings placed for overmap ({}, {})",

@@ -26,7 +26,8 @@ use tracing::info;
 ///    - `should_isolated_swamp`: forest_noise > swamp_noise_threshold_isolated
 ///    - Place `forest_water` if either condition is true.
 pub fn place_swamps(
-    mut chunks: Query<(&ChunkPosition, &mut OvermapChunk)>,
+    chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+    par_commands: ParallelCommands,
     config: Res<OvermapGenConfig>,
     registry: Res<TerrainRegistry>,
     settings: Res<OvermapRegionSettings>,
@@ -45,7 +46,7 @@ pub fn place_swamps(
     let mut terrain = [[0u32; 180]; 180];
     let mut floodplain = [[0u32; 180]; 180];
 
-    for (chunk_pos, chunk) in &chunks {
+    for (_entity, chunk_pos, chunk) in &chunks {
         if chunk_pos.z.0 != 0 {
             continue;
         }
@@ -88,51 +89,66 @@ pub fn place_swamps(
         }
     }
 
-    // Phase 2: place swamp on qualifying FOREST tiles.
+    // Phase 2: compute swamp tiles on the dense grid.
     let forest_water = registry
         .handle_by_id("forest_water")
         .unwrap_or(TerrainHandle::new(0, 0));
     let swamp_adj_threshold = settings.swamp_noise_threshold_adjacent;
     let swamp_iso_threshold = settings.swamp_noise_threshold_isolated;
 
-    for (chunk_pos, mut chunk) in &mut chunks {
-        if chunk_pos.z.0 != 0 {
-            continue;
-        }
-        let (ox, oy) = chunk_pos.omt_origin();
+    let mut swamp_tiles: [[Option<TerrainHandle>; 180]; 180] = [[None; 180]; 180];
 
-        for ly in 0u8..CHUNK_DIM as u8 {
-            for lx in 0u8..CHUNK_DIM as u8 {
-                let h = chunk.get(lx, ly);
-                let ct = h.type_index();
+    for x in 0..180 {
+        for y in 0..180 {
+            let ct = terrain[x][y];
 
-                // Only consider FOREST or FOREST_THICK tiles.
-                if ct != forest_index && ct != forest_thick_index {
-                    continue;
-                }
+            // Only consider FOREST or FOREST_THICK tiles.
+            if ct != forest_index && ct != forest_thick_index {
+                continue;
+            }
 
-                let wx = ox + lx as i32;
-                let wy = oy + ly as i32;
-                if wx < 0 || wx >= 180 || wy < 0 || wy >= 180 {
-                    continue;
-                }
-                let gx = wx as usize;
-                let gy = wy as usize;
+            let fp_val = floodplain[x][y];
+            let should_flood = fp_val > 0
+                && !rng.one_in(fp_val as i32)
+                && cdda_noise::floodplain_noise_at(x as i32, y as i32, seed) > swamp_adj_threshold;
 
-                let fp_val = floodplain[gx][gy];
-                let should_flood = fp_val > 0
-                    && !rng.one_in(fp_val as i32)
-                    && cdda_noise::floodplain_noise_at(wx, wy, seed) > swamp_adj_threshold;
+            let should_isolated =
+                cdda_noise::forest_noise_at(x as i32, y as i32, seed) > swamp_iso_threshold;
 
-                let should_isolated =
-                    cdda_noise::forest_noise_at(wx, wy, seed) > swamp_iso_threshold;
-
-                if should_flood || should_isolated {
-                    chunk.set(lx, ly, forest_water);
-                }
+            if should_flood || should_isolated {
+                swamp_tiles[x][y] = Some(forest_water);
             }
         }
     }
+
+    // Phase 3: write back using par_iter.
+    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
+        if chunk_pos.z.0 != 0 { return; }
+        let (ox, oy) = chunk_pos.omt_origin();
+        let mut modified = false;
+        let mut new_terrain = chunk.terrain.clone();
+
+        for ly in 0u8..CHUNK_DIM as u8 {
+            for lx in 0u8..CHUNK_DIM as u8 {
+                let gx = (ox + lx as i32) as usize;
+                let gy = (oy + ly as i32) as usize;
+                if gx >= 180 || gy >= 180 { continue; }
+                if let Some(new_handle) = swamp_tiles[gx][gy] {
+                    let idx = ly as usize * CHUNK_DIM as usize + lx as usize;
+                    if new_terrain[idx] != new_handle {
+                        new_terrain[idx] = new_handle;
+                        modified = true;
+                    }
+                }
+            }
+        }
+
+        if modified {
+            par_commands.command_scope(|mut cmd| {
+                cmd.entity(entity).insert(OvermapChunk { terrain: new_terrain });
+            });
+        }
+    });
 
     info!(
         "Swamps placed for overmap ({}, {})",

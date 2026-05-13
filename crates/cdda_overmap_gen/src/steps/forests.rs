@@ -11,7 +11,7 @@ use crate::region_settings::OvermapRegionSettings;
 use bevy_ecs::prelude::*;
 use cdda_noise;
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM};
-use cdda_overmap::registry::{TerrainHandle, TerrainRegistry};
+use cdda_overmap::registry::TerrainRegistry;
 use tracing::info;
 
 /// Port of overmap::calculate_forestosity() (C++ L2331-2365).
@@ -46,55 +46,50 @@ pub fn calculate_forestosity(om_x: i32, om_y: i32, settings: &OvermapRegionSetti
 
 /// Place FOREST and FOREST_THICK on FIELD tiles using noise.
 pub fn place_forests(
-    mut chunks: Query<(&ChunkPosition, &mut OvermapChunk)>,
+    chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+    par_commands: ParallelCommands,
     config: Res<OvermapGenConfig>,
     registry: Res<TerrainRegistry>,
     settings: Res<OvermapRegionSettings>,
 ) {
     let field_index = registry.field_index;
-
     let forest_adjust = calculate_forestosity(config.om_x, config.om_y, &settings);
-
     let threshold = settings.forest_noise_threshold;
     let thick_threshold = settings.forest_noise_threshold_thick;
     let seed = config.noise_seed;
 
-    for (chunk_pos, mut chunk) in &mut chunks {
-        // Only process z=0
-        if chunk_pos.z.0 != 0 {
-            continue;
-        }
-
-        let (origin_x, origin_y) = chunk_pos.omt_origin();
+    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
+        if chunk_pos.z.0 != 0 { return; }
+        let (ox, oy) = chunk_pos.omt_origin();
+        let mut modified = false;
+        let mut new_terrain = chunk.terrain.clone();
 
         for ly in 0u8..CHUNK_DIM as u8 {
             for lx in 0u8..CHUNK_DIM as u8 {
-                let handle = chunk.get(lx, ly);
-                if handle.type_index() != field_index {
-                    continue;
-                }
-
-                let wx = origin_x + lx as i32;
-                let wy = origin_y + ly as i32;
+                let idx = ly as usize * CHUNK_DIM as usize + lx as usize;
+                let handle = chunk.terrain[idx];
+                if handle.type_index() != field_index { continue; }
+                let wx = ox + lx as i32;
+                let wy = oy + ly as i32;
                 let n = cdda_noise::forest_noise_at(wx, wy, seed);
 
                 if n + forest_adjust > thick_threshold {
-                    let thick = registry
-                        .handle_by_id("forest_thick")
-                        .unwrap_or(TerrainHandle::new(0, 0));
-                    chunk.set(lx, ly, thick);
+                    if let Some(h) = registry.handle_by_id("forest_thick") {
+                        new_terrain[idx] = h; modified = true;
+                    }
                 } else if n + forest_adjust > threshold {
-                    let forest = registry
-                        .handle_by_id("forest")
-                        .unwrap_or(TerrainHandle::new(0, 0));
-                    chunk.set(lx, ly, forest);
+                    if let Some(h) = registry.handle_by_id("forest") {
+                        new_terrain[idx] = h; modified = true;
+                    }
                 }
             }
         }
-    }
+        if modified {
+            par_commands.command_scope(|mut cmd| {
+                cmd.entity(entity).insert(OvermapChunk { terrain: new_terrain });
+            });
+        }
+    });
 
-    info!(
-        "Forests placed for overmap ({}, {})",
-        config.om_x, config.om_y
-    );
+    info!("Forests placed for overmap ({}, {})", config.om_x, config.om_y);
 }

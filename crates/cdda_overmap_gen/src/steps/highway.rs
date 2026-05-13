@@ -33,6 +33,7 @@ use cdda_overmap::connections::inbounds_omt;
 use cdda_overmap::direction::{OmDirection, FOUR_ADJACENT_OFFSETS};
 use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};
 use cdda_overmap::rng::XorShiftRng;
+use std::collections::HashMap;
 use tracing::{info, warn};
 
 // ---------------------------------------------------------------------------
@@ -237,29 +238,61 @@ fn hash_om(om_x: i32, om_y: i32, origin: (i32, i32)) -> u64 {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: terrain queries
+// Write-buffer for terrain writes during highway generation
 // ---------------------------------------------------------------------------
 
-/// Read terrain from a query (works with both `&OvermapChunk` and `&mut OvermapChunk`).
-fn get_terrain_at_mut(
-    chunks: &Query<(&ChunkPosition, &mut OvermapChunk)>,
-    x: i32,
-    y: i32,
-    z: i8,
-) -> TerrainHandle {
-    for (chunk_pos, chunk) in chunks {
-        if chunk_pos.z.0 != z {
-            continue;
-        }
-        let (ox, oy) = chunk_pos.omt_origin();
-        let lx = x - ox;
-        let ly = y - oy;
-        if lx >= 0 && lx < CHUNK_DIM as i32 && ly >= 0 && ly < CHUNK_DIM as i32 {
-            return chunk.get(lx as u8, ly as u8);
+/// A write-buffer that collects terrain writes during highway path computation.
+/// Supports both writes (insert) and reads (check buffer first, then fall back
+/// to the base grid).
+struct TerrainWriteBuffer {
+    /// Base terrain grid for z=0 (from immutable query).
+    base_grid_z0: [[u32; 180]; 180],
+    /// Base terrain grid for z=1.
+    base_grid_z1: [[u32; 180]; 180],
+    /// Pending writes: (x, y, z) → TerrainHandle.
+    pending: HashMap<(i32, i32, i8), TerrainHandle>,
+}
+
+impl TerrainWriteBuffer {
+    fn new(
+        base_grid_z0: [[u32; 180]; 180],
+        base_grid_z1: [[u32; 180]; 180],
+    ) -> Self {
+        Self {
+            base_grid_z0,
+            base_grid_z1,
+            pending: HashMap::new(),
         }
     }
-    TerrainHandle::NULL
+
+    /// Read terrain at (x, y, z). Checks write-buffer first, then base grid.
+    fn get(&self, x: i32, y: i32, z: i8) -> TerrainHandle {
+        if let Some(h) = self.pending.get(&(x, y, z)) {
+            return *h;
+        }
+        if z == 0 {
+            TerrainHandle(self.base_grid_z0[x as usize][y as usize])
+        } else if z == 1 {
+            TerrainHandle(self.base_grid_z1[x as usize][y as usize])
+        } else {
+            TerrainHandle::NULL
+        }
+    }
+
+    /// Write terrain at (x, y, z).
+    fn set(&mut self, x: i32, y: i32, z: i8, handle: TerrainHandle) {
+        self.pending.insert((x, y, z), handle);
+    }
+
+    /// Drain all pending writes into a Vec.
+    fn drain_writes(&mut self) -> Vec<(i32, i32, i8, TerrainHandle)> {
+        self.pending.drain().map(|((x, y, z), h)| (x, y, z, h)).collect()
+    }
 }
+
+// ---------------------------------------------------------------------------
+// Helper: terrain queries (using the write-buffer)
+// ---------------------------------------------------------------------------
 
 /// Check if a terrain handle represents a water body.
 fn is_water_body(handle: TerrainHandle, registry: &TerrainRegistry) -> bool {
@@ -267,28 +300,6 @@ fn is_water_body(handle: TerrainHandle, registry: &TerrainRegistry) -> bool {
     flags.contains(TerrainFlags::RIVER)
         || flags.contains(TerrainFlags::LAKE)
         || flags.contains(TerrainFlags::OCEAN)
-}
-
-/// Set terrain at a specific OMT coordinate within the current overmap.
-fn set_terrain_at(
-    chunks: &mut Query<(&ChunkPosition, &mut OvermapChunk)>,
-    x: i32,
-    y: i32,
-    z: i8,
-    handle: TerrainHandle,
-) {
-    for (chunk_pos, mut chunk) in chunks.iter_mut() {
-        if chunk_pos.z.0 != z {
-            continue;
-        }
-        let (ox, oy) = chunk_pos.omt_origin();
-        let lx = x - ox;
-        let ly = y - oy;
-        if lx >= 0 && lx < CHUNK_DIM as i32 && ly >= 0 && ly < CHUNK_DIM as i32 {
-            chunk.set(lx as u8, ly as u8, handle);
-            return;
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -466,13 +477,19 @@ impl HighwayTerrains {
     fn resolve(registry: &TerrainRegistry) -> Self {
         // Try to find highway terrains by common CDDA IDs.
         // In a full port, these would come from highway-specific region settings.
-        let highway_segment = registry
+        let Some(highway_segment) = registry
             .handle_by_id("hiway_ns")
             .or_else(|| registry.handle_by_id("highway_ns"))
-            .unwrap_or_else(|| {
-                warn!("highway segment terrain not found; falling back to road");
-                TerrainHandle::new(registry.road_ns_index, 0)
-            });
+else {
+        warn!("highway segment terrain not found; using NULL fallback");
+        return Self {
+            highway_segment: TerrainHandle::NULL,
+            highway_bridge: TerrainHandle::NULL,
+            highway_ramp: None,
+            highway_4way: None,
+            highway_3way: None,
+        };
+    };
 
         let highway_bridge = registry
             .handle_by_id("hiway_bridge_ns")
@@ -516,7 +533,7 @@ fn highway_handle_oceans(
     config: &OvermapGenConfig,
     settings: &OvermapRegionSettings,
     registry: &TerrainRegistry,
-    chunks: &Query<(&ChunkPosition, &mut OvermapChunk)>,
+    buffer: &TerrainWriteBuffer,
 ) -> (bool, [bool; 4]) {
     let mut ocean_adjacent = [false; 4];
 
@@ -566,7 +583,7 @@ fn highway_handle_oceans(
         let border = get_border(dir, z, 0);
         let water_count = border
             .iter()
-            .filter(|&&(x, y, _)| is_water_body(get_terrain_at_mut(chunks, x, y, z), registry))
+            .filter(|&&(x, y, _)| is_water_body(buffer.get(x, y, z), registry))
             .count();
         // If more than half the edge is water, treat as ocean-adjacent
         if !border.is_empty() && water_count > border.len() / 2 {
@@ -594,7 +611,7 @@ fn highway_select_end_points(
     base_z: i8,
     rng: &mut XorShiftRng,
     registry: &TerrainRegistry,
-    chunks: &Query<(&ChunkPosition, &mut OvermapChunk)>,
+    buffer: &TerrainWriteBuffer,
 ) -> bool {
     // If there are adjacent oceans, cut highway connections on those sides
     for i in 0..HIGHWAY_MAX_CONNECTIONS {
@@ -654,7 +671,7 @@ fn highway_select_end_points(
 
         // If endpoint is on water, raise z by 1 (bridge level)
         let (ex, ey, ez) = end_points[i];
-        if is_water_body(get_terrain_at_mut(chunks, ex, ey, base_z), registry) {
+        if is_water_body(buffer.get(ex, ey, base_z), registry) {
             end_points[i] = (ex, ey, ez + 1);
         }
 
@@ -686,7 +703,7 @@ fn place_highway_line(
     terrains: &HighwayTerrains,
     registry: &TerrainRegistry,
     _rng: &mut XorShiftRng,
-    chunks: &mut Query<(&ChunkPosition, &mut OvermapChunk)>,
+    buffer: &mut TerrainWriteBuffer,
 ) -> HighwayPath {
     let draw_vec = direction_vector(draw_direction);
     let base_z_i32 = base_z as i32;
@@ -709,10 +726,7 @@ fn place_highway_line(
     let step = draw_vec;
 
     // Water detection for the starting segment
-    let start_on_water = is_water_body(
-        get_terrain_at_mut(chunks, current.0, current.1, base_z),
-        registry,
-    );
+    let start_on_water = is_water_body(buffer.get(current.0, current.1, base_z), registry);
 
     let mut is_on_water = start_on_water;
 
@@ -727,10 +741,8 @@ fn place_highway_line(
         }
 
         // Check for water at this position
-        let this_water = is_water_body(
-            get_terrain_at_mut(chunks, current.0, current.1, base_z),
-            registry,
-        );
+        let this_water =
+            is_water_body(buffer.get(current.0, current.1, base_z), registry);
 
         // Detect z-change: transition between water and land
         if this_water != is_on_water && i > 0 {
@@ -750,7 +762,7 @@ fn place_highway_line(
             terrains.highway_segment
         };
 
-        set_terrain_at(chunks, current.0, current.1, z as i8, segment_handle);
+        buffer.set(current.0, current.1, z as i8, segment_handle);
 
         path.push(HighwayNode {
             pos: (current.0, current.1, z),
@@ -787,7 +799,7 @@ fn place_highway_lines_with_bends(
     terrains: &HighwayTerrains,
     registry: &TerrainRegistry,
     rng: &mut XorShiftRng,
-    chunks: &mut Query<(&ChunkPosition, &mut OvermapChunk)>,
+    buffer: &mut TerrainWriteBuffer,
 ) -> HighwayPath {
     let mut highway_path = HighwayPath::new();
     let base_z_i32 = base_z as i32;
@@ -812,7 +824,7 @@ fn place_highway_lines_with_bends(
             terrains,
             registry,
             rng,
-            chunks,
+            buffer,
         );
 
         for node in &segment {
@@ -827,10 +839,7 @@ fn place_highway_lines_with_bends(
             current_direction.turn_right()
         };
 
-        let bend_water = is_water_body(
-            get_terrain_at_mut(chunks, bend_pos.0, bend_pos.1, base_z),
-            registry,
-        );
+        let bend_water = is_water_body(buffer.get(bend_pos.0, bend_pos.1, base_z), registry);
         let bend_z = if bend_water {
             base_z_i32 + 1
         } else {
@@ -859,7 +868,7 @@ fn place_highway_lines_with_bends(
         terrains,
         registry,
         rng,
-        chunks,
+        buffer,
     );
 
     for node in &final_segment {
@@ -890,7 +899,7 @@ fn place_highway_reserved_path(
     terrains: &HighwayTerrains,
     registry: &TerrainRegistry,
     rng: &mut XorShiftRng,
-    chunks: &mut Query<(&ChunkPosition, &mut OvermapChunk)>,
+    buffer: &mut TerrainWriteBuffer,
 ) -> HighwayPath {
     let direction1 = OmDirection::from_index(dir1);
     let direction2 = OmDirection::from_index(dir2);
@@ -917,7 +926,7 @@ fn place_highway_reserved_path(
         // Fallback: place ramp at valid endpoint only
         if !p1_invalid {
             if let Some(ref ramp) = terrains.highway_ramp {
-                set_terrain_at(chunks, p1.0, p1.1, base_z, *ramp);
+                buffer.set(p1.0, p1.1, base_z, *ramp);
             }
             highway_path.push(HighwayNode {
                 pos: (p1.0, p1.1, base_z as i32),
@@ -929,7 +938,7 @@ fn place_highway_reserved_path(
         }
         if !p2_invalid {
             if let Some(ref ramp) = terrains.highway_ramp {
-                set_terrain_at(chunks, p2.0, p2.1, base_z, *ramp);
+                buffer.set(p2.0, p2.1, base_z, *ramp);
             }
             highway_path.push(HighwayNode {
                 pos: (p2.0, p2.1, base_z as i32),
@@ -977,8 +986,10 @@ fn place_highway_reserved_path(
                     return highway_path;
                 }
                 let bend_midpoint = midpoint(p1, p2);
-                let (corner1, dir1_out) = closest_corner_in_direction(p1, bend_midpoint, draw_dir1);
-                let (corner2, _dir2_out) = closest_corner_in_direction(bend_midpoint, p2, dir1_out);
+                let (corner1, dir1_out) =
+                    closest_corner_in_direction(p1, bend_midpoint, draw_dir1);
+                let (corner2, _dir2_out) =
+                    closest_corner_in_direction(bend_midpoint, p2, dir1_out);
                 bend_points.push((corner1, dir1_out));
                 bend_points.push((corner2, _dir2_out));
             } else {
@@ -1001,18 +1012,17 @@ fn place_highway_reserved_path(
             terrains,
             registry,
             rng,
-            chunks,
+            buffer,
         );
     } else {
-        highway_path =
-            place_highway_line(p1, p2, draw_dir1, base_z, terrains, registry, rng, chunks);
+        highway_path = place_highway_line(p1, p2, draw_dir1, base_z, terrains, registry, rng, buffer);
     }
 
     // Handle z-level adjustments for special nodes
-    highway_handle_special_z(&mut highway_path, base_z, terrains, registry, chunks);
+    highway_handle_special_z(&mut highway_path, base_z, terrains, registry, buffer);
 
     // Handle ramp placement
-    highway_handle_ramps(&mut highway_path, base_z, terrains, chunks);
+    highway_handle_ramps(&mut highway_path, base_z, terrains, buffer);
 
     highway_path
 }
@@ -1032,7 +1042,7 @@ fn highway_handle_special_z(
     base_z: i8,
     terrains: &HighwayTerrains,
     _registry: &TerrainRegistry,
-    chunks: &mut Query<(&ChunkPosition, &mut OvermapChunk)>,
+    buffer: &mut TerrainWriteBuffer,
 ) {
     let path_len = path.len();
     if path_len < 3 {
@@ -1054,8 +1064,7 @@ fn highway_handle_special_z(
                 } else {
                     terrains.highway_segment
                 };
-                set_terrain_at(
-                    chunks,
+                buffer.set(
                     path[i + 1].pos.0,
                     path[i + 1].pos.1,
                     current_z as i8,
@@ -1071,8 +1080,7 @@ fn highway_handle_special_z(
                 } else {
                     terrains.highway_segment
                 };
-                set_terrain_at(
-                    chunks,
+                buffer.set(
                     path[i - 1].pos.0,
                     path[i - 1].pos.1,
                     current_z as i8,
@@ -1097,7 +1105,7 @@ fn highway_handle_ramps(
     path: &mut HighwayPath,
     base_z: i8,
     terrains: &HighwayTerrains,
-    chunks: &mut Query<(&ChunkPosition, &mut OvermapChunk)>,
+    buffer: &mut TerrainWriteBuffer,
 ) {
     let range = path.len();
     if range == 0 {
@@ -1125,13 +1133,13 @@ fn highway_handle_ramps(
                     if path[i + 1].pos.2 == base_z_i32 {
                         if i + 2 < range && path[i + 2].pos.2 == base_z_i32 + 1 {
                             // Single gap: fill both with bridge
-                            fill_bridge_node(&mut path[i], terrains, chunks);
-                            fill_bridge_node(&mut path[i + 1], terrains, chunks);
+                            fill_bridge_node(&mut path[i], terrains, buffer);
+                            fill_bridge_node(&mut path[i + 1], terrains, buffer);
                             place_ramp = false;
                         }
                     } else {
                         // Next is elevated: fill current with bridge
-                        fill_bridge_node(&mut path[i], terrains, chunks);
+                        fill_bridge_node(&mut path[i], terrains, buffer);
                         place_ramp = false;
                     }
                 }
@@ -1151,7 +1159,7 @@ fn highway_handle_ramps(
         if path[i].is_ramp {
             if let Some(ref ramp_handle) = terrains.highway_ramp {
                 let (rx, ry, rz) = path[i].pos;
-                set_terrain_at(chunks, rx, ry, rz as i8, *ramp_handle);
+                buffer.set(rx, ry, rz as i8, *ramp_handle);
             }
         }
     }
@@ -1161,13 +1169,12 @@ fn highway_handle_ramps(
 fn fill_bridge_node(
     node: &mut HighwayNode,
     terrains: &HighwayTerrains,
-    chunks: &mut Query<(&ChunkPosition, &mut OvermapChunk)>,
+    buffer: &mut TerrainWriteBuffer,
 ) {
     if node.is_segment {
         node.pos.2 += 1; // Raise z by 1
         node.is_ramp = false;
-        set_terrain_at(
-            chunks,
+        buffer.set(
             node.pos.0,
             node.pos.1,
             node.pos.2 as i8,
@@ -1194,14 +1201,21 @@ fn fill_bridge_node(
 #[allow(clippy::too_many_arguments)]
 pub fn place_highways(
     mut commands: Commands,
-    mut chunks: Query<(&ChunkPosition, &mut OvermapChunk)>,
+    chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+    par_commands: ParallelCommands,
     config: Res<OvermapGenConfig>,
     registry: Res<TerrainRegistry>,
     settings: Res<OvermapRegionSettings>,
-    mut rng: ResMut<XorShiftRng>,
+
 ) {
-    // Resolve highway terrains
+// Create seeded RNG from config
+    let mut rng = XorShiftRng::new(config.noise_seed as u64 + 11);
+
+    // Resolve highway terrains — skip if none available
     let terrains = HighwayTerrains::resolve(&registry);
+    if terrains.highway_segment == TerrainHandle::NULL {
+        return;
+    }
     let base_z: i8 = HIGHWAY_BASE_Z;
 
     // Initialize the highway intersection grid for this overmap
@@ -1211,8 +1225,34 @@ pub fn place_highways(
         highway_grid.set_grid_origin((config.om_x, config.om_y));
     }
 
+    // Build base terrain grids for z=0 and z=1 from immutable query
+    let mut base_grid_z0 = [[0u32; 180]; 180];
+    let mut base_grid_z1 = [[0u32; 180]; 180];
+    for (_entity, chunk_pos, chunk) in &chunks {
+        let (ox, oy) = chunk_pos.omt_origin();
+        for ly in 0u8..CHUNK_DIM as u8 {
+            for lx in 0u8..CHUNK_DIM as u8 {
+                let gx = (ox + lx as i32) as usize;
+                let gy = (oy + ly as i32) as usize;
+                if gx >= 180 || gy >= 180 {
+                    continue;
+                }
+                let raw = chunk.get(lx, ly).0;
+                if chunk_pos.z.0 == 0 {
+                    base_grid_z0[gx][gy] = raw;
+                } else if chunk_pos.z.0 == 1 {
+                    base_grid_z1[gx][gy] = raw;
+                }
+            }
+        }
+    }
+
+    // Create write-buffer backed by the base grids
+    let mut buffer = TerrainWriteBuffer::new(base_grid_z0, base_grid_z1);
+
     // Step 1: Handle oceans
-    let (is_ocean, ocean_neighbors) = highway_handle_oceans(&config, &settings, &registry, &chunks);
+    let (is_ocean, ocean_neighbors) =
+        highway_handle_oceans(&config, &settings, &registry, &buffer);
 
     if is_ocean {
         info!(
@@ -1247,7 +1287,7 @@ pub fn place_highways(
         base_z,
         &mut rng,
         &registry,
-        &chunks,
+        &buffer,
     ) {
         commands.insert_resource(highway_grid);
         return;
@@ -1281,7 +1321,7 @@ pub fn place_highways(
                     &terrains,
                     &registry,
                     &mut rng,
-                    &mut chunks,
+                    &mut buffer,
                 );
             } else if neighbor_connections[1] && neighbor_connections[3] {
                 // E-W through
@@ -1294,7 +1334,7 @@ pub fn place_highways(
                     &terrains,
                     &registry,
                     &mut rng,
-                    &mut chunks,
+                    &mut buffer,
                 );
             } else {
                 // Adjacent edges (corner connection)
@@ -1310,7 +1350,7 @@ pub fn place_highways(
                             &terrains,
                             &registry,
                             &mut rng,
-                            &mut chunks,
+                            &mut buffer,
                         );
                         break;
                     }
@@ -1345,20 +1385,14 @@ pub fn place_highways(
                         &terrains,
                         &registry,
                         &mut rng,
-                        &mut chunks,
+                        &mut buffer,
                     );
                 }
             }
 
             // Place 3-way intersection special
             if let Some(three_way) = terrains.highway_3way {
-                set_terrain_at(
-                    &mut chunks,
-                    three_point.0,
-                    three_point.1,
-                    three_point.2 as i8,
-                    three_way,
-                );
+                buffer.set(three_point.0, three_point.1, three_point.2 as i8, three_way);
             }
         }
         4 => {
@@ -1383,9 +1417,7 @@ pub fn place_highways(
             let close_count = corners_close.iter().filter(|&&c| c).count();
 
             if close_count == 2 {
-                // Two pairs of close corners → two 3-way intersections connected
-                // This is a simplified port of the complex C++ double-3-way logic
-                // For the initial port, fall back to a single 4-way intersection
+                // Two pairs of close corners → fall back to 4-way
                 warn!("two close corner pairs — falling back to 4-way intersection");
 
                 for i in 0..HIGHWAY_MAX_CONNECTIONS {
@@ -1398,18 +1430,12 @@ pub fn place_highways(
                         &terrains,
                         &registry,
                         &mut rng,
-                        &mut chunks,
+                        &mut buffer,
                     );
                 }
 
                 if let Some(four_way) = terrains.highway_4way {
-                    set_terrain_at(
-                        &mut chunks,
-                        four_point.0,
-                        four_point.1,
-                        four_point.2 as i8,
-                        four_way,
-                    );
+                    buffer.set(four_point.0, four_point.1, four_point.2 as i8, four_way);
                 }
             } else {
                 // Standard 4-way intersection
@@ -1423,18 +1449,12 @@ pub fn place_highways(
                         &terrains,
                         &registry,
                         &mut rng,
-                        &mut chunks,
+                        &mut buffer,
                     );
                 }
 
                 if let Some(four_way) = terrains.highway_4way {
-                    set_terrain_at(
-                        &mut chunks,
-                        four_point.0,
-                        four_point.1,
-                        four_point.2 as i8,
-                        four_way,
-                    );
+                    buffer.set(four_point.0, four_point.1, four_point.2 as i8, four_way);
                 }
             }
         }
@@ -1453,7 +1473,7 @@ pub fn place_highways(
                         &terrains,
                         &registry,
                         &mut rng,
-                        &mut chunks,
+                        &mut buffer,
                     );
                 }
             }
@@ -1462,6 +1482,39 @@ pub fn place_highways(
 
     // Store the grid back
     commands.insert_resource(highway_grid);
+
+    // ------------------------------------------------------------------
+    // Write-back: drain buffer and apply all writes via par_iter
+    // ------------------------------------------------------------------
+    let writes = buffer.drain_writes();
+
+    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
+        let z_chunk = chunk_pos.z.0;
+        let (ox, oy) = chunk_pos.omt_origin();
+        let mut modified = false;
+        let mut new_terrain = chunk.terrain.clone();
+
+        for &(wx, wy, wz, handle) in &writes {
+            if wz != z_chunk {
+                continue;
+            }
+            let lx = wx - ox;
+            let ly = wy - oy;
+            if lx >= 0 && lx < CHUNK_DIM as i32 && ly >= 0 && ly < CHUNK_DIM as i32 {
+                let idx = ly as usize * CHUNK_DIM + lx as usize;
+                if new_terrain[idx] != handle {
+                    new_terrain[idx] = handle;
+                    modified = true;
+                }
+            }
+        }
+
+        if modified {
+            par_commands.command_scope(|mut cmd| {
+                cmd.entity(entity).insert(OvermapChunk { terrain: new_terrain });
+            });
+        }
+    });
 
     info!(
         "Highways placed for overmap ({}, {})",

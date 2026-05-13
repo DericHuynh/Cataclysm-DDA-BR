@@ -26,7 +26,8 @@ const CARDINAL_DIRS: [(i32, i32); 4] = [(0, -1), (1, 0), (0, 1), (-1, 0)];
 /// 4. After all streets are built, flood-fill areas fully enclosed by roads
 ///    and mark them as city tiles.
 pub fn build_cities(
-    mut chunks: Query<(&ChunkPosition, &mut OvermapChunk)>,
+    chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+    par_commands: ParallelCommands,
     cities: Query<&City>,
     mut city_tiles: ResMut<CityTiles>,
     config: Res<OvermapGenConfig>,
@@ -89,12 +90,39 @@ pub fn build_cities(
         }
     }
 
+    // Pre-compute manhole placement for 4-way intersections using rng.
+    // This must happen before the parallel write-back since rng is not Sync.
+    let mut manhole_grid = [[false; OMAP_DIM as usize]; OMAP_DIM as usize];
+    for y in 0..OMAP_DIM as usize {
+        for x in 0..OMAP_DIM as usize {
+            if !grid[x][y] {
+                continue;
+            }
+            let north = y > 0 && grid[x][y - 1];
+            let south = y + 1 < OMAP_DIM as usize && grid[x][y + 1];
+            let east = x + 1 < OMAP_DIM as usize && grid[x + 1][y];
+            let west = x > 0 && grid[x - 1][y];
+            let has_ns = north || south;
+            let has_ew = east || west;
+            if has_ns && has_ew {
+                manhole_grid[x][y] = rng.one_in(2);
+            }
+        }
+    }
+
     // Write grid back to chunks.
-    for (chunk_pos, mut chunk) in &mut chunks {
+    let road_ns_idx = road_ns.type_index();
+    let road_ew_idx = road_ew.type_index();
+    let road_nesw_idx = road_nesw.type_index();
+
+    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
         if chunk_pos.z.0 != 0 {
-            continue;
+            return;
         }
         let (ox, oy) = chunk_pos.omt_origin();
+        let mut modified = false;
+        let mut new_terrain = chunk.terrain.clone();
+
         for ly in 0u8..CHUNK_DIM as u8 {
             for lx in 0u8..CHUNK_DIM as u8 {
                 let gx = (ox + lx as i32) as usize;
@@ -106,11 +134,12 @@ pub fn build_cities(
                     continue;
                 }
 
-                let current_type = chunk.get(lx, ly).type_index();
+                let idx = ly as usize * CHUNK_DIM as usize + lx as usize;
+                let current_type = chunk.terrain[idx].type_index();
                 // Don't overwrite existing roads, rivers, lakes, oceans.
-                if current_type == road_ns.type_index()
-                    || current_type == road_ew.type_index()
-                    || current_type == road_nesw.type_index()
+                if current_type == road_ns_idx
+                    || current_type == road_ew_idx
+                    || current_type == road_nesw_idx
                 {
                     continue;
                 }
@@ -128,17 +157,28 @@ pub fn build_cities(
                 let has_ew = east || west;
 
                 let handle = if has_ns && has_ew {
-                    // 50% chance of manhole on 4-way intersections (CDDA L443-445)
-                    if rng.one_in(2) { road_nesw_manhole } else { road_nesw }
+                    if manhole_grid[gx][gy] {
+                        road_nesw_manhole
+                    } else {
+                        road_nesw
+                    }
                 } else if has_ew {
                     road_ew
                 } else {
                     road_ns
                 };
-                chunk.set(lx, ly, handle);
+                new_terrain[idx] = handle;
+                modified = true;
             }
         }
-    }
+        if modified {
+            par_commands.command_scope(|mut cmd| {
+                cmd.entity(entity).insert(OvermapChunk {
+                    terrain: new_terrain,
+                });
+            });
+        }
+    });
 
     // Update CityTiles.
     city_tiles.tiles.clear();
@@ -313,7 +353,6 @@ fn flood_fill_city_tiles(grid: &mut [[bool; OMAP_DIM as usize]]) {
     }
 }
 
-
 // ---------------------------------------------------------------------------
 // place_buildings_along_streets — CDDA place_building port
 // ---------------------------------------------------------------------------
@@ -335,21 +374,29 @@ fn place_buildings_along_streets(
         .collect();
 
     let n_buildings = catalog.buildings.len();
-    if n_buildings == 0 { return; }
+    if n_buildings == 0 {
+        return;
+    }
 
     for &(rx, ry) in &road_positions {
         // Check cardinal neighbors for possible building positions
         for &(dx, dy) in &[(0, -1), (1, 0), (0, 1), (-1, 0)] {
             let bx = rx + dx;
             let by = ry + dy;
-            if bx < 1 || bx >= OMAP_DIM - 1 || by < 1 || by >= OMAP_DIM - 1 { continue; }
+            if bx < 1 || bx >= OMAP_DIM - 1 || by < 1 || by >= OMAP_DIM - 1 {
+                continue;
+            }
             let bux = bx as usize;
             let buy = by as usize;
             // Only place buildings on empty tiles adjacent to roads
-            if grid[bux][buy] { continue; }
+            if grid[bux][buy] {
+                continue;
+            }
 
             // CDDA: if (!one_in(BUILDINGCHANCE)) place_building(...)
-            if rng.one_in(BUILDINGCHANCE) { continue; }
+            if rng.one_in(BUILDINGCHANCE) {
+                continue;
+            }
 
             // Pick a random building and place its OMTs
             let idx = rng.range_i32(0, n_buildings as i32 - 1) as usize;
@@ -357,14 +404,14 @@ fn place_buildings_along_streets(
 
             // Try to place the building's OMTs
             let can_place = match &building.overmaps {
-                Some(overmaps) => {
-                    overmaps.iter().all(|omt| {
-                        let px = bx + omt.point.first().copied().unwrap_or(0);
-                        let py = by + omt.point.get(1).copied().unwrap_or(0);
-                        if px < 1 || px >= OMAP_DIM - 1 || py < 1 || py >= OMAP_DIM - 1 { return false; }
-                        !grid[px as usize][py as usize]
-                    })
-                }
+                Some(overmaps) => overmaps.iter().all(|omt| {
+                    let px = bx + omt.point.first().copied().unwrap_or(0);
+                    let py = by + omt.point.get(1).copied().unwrap_or(0);
+                    if px < 1 || px >= OMAP_DIM - 1 || py < 1 || py >= OMAP_DIM - 1 {
+                        return false;
+                    }
+                    !grid[px as usize][py as usize]
+                }),
                 None => false,
             };
 

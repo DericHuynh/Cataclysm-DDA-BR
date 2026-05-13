@@ -7,16 +7,18 @@
 //! - Uses `ConnectionType::Railroad`.
 //! - Places railroad terrain instead of road terrain.
 
+use crate::pipeline::OvermapGenConfig;
+use crate::region_settings::OvermapRegionSettings;
+use crate::steps::cities::City;
 use bevy_ecs::prelude::*;
-use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, OMAP_DIM};
-use cdda_overmap::connections::{connect_closest_points, ConnectionType, inbounds_omt, line_between};
+use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, OMAP_DIM};
+use cdda_overmap::connections::{
+    connect_closest_points, inbounds_omt, line_between, ConnectionType,
+};
 use cdda_overmap::direction::OmDirection;
 use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};
 use cdda_overmap::rng::XorShiftRng;
 use cdda_overmap::Rng;
-use crate::pipeline::OvermapGenConfig;
-use crate::region_settings::OvermapRegionSettings;
-use crate::steps::cities::City;
 use tracing::info;
 
 // ---------------------------------------------------------------------------
@@ -115,14 +117,17 @@ fn build_rail_segment(
 /// 4. Call `connect_closest_points` with `ConnectionType::Railroad`.
 /// 5. Write railroad tiles back to chunks, only overwriting FIELD and FOREST tiles.
 pub fn place_railroads(
-    mut chunks: Query<(&ChunkPosition, &mut OvermapChunk)>,
+    chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+    par_commands: ParallelCommands,
     cities: Query<&City>,
     config: Res<OvermapGenConfig>,
     registry: Res<TerrainRegistry>,
     settings: Res<OvermapRegionSettings>,
 ) {
     // no railroads if there are no cities (matching C++ behavior)
-    if !settings.place_railroads {
+    // CDDA: no railroads if there are no cities
+    let op_city_size = settings.city_size;
+    if op_city_size <= 0 || !settings.place_railroads {
         return;
     }
 
@@ -163,10 +168,13 @@ pub fn place_railroads(
                 let ly = (gy % 32) as u8;
 
                 let mut is_river_collision = false;
-                for (chunk_pos, chunk) in &chunks {
-                    if chunk_pos.z.0 != 0 { continue; }
+                for (_entity, chunk_pos, chunk) in &chunks {
+                    if chunk_pos.z.0 != 0 {
+                        continue;
+                    }
                     if chunk_pos.chunk_x == cx && chunk_pos.chunk_y == cy {
-                        let handle = chunk.get(lx, ly);
+                        let idx = ly as usize * CHUNK_DIM + lx as usize;
+                        let handle = chunk.terrain[idx];
                         if is_water(handle, &registry) {
                             is_river_collision = true;
                         }
@@ -249,11 +257,17 @@ pub fn place_railroads(
 
     // --- 4. Write grid back to chunks ---
     // Only overwrite FIELD and FOREST-type tiles. Never overwrite water or roads.
-    for (chunk_pos, mut chunk) in &mut chunks {
-        if chunk_pos.z.0 != 0 {
-            continue;
-        }
+    let field_index = registry.field_index;
+    let forest_index = registry.forest_index;
+    let forest_thick_index = registry.forest_thick_index;
+    let forest_water_index = registry.forest_water_index;
+    let reg = &*registry;
+
+    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
+        if chunk_pos.z.0 != 0 { return; }
         let (ox, oy) = chunk_pos.omt_origin();
+        let mut modified = false;
+        let mut new_terrain = chunk.terrain.clone();
 
         for ly in 0u8..32 {
             for lx in 0u8..32 {
@@ -263,19 +277,20 @@ pub fn place_railroads(
                     continue;
                 }
 
-                let current = chunk.get(lx, ly);
+                let idx = ly as usize * CHUNK_DIM + lx as usize;
+                let current = chunk.terrain[idx];
                 let ct = current.type_index();
 
                 // Skip water tiles.
-                if is_water(current, &registry) {
+                if is_water(current, reg) {
                     continue;
                 }
 
                 // Only overwrite field and forest-type tiles.
-                let is_field = ct == registry.field_index;
-                let is_forest = ct == registry.forest_index
-                    || ct == registry.forest_thick_index
-                    || ct == registry.forest_water_index;
+                let is_field = ct == field_index;
+                let is_forest = ct == forest_index
+                    || ct == forest_thick_index
+                    || ct == forest_water_index;
                 let is_rail = ct == rail_ew_idx || ct == rail_ns_idx || ct == rail_nesw_idx;
 
                 if !is_field && !is_forest && !is_rail {
@@ -298,10 +313,16 @@ pub fn place_railroads(
                 } else {
                     rail_ns_handle
                 };
-                chunk.set(lx, ly, handle);
+                new_terrain[idx] = handle;
+                modified = true;
             }
         }
-    }
+        if modified {
+            par_commands.command_scope(|mut cmd| {
+                cmd.entity(entity).insert(OvermapChunk { terrain: new_terrain });
+            });
+        }
+    });
 
     info!(
         "Railroads placed: {} rail points, {} exit points for overmap ({}, {})",

@@ -14,17 +14,16 @@
 //! 6. Optionally include border (extrema) points.
 //! 7. Call `connect_closest_points` with `ConnectionType::ForestTrail`.
 
+use crate::pipeline::OvermapGenConfig;
+use crate::region_settings::OvermapRegionSettings;
 use bevy_ecs::prelude::*;
-use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, OMAP_DIM};
+use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, OMAP_DIM};
 use cdda_overmap::connections::{
-    connect_closest_points, ConnectionType, inbounds_omt, point_flood_fill_4,
-    square_dist,
+    connect_closest_points, inbounds_omt, point_flood_fill_4, square_dist, ConnectionType,
 };
 use cdda_overmap::registry::{TerrainHandle, TerrainRegistry};
 use cdda_overmap::rng::XorShiftRng;
 use cdda_overmap::Rng;
-use crate::pipeline::OvermapGenConfig;
-use crate::region_settings::OvermapRegionSettings;
 use tracing::info;
 
 // ---------------------------------------------------------------------------
@@ -80,7 +79,8 @@ fn build_trail_segment(
 /// 6. Optionally include border (extrema) points.
 /// 7. Call `connect_closest_points` with `ConnectionType::ForestTrail`.
 pub fn place_forest_trails(
-    mut chunks: Query<(&ChunkPosition, &mut OvermapChunk)>,
+    chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+    par_commands: ParallelCommands,
     config: Res<OvermapGenConfig>,
     registry: Res<TerrainRegistry>,
     settings: Res<OvermapRegionSettings>,
@@ -101,7 +101,7 @@ pub fn place_forest_trails(
     // This avoids dual borrow issues: we read all terrain once, then
     // flood-fill from the grid, then write back to chunks.
     let mut terrain_grid = [[0u32; 180]; 180];
-    for (chunk_pos, chunk) in &chunks {
+    for (_entity, chunk_pos, chunk) in &chunks {
         if chunk_pos.z.0 != 0 {
             continue;
         }
@@ -111,7 +111,8 @@ pub fn place_forest_trails(
                 let gx = (ox + lx as i32) as usize;
                 let gy = (oy + ly as i32) as usize;
                 if gx < 180 && gy < 180 {
-                    terrain_grid[gx][gy] = chunk.get(lx, ly).type_index();
+                    let idx = ly as usize * CHUNK_DIM + lx as usize;
+                    terrain_grid[gx][gy] = chunk.terrain[idx].type_index();
                 }
             }
         }
@@ -242,7 +243,10 @@ pub fn place_forest_trails(
 
             tracing::trace!(
                 "Forest region at ({}, {}) size={}: {} chosen trail points",
-                gx, gy, forest_points.len(), chosen_points.len()
+                gx,
+                gy,
+                forest_points.len(),
+                chosen_points.len()
             );
 
             if chosen_points.len() < 2 {
@@ -266,11 +270,20 @@ pub fn place_forest_trails(
 
     // --- Write trail grid back to chunks ---
     // Only overwrite forest-type tiles (forest, forest_thick, forest_water).
-    for (chunk_pos, mut chunk) in &mut chunks {
+    let forest_index = registry.forest_index;
+    let forest_thick_index = registry.forest_thick_index;
+    let forest_water_index = registry.forest_water_index;
+    let trail_ns_idx = trail_ns_handle;
+    let trail_ew_idx = trail_ew_handle;
+    let trail_nesw_idx = trail_nesw_handle;
+
+    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
         if chunk_pos.z.0 != 0 {
-            continue;
+            return;
         }
         let (ox, oy) = chunk_pos.omt_origin();
+        let mut modified = false;
+        let mut new_terrain = chunk.terrain.clone();
 
         for ly in 0u8..32 {
             for lx in 0u8..32 {
@@ -280,11 +293,11 @@ pub fn place_forest_trails(
                     continue;
                 }
 
-                let current = chunk.get(lx, ly);
-                let ct = current.type_index();
+                let idx = ly as usize * CHUNK_DIM + lx as usize;
+                let ct = chunk.terrain[idx].type_index();
 
                 // Only overwrite forest-type tiles.
-                if !is_forest_index(ct, &registry) {
+                if ct != forest_index && ct != forest_thick_index && ct != forest_water_index {
                     continue;
                 }
 
@@ -298,16 +311,24 @@ pub fn place_forest_trails(
                 let has_ew = east || west;
 
                 let handle = if has_ns && has_ew {
-                    trail_nesw_handle
+                    trail_nesw_idx
                 } else if has_ew {
-                    trail_ew_handle
+                    trail_ew_idx
                 } else {
-                    trail_ns_handle
+                    trail_ns_idx
                 };
-                chunk.set(lx, ly, handle);
+                new_terrain[idx] = handle;
+                modified = true;
             }
         }
-    }
+        if modified {
+            par_commands.command_scope(|mut cmd| {
+                cmd.entity(entity).insert(OvermapChunk {
+                    terrain: new_terrain,
+                });
+            });
+        }
+    });
 
     info!(
         "Forest trails placed: {} regions, {} trails built for overmap ({}, {})",

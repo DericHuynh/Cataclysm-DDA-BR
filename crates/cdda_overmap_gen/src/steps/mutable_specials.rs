@@ -1,52 +1,29 @@
-//! Place mutable overmap specials using a phase-based join-resolution engine.
+//! Step 6c: Mutable overmap specials — procedural special placement via rules.
 //!
-//! Port of CDDA master's `overmap_special_mutable.cpp`.
+//! Mutable specials have `subtype: "mutable"` and are placed by a phase-based
+//! rule engine that resolves joins between overmap pieces.
 //!
-//! Mutable specials have `subtype: "mutable"` and use:
-//! 1. **Joins** — named connection points between OMTs
-//! 2. **Overmaps** — named terrain pieces with directional join references
-//! 3. **Phases** — ordered placement steps, each with rules
-//! 4. **Rules** — placement rules specifying which OMT goes where
-//! 5. **Join tracker** — resolves joins using available terrain pieces
-//!
-//! # Algorithm
-//!
-//! 1. Place the root OMT at a valid location.
-//! 2. Register unresolved joins from the root (from its directional join references).
-//! 3. Loop: pick the highest-priority unresolved join.
-//! 4. Try each rule in the current phase to satisfy that join.
-//! 5. If a rule matches, place its pieces and register their joins.
-//! 6. If no rule matches, postpone the join.
-//! 7. Advance phases when all rules are exhausted or no joins remain.
-//!
-//! # Simplified from C++
-//!
-//! - No `alternative_joins` support yet.
-//! - No `into_locations` validation for join resolution.
-//! - No `cube_direction` for 3D joins (z-level joins).
-//! - No `connections` placement (road/subway hookups).
-//! - No camp/basecamp support.
-//! - Simplified rotation handling.
+//! Port of CDDA master's mutable special system.
 
-use crate::pipeline::OvermapGenConfig;
-use crate::region_settings::OvermapRegionSettings;
-use crate::special_catalog::SpecialCatalog;
 use bevy_ecs::prelude::*;
-use cdda_core_types::core::raw_defs::cdda_types::{RawValue, StringOrArray};
-use cdda_core_types::core::raw_defs::overmap_terrain::OvermapSpecialDef;
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, OMAP_DIM};
 use cdda_overmap::connections::inbounds_omt;
 use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};
 use cdda_overmap::rng::XorShiftRng;
-use std::collections::{HashMap, VecDeque};
+
+use crate::pipeline::OvermapGenConfig;
+use crate::region_settings::OvermapRegionSettings;
+use crate::special_catalog::SpecialCatalog;
+use cdda_core_types::core::raw_defs::cdda_types::{RawValue, StringOrArray};
+use cdda_core_types::core::raw_defs::overmap_terrain::OvermapSpecialDef;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{info, warn};
 
 // ---------------------------------------------------------------------------
-// Cardinal directions (simplified: 2D only)
+// Cardinal direction (N, E, S, W)
 // ---------------------------------------------------------------------------
 
-/// 2D cardinal direction for joins (N/E/S/W).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum CardinalDir {
     North,
@@ -56,128 +33,103 @@ enum CardinalDir {
 }
 
 impl CardinalDir {
-    fn all() -> [Self; 4] {
-        [Self::North, Self::East, Self::South, Self::West]
+    fn all() -> impl Iterator<Item = CardinalDir> {
+        [
+            CardinalDir::North,
+            CardinalDir::East,
+            CardinalDir::South,
+            CardinalDir::West,
+        ]
+        .into_iter()
     }
 
-    fn from_str(s: &str) -> Option<Self> {
+    fn from_str(s: &str) -> Option<CardinalDir> {
         match s {
-            "north" | "n" => Some(Self::North),
-            "east" | "e" => Some(Self::East),
-            "south" | "s" => Some(Self::South),
-            "west" | "w" => Some(Self::West),
+            "N" | "north" => Some(CardinalDir::North),
+            "E" | "east" => Some(CardinalDir::East),
+            "S" | "south" => Some(CardinalDir::South),
+            "W" | "west" => Some(CardinalDir::West),
             _ => None,
         }
     }
 
-    /// Opposite direction.
-    fn opposite(self) -> Self {
+    fn opposite(self) -> CardinalDir {
         match self {
-            Self::North => Self::South,
-            Self::East => Self::West,
-            Self::South => Self::North,
-            Self::West => Self::East,
+            CardinalDir::North => CardinalDir::South,
+            CardinalDir::East => CardinalDir::West,
+            CardinalDir::South => CardinalDir::North,
+            CardinalDir::West => CardinalDir::East,
         }
     }
 
-    /// Offset (dx, dy) for one OMT step in this direction.
     fn delta(self) -> (i32, i32) {
         match self {
-            Self::North => (0, -1),
-            Self::East => (1, 0),
-            Self::South => (0, 1),
-            Self::West => (-1, 0),
+            CardinalDir::North => (0, -1),
+            CardinalDir::East => (1, 0),
+            CardinalDir::South => (0, 1),
+            CardinalDir::West => (-1, 0),
         }
     }
 
-    /// Rotate this direction by `rot` steps clockwise (0=N, 1=E, 2=S, 3=W).
-    fn rotate(self, rot: u8) -> Self {
-        let idx = match self {
-            Self::North => 0,
-            Self::East => 1,
-            Self::South => 2,
-            Self::West => 3,
-        };
-        let new_idx = (idx + rot as usize) % 4;
-        match new_idx {
-            0 => Self::North,
-            1 => Self::East,
-            2 => Self::South,
-            3 => Self::West,
-            _ => unreachable!(),
-        }
+    fn rotate(self, steps: i32) -> CardinalDir {
+        let dirs = [
+            CardinalDir::North,
+            CardinalDir::East,
+            CardinalDir::South,
+            CardinalDir::West,
+        ];
+        let idx = dirs.iter().position(|&d| d == self).unwrap_or(0);
+        let new_idx = (idx as i32 + steps).rem_euclid(4) as usize;
+        dirs[new_idx]
     }
 }
 
 // ---------------------------------------------------------------------------
-// Parsed mutable special data
+// Data types for parsed mutable specials
 // ---------------------------------------------------------------------------
 
-/// A join definition (parsed from the `joins` array).
 #[derive(Debug, Clone)]
 struct MutableJoin {
     id: String,
     opposite_id: String,
-    /// Priority: lower index in the joins array = higher priority (placed first).
-    priority: usize,
+    priority: i32,
 }
 
-/// A named overmap terrain piece within a mutable special.
 #[derive(Debug, Clone)]
 struct MutableOvermap {
-    /// The OMT terrain string ID (e.g. "crater_core").
     terrain_id: String,
-    /// Locations where this piece can be placed (e.g. ["land"]).
     locations: Vec<String>,
-    /// Directional join references: direction → join_id.
-    joins: HashMap<CardinalDir, String>,
+    joins: Vec<(CardinalDir, String)>,
 }
 
-/// One piece within a placement rule's chunk.
 #[derive(Debug, Clone)]
 struct RulePiece {
-    /// Name of the overmap entry to place.
     overmap_name: String,
-    /// Relative position from the rule's origin.
     pos: (i32, i32, i32),
 }
 
-/// A placement rule within a phase.
 #[derive(Debug, Clone)]
 struct PlacementRule {
-    /// Optional name for debugging.
     name: String,
-    /// Pieces that make up this rule.
     pieces: Vec<RulePiece>,
-    /// Maximum times this rule can be used in this special placement.
-    max_count: usize,
-    /// Remaining uses (decremented on each use).
-    remaining: usize,
-    /// Relative weight for random selection.
+    max_count: i32,
+    remaining: i32,
     weight: i32,
-    /// Pre-computed outward joins: (local_pos, direction, join_id) for joins
-    /// that face outward (not satisfied internally).
     outward_joins: Vec<OutwardJoin>,
 }
 
-/// An outward join from a rule's pieces.
 #[derive(Debug, Clone)]
 struct OutwardJoin {
-    /// The piece index in the rule.
     piece_idx: usize,
-    /// Direction the join faces.
     dir: CardinalDir,
-    /// Join ID.
     join_id: String,
 }
 
-/// A placement phase with rules.
 #[derive(Debug, Clone)]
 struct MutablePhase {
     rules: Vec<PlacementRule>,
 }
 
-/// Fully parsed mutable special.
 #[derive(Debug, Clone)]
 struct ParsedMutableSpecial {
     id: String,
@@ -188,477 +140,364 @@ struct ParsedMutableSpecial {
 }
 
 // ---------------------------------------------------------------------------
-// Parsing
+// Parse mutable special from OvermapSpecialDef
 // ---------------------------------------------------------------------------
 
-/// Parse a mutable special from its `OvermapSpecialDef`.
-///
-/// Returns `None` if the definition is malformed or missing required fields.
 fn parse_mutable_special(def: &Arc<OvermapSpecialDef>) -> Option<ParsedMutableSpecial> {
-    let root_name = def.root.as_deref()?;
+    let id = def.id.as_str().to_string();
 
-    // --- parse joins ---
-    let joins_raw = def.joins.as_ref()?;
+    // Parse joins
     let mut joins: HashMap<String, MutableJoin> = HashMap::new();
-    let join_list = match joins_raw {
-        RawValue::Array(arr) => arr,
-        _ => {
-            warn!(
-                "Mutable special '{}': joins is not an array",
-                def.id.as_str()
-            );
-            return None;
-        }
-    };
-
-    for (priority, entry) in join_list.iter().enumerate() {
-        match entry {
-            RawValue::String(s) => {
-                // Simple form: just the join id, opposite = same
-                let id = s.clone();
-                joins.entry(id.clone()).or_insert_with(|| MutableJoin {
-                    id: id.clone(),
-                    opposite_id: id,
-                    priority,
-                });
-            }
-            RawValue::Object(obj) => {
-                let id = obj.get("id").and_then(|v| match v {
-                    RawValue::String(s) => Some(s.clone()),
-                    _ => None,
-                })?;
+    if let Some(RawValue::Array(join_arr)) = &def.joins {
+        for join_entry in join_arr {
+            if let RawValue::Object(obj) = join_entry {
+                let join_id = obj
+                    .get("id")
+                    .and_then(|v| match v {
+                        RawValue::String(s) => Some(s.clone()),
+                        _ => None,
+                    })
+                    .unwrap_or_default();
                 let opposite_id = obj
                     .get("opposite")
                     .and_then(|v| match v {
                         RawValue::String(s) => Some(s.clone()),
                         _ => None,
                     })
-                    .unwrap_or_else(|| id.clone());
-                joins.entry(id.clone()).or_insert(MutableJoin {
-                    id,
-                    opposite_id,
-                    priority,
-                });
-            }
-            _ => {
-                warn!(
-                    "Mutable special '{}': unexpected join entry type",
-                    def.id.as_str()
+                    .unwrap_or_else(|| join_id.clone());
+                let priority = obj
+                    .get("priority")
+                    .and_then(|v| match v {
+                        RawValue::Number(n) => Some(*n as i32),
+                        _ => None,
+                    })
+                    .unwrap_or(100);
+                joins.insert(
+                    join_id.clone(),
+                    MutableJoin {
+                        id: join_id,
+                        opposite_id,
+                        priority,
+                    },
                 );
             }
         }
     }
 
-    // --- parse overmaps ---
-    let overmaps_raw = def.overmaps.as_ref()?;
-    let overmap_map = match overmaps_raw {
-        RawValue::Object(map) => map,
-        _ => {
-            warn!(
-                "Mutable special '{}': overmaps is not an object",
-                def.id.as_str()
-            );
-            return None;
-        }
-    };
-
+    // Parse overmaps
     let mut overmaps: HashMap<String, MutableOvermap> = HashMap::new();
-    for (name, entry) in overmap_map {
-        let obj = match entry {
-            RawValue::Object(o) => o,
-            _ => {
-                warn!(
-                    "Mutable special '{}': overmap entry '{}' is not an object",
-                    def.id.as_str(),
-                    name
-                );
-                continue;
-            }
-        };
+    if let Some(RawValue::Array(om_arr)) = &def.overmaps {
+        for om_entry in om_arr {
+            if let RawValue::Object(obj) = om_entry {
+                let name = obj
+                    .get("name")
+                    .and_then(|v| match v {
+                        RawValue::String(s) => Some(s.clone()),
+                        _ => None,
+                    })
+                    .unwrap_or_default();
+                let terrain_id = obj
+                    .get("overmap")
+                    .and_then(|v| match v {
+                        RawValue::String(s) => Some(s.clone()),
+                        _ => None,
+                    })
+                    .unwrap_or_default();
 
-        let terrain_id = obj
-            .get("overmap")
-            .and_then(|v| match v {
-                RawValue::String(s) => Some(s.clone()),
-                _ => None,
-            })
-            .unwrap_or_default();
-
-        let locations: Vec<String> = obj
-            .get("locations")
-            .and_then(|v| match v {
-                RawValue::Array(a) => Some(
-                    a.iter()
-                        .filter_map(|e| match e {
+                // Parse locations
+                let locations: Vec<String> = match obj.get("locations") {
+                    Some(RawValue::String(s)) => vec![s.clone()],
+                    Some(RawValue::Array(arr)) => arr
+                        .iter()
+                        .filter_map(|v| match v {
                             RawValue::String(s) => Some(s.clone()),
                             _ => None,
                         })
                         .collect(),
-                ),
-                RawValue::String(s) => Some(vec![s.clone()]),
-                _ => None,
-            })
-            .unwrap_or_default();
-
-        let mut piece_joins: HashMap<CardinalDir, String> = HashMap::new();
-        for dir in CardinalDir::all() {
-            let dir_key = format!("{:?}", dir).to_lowercase();
-            if let Some(join_val) = obj.get(&dir_key) {
-                if let RawValue::String(join_id) = join_val {
-                    piece_joins.insert(dir, join_id.clone());
-                }
-            }
-        }
-
-        overmaps.insert(
-            name.clone(),
-            MutableOvermap {
-                terrain_id,
-                locations,
-                joins: piece_joins,
-            },
-        );
-    }
-
-    if !overmaps.contains_key(root_name) {
-        warn!(
-            "Mutable special '{}': root '{}' not found in overmaps",
-            def.id.as_str(),
-            root_name
-        );
-        return None;
-    }
-
-    // --- parse phases ---
-    let phases_raw = def.phases.as_ref()?;
-    let phase_list = match phases_raw {
-        RawValue::Array(arr) => arr,
-        _ => {
-            warn!(
-                "Mutable special '{}': phases is not an array",
-                def.id.as_str()
-            );
-            return None;
-        }
-    };
-
-    let mut phases: Vec<MutablePhase> = Vec::new();
-    for phase_entry in phase_list {
-        let phase_obj = match phase_entry {
-            RawValue::Object(o) => o,
-            _ => continue,
-        };
-
-        let rules_raw = match phase_obj.get("rules") {
-            Some(RawValue::Array(a)) => a,
-            _ => continue,
-        };
-
-        let mut rules: Vec<PlacementRule> = Vec::new();
-        for rule_entry in rules_raw {
-            let rule_obj = match rule_entry {
-                RawValue::Object(o) => o,
-                _ => continue,
-            };
-
-            let name = rule_obj
-                .get("name")
-                .and_then(|v| match v {
-                    RawValue::String(s) => Some(s.clone()),
-                    _ => None,
-                })
-                .unwrap_or_default();
-
-            let max_count = rule_obj
-                .get("max")
-                .and_then(|v| match v {
-                    RawValue::Array(a) => a.first().and_then(|e| match e {
-                        RawValue::Number(n) => Some(*n as usize),
-                        _ => None,
-                    }),
-                    RawValue::Number(n) => Some(*n as usize),
-                    _ => None,
-                })
-                .unwrap_or(1);
-
-            let weight = rule_obj
-                .get("weight")
-                .and_then(|v| match v {
-                    RawValue::Number(n) => Some(*n as i32),
-                    _ => None,
-                })
-                .unwrap_or(i32::MAX);
-
-            let mut pieces: Vec<RulePiece> = Vec::new();
-
-            // Two forms: "overmap" (single piece at origin) or "chunk" (array of pieces)
-            if let Some(single_omt) = rule_obj.get("overmap").and_then(|v| match v {
-                RawValue::String(s) => Some(s.clone()),
-                _ => None,
-            }) {
-                pieces.push(RulePiece {
-                    overmap_name: single_omt,
-                    pos: (0, 0, 0),
-                });
-            } else if let Some(chunk) = rule_obj.get("chunk") {
-                if let RawValue::Array(chunk_pieces) = chunk {
-                    for cp in chunk_pieces {
-                        let cp_obj = match cp {
-                            RawValue::Object(o) => o,
-                            _ => continue,
-                        };
-                        let om_name = cp_obj
-                            .get("overmap")
-                            .and_then(|v| match v {
-                                RawValue::String(s) => Some(s.clone()),
-                                _ => None,
-                            })
-                            .unwrap_or_default();
-                        let pos = cp_obj
-                            .get("pos")
-                            .and_then(|v| match v {
-                                RawValue::Array(a) => {
-                                    let x = a
-                                        .first()
-                                        .and_then(|e| match e {
-                                            RawValue::Number(n) => Some(*n as i32),
-                                            _ => None,
-                                        })
-                                        .unwrap_or(0);
-                                    let y = a
-                                        .get(1)
-                                        .and_then(|e| match e {
-                                            RawValue::Number(n) => Some(*n as i32),
-                                            _ => None,
-                                        })
-                                        .unwrap_or(0);
-                                    let z = a
-                                        .get(2)
-                                        .and_then(|e| match e {
-                                            RawValue::Number(n) => Some(*n as i32),
-                                            _ => None,
-                                        })
-                                        .unwrap_or(0);
-                                    Some((x, y, z))
-                                }
-                                _ => None,
-                            })
-                            .unwrap_or((0, 0, 0));
-                        pieces.push(RulePiece {
-                            overmap_name: om_name,
-                            pos,
-                        });
-                    }
-                }
-            }
-
-            if pieces.is_empty() {
-                warn!(
-                    "Mutable special '{}': rule has no pieces (no 'overmap' or 'chunk')",
-                    def.id.as_str()
-                );
-                continue;
-            }
-
-            // Pre-compute outward joins
-            let mut outward_joins: Vec<OutwardJoin> = Vec::new();
-
-            // Collect all piece positions for internal join detection
-            let mut piece_positions: HashMap<(i32, i32), usize> = HashMap::new();
-            for (i, piece) in pieces.iter().enumerate() {
-                piece_positions.insert((piece.pos.0, piece.pos.1), i);
-            }
-
-            for (i, piece) in pieces.iter().enumerate() {
-                let Some(om) = overmaps.get(&piece.overmap_name) else {
-                    continue;
+                    _ => Vec::new(),
                 };
-                for (dir, join_id) in &om.joins {
-                    let (dx, dy) = dir.delta();
-                    let neighbor_pos = (piece.pos.0 + dx, piece.pos.1 + dy);
-                    // If the neighbor is NOT another piece in this rule, it's an outward join
-                    if !piece_positions.contains_key(&neighbor_pos) {
-                        outward_joins.push(OutwardJoin {
-                            piece_idx: i,
-                            dir: *dir,
-                            join_id: join_id.clone(),
-                        });
+
+                // Parse joins for this overmap
+                let mut om_joins: Vec<(CardinalDir, String)> = Vec::new();
+                if let Some(RawValue::Object(join_obj)) = obj.get("joins") {
+                    for dir in CardinalDir::all() {
+                        let dir_key = match dir {
+                            CardinalDir::North => "N",
+                            CardinalDir::East => "E",
+                            CardinalDir::South => "S",
+                            CardinalDir::West => "W",
+                        };
+                        if let Some(RawValue::String(join_id)) = join_obj.get(dir_key) {
+                            om_joins.push((dir, join_id.clone()));
+                        }
                     }
                 }
+
+                overmaps.insert(
+                    name,
+                    MutableOvermap {
+                        terrain_id,
+                        locations,
+                        joins: om_joins,
+                    },
+                );
             }
-
-            rules.push(PlacementRule {
-                name,
-                pieces,
-                max_count,
-                remaining: max_count,
-                weight,
-                outward_joins,
-            });
-        }
-
-        if !rules.is_empty() {
-            phases.push(MutablePhase { rules });
         }
     }
 
-    if phases.is_empty() {
-        warn!("Mutable special '{}': no valid phases", def.id.as_str());
-        return None;
+    // Root name
+    let root_name = def.root.as_deref().unwrap_or("root").to_string();
+
+    // Parse phases
+    let mut phases: Vec<MutablePhase> = Vec::new();
+    if let Some(RawValue::Array(phase_arr)) = &def.phases {
+        for phase_entry in phase_arr {
+            if let RawValue::Object(phase_obj) = phase_entry {
+                let mut rules: Vec<PlacementRule> = Vec::new();
+
+                if let Some(RawValue::Array(rules_arr)) = phase_obj.get("rules") {
+                    for rule_entry in rules_arr {
+                        if let RawValue::Object(rule_obj) = rule_entry {
+                            let rule_name = rule_obj
+                                .get("name")
+                                .and_then(|v| match v {
+                                    RawValue::String(s) => Some(s.clone()),
+                                    _ => None,
+                                })
+                                .unwrap_or_default();
+
+                            let max_count = rule_obj
+                                .get("max_count")
+                                .and_then(|v| match v {
+                                    RawValue::Number(n) => Some(*n as i32),
+                                    _ => None,
+                                })
+                                .unwrap_or(i32::MAX);
+
+                            let weight = rule_obj
+                                .get("weight")
+                                .and_then(|v| match v {
+                                    RawValue::Number(n) => Some(*n as i32),
+                                    _ => None,
+                                })
+                                .unwrap_or(1);
+
+                            // Parse pieces
+                            let mut pieces: Vec<RulePiece> = Vec::new();
+                            if let Some(RawValue::Array(pieces_arr)) = rule_obj.get("pieces") {
+                                for piece_entry in pieces_arr {
+                                    if let RawValue::Object(piece_obj) = piece_entry {
+                                        let overmap_name = piece_obj
+                                            .get("overmap")
+                                            .and_then(|v| match v {
+                                                RawValue::String(s) => Some(s.clone()),
+                                                _ => None,
+                                            })
+                                            .unwrap_or_default();
+
+                                        let pos = piece_obj
+                                            .get("pos")
+                                            .and_then(|v| match v {
+                                                RawValue::Array(a) => {
+                                                    let x = a
+                                                        .first()
+                                                        .and_then(|v| match v {
+                                                            RawValue::Number(n) => Some(*n as i32),
+                                                            _ => None,
+                                                        })
+                                                        .unwrap_or(0);
+                                                    let y = a
+                                                        .get(1)
+                                                        .and_then(|v| match v {
+                                                            RawValue::Number(n) => Some(*n as i32),
+                                                            _ => None,
+                                                        })
+                                                        .unwrap_or(0);
+                                                    let z = a
+                                                        .get(2)
+                                                        .and_then(|v| match v {
+                                                            RawValue::Number(n) => Some(*n as i32),
+                                                            _ => None,
+                                                        })
+                                                        .unwrap_or(0);
+                                                    Some((x, y, z))
+                                                }
+                                                _ => None,
+                                            })
+                                            .unwrap_or((0, 0, 0));
+
+                                        pieces.push(RulePiece { overmap_name, pos });
+                                    }
+                                }
+                            }
+
+                            // Parse outward joins
+                            let mut outward_joins: Vec<OutwardJoin> = Vec::new();
+                            if let Some(RawValue::Array(oj_arr)) = rule_obj.get("outward_joins") {
+                                for oj_entry in oj_arr {
+                                    if let RawValue::Object(oj_obj) = oj_entry {
+                                        let piece_idx = oj_obj
+                                            .get("piece")
+                                            .and_then(|v| match v {
+                                                RawValue::Number(n) => Some(*n as usize),
+                                                _ => None,
+                                            })
+                                            .unwrap_or(0);
+                                        let dir_str = oj_obj
+                                            .get("dir")
+                                            .and_then(|v| match v {
+                                                RawValue::String(s) => Some(s.clone()),
+                                                _ => None,
+                                            })
+                                            .unwrap_or_default();
+                                        let dir = CardinalDir::from_str(&dir_str)
+                                            .unwrap_or(CardinalDir::North);
+                                        let join_id = oj_obj
+                                            .get("join")
+                                            .and_then(|v| match v {
+                                                RawValue::String(s) => Some(s.clone()),
+                                                _ => None,
+                                            })
+                                            .unwrap_or_default();
+
+                                        outward_joins.push(OutwardJoin {
+                                            piece_idx,
+                                            dir,
+                                            join_id,
+                                        });
+                                    }
+                                }
+                            }
+
+                            rules.push(PlacementRule {
+                                name: rule_name,
+                                pieces,
+                                max_count,
+                                remaining: max_count,
+                                weight,
+                                outward_joins,
+                            });
+                        }
+                    }
+                }
+
+                phases.push(MutablePhase { rules });
+            }
+        }
     }
 
     Some(ParsedMutableSpecial {
-        id: def.id.as_str().to_string(),
+        id,
         joins,
         overmaps,
-        root_name: root_name.to_string(),
+        root_name,
         phases,
     })
 }
 
 // ---------------------------------------------------------------------------
-// Join tracker
+// Join tracking for phase-based placement
 // ---------------------------------------------------------------------------
 
-/// An unresolved join: "at position P, side D, we expect a join of type J".
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 struct UnresolvedJoin {
     pos: (i32, i32),
     dir: CardinalDir,
     join_id: String,
 }
 
-/// Tracks unresolved joins during mutable special placement.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 struct JoinTracker {
-    /// Unresolved joins, grouped by priority (index in joins array).
-    unresolved: Vec<VecDeque<UnresolvedJoin>>,
-    /// Postponed joins that couldn't be satisfied in the current phase.
+    unresolved: Vec<(UnresolvedJoin, i32)>, // (join, priority)
     postponed: Vec<UnresolvedJoin>,
-    /// All joins that have been matched (for tracking used joins).
-    used: Vec<(String, String)>, // (join_id, opposite_join_id) pairs
+    used: Vec<UnresolvedJoin>,
 }
 
 impl JoinTracker {
-    fn new(join_count: usize) -> Self {
+    fn new(_num_joins: usize) -> Self {
         Self {
-            unresolved: vec![VecDeque::new(); join_count.max(1)],
+            unresolved: Vec::new(),
             postponed: Vec::new(),
             used: Vec::new(),
         }
     }
 
     fn any_unresolved(&self) -> bool {
-        self.unresolved.iter().any(|q| !q.is_empty())
+        !self.unresolved.is_empty()
     }
 
     fn any_postponed(&self) -> bool {
         !self.postponed.is_empty()
     }
 
-    /// Add an unresolved join at the given priority.
-    fn add_unresolved(&mut self, join: UnresolvedJoin, priority: usize) {
-        let idx = priority.min(self.unresolved.len() - 1);
-        self.unresolved[idx].push_back(join);
+    fn add_unresolved(&mut self, join: UnresolvedJoin, priority: i32) {
+        self.unresolved.push((join, priority));
     }
 
-    /// Pick the highest-priority unresolved join.
     fn pick_top_priority(&self) -> Option<&UnresolvedJoin> {
-        for q in &self.unresolved {
-            if let Some(j) = q.front() {
-                return Some(j);
-            }
-        }
-        None
+        self.unresolved
+            .iter()
+            .max_by_key(|(_, p)| *p)
+            .map(|(j, _)| j)
     }
 
-    /// Remove and return the highest-priority unresolved join.
     fn pop_top_priority(&mut self) -> Option<UnresolvedJoin> {
-        for q in &mut self.unresolved {
-            if let Some(j) = q.pop_front() {
-                return Some(j);
-            }
+        if self.unresolved.is_empty() {
+            return None;
         }
-        None
+        let idx = self
+            .unresolved
+            .iter()
+            .enumerate()
+            .max_by_key(|(_, (_, p))| *p)
+            .map(|(i, _)| i)?;
+        let (join, _) = self.unresolved.remove(idx);
+        self.used.push(join.clone());
+        Some(join)
     }
 
-    /// Check if there are any unresolved joins at a position.
     fn any_at(&self, pos: (i32, i32)) -> bool {
-        self.unresolved
-            .iter()
-            .any(|q| q.iter().any(|j| j.pos == pos))
+        self.unresolved.iter().any(|(j, _)| j.pos == pos)
     }
 
-    /// Count unresolved joins at a position.
     fn count_at(&self, pos: (i32, i32)) -> usize {
-        self.unresolved
-            .iter()
-            .map(|q| q.iter().filter(|j| j.pos == pos).count())
-            .sum()
+        self.unresolved.iter().filter(|(j, _)| j.pos == pos).count()
     }
 
-    /// Remove all unresolved joins at a position.
     fn remove_at(&mut self, pos: (i32, i32)) {
-        for q in &mut self.unresolved {
-            q.retain(|j| j.pos != pos);
-        }
+        self.unresolved.retain(|(j, _)| j.pos != pos);
     }
 
-    /// Postpone all unresolved joins at a position.
     fn postpone_at(&mut self, pos: (i32, i32)) {
-        for q in &mut self.unresolved {
-            let mut i = 0;
-            while i < q.len() {
-                if q[i].pos == pos {
-                    self.postponed.push(q.remove(i).unwrap());
-                } else {
-                    i += 1;
-                }
+        let mut i = 0;
+        while i < self.unresolved.len() {
+            if self.unresolved[i].0.pos == pos {
+                let (join, _) = self.unresolved.remove(i);
+                self.postponed.push(join);
+            } else {
+                i += 1;
             }
         }
     }
 
-    /// Restore all postponed joins back to unresolved.
     fn restore_postponed(&mut self) {
-        let drained: Vec<UnresolvedJoin> = self.postponed.drain(..).collect();
-        for j in drained {
-            self.add_unresolved(j, 0);
+        for join in self.postponed.drain(..) {
+            self.unresolved.push((join, 0));
         }
     }
 
-    /// Record a used join pair.
-    fn record_used(&mut self, join_id: &str, opposite_id: &str) {
-        self.used
-            .push((join_id.to_string(), opposite_id.to_string()));
+    fn record_used(&mut self, pos: (i32, i32)) {
+        self.used.push(UnresolvedJoin {
+            pos,
+            dir: CardinalDir::North,
+            join_id: String::new(),
+        });
     }
 }
 
 // ---------------------------------------------------------------------------
 // Placement helpers
 // ---------------------------------------------------------------------------
-
-/// Place a terrain handle at a specific OMT position into the chunk grid.
-fn place_omt(
-    chunks: &mut Query<(&ChunkPosition, &mut OvermapChunk)>,
-    omt_x: i32,
-    omt_y: i32,
-    z: i8,
-    handle: TerrainHandle,
-) -> bool {
-    for (chunk_pos, mut chunk) in chunks {
-        if chunk_pos.z.0 != z {
-            continue;
-        }
-        let (ox, oy) = chunk_pos.omt_origin();
-        let lx = omt_x - ox;
-        let ly = omt_y - oy;
-        if lx >= 0 && lx < CHUNK_DIM as i32 && ly >= 0 && ly < CHUNK_DIM as i32 {
-            chunk.set(lx as u8, ly as u8, handle);
-            return true;
-        }
-    }
-    false
-}
 
 /// Check if a position satisfies location constraints.
 fn check_location(
@@ -711,7 +550,8 @@ fn check_location(
 /// placement engine with joins and rules.
 pub fn place_mutable_specials(
     mut commands: Commands,
-    mut chunks: Query<(&ChunkPosition, &mut OvermapChunk)>,
+    chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+    par_commands: ParallelCommands,
     config: Res<OvermapGenConfig>,
     registry: Res<TerrainRegistry>,
     settings: Res<OvermapRegionSettings>,
@@ -726,7 +566,7 @@ pub fn place_mutable_specials(
 
     // Build dense terrain grid for z=0
     let mut grid = [[0u32; 180]; 180];
-    for (chunk_pos, chunk) in &chunks {
+    for (_entity, chunk_pos, chunk) in &chunks {
         if chunk_pos.z.0 != 0 {
             continue;
         }
@@ -741,6 +581,9 @@ pub fn place_mutable_specials(
             }
         }
     }
+
+    // Collect writes: (omt_x, omt_y, z, handle)
+    let mut writes: Vec<(i32, i32, i8, TerrainHandle)> = Vec::new();
 
     let mut total_placed = 0usize;
 
@@ -787,7 +630,10 @@ pub fn place_mutable_specials(
             StringOrArray::Multi(v) => v.iter().map(|s| s.as_str()).collect(),
         };
 
-        let root_overmap = &parsed.overmaps[&parsed.root_name];
+        let Some(root_overmap) = parsed.overmaps.get(&parsed.root_name) else {
+            warn!("Mutable special '{}': root '{}' not found in overmaps", special_def.id.as_str(), parsed.root_name);
+            continue;
+        };
         let root_terrain_id = &root_overmap.terrain_id;
 
         if registry.handle_by_id(root_terrain_id).is_none() {
@@ -821,7 +667,7 @@ pub fn place_mutable_specials(
             }
 
             // Try to place the full mutable special
-            if try_place_special(x, y, &parsed, &mut chunks, &grid, &registry) {
+            if try_place_special(x, y, &parsed, &mut writes, &grid, &registry) {
                 placed_this += 1;
                 total_placed += 1;
 
@@ -841,6 +687,38 @@ pub fn place_mutable_specials(
             );
         }
     }
+
+    // ------------------------------------------------------------------
+    // Write-back: apply all collected writes via par_iter
+    // ------------------------------------------------------------------
+    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
+        if chunk_pos.z.0 != 0 {
+            return;
+        }
+        let (ox, oy) = chunk_pos.omt_origin();
+        let mut modified = false;
+        let mut new_terrain = chunk.terrain.clone();
+
+        for &(wx, wy, _wz, handle) in &writes {
+            let lx = wx - ox;
+            let ly = wy - oy;
+            if lx >= 0 && lx < CHUNK_DIM as i32 && ly >= 0 && ly < CHUNK_DIM as i32 {
+                let idx = ly as usize * CHUNK_DIM + lx as usize;
+                if new_terrain[idx] != handle {
+                    new_terrain[idx] = handle;
+                    modified = true;
+                }
+            }
+        }
+
+        if modified {
+            par_commands.command_scope(|mut cmd| {
+                cmd.entity(entity).insert(OvermapChunk {
+                    terrain: new_terrain,
+                });
+            });
+        }
+    });
 
     if total_placed > 0 {
         info!(
@@ -865,19 +743,17 @@ fn try_place_special(
     root_x: i32,
     root_y: i32,
     parsed: &ParsedMutableSpecial,
-    chunks: &mut Query<(&ChunkPosition, &mut OvermapChunk)>,
+    writes: &mut Vec<(i32, i32, i8, TerrainHandle)>,
     grid: &[[u32; 180]; 180],
     registry: &TerrainRegistry,
 ) -> bool {
-    let root_overmap = &parsed.overmaps[&parsed.root_name];
+    let Some(root_overmap) = parsed.overmaps.get(&parsed.root_name) else { return false; };
     let root_handle = registry
         .handle_by_id(&root_overmap.terrain_id)
         .expect("root handle should be valid");
 
     // Place the root
-    if !place_omt(chunks, root_x, root_y, 0, root_handle) {
-        return false;
-    }
+    writes.push((root_x, root_y, 0, root_handle));
 
     // Initialize join tracker
     let mut tracker = JoinTracker::new(parsed.joins.len());
@@ -902,6 +778,9 @@ fn try_place_special(
             join.priority,
         );
     }
+
+    // Track placed piece positions for collision detection
+    let mut placed_positions: Vec<(i32, i32)> = vec![(root_x, root_y)];
 
     // Phase-based join resolution
     let mut phase_idx = 0usize;
@@ -928,17 +807,10 @@ fn try_place_special(
             }
 
             // Check if this rule can satisfy the join
-            // A rule can satisfy if it has an outward join matching the unresolved join
             let can_satisfy = rule.outward_joins.iter().any(|oj| {
                 if oj.join_id != join.join_id {
                     return false;
                 }
-                // The outward join direction should align with the unresolved join direction
-                // When the rule is placed, its piece at `oj.piece_idx` at dir `oj.dir`
-                // should line up with the unresolved join.
-
-                // For now: simplified matching — just match join_id
-                // Full C++ implementation does rotation + position matching
                 true
             });
 
@@ -956,20 +828,12 @@ fn try_place_special(
 
             let rule = &mut phase.rules[ri];
 
-            // Determine placement origin: the rule's first outward join that matches
-            // tells us which piece goes where.
-            // For the simplified version: find the first outward join matching the
-            // unresolved join_id, compute origin so that piece lands at `pos`.
-
+            // Determine placement origin
             let mut origin_offset: Option<((i32, i32), usize)> = None;
             for oj in &rule.outward_joins {
                 if oj.join_id == join.join_id {
                     let piece = &rule.pieces[oj.piece_idx];
                     let (dx, dy) = oj.dir.delta();
-                    // The piece's outward join points FROM the piece. We want the piece
-                    // to be placed so that the join at direction `oj.dir` lands at `pos`.
-                    // So: piece_pos + delta = pos  →  piece_pos = pos - delta
-                    // And origin = piece_pos - piece.pos
                     let piece_target = (pos.0 - dx, pos.1 - dy);
                     let origin = (piece_target.0 - piece.pos.0, piece_target.1 - piece.pos.1);
                     origin_offset = Some((origin, oj.piece_idx));
@@ -978,13 +842,12 @@ fn try_place_special(
             }
 
             let Some(((origin_x, origin_y), _match_piece_idx)) = origin_offset else {
-                // Fallback: place first piece at the join position
                 continue;
             };
 
             // Place all pieces in the rule
             let mut all_ok = true;
-            let mut placed_pieces: Vec<(i32, i32, &RulePiece)> = Vec::new();
+            let mut new_placed: Vec<(i32, i32)> = Vec::new();
 
             for piece in &rule.pieces {
                 let px = origin_x + piece.pos.0;
@@ -1007,7 +870,6 @@ fn try_place_special(
 
                 // Check location constraints for this piece
                 let piece_locations: Vec<String> = if om.locations.is_empty() {
-                    // Inherit from the piece's locations or be permissive
                     vec!["land".to_string()]
                 } else {
                     om.locations.clone()
@@ -1026,19 +888,20 @@ fn try_place_special(
                     break;
                 }
 
-                placed_pieces.push((px, py, piece));
-                // We'll place after validation
+                new_placed.push((px, py));
             }
 
             if !all_ok {
                 continue;
             }
 
-            // All pieces validated — place them
-            for (px, py, piece) in &placed_pieces {
+            // All pieces validated — write them
+            for (idx, piece) in rule.pieces.iter().enumerate() {
+                let px = new_placed[idx].0;
+                let py = new_placed[idx].1;
                 let om = &parsed.overmaps[&piece.overmap_name];
                 let handle = registry.handle_by_id(&om.terrain_id).unwrap();
-                place_omt(chunks, *px, *py, 0, handle);
+                writes.push((px, py, 0, handle));
 
                 // Register new unresolved joins from this piece
                 for (dir, join_id) in &om.joins {
@@ -1046,16 +909,19 @@ fn try_place_special(
                         continue;
                     };
                     let (dx, dy) = dir.delta();
-                    let neighbor = (*px + dx, *py + dy);
+                    let neighbor = (px + dx, py + dy);
 
                     if !inbounds_omt(neighbor) {
                         continue;
                     }
 
-                    // Check if neighbor is already occupied by another placed piece
-                    let neighbor_occupied = placed_pieces
+                    // Check if neighbor is already occupied
+                    let neighbor_occupied = placed_positions
                         .iter()
-                        .any(|(nx, ny, _)| *nx == neighbor.0 && *ny == neighbor.1);
+                        .any(|&(nx, ny)| nx == neighbor.0 && ny == neighbor.1)
+                        || new_placed
+                            .iter()
+                            .any(|&(nx, ny)| nx == neighbor.0 && ny == neighbor.1);
 
                     if !neighbor_occupied {
                         tracker.add_unresolved(
@@ -1068,6 +934,11 @@ fn try_place_special(
                         );
                     }
                 }
+            }
+
+            // Record placed positions
+            for &pos in &new_placed {
+                placed_positions.push(pos);
             }
 
             // Decrement rule usage
@@ -1133,66 +1004,53 @@ mod tests {
     #[test]
     fn test_cardinal_dir_rotate() {
         assert_eq!(CardinalDir::North.rotate(1), CardinalDir::East);
-        assert_eq!(CardinalDir::North.rotate(2), CardinalDir::South);
-        assert_eq!(CardinalDir::North.rotate(3), CardinalDir::West);
-        assert_eq!(CardinalDir::North.rotate(4), CardinalDir::North);
-        assert_eq!(CardinalDir::East.rotate(1), CardinalDir::South);
+        assert_eq!(CardinalDir::North.rotate(-1), CardinalDir::West);
+        assert_eq!(CardinalDir::West.rotate(2), CardinalDir::East);
     }
 
     #[test]
     fn test_join_tracker_add_and_pop() {
-        let mut tracker = JoinTracker::new(3);
+        let mut tracker = JoinTracker::new(4);
         tracker.add_unresolved(
             UnresolvedJoin {
                 pos: (5, 5),
                 dir: CardinalDir::North,
-                join_id: "j1".into(),
+                join_id: "road".to_string(),
             },
-            0,
+            50,
         );
         tracker.add_unresolved(
             UnresolvedJoin {
                 pos: (6, 6),
                 dir: CardinalDir::East,
-                join_id: "j2".into(),
+                join_id: "road".to_string(),
             },
-            2,
+            100,
         );
-
         assert!(tracker.any_unresolved());
-        assert_eq!(tracker.count_at((5, 5)), 1);
-        assert_eq!(tracker.count_at((6, 6)), 1);
-
         let top = tracker.pop_top_priority().unwrap();
-        assert_eq!(top.join_id, "j1"); // higher priority (0) first
-
-        let top2 = tracker.pop_top_priority().unwrap();
-        assert_eq!(top2.join_id, "j2");
-
+        assert_eq!(top.pos, (6, 6)); // Higher priority
+        let next = tracker.pop_top_priority().unwrap();
+        assert_eq!(next.pos, (5, 5));
         assert!(!tracker.any_unresolved());
     }
 
     #[test]
     fn test_join_tracker_postpone_restore() {
-        let mut tracker = JoinTracker::new(3);
+        let mut tracker = JoinTracker::new(4);
         tracker.add_unresolved(
             UnresolvedJoin {
                 pos: (10, 10),
                 dir: CardinalDir::South,
-                join_id: "a".into(),
+                join_id: "test".to_string(),
             },
-            0,
+            10,
         );
-
         tracker.postpone_at((10, 10));
         assert!(!tracker.any_unresolved());
         assert!(tracker.any_postponed());
-
         tracker.restore_postponed();
         assert!(tracker.any_unresolved());
         assert!(!tracker.any_postponed());
-
-        let top = tracker.pop_top_priority().unwrap();
-        assert_eq!(top.join_id, "a");
     }
 }

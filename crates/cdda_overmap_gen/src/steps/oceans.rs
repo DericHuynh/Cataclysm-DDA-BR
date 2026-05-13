@@ -63,7 +63,8 @@ pub fn calculate_ocean_gradient(
 /// into clusters, skips clusters smaller than `ocean_size_min`, and then
 /// populates the z-levels below.
 pub fn place_oceans(
-    mut chunks: Query<(&ChunkPosition, &mut OvermapChunk)>,
+    chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+    par_commands: ParallelCommands,
     config: Res<OvermapGenConfig>,
     registry: Res<TerrainRegistry>,
     settings: Res<OvermapRegionSettings>,
@@ -86,7 +87,7 @@ pub fn place_oceans(
 
     // Read current terrain from all z=0 chunks into a dense array.
     let mut current = [[0u32; 180]; 180];
-    for (chunk_pos, chunk) in &chunks {
+    for (_entity, chunk_pos, chunk) in &chunks {
         if chunk_pos.z.0 != 0 {
             continue;
         }
@@ -159,7 +160,7 @@ pub fn place_oceans(
         return;
     }
 
-    // Phase 3: write ocean surface + shore tiles at z=0.
+    // Phase 3: build modified tile grids, then write back via par_iter.
     let ocean_surface = registry
         .handle_by_id("ocean_surface")
         .unwrap_or(TerrainHandle::new(0, 0));
@@ -181,46 +182,63 @@ pub fn place_oceans(
         }
     }
 
-    // Place surface + shore at z=0.
+    // Precompute shore status and surface handles.
+    let mut surface_handles: [[Option<TerrainHandle>; 180]; 180] = [[None; 180]; 180];
+    let mut is_shore: [[bool; 180]; 180] = [[false; 180]; 180];
     for cluster in &clusters {
         for &(x, y) in cluster {
-            // Check if any 8-neighbor is NOT an ocean tile → shore.
             let shore = neighbors_8(x, y)
                 .iter()
                 .any(|&(nx, ny)| !is_ocean[nx][ny]);
-            let handle = if shore {
-                ocean_shore
-            } else {
-                ocean_surface
-            };
-
-            write_tile_to_chunks(&mut chunks, x as i32, y as i32, 0, handle);
+            is_shore[x][y] = shore;
+            surface_handles[x][y] = Some(if shore { ocean_shore } else { ocean_surface });
         }
     }
 
-    // Phase 4: place z-levels below surface.
-    // ocean_water_cube from z=-1 down to ocean_depth+1, ocean_bed at ocean_depth.
     let ocean_depth = settings.ocean_depth;
-    for cluster in &clusters {
-        for &(x, y) in cluster {
-            let is_shore = neighbors_8(x, y)
-                .iter()
-                .any(|&(nx, ny)| !is_ocean[nx][ny]);
 
-            if is_shore {
-                // Shore: just water cubes down to ocean_depth, no special bed.
-                for z in (ocean_depth + 1)..0 {
-                    write_tile_to_chunks(&mut chunks, x as i32, y as i32, z, ocean_water_cube);
+    // Phase 4: write back using par_iter across all z-levels.
+    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
+        let z = chunk_pos.z.0 as i32;
+        let (ox, oy) = chunk_pos.omt_origin();
+        let mut modified = false;
+        let mut new_terrain = chunk.terrain.clone();
+
+        for ly in 0u8..CHUNK_DIM as u8 {
+            for lx in 0u8..CHUNK_DIM as u8 {
+                let gx = (ox + lx as i32) as usize;
+                let gy = (oy + ly as i32) as usize;
+                if gx >= 180 || gy >= 180 { continue; }
+                if !is_ocean[gx][gy] { continue; }
+
+                let handle = if z == 0 {
+                    surface_handles[gx][gy]
+                } else if z > ocean_depth && z < 0 {
+                    // Water cubes down to ocean_depth+1.
+                    Some(ocean_water_cube)
+                } else if z == ocean_depth && !is_shore[gx][gy] {
+                    // Bed at ocean_depth, but only for non-shore tiles.
+                    Some(ocean_bed)
+                } else {
+                    None
+                };
+
+                if let Some(new_handle) = handle {
+                    let idx = ly as usize * CHUNK_DIM as usize + lx as usize;
+                    if new_terrain[idx] != new_handle {
+                        new_terrain[idx] = new_handle;
+                        modified = true;
+                    }
                 }
-            } else {
-                // Deep ocean: water cubes down to ocean_depth+1, bed at ocean_depth.
-                for z in (ocean_depth + 1)..0 {
-                    write_tile_to_chunks(&mut chunks, x as i32, y as i32, z, ocean_water_cube);
-                }
-                write_tile_to_chunks(&mut chunks, x as i32, y as i32, ocean_depth, ocean_bed);
             }
         }
-    }
+
+        if modified {
+            par_commands.command_scope(|mut cmd| {
+                cmd.entity(entity).insert(OvermapChunk { terrain: new_terrain });
+            });
+        }
+    });
 
     info!(
         "Oceans placed: {} clusters for overmap ({}, {})",
@@ -230,27 +248,6 @@ pub fn place_oceans(
     );
 }
 
-/// Write a terrain handle to the chunk that contains the given OMT coordinate.
-fn write_tile_to_chunks(
-    chunks: &mut Query<(&ChunkPosition, &mut OvermapChunk)>,
-    omt_x: i32,
-    omt_y: i32,
-    z: i32,
-    handle: TerrainHandle,
-) {
-    for (chunk_pos, mut chunk) in chunks {
-        if chunk_pos.z.0 != z as i8 {
-            continue;
-        }
-        let (ox, oy) = chunk_pos.omt_origin();
-        let lx = omt_x - ox;
-        let ly = omt_y - oy;
-        if lx >= 0 && lx < 32 && ly >= 0 && ly < 32 {
-            chunk.set(lx as u8, ly as u8, handle);
-            break;
-        }
-    }
-}
 
 fn neighbors_4(x: usize, y: usize) -> Vec<(usize, usize)> {
     let mut v = Vec::with_capacity(4);

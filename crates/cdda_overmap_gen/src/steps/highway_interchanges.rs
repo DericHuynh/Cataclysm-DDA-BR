@@ -17,11 +17,11 @@
 //! 4. If any neighbour is water (RIVER/LAKE/OCEAN), replace the highway tile
 //!    with a bridge terrain so the tile set renders correctly.
 
+use crate::pipeline::OvermapGenConfig;
 use bevy_ecs::prelude::*;
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, OMAP_DIM};
 use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};
 use cdda_overmap::rng::XorShiftRng;
-use crate::pipeline::OvermapGenConfig;
 use tracing::info;
 
 // ---------------------------------------------------------------------------
@@ -47,10 +47,10 @@ fn is_water(handle: TerrainHandle, registry: &TerrainRegistry) -> bool {
 
 /// Build a dense 180x180 grid of TerrainHandle raw values from all z=0 chunks.
 fn build_grid_from_chunks(
-    chunks: &Query<(&ChunkPosition, &OvermapChunk)>,
+    chunks: &Query<(Entity, &ChunkPosition, &OvermapChunk)>,
 ) -> [[u32; 180]; 180] {
     let mut grid = [[0u32; 180]; 180];
-    for (chunk_pos, chunk) in chunks {
+    for (_entity, chunk_pos, chunk) in chunks {
         if chunk_pos.z.0 != 0 {
             continue;
         }
@@ -60,7 +60,8 @@ fn build_grid_from_chunks(
                 let gx = (ox + lx as i32) as usize;
                 let gy = (oy + ly as i32) as usize;
                 if gx < 180 && gy < 180 {
-                    grid[gx][gy] = chunk.get(lx, ly).0;
+                    let idx = ly as usize * CHUNK_DIM as usize + lx as usize;
+                    grid[gx][gy] = chunk.terrain[idx].0;
                 }
             }
         }
@@ -84,7 +85,8 @@ fn build_grid_from_chunks(
 /// walk highway tiles in spatial order and place interchanges at spacing
 /// intervals with random variance.
 pub fn place_highway_interchanges(
-    mut chunks: Query<(&ChunkPosition, &mut OvermapChunk)>,
+    chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+    par_commands: ParallelCommands,
     registry: Res<TerrainRegistry>,
     config: Res<OvermapGenConfig>,
 ) {
@@ -103,7 +105,7 @@ pub fn place_highway_interchanges(
     // Collect all highway tile positions in spatial order.
     let mut highway_tiles: Vec<(i32, i32)> = Vec::new();
 
-    for (chunk_pos, chunk) in &chunks {
+    for (_entity, chunk_pos, chunk) in &chunks {
         if chunk_pos.z.0 != 0 {
             continue;
         }
@@ -132,6 +134,9 @@ pub fn place_highway_interchanges(
         return;
     }
 
+    // Collect interchange writes: (omt_x, omt_y, handle)
+    let mut writes: Vec<(i32, i32, TerrainHandle)> = Vec::new();
+
     let mut tiles_since_interchange = spacing / 2;
     let mut interchange_count = 0usize;
 
@@ -142,28 +147,52 @@ pub fn place_highway_interchanges(
         }
         tiles_since_interchange = 0;
 
-        // Write interchange terrain into the appropriate chunk.
-        for (chunk_pos, mut chunk) in &mut chunks {
-            if chunk_pos.z.0 != 0 {
-                continue;
-            }
-            let (ox, oy) = chunk_pos.omt_origin();
-            let lx = x - ox;
-            let ly = y - oy;
+        writes.push((x, y, interchange));
+        interchange_count += 1;
+    }
+
+    // ------------------------------------------------------------------
+    // Write-back: apply all collected writes via par_iter
+    // ------------------------------------------------------------------
+    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
+        if chunk_pos.z.0 != 0 {
+            return;
+        }
+        let (ox, oy) = chunk_pos.omt_origin();
+        let mut modified = false;
+        let mut new_terrain = chunk.terrain.clone();
+
+        for &(wx, wy, handle) in &writes {
+            let lx = wx - ox;
+            let ly = wy - oy;
             if lx >= 0 && lx < CHUNK_DIM as i32 && ly >= 0 && ly < CHUNK_DIM as i32 {
-                let handle = chunk.get(lx as u8, ly as u8);
-                if registry.flags_for(handle).contains(TerrainFlags::HIGHWAY) {
-                    chunk.set(lx as u8, ly as u8, interchange);
-                    interchange_count += 1;
+                // Only write if the tile is still a highway tile
+                let idx = ly as usize * CHUNK_DIM + lx as usize;
+                let current = new_terrain[idx];
+                if registry.flags_for(current).contains(TerrainFlags::HIGHWAY) {
+                    if current != handle {
+                        new_terrain[idx] = handle;
+                        modified = true;
+                    }
                 }
-                break;
             }
         }
-    }
+
+        if modified {
+            par_commands.command_scope(|mut cmd| {
+                cmd.entity(entity).insert(OvermapChunk {
+                    terrain: new_terrain,
+                });
+            });
+        }
+    });
 
     info!(
         "Highway interchanges placed: {} interchanges on {} highway tiles for overmap ({}, {})",
-        interchange_count, highway_tiles.len(), config.om_x, config.om_y
+        interchange_count,
+        highway_tiles.len(),
+        config.om_x,
+        config.om_y
     );
 }
 
@@ -177,13 +206,13 @@ pub fn place_highway_interchanges(
 /// # Algorithm (port of `overmap::finalize_highways`)
 ///
 /// 1. Build a dense terrain grid from all z=0 chunks (immutable pass).
-/// 2. Scan every z=0 highway tile with mutable access.
+/// 2. Scan every z=0 highway tile.
 /// 3. For each highway tile, check its 4 cardinal neighbours in the grid.
 /// 4. If any neighbour is water, replace the highway tile with a bridge
 ///    terrain handle. Also place the bridge at z=+1 for elevated rendering.
 pub fn finalize_highways(
-    chunks: Query<(&ChunkPosition, &OvermapChunk)>,
-    mut chunks_mut: Query<(&ChunkPosition, &mut OvermapChunk)>,
+    chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+    par_commands: ParallelCommands,
     registry: Res<TerrainRegistry>,
     config: Res<OvermapGenConfig>,
 ) {
@@ -210,22 +239,16 @@ pub fn finalize_highways(
     let effective_bridge_ew = hiway_bridge_ew.or(bridge_ew);
 
     let (Some(bridge_ns_h), Some(bridge_ew_h)) = (effective_bridge_ns, effective_bridge_ew) else {
-        info!(
-            "Highway finalize skipped: no bridge_ns/bridge_ew or hiway_bridge in registry"
-        );
+        info!("Highway finalize skipped: no bridge_ns/bridge_ew or hiway_bridge in registry");
         return;
     };
 
-    // Build a set of (x, y, bridge_handle) tuples to apply.
-    struct BridgeCandidate {
-        x: i32,
-        y: i32,
-        handle: TerrainHandle,
-    }
-    let mut candidates: Vec<BridgeCandidate> = Vec::new();
+    // Collect candidate writes: (x, y, z, handle)
+    // z=0 for the bridge itself, z=1 for elevated rendering
+    let mut writes: Vec<(i32, i32, i8, TerrainHandle)> = Vec::new();
 
     // Scan using the immutable query to identify candidates.
-    for (chunk_pos, chunk) in &chunks {
+    for (_entity, chunk_pos, chunk) in &chunks {
         if chunk_pos.z.0 != 0 {
             continue;
         }
@@ -242,12 +265,8 @@ pub fn finalize_highways(
                 let wy = oy + ly as i32;
 
                 // Check 4 cardinal neighbours for water.
-                let neighbours: [(i32, i32); 4] = [
-                    (wx, wy - 1),
-                    (wx + 1, wy),
-                    (wx, wy + 1),
-                    (wx - 1, wy),
-                ];
+                let neighbours: [(i32, i32); 4] =
+                    [(wx, wy - 1), (wx + 1, wy), (wx, wy + 1), (wx - 1, wy)];
 
                 let mut water_north = false;
                 let mut water_south = false;
@@ -298,34 +317,52 @@ pub fn finalize_highways(
                     bridge_ns_h
                 };
 
-                candidates.push(BridgeCandidate { x: wx, y: wy, handle: bridge_handle });
+                writes.push((wx, wy, 0, bridge_handle));
+                writes.push((wx, wy, 1, bridge_handle));
             }
         }
     }
 
-    // Apply bridge terrain to z=0 and z=+1 chunks.
-    let mut bridge_count = 0usize;
-    for candidate in &candidates {
-        for (chunk_pos, mut chunk) in &mut chunks_mut {
-            let z = chunk_pos.z.0;
-            if z != 0 && z != 1 {
+    let candidate_count = writes.len() / 2; // each candidate has z=0 and z=1
+
+    // ------------------------------------------------------------------
+    // Write-back: apply all bridge writes via par_iter
+    // ------------------------------------------------------------------
+    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
+        let z_chunk = chunk_pos.z.0;
+        if z_chunk != 0 && z_chunk != 1 {
+            return;
+        }
+        let (ox, oy) = chunk_pos.omt_origin();
+        let mut modified = false;
+        let mut new_terrain = chunk.terrain.clone();
+
+        for &(wx, wy, wz, handle) in &writes {
+            if wz != z_chunk {
                 continue;
             }
-            let (ox, oy) = chunk_pos.omt_origin();
-            let lx = candidate.x - ox;
-            let ly = candidate.y - oy;
+            let lx = wx - ox;
+            let ly = wy - oy;
             if lx >= 0 && lx < CHUNK_DIM as i32 && ly >= 0 && ly < CHUNK_DIM as i32 {
-                chunk.set(lx as u8, ly as u8, candidate.handle);
-                if z == 0 {
-                    bridge_count += 1;
+                let idx = ly as usize * CHUNK_DIM + lx as usize;
+                if new_terrain[idx] != handle {
+                    new_terrain[idx] = handle;
+                    modified = true;
                 }
-                break;
             }
         }
-    }
+
+        if modified {
+            par_commands.command_scope(|mut cmd| {
+                cmd.entity(entity).insert(OvermapChunk {
+                    terrain: new_terrain,
+                });
+            });
+        }
+    });
 
     info!(
         "Highways finalized: {} bridges from {} candidates for overmap ({}, {})",
-        bridge_count, candidates.len(), config.om_x, config.om_y
+        candidate_count, candidate_count, config.om_x, config.om_y
     );
 }

@@ -2374,6 +2374,7 @@ dependencies = [
  "cdda_sim",
  "serde",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

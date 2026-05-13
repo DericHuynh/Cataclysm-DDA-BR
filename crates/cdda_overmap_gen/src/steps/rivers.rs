@@ -15,13 +15,13 @@
 //! across overmap boundaries will be added when neighbor overmap access
 //! is available.
 
+use crate::pipeline::OvermapGenConfig;
+use crate::region_settings::OvermapRegionSettings;
 use bevy_ecs::prelude::*;
 use cdda_core_types::rng::SeededRng;
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, OMAP_DIM};
 use cdda_overmap::connections::inbounds_omt;
-use cdda_overmap::registry::{TerrainHandle, TerrainFlags, TerrainRegistry};
-use crate::pipeline::OvermapGenConfig;
-use crate::region_settings::OvermapRegionSettings;
+use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};
 use tracing::info;
 
 // ---------------------------------------------------------------------------
@@ -217,18 +217,18 @@ fn rl_dist(a: (i32, i32), b: (i32, i32)) -> i32 {
 
 /// Cardinal offsets in N, E, S, W order (matching C++ `four_adjacent_offsets`).
 const FOUR_ADJACENT: [(i32, i32); 4] = [
-    (0, -1),  // N
-    (1, 0),   // E
-    (0, 1),   // S
-    (-1, 0),  // W
+    (0, -1), // N
+    (1, 0),  // E
+    (0, 1),  // S
+    (-1, 0), // W
 ];
 
 /// Ordinal (diagonal) offsets in NE, SE, SW, NW order.
 const FOUR_ORDINAL: [(i32, i32); 4] = [
-    (1, -1),   // NE
-    (1, 1),    // SE
-    (-1, 1),   // SW
-    (-1, -1),  // NW
+    (1, -1),  // NE
+    (1, 1),   // SE
+    (-1, 1),  // SW
+    (-1, -1), // NW
 ];
 
 // ---------------------------------------------------------------------------
@@ -285,22 +285,22 @@ fn is_water_body(handle: TerrainHandle, registry: &TerrainRegistry) -> bool {
 /// | 1111 | N+E+S+W | river_center |
 fn river_shore_terrain(mask: u8, registry: &TerrainRegistry) -> TerrainHandle {
     let names: [&str; 16] = [
-        "forest_water",    // 0000
-        "river_south",     // 0001 — N only
-        "river_west",      // 0010 — E only
-        "river_sw",        // 0011 — N+E
-        "river_north",     // 0100 — S only
-        "forest_water",    // 0101 — N+S (unused)
-        "river_nw",        // 0110 — E+S
-        "river_west",      // 0111 — N+E+S
-        "river_east",      // 1000 — W only
-        "river_se",        // 1001 — N+W
-        "forest_water",    // 1010 — E+W (unused)
-        "river_south",     // 1011 — N+E+W
-        "river_ne",        // 1100 — S+W
-        "river_east",      // 1101 — N+S+W
-        "river_north",     // 1110 — E+S+W
-        "river_center",    // 1111 — N+E+S+W
+        "forest_water", // 0000
+        "river_south",  // 0001 — N only
+        "river_west",   // 0010 — E only
+        "river_sw",     // 0011 — N+E
+        "river_north",  // 0100 — S only
+        "forest_water", // 0101 — N+S (unused)
+        "river_nw",     // 0110 — E+S
+        "river_west",   // 0111 — N+E+S
+        "river_east",   // 1000 — W only
+        "river_se",     // 1001 — N+W
+        "forest_water", // 1010 — E+W (unused)
+        "river_south",  // 1011 — N+E+W
+        "river_ne",     // 1100 — S+W
+        "river_east",   // 1101 — N+S+W
+        "river_north",  // 1110 — E+S+W
+        "river_center", // 1111 — N+E+S+W
     ];
     registry
         .handle_by_id(names[mask as usize])
@@ -331,32 +331,6 @@ fn trimmed_corner_terrain(
         }
     }
     None
-}
-
-// ---------------------------------------------------------------------------
-// Dense array helpers
-// ---------------------------------------------------------------------------
-
-/// Write a dense 180×180 array of terrain handles back to z=0 chunks.
-fn write_overmap_terrain(
-    chunks: &mut Query<(&ChunkPosition, &mut OvermapChunk)>,
-    terrain: &[[TerrainHandle; 180]; 180],
-) {
-    for (chunk_pos, mut chunk) in chunks {
-        if chunk_pos.z.0 != 0 {
-            continue;
-        }
-        let (ox, oy) = chunk_pos.omt_origin();
-        for ly in 0u8..CHUNK_DIM as u8 {
-            for lx in 0u8..CHUNK_DIM as u8 {
-                let gx = (ox + lx as i32) as usize;
-                let gy = (oy + ly as i32) as usize;
-                if gx < 180 && gy < 180 {
-                    chunk.set(lx, ly, terrain[gx][gy]);
-                }
-            }
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -396,8 +370,7 @@ fn river_meander(
 
     // As distance decreases, meander closer to river end
     if current.0 != river_end.0
-        && (random_uniform(rng, abs_dx)
-            || (random_close(rng, abs_dx) && random_close(rng, abs_dy)))
+        && (random_uniform(rng, abs_dx) || (random_close(rng, abs_dx) && random_close(rng, abs_dy)))
     {
         if river_end.0 > current.0 {
             current.0 += 1;
@@ -406,8 +379,7 @@ fn river_meander(
         }
     }
     if current.1 != river_end.1
-        && (random_uniform(rng, abs_dy)
-            || (random_close(rng, abs_dy) && random_close(rng, abs_dx)))
+        && (random_uniform(rng, abs_dy) || (random_close(rng, abs_dy) && random_close(rng, abs_dx)))
     {
         if river_end.1 > current.1 {
             current.1 += 1;
@@ -652,7 +624,8 @@ fn place_single_river(
 /// 4. Writes river_center terrain to affected chunks
 pub fn place_rivers(
     mut commands: Commands,
-    mut chunks: Query<(&ChunkPosition, &mut OvermapChunk)>,
+    chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+    par_commands: ParallelCommands,
     config: Res<OvermapGenConfig>,
     registry: Res<TerrainRegistry>,
     settings: Res<OvermapRegionSettings>,
@@ -675,10 +648,10 @@ pub fn place_rivers(
     let omap_edge = OMAP_DIM - 1;
     let mut rng = SeededRng::new(config.noise_seed as u64 + 173);
 
-    // Read current terrain into dense arrays from the mutable query
+    // Read current terrain into dense arrays from the immutable query
     let mut terrain_dense = [[TerrainHandle::NULL; 180]; 180];
     let mut river_center_mask = [[false; 180]; 180];
-    for (chunk_pos, chunk) in &chunks {
+    for (_entity, chunk_pos, chunk) in &chunks {
         if chunk_pos.z.0 != 0 {
             continue;
         }
@@ -763,8 +736,38 @@ pub fn place_rivers(
         }
     }
 
-    // Write terrain back to chunks
-    write_overmap_terrain(&mut chunks, &terrain_dense);
+    // Write terrain back to chunks via par_iter
+    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
+        if chunk_pos.z.0 != 0 {
+            return;
+        }
+        let (ox, oy) = chunk_pos.omt_origin();
+        let mut modified = false;
+        let mut new_terrain = chunk.terrain.clone();
+
+        for ly in 0u8..CHUNK_DIM as u8 {
+            for lx in 0u8..CHUNK_DIM as u8 {
+                let gx = (ox + lx as i32) as usize;
+                let gy = (oy + ly as i32) as usize;
+                if gx < 180 && gy < 180 {
+                    let idx = ly as usize * CHUNK_DIM + lx as usize;
+                    let new_val = terrain_dense[gx][gy];
+                    if new_terrain[idx] != new_val {
+                        new_terrain[idx] = new_val;
+                        modified = true;
+                    }
+                }
+            }
+        }
+
+        if modified {
+            par_commands.command_scope(|mut cmd| {
+                cmd.entity(entity).insert(OvermapChunk {
+                    terrain: new_terrain,
+                });
+            });
+        }
+    });
 
     // Spawn RiverNode entities
     for node in &river_nodes {
@@ -790,12 +793,13 @@ pub fn place_rivers(
 /// Must run after `place_rivers` because it reads `TerrainFlags::RIVER`
 /// to identify river tiles.
 pub fn build_river_shores(
-    mut chunks: Query<(&ChunkPosition, &mut OvermapChunk)>,
+    chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+    par_commands: ParallelCommands,
     registry: Res<TerrainRegistry>,
 ) {
     // Read terrain into dense array
     let mut terrain = [[TerrainHandle::NULL; 180]; 180];
-    for (chunk_pos, chunk) in &chunks {
+    for (_entity, chunk_pos, chunk) in &chunks {
         if chunk_pos.z.0 != 0 {
             continue;
         }
@@ -837,8 +841,7 @@ pub fn build_river_shores(
                 let ny = y + dy;
 
                 // Out-of-bounds neighbors count as river (border continuity)
-                if !inbounds_omt((nx, ny))
-                    || is_river(terrain[nx as usize][ny as usize], &registry)
+                if !inbounds_omt((nx, ny)) || is_river(terrain[nx as usize][ny as usize], &registry)
                 {
                     mask += multiplier;
                 }
@@ -847,9 +850,7 @@ pub fn build_river_shores(
 
             // For mask 15 (all 4 connections), check trimmed corners
             if mask == 15 {
-                if let Some(trimmed) =
-                    trimmed_corner_terrain((x, y), &is_river_center, &registry)
-                {
+                if let Some(trimmed) = trimmed_corner_terrain((x, y), &is_river_center, &registry) {
                     new_terrain[x as usize][y as usize] = trimmed;
                     continue;
                 }
@@ -859,8 +860,38 @@ pub fn build_river_shores(
         }
     }
 
-    // Write back
-    write_overmap_terrain(&mut chunks, &new_terrain);
+    // Write back via par_iter
+    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
+        if chunk_pos.z.0 != 0 {
+            return;
+        }
+        let (ox, oy) = chunk_pos.omt_origin();
+        let mut modified = false;
+        let mut chunk_terrain = chunk.terrain.clone();
+
+        for ly in 0u8..CHUNK_DIM as u8 {
+            for lx in 0u8..CHUNK_DIM as u8 {
+                let gx = (ox + lx as i32) as usize;
+                let gy = (oy + ly as i32) as usize;
+                if gx < 180 && gy < 180 {
+                    let idx = ly as usize * CHUNK_DIM + lx as usize;
+                    let new_val = new_terrain[gx][gy];
+                    if chunk_terrain[idx] != new_val {
+                        chunk_terrain[idx] = new_val;
+                        modified = true;
+                    }
+                }
+            }
+        }
+
+        if modified {
+            par_commands.command_scope(|mut cmd| {
+                cmd.entity(entity).insert(OvermapChunk {
+                    terrain: chunk_terrain,
+                });
+            });
+        }
+    });
 }
 
 /// Polish rivers — re-run shore building on all tiles.
@@ -873,12 +904,13 @@ pub fn build_river_shores(
 ///
 /// In our pipeline, this runs in `OvermapGenSet::Finalize`.
 pub fn polish_river(
-    mut chunks: Query<(&ChunkPosition, &mut OvermapChunk)>,
+    chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+    par_commands: ParallelCommands,
     registry: Res<TerrainRegistry>,
 ) {
     // Same logic as build_river_shores — rebuild all shores from scratch
     let mut terrain = [[TerrainHandle::NULL; 180]; 180];
-    for (chunk_pos, chunk) in &chunks {
+    for (_entity, chunk_pos, chunk) in &chunks {
         if chunk_pos.z.0 != 0 {
             continue;
         }
@@ -916,8 +948,7 @@ pub fn polish_river(
                 let nx = x + dx;
                 let ny = y + dy;
 
-                if !inbounds_omt((nx, ny))
-                    || is_river(terrain[nx as usize][ny as usize], &registry)
+                if !inbounds_omt((nx, ny)) || is_river(terrain[nx as usize][ny as usize], &registry)
                 {
                     mask += multiplier;
                 }
@@ -925,9 +956,7 @@ pub fn polish_river(
             }
 
             if mask == 15 {
-                if let Some(trimmed) =
-                    trimmed_corner_terrain((x, y), &is_river_center, &registry)
-                {
+                if let Some(trimmed) = trimmed_corner_terrain((x, y), &is_river_center, &registry) {
                     new_terrain[x as usize][y as usize] = trimmed;
                     continue;
                 }
@@ -937,5 +966,36 @@ pub fn polish_river(
         }
     }
 
-    write_overmap_terrain(&mut chunks, &new_terrain);
+    // Write back via par_iter
+    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
+        if chunk_pos.z.0 != 0 {
+            return;
+        }
+        let (ox, oy) = chunk_pos.omt_origin();
+        let mut modified = false;
+        let mut chunk_terrain = chunk.terrain.clone();
+
+        for ly in 0u8..CHUNK_DIM as u8 {
+            for lx in 0u8..CHUNK_DIM as u8 {
+                let gx = (ox + lx as i32) as usize;
+                let gy = (oy + ly as i32) as usize;
+                if gx < 180 && gy < 180 {
+                    let idx = ly as usize * CHUNK_DIM + lx as usize;
+                    let new_val = new_terrain[gx][gy];
+                    if chunk_terrain[idx] != new_val {
+                        chunk_terrain[idx] = new_val;
+                        modified = true;
+                    }
+                }
+            }
+        }
+
+        if modified {
+            par_commands.command_scope(|mut cmd| {
+                cmd.entity(entity).insert(OvermapChunk {
+                    terrain: chunk_terrain,
+                });
+            });
+        }
+    });
 }
