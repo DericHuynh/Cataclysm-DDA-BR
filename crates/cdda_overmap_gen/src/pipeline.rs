@@ -252,7 +252,6 @@ impl Plugin for OvermapGenPlugin {
         app.add_systems(
             Update,
             (
-                steps::place_city_buildings,
                 steps::place_specials,
                 steps::place_mutable_specials,
             )

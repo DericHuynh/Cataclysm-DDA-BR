@@ -254,10 +254,7 @@ struct TerrainWriteBuffer {
 }
 
 impl TerrainWriteBuffer {
-    fn new(
-        base_grid_z0: [[u32; 180]; 180],
-        base_grid_z1: [[u32; 180]; 180],
-    ) -> Self {
+    fn new(base_grid_z0: [[u32; 180]; 180], base_grid_z1: [[u32; 180]; 180]) -> Self {
         Self {
             base_grid_z0,
             base_grid_z1,
@@ -286,7 +283,10 @@ impl TerrainWriteBuffer {
 
     /// Drain all pending writes into a Vec.
     fn drain_writes(&mut self) -> Vec<(i32, i32, i8, TerrainHandle)> {
-        self.pending.drain().map(|((x, y, z), h)| (x, y, z, h)).collect()
+        self.pending
+            .drain()
+            .map(|((x, y, z), h)| (x, y, z, h))
+            .collect()
     }
 }
 
@@ -476,24 +476,29 @@ struct HighwayTerrains {
 impl HighwayTerrains {
     fn resolve(registry: &TerrainRegistry) -> Self {
         // Try to find highway terrains by common CDDA IDs.
-        // In a full port, these would come from highway-specific region settings.
-        let Some(highway_segment) = registry
+        // Fall back to standard road terrain so highways don't produce NULL tiles.
+        let highway_segment = registry
             .handle_by_id("hiway_ns")
             .or_else(|| registry.handle_by_id("highway_ns"))
-else {
-        warn!("highway segment terrain not found; using NULL fallback");
-        return Self {
-            highway_segment: TerrainHandle::NULL,
-            highway_bridge: TerrainHandle::NULL,
-            highway_ramp: None,
-            highway_4way: None,
-            highway_3way: None,
-        };
-    };
+            // Fall back to regular road terrain
+            .or_else(|| registry.handle_by_id("road_ns"))
+            .unwrap_or(TerrainHandle::NULL);
+
+        if highway_segment == TerrainHandle::NULL {
+            warn!("no road or highway terrain found; skipping highways");
+            return Self {
+                highway_segment: TerrainHandle::NULL,
+                highway_bridge: TerrainHandle::NULL,
+                highway_ramp: None,
+                highway_4way: None,
+                highway_3way: None,
+            };
+        }
 
         let highway_bridge = registry
             .handle_by_id("hiway_bridge_ns")
             .or_else(|| registry.handle_by_id("highway_bridge_ns"))
+            .or_else(|| registry.handle_by_id("road_ns"))
             .unwrap_or(highway_segment);
 
         let highway_ramp = registry
@@ -502,7 +507,8 @@ else {
 
         let highway_4way = registry
             .handle_by_id("hiway_4way")
-            .or_else(|| registry.handle_by_id("highway_4way"));
+            .or_else(|| registry.handle_by_id("highway_4way"))
+            .or_else(|| registry.handle_by_id("road_nesw"));
 
         let highway_3way = registry
             .handle_by_id("hiway_3way")
@@ -741,8 +747,7 @@ fn place_highway_line(
         }
 
         // Check for water at this position
-        let this_water =
-            is_water_body(buffer.get(current.0, current.1, base_z), registry);
+        let this_water = is_water_body(buffer.get(current.0, current.1, base_z), registry);
 
         // Detect z-change: transition between water and land
         if this_water != is_on_water && i > 0 {
@@ -986,10 +991,8 @@ fn place_highway_reserved_path(
                     return highway_path;
                 }
                 let bend_midpoint = midpoint(p1, p2);
-                let (corner1, dir1_out) =
-                    closest_corner_in_direction(p1, bend_midpoint, draw_dir1);
-                let (corner2, _dir2_out) =
-                    closest_corner_in_direction(bend_midpoint, p2, dir1_out);
+                let (corner1, dir1_out) = closest_corner_in_direction(p1, bend_midpoint, draw_dir1);
+                let (corner2, _dir2_out) = closest_corner_in_direction(bend_midpoint, p2, dir1_out);
                 bend_points.push((corner1, dir1_out));
                 bend_points.push((corner2, _dir2_out));
             } else {
@@ -1015,7 +1018,8 @@ fn place_highway_reserved_path(
             buffer,
         );
     } else {
-        highway_path = place_highway_line(p1, p2, draw_dir1, base_z, terrains, registry, rng, buffer);
+        highway_path =
+            place_highway_line(p1, p2, draw_dir1, base_z, terrains, registry, rng, buffer);
     }
 
     // Handle z-level adjustments for special nodes
@@ -1206,9 +1210,8 @@ pub fn place_highways(
     config: Res<OvermapGenConfig>,
     registry: Res<TerrainRegistry>,
     settings: Res<OvermapRegionSettings>,
-
 ) {
-// Create seeded RNG from config
+    // Create seeded RNG from config
     let mut rng = XorShiftRng::new(config.noise_seed as u64 + 11);
 
     // Resolve highway terrains — skip if none available
@@ -1251,8 +1254,7 @@ pub fn place_highways(
     let mut buffer = TerrainWriteBuffer::new(base_grid_z0, base_grid_z1);
 
     // Step 1: Handle oceans
-    let (is_ocean, ocean_neighbors) =
-        highway_handle_oceans(&config, &settings, &registry, &buffer);
+    let (is_ocean, ocean_neighbors) = highway_handle_oceans(&config, &settings, &registry, &buffer);
 
     if is_ocean {
         info!(
@@ -1511,7 +1513,9 @@ pub fn place_highways(
 
         if modified {
             par_commands.command_scope(|mut cmd| {
-                cmd.entity(entity).insert(OvermapChunk { terrain: new_terrain });
+                cmd.entity(entity).insert(OvermapChunk {
+                    terrain: new_terrain,
+                });
             });
         }
     });

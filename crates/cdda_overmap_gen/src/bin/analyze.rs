@@ -16,7 +16,7 @@ use cdda_overmap_gen::pipeline::{
 use cdda_overmap_gen::region_settings::OvermapRegionSettings;
 use cdda_overmap_gen::special_catalog::SpecialCatalog;
 use cdda_overmap_gen::steps::cities::City;
-use cdda_overmap_gen::steps::city_buildings::CityBuildingCatalog;
+
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 
@@ -29,9 +29,12 @@ fn main() {
         )
         .with_writer(std::io::stderr)
         .init();
-    let data_dir = std::env::args()
-        .nth(1)
+    let args: Vec<String> = std::env::args().collect();
+    let data_dir = args
+        .get(1)
+        .cloned()
         .unwrap_or_else(|| "data/core".to_string());
+    let ascii_mode = args.iter().any(|a| a == "--ascii");
     let path = PathBuf::from(&data_dir);
     if !path.exists() {
         eprintln!("Error: {data_dir} not found");
@@ -48,12 +51,11 @@ fn main() {
         }
     };
     eprintln!(
-        "Loaded: {} terrain, {} regions, {} connections, {} specials, {} city_buildings",
+        "Loaded: {} terrain, {} regions, {} connections, {} specials",
         registry.overmap_terrains.len(),
         registry.region_settings.len(),
         registry.overmap_connections.len(),
-        registry.overmap_specials.len(),
-        registry.city_buildings.len()
+        registry.overmap_specials.len()
     );
 
     let mut treg = TerrainRegistry::empty();
@@ -319,9 +321,7 @@ fn main() {
     app.insert_resource(SpecialCatalog::from_registry(&registry));
     app.insert_resource(connection_catalog.clone());
     app.insert_resource(MongroupCatalog::from_registry(&registry));
-    app.insert_resource(CityBuildingCatalog {
-        buildings: registry.city_buildings.values().cloned().collect(),
-    });
+
     app.insert_resource(cdda_overmap::index::ChunkIndex::default());
     let treg_for_stats = treg.clone();
     app.insert_resource(treg);
@@ -499,6 +499,84 @@ fn main() {
         );
     }
     println!("═══════════════════════════════════\n");
+
+    // ── ASCII map ────────────────────────────────────────────────────────
+    if ascii_mode {
+        // Build a grid of terrain types keyed by (x, y)
+        let mut grid = vec![vec![' '; OMAP_DIM as usize]; OMAP_DIM as usize];
+        for (cpos, chunk) in w.query::<(&ChunkPosition, &OvermapChunk)>().iter(&*w) {
+            if cpos.z.0 != 0 {
+                continue;
+            }
+            let (ox, oy) = cpos.omt_origin();
+            for ly in 0u8..CHUNK_DIM as u8 {
+                for lx in 0u8..CHUNK_DIM as u8 {
+                    let h = chunk.get(lx, ly);
+                    if h == TerrainHandle::NULL {
+                        continue;
+                    }
+                    let id = treg_actual.string_id_for(h).unwrap_or("?");
+                    let wx = (ox + lx as i32) as usize;
+                    let wy = (oy + ly as i32) as usize;
+                    if wx >= OMAP_DIM as usize || wy >= OMAP_DIM as usize {
+                        continue;
+                    }
+                    let flags = treg_actual.flags_for(h);
+                    let ch = if flags.contains(TerrainFlags::ROAD) {
+                        if city_pos.iter().any(|&(cx, cy)| {
+                            (cx as i32 - wx as i32).abs() <= 1 && (cy as i32 - wy as i32).abs() <= 1
+                        }) {
+                            '#'
+                        } else {
+                            'R'
+                        }
+                    } else if flags.contains(TerrainFlags::HIGHWAY) {
+                        'H'
+                    } else if flags.contains(TerrainFlags::RIVER) {
+                        '~'
+                    } else if flags.contains(TerrainFlags::LAKE) {
+                        'l'
+                    } else if flags.contains(TerrainFlags::OCEAN) {
+                        'o'
+                    } else if let Some(first) = id.chars().next() {
+                        match first {
+                            'f' => {
+                                if id.contains("_thick") {
+                                    'F'
+                                } else if id.contains("_water") {
+                                    'w'
+                                } else {
+                                    'f'
+                                }
+                            }
+                            'r' => 'r',       // ravine
+                            's' | 'S' => '■', // special/building
+                            _ => '·',
+                        }
+                    } else {
+                        '·'
+                    };
+                    grid[wy][wx] = ch;
+                }
+            }
+        }
+
+        // Mark city centers
+        for &(cx, cy) in &city_pos {
+            if cx >= 0 && cx < OMAP_DIM as i32 && cy >= 0 && cy < OMAP_DIM as i32 {
+                grid[cy as usize][cx as usize] = '@';
+            }
+        }
+
+        println!("\n═══ ASCII OVERMAP (z=0) ═══");
+        println!("Legend: @=city  #=urban  R=road  f=forest  F=thick  w=water  ~=river  l=lake  o=ocean  r=ravine  ·=field");
+        // Print row by row, skipping the first and last 5 border columns
+        for y in 5..(OMAP_DIM as usize - 5) {
+            let row: String = grid[y][5..(OMAP_DIM as usize - 5)].iter().collect();
+            println!("{}", row);
+        }
+        println!("═══════════════════════════════════\n");
+    }
 }
 
 fn flood_fill(start: (i32, i32), roads: &HashSet<(i32, i32)>) -> HashSet<(i32, i32)> {

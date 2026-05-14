@@ -13,7 +13,6 @@ use cdda_sim::state::{AppState, GameTime, LoadingStatus, StartupConfig};
 
 use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};
 use cdda_overmap_gen::pipeline::{OvermapGenConfig, OvermapGenPhase, DEFAULT_NOISE_SEED};
-use cdda_overmap_gen::steps::city_buildings::CityBuildingCatalog;
 
 use std::sync::Arc;
 
@@ -89,12 +88,6 @@ pub fn load_data_system(world: &mut World) {
 
             // --- Build TerrainRegistry from overmap_terrains ---
             build_terrain_registry(world, &registry, &def_world);
-
-            // --- Build CityBuildingCatalog ---
-            let catalog = CityBuildingCatalog {
-                buildings: registry.city_buildings.values().cloned().collect(),
-            };
-            world.insert_resource(catalog);
 
             world.insert_resource(CityBuildings(registry.city_buildings.clone()));
 

@@ -1,7 +1,6 @@
 //! Generation step systems.
 pub mod build_cities;
 pub mod cities;
-pub mod city_buildings;
 pub mod elevated;
 pub mod finalize;
 pub mod forest_trailheads;
@@ -27,7 +26,6 @@ pub mod swamps;
 
 pub use build_cities::build_cities;
 pub use cities::{calculate_urbanity, place_cities, CityTiles};
-pub use city_buildings::place_city_buildings;
 pub use elevated::generate_over;
 pub use finalize::finalize_overmap;
 pub use forest_trailheads::place_forest_trailheads;

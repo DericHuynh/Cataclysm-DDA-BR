@@ -64,6 +64,9 @@ pub struct OvermapRegionSettings {
     /// further from the edge. `[North, East, South, West]`.
     pub forest_increase: [f32; 4],
 
+    /// Whether forest generation is enabled on this overmap.
+    pub overmap_forest: bool,
+
     /// Target city size. Larger = bigger cities.
     pub city_size: i32,
 
@@ -135,6 +138,12 @@ pub struct OvermapRegionSettings {
 
     /// Maximum distance from a river where floodplain buffering ends.
     pub river_floodplain_buffer_dist_max: i32,
+
+    /// Maximum Chebyshev distance from a trail end to look for a road.
+    pub trailhead_road_distance: i32,
+
+    /// Chance (1-in-N) of a trailhead being placed at a trail end.
+    pub trailhead_chance: i32,
 }
 
 impl Default for OvermapRegionSettings {
@@ -153,6 +162,7 @@ impl Default for OvermapRegionSettings {
             forest_noise_threshold_thick: 0.25,
             forest_max: 0.395,
             forest_increase: [0.04, 0.0, 0.0, 0.02],
+            overmap_forest: true,
             city_size: 8,
             city_spacing: 4,
             max_urban: 3,
@@ -177,6 +187,8 @@ impl Default for OvermapRegionSettings {
             forest_trail_border_point_chance: 2,
             river_floodplain_buffer_dist_min: 2,
             river_floodplain_buffer_dist_max: 6,
+            trailhead_road_distance: 8,
+            trailhead_chance: 8,
         }
     }
 }
