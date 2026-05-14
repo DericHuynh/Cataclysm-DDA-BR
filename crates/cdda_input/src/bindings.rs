@@ -180,6 +180,7 @@ pub fn default_bindings() -> ContextInputMaps {
         (BindableAction::Fire, KeyCode::KeyF),
         (BindableAction::Throw, KeyCode::KeyT),
         (BindableAction::Custom1, KeyCode::F2), // debug spawn panel
+        (BindableAction::Custom2, KeyCode::F3), // debug registry viewer
         (BindableAction::OpenInventory, KeyCode::KeyI),
         (BindableAction::OpenCrafting, KeyCode::KeyC),
         (BindableAction::OpenCharacterSheet, KeyCode::KeyP),
@@ -192,7 +193,7 @@ pub fn default_bindings() -> ContextInputMaps {
     );
     maps.contexts.insert(InputContextId::Gameplay, gameplay);
 
-// -- Overmap ------------------------------------------------------------
+    // -- Overmap ------------------------------------------------------------
     // Arrow keys pan the camera.  Shift pans 5 tiles.
     // < > change z-level.  Escape returns to gameplay.
     let mut overmap = InputMap::new([

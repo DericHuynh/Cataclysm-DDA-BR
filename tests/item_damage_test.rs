@@ -2,7 +2,7 @@
 //! combat effectiveness.
 
 use cdda_components::item::ItemDamage;
-use cdda_core::sim::test_utils::TestBed;
+use cdda_sim::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------
 // Damage-level → effectiveness formula

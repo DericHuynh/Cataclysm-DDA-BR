@@ -3,6 +3,8 @@
 //! Wires all CDDA subsystems into a Bevy application using `GameSet`
 //! ordering (Input → Sim → Render).
 
+mod startup;
+
 use bevy::app::{App, Plugin, PluginGroup, Update};
 use bevy::prelude::*;
 use bevy::render::settings::{RenderCreation, WgpuSettings};
@@ -15,46 +17,48 @@ use bevy_state::prelude::OnEnter;
 use bevy_state::state::{NextState, State};
 use std::time::Duration;
 
-use cdda_core::context::ctx::Ctx as Screen;
-use cdda_core::context::screen::Screen as ScreenPlugin;
-use cdda_core::context::ContextStack;
-use cdda_core::{GameSet, SimSet};
+use cdda_components::schedule::{GameSet, SimSet};
+use cdda_context::ctx::Ctx as Screen;
+use cdda_context::screen::Screen as ScreenPlugin;
+use cdda_context::ContextStack;
 
+use crate::startup::load_data_system;
+use crate::startup::{examine_item_input, spawn_dev_world};
 use cdda_activity::plugin::ActivityPlugin;
+use cdda_actor::bionics::tick_bionics;
+use cdda_actor::effects::effects_phase;
+use cdda_actor::healing::healing_phase;
+use cdda_actor::morale::tick_morale_decay;
+use cdda_actor::movement::movement_phase;
+use cdda_actor::plugin::ActorPlugin;
+use cdda_actor::temperature::temperature_phase;
+use cdda_actor::turn::{debug_turn_queue, tick_move_points, TurnQueue};
+use cdda_actor::vision::update_vision;
+use cdda_ai::systems::ai_phase;
+use cdda_combat::systems::combat_phase;
 use cdda_components::dev::{DevCamera, DevPlayer};
 use cdda_components::events::ItemMoveEvent;
+use cdda_components::item::InventoryFocus;
 use cdda_components::messages;
 use cdda_components::sim::WorldPosition;
-use cdda_core::actor::bionics::tick_bionics;
-use cdda_core::actor::effects::effects_phase;
-use cdda_core::actor::healing::healing_phase;
-use cdda_core::actor::morale::tick_morale_decay;
-use cdda_core::actor::movement::movement_phase;
-use cdda_core::actor::plugin::ActorPlugin;
-use cdda_core::actor::temperature::temperature_phase;
-use cdda_core::actor::turn::{debug_turn_queue, tick_move_points, TurnQueue};
-use cdda_core::actor::vision::update_vision;
-use cdda_core::ai::systems::ai_phase;
-use cdda_core::combat::systems::combat_phase;
-use cdda_core::context::overlay::{
+use cdda_context::overlay::{
     cleanup_activity_overlay, handle_overlay_cancel, sync_activity_overlay,
 };
-use cdda_core::crafting::plugin::CraftingPlugin;
-use cdda_core::crafting::systems::on_examine_item_changed;
-use cdda_core::data::assets::CddaAssetsPlugin;
-use cdda_core::item::plugin::ItemPlugin;
-use cdda_core::overmap::spatial::EntitySpatialIndex;
-use cdda_core::overmap_gen::pipeline::OvermapGenPlugin;
-use cdda_core::overmap_gen::setup::register_game_components;
-use cdda_core::overmap_gen::spatial_systems::{cleanup_spatial_index, update_spatial_index};
-use cdda_core::sim::state::{AppState, StartupConfig};
-use cdda_core::startup::load_data_system;
-use cdda_core::startup::{examine_item_input, spawn_dev_world};
+use cdda_core_types::core::coords::TILES_PER_OMT;
+use cdda_crafting::plugin::CraftingPlugin;
+use cdda_crafting::systems::on_examine_item_changed;
+use cdda_data::assets::CddaAssetsPlugin;
 use cdda_inventory::systems::{
     assign_invlets_system, build_inventory_bins, dev_pickup_drop_system, inventory_screen_input,
     process_item_move_events, InventoryBin,
 };
+use cdda_item::plugin::ItemPlugin;
+use cdda_overmap::spatial::EntitySpatialIndex;
 use cdda_overmap::OvermapCamera;
+use cdda_overmap_gen::pipeline::OvermapGenPlugin;
+use cdda_overmap_gen::setup::register_game_components;
+use cdda_overmap_gen::spatial_systems::{cleanup_spatial_index, update_spatial_index};
+use cdda_sim::state::{AppState, StartupConfig};
 
 // ---------------------------------------------------------------------------
 // Startup config
@@ -115,10 +119,10 @@ pub fn dev_player_move(
 
     if dx != 0 || dy != 0 {
         for mut pos in &mut query {
-            pos.0.x += dx * 24; // 24 tiles per OMT
-            pos.0.y += dy * 24;
-            let omt_x = pos.0.x.div_euclid(24);
-            let omt_y = pos.0.y.div_euclid(24);
+            pos.0.x += dx * TILES_PER_OMT;
+            pos.0.y += dy * TILES_PER_OMT;
+            let omt_x = pos.0.x.div_euclid(TILES_PER_OMT);
+            let omt_y = pos.0.y.div_euclid(TILES_PER_OMT);
             dev_cam.x = omt_x;
             dev_cam.y = omt_y;
             dev_cam.z = 0;
@@ -143,7 +147,7 @@ impl Plugin for CddaPlugin {
             ItemPlugin,
             CddaAssetsPlugin,
             CraftingPlugin,
-            cdda_core::data::flags::CddaDataPlugin,
+            cdda_data::flags::CddaDataPlugin,
         ));
 
         app.init_resource::<EntitySpatialIndex>();
@@ -156,9 +160,10 @@ impl Plugin for CddaPlugin {
         app.init_resource::<TurnQueue>();
         app.init_resource::<InventoryBin>();
         app.init_resource::<cdda_inventory::examine_resource::ExaminedItem>();
+        app.init_resource::<InventoryFocus>();
         app.init_resource::<DevCamera>();
-        app.init_resource::<cdda_core::sim::state::LoadingStatus>();
-        app.init_resource::<cdda_core::sim::state::GameTime>();
+        app.init_resource::<cdda_sim::state::LoadingStatus>();
+        app.init_resource::<cdda_sim::state::GameTime>();
 
         // ── Screen transitions ─────────────────────────────────────────
         app.add_systems(
@@ -217,10 +222,11 @@ impl Plugin for CddaPlugin {
         app.add_plugins(ScreenPlugin::<
             cdda_render::render::character::CharacterScreen,
         >::default());
+        app.add_plugins(ScreenPlugin::<cdda_render::render::registry::RegistryScreen>::default());
 
         app.add_plugins(cdda_render::render::CddaRenderPlugin);
-        app.add_plugins(cdda_core::input::CddaInputPlugin);
-        app.add_plugins(cdda_core::context::ContextPlugin);
+        app.add_plugins(cdda_input::CddaInputPlugin);
+        app.add_plugins(cdda_context::ContextPlugin);
 
         // ── Replay ─────────────────────────────────────────────────────
         let config = app
@@ -230,18 +236,18 @@ impl Plugin for CddaPlugin {
             .unwrap_or_default();
 
         if let Some(ref replay_path) = config.replay_file {
-            match cdda_core::replay::session_log::SessionLog::load_compressed(std::path::Path::new(
+            match cdda_replay::session_log::SessionLog::load_compressed(std::path::Path::new(
                 replay_path,
             )) {
                 Ok(log) => {
                     info!("Replay loaded: {} actions", log.len());
                     app.insert_resource(log);
-                    app.add_plugins(cdda_core::replay::CddaReplayModePlugin);
+                    app.add_plugins(cdda_replay::CddaReplayModePlugin);
                 }
                 Err(e) => error!("Failed to load replay: {e}"),
             }
         } else if config.record_session {
-            app.add_plugins(cdda_core::replay::CddaReplayPlugin {
+            app.add_plugins(cdda_replay::CddaReplayPlugin {
                 world_seed: config.world_seed,
             });
         }
@@ -254,7 +260,7 @@ impl Plugin for CddaPlugin {
         );
         app.add_systems(
             Update,
-            cdda_core::startup::worldgen_system.run_if(in_state(AppState::WorldGen)),
+            crate::startup::worldgen_system.run_if(in_state(AppState::WorldGen)),
         );
 
         // ── Turn tick ──────────────────────────────────────────────────

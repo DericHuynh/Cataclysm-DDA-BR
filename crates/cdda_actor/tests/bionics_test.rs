@@ -37,14 +37,20 @@ fn spawn_creature(test: &mut TestBed, name: &str) -> Entity {
 fn spawn_bionic(test: &mut TestBed, creature: Entity, id: u32, active: bool, power: u64) -> Entity {
     test.register::<cdda_components::actor::Bionic>();
     test.register::<cdda_components::actor::BionicOf>();
-    test.spawn((
+    test.register::<cdda_components::actor::Active>();
+    let entity = test.spawn((
         cdda_components::actor::BionicOf(creature),
         cdda_components::actor::Bionic {
             bionic_id: id.into(),
-            active,
             power_used: cdda_components::Energy(power),
         },
-    ))
+    ));
+    if active {
+        test.world_mut()
+            .entity_mut(entity)
+            .insert(cdda_components::actor::Active);
+    }
+    entity
 }
 
 // ===========================================================================
@@ -58,45 +64,44 @@ fn bionic_has_id_and_active_flag() {
 
     let e = test.spawn((cdda_components::actor::Bionic {
         bionic_id: cdda_components::BionicId::from(5u32),
-        active: false,
         power_used: cdda_components::Energy(0),
     },));
     let b = test.get::<cdda_components::actor::Bionic>(e).unwrap();
     assert_eq!(b.bionic_id, cdda_components::BionicId::from(5u32));
-    assert!(!b.active);
     assert_eq!(b.power_used, cdda_components::Energy(0));
+    // No Active component by default
+    assert!(test
+        .world()
+        .get::<cdda_components::actor::Active>(e)
+        .is_none());
 }
 
 #[test]
 fn bionic_active_toggle() {
     let mut test = TestBed::new();
     test.register::<cdda_components::actor::Bionic>();
+    test.register::<cdda_components::actor::Active>();
 
-    let e = test.spawn((cdda_components::actor::Bionic {
-        bionic_id: cdda_components::BionicId::from(2u32),
-        active: true,
-        power_used: cdda_components::Energy(0),
-    },));
-    assert!(
-        test.get::<cdda_components::actor::Bionic>(e)
-            .unwrap()
-            .active
-    );
+    let e = test.spawn((
+        cdda_components::actor::Bionic {
+            bionic_id: cdda_components::BionicId::from(2u32),
+            power_used: cdda_components::Energy(0),
+        },
+        cdda_components::actor::Active,
+    ));
+    assert!(test
+        .world()
+        .get::<cdda_components::actor::Active>(e)
+        .is_some());
 
-    // Toggle by reinserting (immutable component pattern)
+    // Toggle by removing Active tag
     test.world_mut()
         .entity_mut(e)
-        .insert(cdda_components::actor::Bionic {
-            bionic_id: cdda_components::BionicId::from(2u32),
-            active: false,
-            power_used: cdda_components::Energy(0),
-        });
-    assert!(
-        !test
-            .get::<cdda_components::actor::Bionic>(e)
-            .unwrap()
-            .active
-    );
+        .remove::<cdda_components::actor::Active>();
+    assert!(test
+        .world()
+        .get::<cdda_components::actor::Active>(e)
+        .is_none());
 }
 
 // ===========================================================================
@@ -112,9 +117,9 @@ fn bionic_of_relationship() {
         cdda_components::actor::BionicOf(creature),
         cdda_components::actor::Bionic {
             bionic_id: cdda_components::BionicId::from(3u32),
-            active: true,
             power_used: cdda_components::Energy(0),
         },
+        cdda_components::actor::Active,
     ));
 
     let rel = test
@@ -192,7 +197,6 @@ fn bionic_power_usage() {
 
     let e = test.spawn((cdda_components::actor::Bionic {
         bionic_id: cdda_components::BionicId::from(7u32),
-        active: true,
         power_used: cdda_components::Energy(2500),
     },));
     let b = test.get::<cdda_components::actor::Bionic>(e).unwrap();
@@ -231,8 +235,6 @@ fn bionic_reassignment() {
     if let Some(installed) = installed_a {
         assert!(!installed.iter().any(|e| e == bionic));
     }
-    // If the component is gone entirely, that also means the bionic was removed
-    // (the relationship hook removes the target when the last relation is moved).
 
     // creature_b should now have it
     let installed_b = test
@@ -259,9 +261,7 @@ fn creature_has_playerdata() {
         profession: None,
         scenario: None,
     },));
-    let pd = test
-        .get::<cdda_components::actor::PlayerData>(e)
-        .unwrap();
+    let pd = test.get::<cdda_components::actor::PlayerData>(e).unwrap();
     assert_eq!(pd.name, "Alice");
     assert_eq!(pd.gender, cdda_components::actor::Gender::Female);
     assert_eq!(pd.age, 25);

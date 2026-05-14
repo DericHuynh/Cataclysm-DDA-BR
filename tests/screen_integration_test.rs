@@ -14,16 +14,16 @@ use bevy_app::App;
 use bevy_ecs::prelude::*;
 use bevy_state::app::{AppExtStates, StatesPlugin};
 use bevy_state::state::NextState;
-use cdda_core::context::actions::ContextActions;
-use cdda_core::context::ctx::Ctx;
-use cdda_core::context::nav::{ctx_def, FocusedCommandIndex};
-use cdda_core::context::overlay::{Overlay, OverlayStack};
-use cdda_core::context::screen::{CddaScreen, Screen};
-use cdda_core::context::ContextStack;
-use cdda_core::input::bindings::{default_bindings, ActiveKeybindings};
-use cdda_core::input::BindableAction;
-use cdda_core::input::InputAction;
-use cdda_core::input::InputContextId;
+use cdda_context::actions::ContextActions;
+use cdda_context::ctx::Ctx;
+use cdda_context::nav::{ctx_def, FocusedCommandIndex};
+use cdda_context::overlay::{Overlay, OverlayStack};
+use cdda_context::screen::{CddaScreen, Screen};
+use cdda_context::ContextStack;
+use cdda_input::bindings::{default_bindings, ActiveKeybindings};
+use cdda_input::BindableAction;
+use cdda_input::InputAction;
+use cdda_input::InputContextId;
 
 // ===========================================================================
 // 1. ContextInputMaps — global + context merging
@@ -244,7 +244,7 @@ fn overlay_dismiss_on_cancel() {
     assert!(!app.world().resource::<OverlayStack>().is_empty());
 
     // Simulate the overlay cancel handler
-    cdda_core::context::overlay::pop_overlay(app.world_mut());
+    cdda_context::overlay::pop_overlay(app.world_mut());
     assert!(app.world().resource::<OverlayStack>().is_empty());
     assert!(!app.world().resource::<OverlayStack>().input_blocked);
 }

@@ -5,7 +5,7 @@
 //! required. They verify that def-level components store and retrieve
 //! the CDDA-derived monster fields correctly.
 
-use cdda_core::sim::test_utils::TestBed;
+use cdda_sim::test_utils::TestBed;
 
 // Use def component types
 use cdda_components::def::*;
@@ -228,7 +228,7 @@ fn monster_armour_all_types() {
 
 #[test]
 fn monster_flags_bitset() {
-    use cdda_core::data::flags::{MonsterFlagRegistry, MonsterFlags};
+    use cdda_data::flags::{MonsterFlagRegistry, MonsterFlags};
 
     let mut reg = MonsterFlagRegistry::default();
     let bitset = reg.0.register_all(&[

@@ -6,13 +6,13 @@ use bevy_state::state::{NextState, State};
 use cdda_data::def_world::{build_def_world, DefinitionWorld};
 use cdda_data::loader::Loader;
 
-use crate::sim::state::{AppState, GameTime, LoadingStatus, StartupConfig};
-use cdda_core_types::core::coords::{WorldPos, ZLevel};
+use cdda_core_types::core::coords::{WorldPos, ZLevel, TILES_PER_OMT};
 use cdda_core_types::core::id::DefId;
 use cdda_core_types::core::raw_defs::city_building::CityBuildingDef;
+use cdda_sim::state::{AppState, GameTime, LoadingStatus, StartupConfig};
 
 use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};
-use cdda_overmap_gen::pipeline::{OvermapGenConfig, OvermapGenPhase};
+use cdda_overmap_gen::pipeline::{OvermapGenConfig, OvermapGenPhase, DEFAULT_NOISE_SEED};
 use cdda_overmap_gen::steps::city_buildings::CityBuildingCatalog;
 
 use std::sync::Arc;
@@ -49,6 +49,21 @@ pub fn load_data_system(world: &mut World) {
     world.resource_mut::<LoadingStatus>().total_defs = total_raw;
     info!("Ingested {} raw definitions", total_raw);
 
+    // Save raw JSON values for registry viewer comparison
+    {
+        let mut raw_values = cdda_data::raw_values::RawDefinitionValues::new();
+        for (type_name, defs) in &raw_map {
+            let entries = defs
+                .iter()
+                .filter_map(|raw| raw.id.as_ref().map(|id| (id.clone(), raw.value.clone())))
+                .collect::<std::collections::HashMap<_, _>>();
+            if !entries.is_empty() {
+                raw_values.values.insert(type_name.clone(), entries);
+            }
+        }
+        world.insert_resource(raw_values);
+    }
+
     world.resource_mut::<LoadingStatus>().current_phase =
         "Resolving copy-from inheritance...".into();
     match loader.load() {
@@ -59,6 +74,9 @@ pub fn load_data_system(world: &mut World) {
             world.resource_mut::<LoadingStatus>().current_phase =
                 "Building definition entities...".into();
             let def_world = build_def_world(world, &registry, true);
+            world.insert_resource(cdda_data::def_registry_resource::DefRegistryResource(
+                std::sync::Arc::new(registry.clone()),
+            ));
             cdda_data::populate_flags::populate_def_flags(world, &registry, &def_world);
             cdda_data::schema_gen::collect_and_generate_schemas(world);
             info!(
@@ -104,7 +122,7 @@ pub fn load_data_system(world: &mut World) {
 
             // --- Configure overmap generation ---
             let gen_config = OvermapGenConfig {
-                noise_seed: 1920237457,
+                noise_seed: DEFAULT_NOISE_SEED,
                 om_x: 0,
                 om_y: 0,
                 region_id: "default".into(),
@@ -481,7 +499,7 @@ use cdda_context::ctx::Ctx;
 use cdda_context::{ContextStack, FocusedCommandIndex};
 use cdda_inventory::examine_resource::ExaminedItem;
 
-use crate::actor::turn::AP_COST_WIELD;
+use cdda_actor::turn::AP_COST_WIELD;
 
 pub fn examine_item_input(world: &mut World) {
     let actions: Vec<GameAction> = {
@@ -533,8 +551,8 @@ pub fn examine_item_input(world: &mut World) {
                     let mut q = world.query::<(&WorldPosition, Option<&ItemVolume>)>();
                     q.iter(world)
                         .filter(|(wp, _)| {
-                            wp.0.x.div_euclid(24) == camera.x
-                                && wp.0.y.div_euclid(24) == camera.y
+                            wp.0.x.div_euclid(TILES_PER_OMT) == camera.x
+                                && wp.0.y.div_euclid(TILES_PER_OMT) == camera.y
                                 && wp.0.z.0 as i32 == camera.z
                         })
                         .filter_map(|(_, vol)| vol.map(|v| v.0))
@@ -544,8 +562,11 @@ pub fn examine_item_input(world: &mut World) {
                     continue;
                 }
 
-                let drop_pos =
-                    WorldPos::new(camera.x * 24, camera.y * 24, ZLevel::new(camera.z as i8));
+                let drop_pos = WorldPos::new(
+                    camera.x * TILES_PER_OMT,
+                    camera.y * TILES_PER_OMT,
+                    ZLevel::new(camera.z as i8),
+                );
 
                 world
                     .entity_mut(item_entity)
@@ -655,11 +676,11 @@ pub fn spawn_dev_world(world: &mut World) {
         ))
         .id();
 
-    crate::inventory::pocket::spawn_body_pocket(world, player);
+    cdda_inventory::pocket::spawn_body_pocket(world, player);
 
     let camera = DevCamera {
-        x: pos.x.div_euclid(24),
-        y: pos.y.div_euclid(24),
+        x: pos.x.div_euclid(TILES_PER_OMT),
+        y: pos.y.div_euclid(TILES_PER_OMT),
         z: pos.z.0 as i32,
     };
     let cx = camera.x;

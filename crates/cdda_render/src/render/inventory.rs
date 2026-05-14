@@ -10,12 +10,12 @@
 use std::collections::HashMap;
 
 use super::FooterHint;
-use crate::context::ctx::Ctx;
-use crate::context::screen::CddaScreen;
-use crate::context::ContextActions;
-use crate::data::interner::ItemTypeRegistry;
-use crate::input::ActiveKeybindings;
-use crate::input::BindableAction;
+use cdda_context::ctx::Ctx;
+use cdda_context::screen::CddaScreen;
+use cdda_context::ContextActions;
+use cdda_data::interner::ItemTypeRegistry;
+use cdda_input::ActiveKeybindings;
+use cdda_input::BindableAction;
 use crate::render::theme::{self, UiTheme};
 use crate::render::tiles::TileRegistry;
 use bevy::prelude::*;

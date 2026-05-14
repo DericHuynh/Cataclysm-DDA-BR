@@ -12,4 +12,4 @@ cdda_components = { path = "../cdda_components" }
 
 [dev-dependencies]
 cdda_sim = { path = "../cdda_sim" }
-cdda_core = { path = "../cdda_core" }
+cdda_data = { path = "../cdda_data" }

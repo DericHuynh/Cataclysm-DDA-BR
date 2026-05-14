@@ -19,9 +19,9 @@ use cdda_components::actor::{ActionPoints, HandCount, IsAlive};
 use cdda_components::def::{ItemName, RecipeResult, RecipeResultCount, RecipeTime};
 use cdda_components::dev::DevPlayer;
 use cdda_components::item::{ContainerContents, InProgressCraft, InsideContainer};
-use cdda_core::actor::turn::AP_COST_CRAFT_TICK;
-use cdda_core::crafting::systems::{continue_crafts, start_craft};
-use cdda_core::sim::test_utils::TestBed;
+use cdda_actor::turn::AP_COST_CRAFT_TICK;
+use cdda_crafting::systems::{continue_crafts, start_craft};
+use cdda_sim::test_utils::TestBed;
 use cdda_data::interner::{ItemTypeRegistry, QualityRegistry};
 
 // ---------------------------------------------------------------------------
@@ -31,7 +31,7 @@ use cdda_data::interner::{ItemTypeRegistry, QualityRegistry};
 fn register_crafting_components(test: &mut TestBed) {
     // Ensure the craft completion hook is set so activity finishes work.
     cdda_activity::CRAFT_COMPLETE_HOOK
-        .set(cdda_core::crafting::systems::complete_craft)
+        .set(cdda_crafting::systems::complete_craft)
         .ok();
 
     test.register::<IsAlive>();

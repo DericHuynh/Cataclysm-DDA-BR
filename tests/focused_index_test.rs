@@ -1,5 +1,5 @@
-use cdda_core::context::ctx::Ctx as Screen;
-use cdda_core::context::nav::FocusedCommandIndex;
+use cdda_context::ctx::Ctx as Screen;
+use cdda_context::nav::FocusedCommandIndex;
 
 // ---------------------------------------------------------------------------
 // Initial state

@@ -17,15 +17,15 @@ use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
 
 use super::FooterHint;
-use crate::context::ctx::Ctx;
-use crate::context::screen::CddaScreen;
-use crate::crafting::systems::{CategoryIndex, CraftEntry, CraftState};
-use crate::data::def_world::DefinitionWorld;
-use crate::data::interner::{
+use cdda_context::ctx::Ctx;
+use cdda_context::screen::CddaScreen;
+use cdda_crafting::systems::{CategoryIndex, CraftEntry, CraftState};
+use cdda_data::def_world::DefinitionWorld;
+use cdda_data::interner::{
     AmmoTypeRegistry, BodyPartRegistry, ComestibleRegistry, ItemTypeRegistry, QualityRegistry,
     SkillRegistry,
 };
-use crate::input::BindableAction;
+use cdda_input::BindableAction;
 use crate::render::item_detail::{spawn_item_detail, ItemDetailQueries};
 use crate::render::theme::{self, UiTheme};
 

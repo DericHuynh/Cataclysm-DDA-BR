@@ -1,8 +1,8 @@
 //! Calendar / game-time tests — GameTime resource, turn tracking, and
 //! hours-elapsed calculation.
 
-use cdda_core::sim::state::GameTime;
-use cdda_core::sim::test_utils::TestBed;
+use cdda_sim::state::GameTime;
+use cdda_sim::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------
 // Default state

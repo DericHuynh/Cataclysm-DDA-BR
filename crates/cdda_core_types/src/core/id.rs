@@ -213,6 +213,16 @@ impl<T> From<&str> for DefId<T> {
         DefId::new(s)
     }
 }
+impl<T> From<u32> for DefId<T> {
+    fn from(n: u32) -> Self {
+        DefId::new(n.to_string())
+    }
+}
+impl<T> From<i32> for DefId<T> {
+    fn from(n: i32) -> Self {
+        DefId::new(n.to_string())
+    }
+}
 impl<T> std::ops::Deref for DefId<T> {
     type Target = str;
     fn deref(&self) -> &str {

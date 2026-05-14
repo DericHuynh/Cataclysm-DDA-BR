@@ -10,7 +10,7 @@
 //! All tests use `TestBed` from `cdda_core::sim::test_utils`.
 
 use bevy_ecs::entity::Entity;
-use cdda_core::sim::test_utils::TestBed;
+use cdda_sim::test_utils::TestBed;
 use cdda_data::interner::BodyPartRegistry;
 
 // ---------------------------------------------------------------------------

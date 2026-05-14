@@ -43,7 +43,10 @@ pub fn spawn_item_from_def(
     count: u32,
 ) -> Entity {
     let entity = world
-        .spawn((WorldPosition(position), StackCount::new(count)))
+        .spawn((
+            WorldPosition(position),
+            StackCount::new(count).expect("spawn count >= 1"),
+        ))
         .id();
     let _ = def_entity;
     entity

@@ -1,4 +1,4 @@
-use cdda_core::context::config::{
+use cdda_context::config::{
     CharacterCreationState, FullscreenMode, GameSettings, WorldCreationSettings,
 };
 

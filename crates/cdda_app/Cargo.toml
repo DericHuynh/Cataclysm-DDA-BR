@@ -10,13 +10,25 @@ path = "src/main.rs"
 
 [dependencies]
 clap.workspace = true
-cdda_core.workspace = true
 cdda_components.workspace = true
 cdda_activity.workspace = true
+cdda_actor.workspace = true
+cdda_ai.workspace = true
+cdda_combat.workspace = true
+cdda_context.workspace = true
+cdda_crafting.workspace = true
+cdda_data.workspace = true
+cdda_input.workspace = true
 cdda_inventory = { path = "../cdda_inventory" }
+cdda_item.workspace = true
 cdda_events.workspace = true
+cdda_overmap.workspace = true
+cdda_overmap_gen.workspace = true
 cdda_render.workspace = true
-cdda_overmap = { path = "../cdda_overmap" }
+cdda_replay.workspace = true
+cdda_sim.workspace = true
+cdda_core_types.workspace = true
+bevy_ecs.workspace = true
 bevy = { workspace = true, features = ["3d"] }
 bevy-inspector-egui.workspace = true
 bevy_egui = { version = "0.39" }

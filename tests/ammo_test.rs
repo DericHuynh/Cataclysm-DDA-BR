@@ -5,9 +5,9 @@
 
 use cdda_components::def::{AmmoData, GunData, MagazineData};
 use cdda_components::{AmmoTypeId, SkillId};
-use cdda_core::sim::test_utils::TestBed;
 use cdda_data::interner::AmmoTypeRegistry;
 use cdda_data::interner::*;
+use cdda_sim::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------
 // AmmoData component tests

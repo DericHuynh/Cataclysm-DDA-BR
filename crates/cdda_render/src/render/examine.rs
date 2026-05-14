@@ -4,14 +4,14 @@
 //! Shows full item details using the shared `spawn_item_detail` widget,
 //! looking up the def entity from the runtime item's type ID.
 
-use crate::context::ctx::Ctx;
-use crate::context::screen::CddaScreen;
-use crate::context::ContextActions;
-use crate::data::def_world::DefinitionWorld;
-use crate::data::interner::ItemTypeRegistry;
-use crate::data::interner::QualityRegistry;
-use crate::input::{ActiveKeybindings, BindableAction};
-use crate::inventory::examine_resource::ExaminedItem;
+use cdda_context::ctx::Ctx;
+use cdda_context::screen::CddaScreen;
+use cdda_context::ContextActions;
+use cdda_data::def_world::DefinitionWorld;
+use cdda_data::interner::ItemTypeRegistry;
+use cdda_data::interner::QualityRegistry;
+use cdda_input::{ActiveKeybindings, BindableAction};
+use cdda_inventory::examine_resource::ExaminedItem;
 use crate::render::item_detail::ItemDetailSnapshot;
 use crate::render::theme::{self, UiTheme};
 use bevy::prelude::*;

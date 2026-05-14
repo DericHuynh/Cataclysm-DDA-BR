@@ -5,10 +5,10 @@
 //!
 //! Covers all CDDA mod layering operations: extend, delete, override.
 
-use cdda_core::data::interner::StringInterner;
-use cdda_core::data::loader::Loader;
-use cdda_core::data::patch::apply_cdda_patch;
-use cdda_core::data::flags::ItemFlagRegistry;
+use cdda_data::interner::StringInterner;
+use cdda_data::loader::Loader;
+use cdda_data::patch::apply_cdda_patch;
+use cdda_data::flags::ItemFlagRegistry;
 use std::io::Write;
 use std::path::PathBuf;
 use tempfile::TempDir;

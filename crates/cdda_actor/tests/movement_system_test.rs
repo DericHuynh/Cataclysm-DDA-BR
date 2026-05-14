@@ -9,8 +9,8 @@ use cdda_actor::movement::*;
 use cdda_components::actor::{ActionPoints, Bleeding, IsAlive, Stunned};
 use cdda_components::def::TerrainMoveCost;
 use cdda_components::sim::{Solid, WorldPosition};
-use cdda_sim::test_utils::TestBed;
 use cdda_components::WorldPos;
+use cdda_sim::test_utils::TestBed;
 
 #[test]
 #[ignore = "movement system not yet implemented"]
@@ -19,11 +19,20 @@ fn move_cost_flat_terrain() {
     test.register::<ActionPoints>();
     test.register::<IsAlive>();
 
-    let mover = test.spawn((ActionPoints { current: 100, speed: 100 }, IsAlive));
+    let mover = test.spawn((
+        ActionPoints {
+            current: 100,
+            speed: 100,
+        },
+        IsAlive,
+    ));
     test.run_system(movement_phase);
 
     let ap = test.get::<ActionPoints>(mover).unwrap();
-    assert_eq!(ap.current, 0, "moving onto flat terrain should consume 100 AP");
+    assert_eq!(
+        ap.current, 0,
+        "moving onto flat terrain should consume 100 AP"
+    );
 }
 
 #[test]
@@ -33,11 +42,20 @@ fn move_cost_rough_terrain() {
     test.register::<ActionPoints>();
     test.register::<IsAlive>();
 
-    let mover = test.spawn((ActionPoints { current: 200, speed: 100 }, IsAlive));
+    let mover = test.spawn((
+        ActionPoints {
+            current: 200,
+            speed: 100,
+        },
+        IsAlive,
+    ));
     test.run_system(movement_phase);
 
     let ap = test.get::<ActionPoints>(mover).unwrap();
-    assert_eq!(ap.current, 0, "moving onto rough terrain should consume 200 AP");
+    assert_eq!(
+        ap.current, 0,
+        "moving onto rough terrain should consume 200 AP"
+    );
 }
 
 #[test]
@@ -47,11 +65,20 @@ fn move_cost_impassable() {
     test.register::<ActionPoints>();
     test.register::<IsAlive>();
 
-    let mover = test.spawn((ActionPoints { current: 100, speed: 100 }, IsAlive));
+    let mover = test.spawn((
+        ActionPoints {
+            current: 100,
+            speed: 100,
+        },
+        IsAlive,
+    ));
     test.run_system(movement_phase);
 
     let ap = test.get::<ActionPoints>(mover).unwrap();
-    assert_eq!(ap.current, 100, "impassable terrain should block movement, AP unspent");
+    assert_eq!(
+        ap.current, 100,
+        "impassable terrain should block movement, AP unspent"
+    );
 }
 
 #[test]
@@ -61,13 +88,28 @@ fn move_cost_speed_modifies() {
     test.register::<ActionPoints>();
     test.register::<IsAlive>();
 
-    let fast = test.spawn((ActionPoints { current: 200, speed: 200 }, IsAlive));
-    let slow = test.spawn((ActionPoints { current: 200, speed: 50  }, IsAlive));
+    let fast = test.spawn((
+        ActionPoints {
+            current: 200,
+            speed: 200,
+        },
+        IsAlive,
+    ));
+    let slow = test.spawn((
+        ActionPoints {
+            current: 200,
+            speed: 50,
+        },
+        IsAlive,
+    ));
     test.run_system(movement_phase);
 
     let fast_ap = test.get::<ActionPoints>(fast).unwrap().current;
     let slow_ap = test.get::<ActionPoints>(slow).unwrap().current;
-    assert!(fast_ap > slow_ap, "higher speed should reduce effective move cost");
+    assert!(
+        fast_ap > slow_ap,
+        "higher speed should reduce effective move cost"
+    );
 }
 
 #[test]
@@ -78,13 +120,29 @@ fn move_cost_bleeding_penalty() {
     test.register::<IsAlive>();
     test.register::<Bleeding>();
 
-    let bleeding = test.spawn((ActionPoints { current: 125, speed: 100 }, IsAlive, Bleeding));
-    let healthy  = test.spawn((ActionPoints { current: 100, speed: 100 }, IsAlive));
+    let bleeding = test.spawn((
+        ActionPoints {
+            current: 125,
+            speed: 100,
+        },
+        IsAlive,
+        Bleeding,
+    ));
+    let healthy = test.spawn((
+        ActionPoints {
+            current: 100,
+            speed: 100,
+        },
+        IsAlive,
+    ));
     test.run_system(movement_phase);
 
-    let bleed_ap  = test.get::<ActionPoints>(bleeding).unwrap().current;
+    let bleed_ap = test.get::<ActionPoints>(bleeding).unwrap().current;
     let healthy_ap = test.get::<ActionPoints>(healthy).unwrap().current;
-    assert!(bleed_ap < healthy_ap, "bleeding should add 25% to movement cost");
+    assert!(
+        bleed_ap < healthy_ap,
+        "bleeding should add 25% to movement cost"
+    );
 }
 
 #[test]
@@ -94,7 +152,13 @@ fn move_cost_swimming_penalty() {
     test.register::<ActionPoints>();
     test.register::<IsAlive>();
 
-    let swimmer = test.spawn((ActionPoints { current: 200, speed: 100 }, IsAlive));
+    let swimmer = test.spawn((
+        ActionPoints {
+            current: 200,
+            speed: 100,
+        },
+        IsAlive,
+    ));
     test.run_system(movement_phase);
 
     let ap = test.get::<ActionPoints>(swimmer).unwrap();
@@ -107,7 +171,10 @@ fn spend_ap_reduces() {
     let mut test = TestBed::new();
     test.register::<ActionPoints>();
 
-    let e = test.spawn((ActionPoints { current: 100, speed: 100 },));
+    let e = test.spawn((ActionPoints {
+        current: 100,
+        speed: 100,
+    },));
     test.run_system(movement_phase);
 
     let ap = test.get::<ActionPoints>(e).unwrap();
@@ -120,7 +187,10 @@ fn spend_ap_insufficient() {
     let mut test = TestBed::new();
     test.register::<ActionPoints>();
 
-    let e = test.spawn((ActionPoints { current: 20, speed: 100 },));
+    let e = test.spawn((ActionPoints {
+        current: 20,
+        speed: 100,
+    },));
     test.run_system(movement_phase);
 
     let ap = test.get::<ActionPoints>(e).unwrap();
@@ -134,11 +204,20 @@ fn gain_ap_at_start_of_turn() {
     test.register::<ActionPoints>();
     test.register::<IsAlive>();
 
-    let e = test.spawn((ActionPoints { current: 0, speed: 100 }, IsAlive));
+    let e = test.spawn((
+        ActionPoints {
+            current: 0,
+            speed: 100,
+        },
+        IsAlive,
+    ));
     test.run_system(movement_phase);
 
     let ap = test.get::<ActionPoints>(e).unwrap();
-    assert_eq!(ap.current, 100, "start-of-turn AP gain should add speed value");
+    assert_eq!(
+        ap.current, 100,
+        "start-of-turn AP gain should add speed value"
+    );
 }
 
 #[test]
@@ -150,7 +229,11 @@ fn is_passable_impassable_terrain() {
 
     let impassable = test.spawn((
         TerrainMoveCost(0),
-        WorldPosition(WorldPos::new(0, 0, cdda_components::core::coords::ZLevel::new(0))),
+        WorldPosition(WorldPos::new(
+            0,
+            0,
+            cdda_components::core::coords::ZLevel::new(0),
+        )),
     ));
     test.run_system(movement_phase);
 
@@ -166,7 +249,11 @@ fn is_passable_normal_terrain() {
 
     let passable = test.spawn((
         TerrainMoveCost(100),
-        WorldPosition(WorldPos::new(0, 0, cdda_components::core::coords::ZLevel::new(0))),
+        WorldPosition(WorldPos::new(
+            0,
+            0,
+            cdda_components::core::coords::ZLevel::new(0),
+        )),
     ));
     test.run_system(movement_phase);
 
@@ -185,15 +272,29 @@ fn attempt_move_into_solid() {
 
     let _wall = test.spawn((
         Solid,
-        WorldPosition(WorldPos::new(1, 0, cdda_components::core::coords::ZLevel::new(0))),
+        WorldPosition(WorldPos::new(
+            1,
+            0,
+            cdda_components::core::coords::ZLevel::new(0),
+        )),
     ));
     let mover = test.spawn((
-        ActionPoints { current: 100, speed: 100 },
+        ActionPoints {
+            current: 100,
+            speed: 100,
+        },
         IsAlive,
-        WorldPosition(WorldPos::new(0, 0, cdda_components::core::coords::ZLevel::new(0))),
+        WorldPosition(WorldPos::new(
+            0,
+            0,
+            cdda_components::core::coords::ZLevel::new(0),
+        )),
     ));
     test.run_system(movement_phase);
 
     let ap = test.get::<ActionPoints>(mover).unwrap();
-    assert_eq!(ap.current, 100, "moving into solid should be blocked, AP unspent");
+    assert_eq!(
+        ap.current, 100,
+        "moving into solid should be blocked, AP unspent"
+    );
 }

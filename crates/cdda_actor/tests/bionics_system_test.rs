@@ -1,10 +1,10 @@
 #![allow(unused_imports)]
 
 use bevy_ecs::prelude::Entity;
-use cdda_components::actor::*;
-use cdda_components::*;
-use cdda_components::sim::*;
 use cdda_actor::bionics::*;
+use cdda_components::actor::*;
+use cdda_components::sim::*;
+use cdda_components::*;
 use cdda_sim::test_utils::TestBed;
 
 // ===========================================================================
@@ -27,14 +27,18 @@ fn spawn_creature(test: &mut TestBed) -> Entity {
 fn spawn_bionic(test: &mut TestBed, creature: Entity, id: u32, active: bool, power: u64) -> Entity {
     test.register::<Bionic>();
     test.register::<BionicOf>();
-    test.spawn((
+    test.register::<Active>();
+    let mut cmd = test.spawn((
         BionicOf(creature),
         Bionic {
             bionic_id: BionicId::from(id),
-            active,
             power_used: Energy::from_joules(power),
         },
-    ))
+    ));
+    if active {
+        test.world_mut().entity_mut(cmd).insert(Active);
+    }
+    cmd
 }
 
 // ===========================================================================
@@ -48,18 +52,14 @@ fn activate_bionic_sets_active() {
     let creature = spawn_creature(&mut test);
     let bionic = spawn_bionic(&mut test, creature, 1, false, 100);
 
-    // Bionic starts inactive
-    assert!(!test.get::<Bionic>(bionic).unwrap().active);
+    // Bionic starts inactive — no Active component
+    assert!(test.world().get::<Active>(bionic).is_none());
 
-    // Activate bionic
-    test.world_mut().entity_mut(bionic).insert(Bionic {
-        bionic_id: BionicId::from(1),
-        active: true,
-        power_used: Energy::from_joules(100),
-    });
+    // Activate bionic by inserting Active tag
+    test.world_mut().entity_mut(bionic).insert(Active);
 
-    // After activation, active flag should be true
-    assert!(test.get::<Bionic>(bionic).unwrap().active);
+    // After activation, Active component should be present
+    assert!(test.world().get::<Active>(bionic).is_some());
 }
 
 // ===========================================================================
@@ -111,18 +111,14 @@ fn deactivate_bionic_sets_inactive() {
     let creature = spawn_creature(&mut test);
     let bionic = spawn_bionic(&mut test, creature, 1, true, 100);
 
-    // Bionic starts active
-    assert!(test.get::<Bionic>(bionic).unwrap().active);
+    // Bionic starts active — has Active component
+    assert!(test.world().get::<Active>(bionic).is_some());
 
-    // Deactivate bionic
-    test.world_mut().entity_mut(bionic).insert(Bionic {
-        bionic_id: BionicId::from(1),
-        active: false,
-        power_used: Energy::from_joules(100),
-    });
+    // Deactivate bionic by removing Active tag
+    test.world_mut().entity_mut(bionic).remove::<Active>();
 
-    // After deactivation, active flag should be false
-    assert!(!test.get::<Bionic>(bionic).unwrap().active);
+    // After deactivation, Active component should be gone
+    assert!(test.world().get::<Active>(bionic).is_none());
 }
 
 // ===========================================================================
@@ -193,8 +189,10 @@ fn tick_passive_effects() {
 
     // Passive bionics apply effects each tick without being active
     // This test verifies the tick system processes passive bionics
-    let bionic = test.get::<Bionic>(_bionic).unwrap();
-    assert!(!bionic.active, "Passive bionic should be inactive");
+    assert!(
+        test.world().get::<Active>(_bionic).is_none(),
+        "Passive bionic should be inactive (no Active component)"
+    );
     // A system would apply passive effects during the tick
     let effects_applied = true;
     assert!(effects_applied);

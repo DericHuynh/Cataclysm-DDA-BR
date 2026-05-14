@@ -7,7 +7,7 @@
 use cdda_components::def::*;
 use cdda_components::item::QualityId;
 use cdda_components::item::ItemType;
-use cdda_core::sim::test_utils::TestBed;
+use cdda_sim::test_utils::TestBed;
 use cdda_data::interner::{ItemTypeRegistry, QualityRegistry, SkillRegistry};
 
 // ============================================================================

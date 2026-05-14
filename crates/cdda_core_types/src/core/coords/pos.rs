@@ -1,5 +1,5 @@
 use crate::core::coords::origins::{Abs, Rel};
-use crate::core::coords::scales::{Ms, Om, Omt, Sm};
+use crate::core::coords::scales::{Ms, Om, Omt, Sm, OMT_PER_OM, TILES_PER_OMT, TILES_PER_SM};
 use crate::core::coords::z_level::ZLevel;
 use serde::{Deserialize, Serialize};
 use std::ops::{Add, Sub};
@@ -66,10 +66,10 @@ impl Pos<Ms, Abs> {
     /// Uses `div_euclid`/`rem_euclid` so negative coordinates map to the
     /// correct submap.
     pub fn to_submap(self) -> (Pos<Sm, Abs>, Pos<Ms, Rel>) {
-        let sx = self.x.div_euclid(12);
-        let sy = self.y.div_euclid(12);
-        let lx = self.x.rem_euclid(12);
-        let ly = self.y.rem_euclid(12);
+        let sx = self.x.div_euclid(TILES_PER_SM);
+        let sy = self.y.div_euclid(TILES_PER_SM);
+        let lx = self.x.rem_euclid(TILES_PER_SM);
+        let ly = self.y.rem_euclid(TILES_PER_SM);
         (Pos::new(sx, sy, self.z), Pos::new(lx, ly, self.z))
     }
 
@@ -77,24 +77,36 @@ impl Pos<Ms, Abs> {
     ///
     /// z passes through unchanged (z does not participate in horizontal scaling).
     pub fn from_submap(sm: Pos<Sm, Abs>, local: Pos<Ms, Rel>) -> Self {
-        Pos::new(sm.x * 12 + local.x, sm.y * 12 + local.y, sm.z)
+        Pos::new(
+            sm.x * TILES_PER_SM + local.x,
+            sm.y * TILES_PER_SM + local.y,
+            sm.z,
+        )
     }
 
     /// Convert to overmap-terrain scale (1 OMT = 24×24 world tiles).
     ///
     /// z passes through unchanged.
     pub fn to_omt(self) -> Pos<Omt, Abs> {
-        Pos::new(self.x.div_euclid(24), self.y.div_euclid(24), self.z)
+        Pos::new(
+            self.x.div_euclid(TILES_PER_OMT),
+            self.y.div_euclid(TILES_PER_OMT),
+            self.z,
+        )
     }
 
     /// Construct from an OMT position + local offset within the OMT.
     pub fn from_omt(omt: Pos<Omt, Abs>, local: Pos<Ms, Rel>) -> Self {
-        Pos::new(omt.x * 24 + local.x, omt.y * 24 + local.y, omt.z)
+        Pos::new(
+            omt.x * TILES_PER_OMT + local.x,
+            omt.y * TILES_PER_OMT + local.y,
+            omt.z,
+        )
     }
 
-    /// Convert to overmap scale (1 OM = 180×180 omts = 180 * 24 tiles).
+    /// Convert to overmap scale (1 OM = 180×180 omts).
     pub fn to_om(self) -> Pos<Om, Abs> {
-        let tiles_per_om = 180 * 24;
+        let tiles_per_om = OMT_PER_OM * TILES_PER_OMT;
         Pos::new(
             self.x.div_euclid(tiles_per_om),
             self.y.div_euclid(tiles_per_om),
@@ -179,14 +191,14 @@ impl<Scale, Origin> Pos<Scale, Origin> {
 impl Pos<Sm, Abs> {
     /// Convert SubmapPos to tile-scale WorldPos (top-left corner of the submap).
     pub fn to_worldpos(self) -> Pos<Ms, Abs> {
-        Pos::new(self.x * 12, self.y * 12, self.z)
+        Pos::new(self.x * TILES_PER_SM, self.y * TILES_PER_SM, self.z)
     }
 }
 
 impl Pos<Omt, Abs> {
     /// Convert OmtPos to tile-scale WorldPos (top-left corner of the OMT).
     pub fn to_worldpos(self) -> Pos<Ms, Abs> {
-        Pos::new(self.x * 24, self.y * 24, self.z)
+        Pos::new(self.x * TILES_PER_OMT, self.y * TILES_PER_OMT, self.z)
     }
 
     /// Convert OmtPos to SubmapPos (top-left submap of the OMT).
@@ -198,7 +210,7 @@ impl Pos<Omt, Abs> {
 impl Pos<Om, Abs> {
     /// Convert OmPos to tile-scale WorldPos (top-left corner of the overmap).
     pub fn to_worldpos(self) -> Pos<Ms, Abs> {
-        let tiles_per_om = 180 * 24;
+        let tiles_per_om = OMT_PER_OM * TILES_PER_OMT;
         Pos::new(self.x * tiles_per_om, self.y * tiles_per_om, self.z)
     }
 }

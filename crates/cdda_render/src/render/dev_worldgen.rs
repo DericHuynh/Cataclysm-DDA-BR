@@ -4,9 +4,6 @@
 //! pattern as the Bevy 0.18 Text2d example. Spawned on OnEnter(Gameplay),
 //! updated on move.
 
-use crate::context::ctx::Ctx as Screen;
-use crate::context::nav::{ctx_def, FocusedCommandIndex};
-use crate::data::interner::ItemTypeRegistry;
 use crate::render::theme::{self, UiTheme};
 use crate::render::tiles::TileRegistry;
 use bevy::prelude::*;
@@ -20,6 +17,10 @@ use cdda_components::item::{
     ContainerContents, Invlet, ItemType, MountedPockets, WieldedItems, FLOOR_CAP_ML,
 };
 use cdda_components::sim::WorldPosition;
+use cdda_context::ctx::Ctx as Screen;
+use cdda_context::nav::{ctx_def, FocusedCommandIndex};
+use cdda_core_types::core::coords::TILES_PER_OMT;
+use cdda_data::interner::ItemTypeRegistry;
 use std::collections::HashMap;
 use tracing::info;
 
@@ -376,8 +377,8 @@ pub(crate) fn update_ascii_view(
     }
 
     for (item_e, wp, type_id, symbol, _vol, name) in ground_items.iter() {
-        let omt_x = wp.0.x.div_euclid(24);
-        let omt_y = wp.0.y.div_euclid(24);
+        let omt_x = wp.0.x.div_euclid(TILES_PER_OMT);
+        let omt_y = wp.0.y.div_euclid(TILES_PER_OMT);
         let omt_z = wp.0.z.0 as i32;
 
         if omt_z != cz {
@@ -486,7 +487,9 @@ fn status_text_with_items(
     let at_tile: Vec<(&str, u32)> = ground_items
         .iter()
         .filter(|(_, wp, _, _, _, _)| {
-            wp.0.x.div_euclid(24) == cx && wp.0.y.div_euclid(24) == cy && wp.0.z.0 as i32 == cz
+            wp.0.x.div_euclid(TILES_PER_OMT) == cx
+                && wp.0.y.div_euclid(TILES_PER_OMT) == cy
+                && wp.0.z.0 as i32 == cz
         })
         .map(|(_, _, _, _, vol, name)| {
             (

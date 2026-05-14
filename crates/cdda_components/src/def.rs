@@ -17,12 +17,12 @@
 //! `DefinitionWorld`), never in the gameplay world. Runtime entities
 //! reference definition entities via a single component.
 
+use crate::item::ItemType;
 use crate::item::QualityId;
 use crate::AmmoTypeId;
 use crate::BodyPartId;
 use crate::ComestibleId;
 use crate::ItemTypeId;
-use crate::item::ItemType;
 
 use crate::SkillId;
 use bevy_ecs::prelude::*;
@@ -219,7 +219,7 @@ pub struct FoodData {
     pub fun: i32,
     pub healthy: i32,
     pub stim: i32,
-    pub spoils_in: u32,                   // turns until rotten
+    pub spoils_in: u32,                // turns until rotten
     pub comestible_type: ComestibleId, // "FOOD", "DRINK", "MED"
 }
 
@@ -564,6 +564,7 @@ impl SubParts {
 
 /// Points to the parent body part def.
 #[derive(Component, Debug, Clone)]
+#[component(immutable)]
 #[relationship(relationship_target = SubParts)]
 pub struct ParentPart(pub Entity);
 

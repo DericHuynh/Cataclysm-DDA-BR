@@ -11,17 +11,17 @@ use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
 
 use super::FooterHint;
-use crate::context::ctx::Ctx;
-use crate::context::screen::CddaScreen;
-use crate::context::ContextActions;
-use crate::data::interner::{
+use crate::render::item_detail::{spawn_item_detail, ItemDetailQueries};
+use crate::render::theme::{self, UiTheme};
+use cdda_context::ctx::Ctx;
+use cdda_context::screen::CddaScreen;
+use cdda_context::ContextActions;
+use cdda_data::interner::{
     AmmoTypeRegistry, BodyPartRegistry, ComestibleRegistry, ItemTypeRegistry, QualityRegistry,
     SkillRegistry,
 };
-use crate::input::ActiveKeybindings;
-use crate::input::BindableAction;
-use crate::render::item_detail::{spawn_item_detail, ItemDetailQueries};
-use crate::render::theme::{self, UiTheme};
+use cdda_input::ActiveKeybindings;
+use cdda_input::BindableAction;
 
 // Rows visible at once in the list (controls centered-scroll window).
 const VISIBLE_ROWS: usize = 22;
@@ -209,7 +209,7 @@ pub fn spawn_dev_spawn_panel(
             ));
 
             // Footer — static, built once
-            let cancel_key = active_keys.key_for(crate::input::BindableAction::Cancel);
+            let cancel_key = active_keys.key_for(cdda_input::BindableAction::Cancel);
             let mut hints = format!("[{}] close", cancel_key);
             for entry in &ctx_actions.actions {
                 let key = active_keys.key_for(entry.action);

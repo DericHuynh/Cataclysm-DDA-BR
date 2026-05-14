@@ -3,7 +3,7 @@
 use cdda_components::def::{BookData, GunModData, ToolData};
 use cdda_components::AmmoTypeId;
 use cdda_components::SkillId;
-use cdda_core::sim::test_utils::TestBed;
+use cdda_sim::test_utils::TestBed;
 use cdda_data::interner::AmmoTypeRegistry;
 use cdda_data::interner::SkillRegistry;
 

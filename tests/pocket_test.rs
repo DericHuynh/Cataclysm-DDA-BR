@@ -8,8 +8,8 @@ use cdda_components::item::IsPocket;
 use cdda_components::item::PocketRestriction;
 use cdda_components::item::PocketType;
 use cdda_components::item::*;
-use cdda_core::sim::test_utils::TestBed;
-use cdda_core::{Length, Volume, Weight};
+use cdda_sim::test_utils::TestBed;
+use cdda_core_types::core::units::{Length, Volume, Weight};
 
 // ===========================================================================
 // Helpers
@@ -156,7 +156,7 @@ fn stack_count_basics() {
     let mut test = TestBed::new();
     test.register::<StackCount>();
 
-    let e = test.spawn((StackCount::new(1),));
+    let e = test.spawn((StackCount::new(1).unwrap(),));
     assert_eq!(test.get::<StackCount>(e).unwrap().get(), 1);
 }
 
@@ -165,14 +165,13 @@ fn stack_count_multiple() {
     let mut test = TestBed::new();
     test.register::<StackCount>();
 
-    let e = test.spawn((StackCount::new(10),));
+    let e = test.spawn((StackCount::new(10).unwrap(),));
     assert_eq!(test.get::<StackCount>(e).unwrap().get(), 10);
 }
 
 #[test]
-#[should_panic(expected = "StackCount must be >= 1")]
-fn stack_count_zero_panics() {
-    let _ = StackCount::new(0);
+fn stack_count_zero_returns_err() {
+    assert!(StackCount::new(0).is_err());
 }
 
 // ===========================================================================
@@ -186,7 +185,7 @@ fn inside_container_relationship() {
     test.register::<ContainerContents>();
 
     let container = make_container(&mut test);
-    let item = test.spawn((StackCount::new(1), InsideContainer(container)));
+    let item = test.spawn((StackCount::new(1).unwrap(), InsideContainer(container)));
 
     let on_item = test.get::<InsideContainer>(item).unwrap();
     assert_eq!(on_item.0, container);
@@ -200,7 +199,7 @@ fn container_contents_queryable() {
     test.register::<StackCount>();
 
     let container = make_container(&mut test);
-    let item = test.spawn((StackCount::new(1), InsideContainer(container)));
+    let item = test.spawn((StackCount::new(1).unwrap(), InsideContainer(container)));
 
     // ContainerContents should have been populated by the relationship hook
     let contents = test.get::<ContainerContents>(container).unwrap();
@@ -220,7 +219,7 @@ fn container_reinsertion_updates() {
 
     let container_a = make_container(&mut test);
     let container_b = make_container(&mut test);
-    let item = test.spawn((StackCount::new(1), InsideContainer(container_a)));
+    let item = test.spawn((StackCount::new(1).unwrap(), InsideContainer(container_a)));
 
     // Verify it's in container_a
     let contents_a = test.get::<ContainerContents>(container_a).unwrap();

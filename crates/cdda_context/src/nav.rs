@@ -8,11 +8,11 @@ use bevy_ecs::message::MessageReader;
 use bevy_ecs::prelude::*;
 use bevy_state::prelude::*;
 
+use crate::overlay::OverlayStack;
+pub use cdda_components::context::{pop_ctx, push_ctx, ContextStack, Ctx, FocusedCommandIndex};
+use cdda_components::input::{GameAction, InputAction};
 pub use cdda_events::GameEvent;
 pub use cdda_events::GameEventDispatch;
-pub use cdda_components::context::{Ctx, ContextStack, FocusedCommandIndex, push_ctx, pop_ctx};
-use cdda_components::input::{GameAction, InputAction};
-use crate::overlay::OverlayStack;
 
 // ---------------------------------------------------------------------------
 // TransitionTarget
@@ -86,7 +86,6 @@ pub fn ctx_def(screen: Ctx) -> ScreenDefinition {
                 cmd("Special", Some('s'), Push(Ctx::DevWorldgen)),
                 cmd("Load Game", Some('l'), Push(Ctx::Custom(1))),
                 cmd("World", Some('w'), Push(WorldMenu)),
-
                 cmd("Settings", Some('t'), Push(SettingsMenu)),
                 cmd("Help", Some('h'), Push(HelpScreen)),
                 cmd("Credits", Some('c'), Push(CreditsScreen)),
@@ -166,17 +165,20 @@ pub fn ctx_def(screen: Ctx) -> ScreenDefinition {
         },
 
         Inventory | ItemExamine | CraftingMenu | CharacterSheet | PauseMenu | ExamineLook
-        | Dialog | DirectionSelect | TextInput | QuantityInput | VehicleInteraction
-        | Overmap => {
+        | Dialog | DirectionSelect | TextInput | QuantityInput | VehicleInteraction | Overmap => {
             ScreenDefinition {
                 title: "",
                 commands: Vec::new(),
             }
         }
 
-
         DevSpawnPanel => ScreenDefinition {
             title: "DEBUG: SPAWN ITEM",
+            commands: Vec::new(),
+        },
+
+        RegistryViewer => ScreenDefinition {
+            title: "DEBUG: REGISTRY VIEWER",
             commands: Vec::new(),
         },
 
@@ -213,17 +215,15 @@ fn dispatch(
         TransitionTarget::Replace(s) => next.set(*s),
         TransitionTarget::Pop => pop_ctx(stack, next, focused),
         TransitionTarget::Quit => std::process::exit(0),
-        TransitionTarget::Event(e) => {
-            match e {
-                GameEvent::StartNewGame => {
-                    tracing::info!("dispatching StartNewGame → DataLoading");
-                    app_next.set(cdda_sim::state::AppState::DataLoading);
-                }
-                GameEvent::SaveAndQuit => {
-                    app_next.set(cdda_sim::state::AppState::MainMenu);
-                }
+        TransitionTarget::Event(e) => match e {
+            GameEvent::StartNewGame => {
+                tracing::info!("dispatching StartNewGame → DataLoading");
+                app_next.set(cdda_sim::state::AppState::DataLoading);
             }
-        }
+            GameEvent::SaveAndQuit => {
+                app_next.set(cdda_sim::state::AppState::MainMenu);
+            }
+        },
     }
 }
 
@@ -409,6 +409,16 @@ pub fn handle_panel_openers(
                     &mut focused,
                 );
             }
+            // Custom(2) opens the registry viewer (bound to F3 in gameplay context).
+            GameAction::Custom(2) if current == Ctx::Gameplay => {
+                push_ctx(
+                    current,
+                    Ctx::RegistryViewer,
+                    &mut stack,
+                    &mut next,
+                    &mut focused,
+                );
+            }
             _ => {}
         }
     }
@@ -440,6 +450,7 @@ pub fn sync_input_context(
         | DevWorldgen | ScenarioSelect | ProfessionSelect | CharacterCreation
         | CharacterConfirm | Custom(_) => InputContextId::MainMenu,
         DevSpawnPanel => InputContextId::Inventory,
+        RegistryViewer => InputContextId::Inventory,
         SettingsMenu => InputContextId::Settings,
         Inventory | ItemExamine => InputContextId::Inventory,
         CraftingMenu => InputContextId::CraftingMenu,

@@ -9,7 +9,7 @@
 
 use bevy_ecs::entity::Entity;
 use cdda_components::item::*;
-use cdda_core::sim::test_utils::TestBed;
+use cdda_sim::test_utils::TestBed;
 
 fn empty_entity(test: &mut TestBed) -> Entity {
     test.world_mut().spawn_empty().id()

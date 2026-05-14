@@ -11,17 +11,18 @@ use bevy_ecs::message::MessageReader;
 use bevy_state::state_scoped::DespawnOnExit;
 
 use super::FooterHint;
-use crate::context::ctx::Ctx;
-use crate::context::screen::CddaScreen;
-use crate::context::ContextActions;
-use crate::input::ActiveKeybindings;
-use crate::input::{BindableAction, GameAction, InputAction};
+use cdda_context::ctx::Ctx;
+use cdda_context::screen::CddaScreen;
+use cdda_context::ContextActions;
+use cdda_input::ActiveKeybindings;
+use cdda_input::{BindableAction, GameAction, InputAction};
 use crate::render::theme::{self, UiTheme};
 use cdda_components::actor::Stats;
 use cdda_components::actor::{
-    ActionPoints, ActiveEffects, Bionic, Bleeding, BodyTemperature, CombatStats, CreatureMutations,
-    CreatureProficiencies, CreatureSkills, Health, InstalledBionics, Morale, MutationEntry, OnFire,
-    PlayerData, ProficiencyEntry, SkillEntry, StatusEffect, Stunned, Vision, Wetness,
+    ActionPoints, Active, ActiveEffects, Bionic, Bleeding, BodyTemperature, CombatStats,
+    CreatureMutations, CreatureProficiencies, CreatureSkills, Health, InstalledBionics, Morale,
+    MutationEntry, OnFire, PlayerData, ProficiencyEntry, SkillEntry, StatusEffect, Stunned,
+    Visible, Vision, Wetness,
 };
 use cdda_components::dev::DevPlayer;
 
@@ -265,8 +266,10 @@ pub fn update_character_sheet_screen(
     >,
     skill_entries: Query<&SkillEntry>,
     mutation_entries: Query<&MutationEntry>,
+    visible_tags: Query<(), With<Visible>>,
     effect_entries: Query<&StatusEffect>,
     bionic_entries: Query<&Bionic>,
+    active_tags: Query<(), With<Active>>,
     proficiency_entries: Query<&ProficiencyEntry>,
     left_container: Query<Entity, With<CharSheetLeftContainer>>,
     content_container: Query<Entity, With<CharSheetContentContainer>>,
@@ -535,24 +538,25 @@ pub fn update_character_sheet_screen(
             }
 
             CharacterTab::Traits => {
-                let traits: Vec<MutationEntry> = creature_mutations
+                let trait_entries: Vec<(Entity, &MutationEntry)> = creature_mutations
                     .map(|cm| {
                         cm.iter()
-                            .filter_map(|e| mutation_entries.get(e).ok())
-                            .cloned()
+                            .filter_map(|e| mutation_entries.get(e).ok().map(|m| (e, m)))
                             .collect()
                     })
                     .unwrap_or_default();
 
-                if traits.is_empty() {
+                if trait_entries.is_empty() {
                     spawn_empty_message(right, "No traits or mutations.");
                 } else {
                     spawn_list_header(right, &format!("{:<30}  {}", "Trait / Mutation", "Visible"));
-                    for (i, entry) in traits.iter().enumerate().skip(state.scroll) {
+                    for (i, (entity, entry)) in trait_entries.iter().enumerate().skip(state.scroll)
+                    {
+                        let is_visible = visible_tags.get(*entity).is_ok();
                         let row_str = format!(
                             "{:<30}  {}",
                             format!("mutation #{}", entry.id.as_str()),
-                            if entry.visible { "yes" } else { "no" },
+                            if is_visible { "yes" } else { "no" },
                         );
                         spawn_content_row(right, &row_str, i % 2 == 0, theme::TEXT_BRIGHT);
                     }
@@ -597,30 +601,31 @@ pub fn update_character_sheet_screen(
             }
 
             CharacterTab::Bionics => {
-                let bionics: Vec<Bionic> = installed_bionics
+                let bionic_entries: Vec<(Entity, &Bionic)> = installed_bionics
                     .map(|ib| {
                         ib.iter()
-                            .filter_map(|e| bionic_entries.get(e).ok())
-                            .cloned()
+                            .filter_map(|e| bionic_entries.get(e).ok().map(|b| (e, b)))
                             .collect()
                     })
                     .unwrap_or_default();
 
-                if bionics.is_empty() {
+                if bionic_entries.is_empty() {
                     spawn_empty_message(right, "No bionics installed.");
                 } else {
                     spawn_list_header(
                         right,
                         &format!("{:<30}  {:>8}  {}", "Bionic", "Power", "Active"),
                     );
-                    for (i, entry) in bionics.iter().enumerate().skip(state.scroll) {
+                    for (i, (entity, entry)) in bionic_entries.iter().enumerate().skip(state.scroll)
+                    {
+                        let is_active = active_tags.get(*entity).is_ok();
                         let row_str = format!(
                             "{:<30}  {:>8}  {}",
                             format!("bionic #{}", entry.bionic_id.as_str()),
                             entry.power_used.0,
-                            if entry.active { "yes" } else { "no" },
+                            if is_active { "yes" } else { "no" },
                         );
-                        let color = if entry.active {
+                        let color = if is_active {
                             theme::TEXT_GREEN
                         } else {
                             theme::TEXT_BRIGHT

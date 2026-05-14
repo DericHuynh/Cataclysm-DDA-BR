@@ -286,9 +286,9 @@ fn damage_profile_tracks_types() {
     let bullet = DefId::<DamageTypeDef>::new("bullet");
 
     let mut d = Damage::ZERO;
-    d.add(bash, 10);
-    d.add(cut, 5);
-    d.add(bullet, 3);
+    d.add(bash.clone(), 10);
+    d.add(cut.clone(), 5);
+    d.add(bullet.clone(), 3);
 
     assert_eq!(d.len(), 3);
     assert_eq!(d.total(), 18);
@@ -303,11 +303,11 @@ fn damage_merge_combat() {
     let cut = DefId::<DamageTypeDef>::new("cut");
 
     let mut a = Damage::ZERO;
-    a.add(bash, 12);
+    a.add(bash.clone(), 12);
 
     let mut b = Damage::ZERO;
-    b.add(cut, 4);
-    b.add(bash, 3);
+    b.add(cut.clone(), 4);
+    b.add(bash.clone(), 3);
 
     a.merge(&b);
     assert_eq!(a.total(), 19);

@@ -5,9 +5,15 @@ edition = "2021"
 description = "CDDA UI rendering — all bevy_ui, Text2d, and tile rendering."
 
 [dependencies]
-cdda_core = { path = "../cdda_core" }
 cdda_components = { path = "../cdda_components" }
+cdda_context = { path = "../cdda_context" }
+cdda_core_types = { path = "../cdda_core_types" }
+cdda_crafting = { path = "../cdda_crafting" }
+cdda_data = { path = "../cdda_data" }
+cdda_input = { path = "../cdda_input" }
+cdda_inventory = { path = "../cdda_inventory" }
 cdda_overmap = { path = "../cdda_overmap" }
+cdda_overmap_gen = { path = "../cdda_overmap_gen" }
 bevy = { workspace = true, default-features = false, features = [
     "bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_render",
     "bevy_sprite", "bevy_text", "bevy_ui", "bevy_winit", "x11",

@@ -19,7 +19,7 @@ use cdda_components::sim::WorldPosition;
 use cdda_components::ItemTypeId;
 
 use cdda_context::ContextActions;
-use cdda_core_types::core::coords::{WorldPos, ZLevel};
+use cdda_core_types::core::coords::{WorldPos, ZLevel, TILES_PER_OMT};
 use cdda_data::def_world::DefinitionWorld;
 use cdda_data::interner::ItemTypeRegistry;
 use cdda_inventory::examine_resource::ExaminedItem;
@@ -115,8 +115,8 @@ pub fn collect_available_items(world: &mut World, player: Entity) -> Vec<Entity>
 
     // Items on the ground within the same 24x24 OMT tile as the player
     if let Some(pos) = player_pos {
-        let px = pos.x.div_euclid(24);
-        let py = pos.y.div_euclid(24);
+        let px = pos.x.div_euclid(TILES_PER_OMT);
+        let py = pos.y.div_euclid(TILES_PER_OMT);
         let pz = pos.z;
 
         let mut q = world.query::<(Entity, &WorldPosition)>();
@@ -124,8 +124,8 @@ pub fn collect_available_items(world: &mut World, player: Entity) -> Vec<Entity>
             .iter(world)
             .filter(|(e, wp)| {
                 *e != player
-                    && wp.0.x.div_euclid(24) == px
-                    && wp.0.y.div_euclid(24) == py
+                    && wp.0.x.div_euclid(TILES_PER_OMT) == px
+                    && wp.0.y.div_euclid(TILES_PER_OMT) == py
                     && wp.0.z == pz
             })
             .map(|(e, _)| e)
@@ -243,7 +243,9 @@ pub fn consume_items(
             // and cleans up Invlet components.
             world.despawn(e);
         } else {
-            world.entity_mut(e).insert(StackCount::new(stack - needed));
+            world.entity_mut(e).insert(
+                StackCount::new(stack - needed).expect("stack > needed in this branch, count >= 1"),
+            );
             needed = 0;
         }
     }

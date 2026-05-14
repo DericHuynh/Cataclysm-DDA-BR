@@ -10,7 +10,9 @@ use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, OMAP_DIM};
 use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};
 use cdda_overmap_gen::connection_catalog::ConnectionCatalog;
 use cdda_overmap_gen::mongroup_catalog::MongroupCatalog;
-use cdda_overmap_gen::pipeline::{OvermapGenConfig, OvermapGenPhase, OvermapGenPlugin};
+use cdda_overmap_gen::pipeline::{
+    OvermapGenConfig, OvermapGenPhase, OvermapGenPlugin, DEFAULT_NOISE_SEED,
+};
 use cdda_overmap_gen::region_settings::OvermapRegionSettings;
 use cdda_overmap_gen::special_catalog::SpecialCatalog;
 use cdda_overmap_gen::steps::cities::City;
@@ -309,7 +311,7 @@ fn main() {
     let mut app = App::new();
     app.add_plugins((StatesPlugin, OvermapGenPlugin));
     app.insert_resource(OvermapGenConfig {
-        noise_seed: 1920237457,
+        noise_seed: DEFAULT_NOISE_SEED,
         om_x: 0,
         om_y: 0,
         region_id: "default".into(),

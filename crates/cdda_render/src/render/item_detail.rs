@@ -11,16 +11,16 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
-use crate::data::interner::{
-    AmmoTypeRegistry, BodyPartRegistry, ComestibleRegistry, ItemTypeRegistry, QualityRegistry,
-    SkillRegistry,
-};
 use cdda_components::def::{
     AmmoData, ArmourData, BookData, ContainerData, FoodData, GunData, ItemCategory, ItemColor,
     ItemDescription, ItemMaterials, ItemPhase, ItemSymbol, ItemVolume, ItemWeight, MagazineData,
     Phase, ToolData, WeaponData,
 };
 use cdda_components::item::{ItemQualities, QualityId};
+use cdda_data::interner::{
+    AmmoTypeRegistry, BodyPartRegistry, ComestibleRegistry, ItemTypeRegistry, QualityRegistry,
+    SkillRegistry,
+};
 
 // ---------------------------------------------------------------------------
 // Bundled queries — a SystemParam to avoid Bevy's 16-query limit
@@ -862,11 +862,7 @@ impl ItemDetailSnapshot {
         if let Some(ref a) = self.ammo {
             divider(parent);
             section_header(parent, "Ammo");
-            stat_row(
-                parent,
-                "Type",
-                &a.ammo_type,
-            );
+            stat_row(parent, "Type", &a.ammo_type);
             stat_row(parent, "Damage", &a.damage.to_string());
             stat_row(parent, "Pierce", &a.pierce.to_string());
             stat_row(parent, "Range", &a.range.to_string());
@@ -882,11 +878,7 @@ impl ItemDetailSnapshot {
         if let Some(ref m) = self.magazine {
             divider(parent);
             section_header(parent, "Magazine");
-            stat_row(
-                parent,
-                "Ammo type",
-                &m.ammo_type,
-            );
+            stat_row(parent, "Ammo type", &m.ammo_type);
             stat_row(parent, "Capacity", &m.capacity.to_string());
             stat_row(parent, "Reload time", &m.reload_time.to_string());
         }
@@ -946,11 +938,7 @@ impl ItemDetailSnapshot {
         if let Some(ref food) = self.food {
             divider(parent);
             section_header(parent, "Food");
-            stat_row(
-                parent,
-                "Type",
-                &food.comestible_type,
-            );
+            stat_row(parent, "Type", &food.comestible_type);
             stat_row(parent, "Calories", &food.calories.to_string());
             stat_row(parent, "Quench", &food.quench.to_string());
             stat_row(parent, "Fun", &food.fun.to_string());
@@ -1046,11 +1034,7 @@ impl ItemDetailSnapshot {
         if let Some(ref book) = self.book {
             divider(parent);
             section_header(parent, "Book");
-            stat_row(
-                parent,
-                "Skill",
-                &book.skill,
-            );
+            stat_row(parent, "Skill", &book.skill);
             stat_row(
                 parent,
                 "Levels",

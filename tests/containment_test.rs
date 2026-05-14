@@ -1,5 +1,5 @@
 use bevy_ecs::entity::Entity;
-use cdda_core::sim::test_utils::TestBed;
+use cdda_sim::test_utils::TestBed;
 
 fn setup_item(test: &mut TestBed, _id: &str, vol_ml: u32, wgt_g: u32) -> Entity {
     test.spawn((
@@ -17,9 +17,7 @@ fn small_item_fits_in_container() {
 
     let container_vol_ml = 1000;
     let item = setup_item(&mut test, "test_rock", 250, 100);
-    let vol = test
-        .get::<cdda_components::def::ItemVolume>(item)
-        .unwrap();
+    let vol = test.get::<cdda_components::def::ItemVolume>(item).unwrap();
     assert!(vol.0 < container_vol_ml);
 }
 
@@ -31,9 +29,7 @@ fn large_item_does_not_fit() {
 
     let container_vol_ml = 1000;
     let item = setup_item(&mut test, "giant_rock", 5000, 1000);
-    let vol = test
-        .get::<cdda_components::def::ItemVolume>(item)
-        .unwrap();
+    let vol = test.get::<cdda_components::def::ItemVolume>(item).unwrap();
     assert!(vol.0 > container_vol_ml);
 }
 
@@ -74,9 +70,7 @@ fn item_weight_positive() {
     test.register::<cdda_components::def::ItemWeight>();
 
     let item = test.spawn((cdda_components::def::ItemWeight(500),));
-    let wgt = test
-        .get::<cdda_components::def::ItemWeight>(item)
-        .unwrap();
+    let wgt = test.get::<cdda_components::def::ItemWeight>(item).unwrap();
     assert!(wgt.0 > 0);
 }
 
@@ -84,7 +78,7 @@ fn item_weight_positive() {
 fn stack_count_minimum_one() {
     let mut test = TestBed::new();
     test.register::<cdda_components::item::StackCount>();
-    let item = test.spawn((cdda_components::item::StackCount::new(1),));
+    let item = test.spawn((cdda_components::item::StackCount::new(1).unwrap(),));
     assert_eq!(
         test.get::<cdda_components::item::StackCount>(item)
             .unwrap()
@@ -97,7 +91,7 @@ fn stack_count_minimum_one() {
 fn stack_count_multi() {
     let mut test = TestBed::new();
     test.register::<cdda_components::item::StackCount>();
-    let item = test.spawn((cdda_components::item::StackCount::new(10),));
+    let item = test.spawn((cdda_components::item::StackCount::new(10).unwrap(),));
     assert_eq!(
         test.get::<cdda_components::item::StackCount>(item)
             .unwrap()
@@ -107,7 +101,6 @@ fn stack_count_multi() {
 }
 
 #[test]
-#[should_panic(expected = "StackCount must be >= 1")]
-fn stack_count_zero_panics() {
-    let _ = cdda_components::item::StackCount::new(0);
+fn stack_count_zero_returns_err() {
+    assert!(cdda_components::item::StackCount::new(0).is_err());
 }

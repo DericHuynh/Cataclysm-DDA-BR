@@ -4,13 +4,13 @@
 //! via `DespawnOnExit(Ctx::MainMenu)`.
 
 use super::FooterHint;
-use crate::context::ctx::Ctx;
-use crate::context::nav::{ctx_def, FocusedCommandIndex};
-use crate::context::InputFocus;
-use crate::input::ActiveKeybindings;
 use crate::render::theme::{self, UiTheme};
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
+use cdda_context::ctx::Ctx;
+use cdda_context::nav::{ctx_def, FocusedCommandIndex};
+use cdda_context::InputFocus;
+use cdda_input::{ActiveKeybindings, BindableAction};
 
 /// Marks a command button, storing its index into the screen_def command list.
 #[derive(Component)]
@@ -82,7 +82,11 @@ pub fn spawn(
                             border: UiRect::all(Val::Px(2.0)),
                             ..default()
                         },
-                        BackgroundColor(if is_focused { theme::BUTTON_FOCUS_BG } else { theme::BUTTON_BG }),
+                        BackgroundColor(if is_focused {
+                            theme::BUTTON_FOCUS_BG
+                        } else {
+                            theme::BUTTON_BG
+                        }),
                         BorderColor::all(if is_focused {
                             theme::TEXT_BRIGHT
                         } else {
@@ -100,8 +104,8 @@ pub fn spawn(
             }
 
             // Footer hint
-            let nav_key = active_keys.key_for(crate::input::BindableAction::NavigateUp);
-            let confirm_key = active_keys.key_for(crate::input::BindableAction::Confirm);
+            let nav_key = active_keys.key_for(cdda_input::BindableAction::NavigateUp);
+            let confirm_key = active_keys.key_for(cdda_input::BindableAction::Confirm);
             let hints = format!(
                 "[{}] navigate  |  [{}] select  |  Hotkey: quick-select",
                 nav_key, confirm_key
@@ -140,8 +144,8 @@ pub fn sync_focus(
 ) {
     // Live-update footer hints
     if let Ok(mut text) = footer_hint_q.single_mut() {
-        let nav_key = active_keys.key_for(crate::input::BindableAction::NavigateUp);
-        let confirm_key = active_keys.key_for(crate::input::BindableAction::Confirm);
+        let nav_key = active_keys.key_for(cdda_input::BindableAction::NavigateUp);
+        let confirm_key = active_keys.key_for(cdda_input::BindableAction::Confirm);
         let hints = format!(
             "[{}] navigate  |  [{}] select  |  Hotkey: quick-select",
             nav_key, confirm_key

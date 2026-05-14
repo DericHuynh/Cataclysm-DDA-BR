@@ -38,7 +38,7 @@ use cdda_components::item::{
     FLOOR_CAP_ML, INVLET_CHARS,
 };
 use cdda_components::sim::WorldPosition;
-use cdda_core_types::core::coords::{WorldPos, ZLevel};
+use cdda_core_types::core::coords::{WorldPos, ZLevel, TILES_PER_OMT};
 use cdda_core_types::core::units::*;
 use tracing::warn;
 
@@ -369,9 +369,9 @@ pub fn assign_invlets_system(
 
         for (target, extra) in merge_adds {
             let current = stack_counts.get(target).ok().map(|s| s.get()).unwrap_or(1);
-            commands
-                .entity(target)
-                .insert(StackCount::new(current + extra));
+            commands.entity(target).insert(
+                StackCount::new(current + extra).expect("current >= 1, so current + extra >= 1"),
+            );
         }
     }
 }
@@ -669,8 +669,8 @@ pub fn dev_pickup_drop_system(
                 let to_pickup: Vec<(Entity, WorldPos)> = ground_item_query
                     .iter()
                     .filter(|(_, wp, _)| {
-                        wp.0.x.div_euclid(24) == camera.x
-                            && wp.0.y.div_euclid(24) == camera.y
+                        wp.0.x.div_euclid(TILES_PER_OMT) == camera.x
+                            && wp.0.y.div_euclid(TILES_PER_OMT) == camera.y
                             && wp.0.z.0 as i32 == camera.z
                     })
                     .map(|(e, wp, _)| (e, wp.0))
@@ -731,8 +731,8 @@ pub fn dev_pickup_drop_system(
                     let floor_volume: u32 = ground_item_query
                         .iter()
                         .filter(|(_, wp, _)| {
-                            wp.0.x.div_euclid(24) == camera.x
-                                && wp.0.y.div_euclid(24) == camera.y
+                            wp.0.x.div_euclid(TILES_PER_OMT) == camera.x
+                                && wp.0.y.div_euclid(TILES_PER_OMT) == camera.y
                                 && wp.0.z.0 as i32 == camera.z
                         })
                         .filter_map(|(_, _, vol)| vol.map(|v| v.0))
@@ -745,8 +745,11 @@ pub fn dev_pickup_drop_system(
                         continue;
                     }
 
-                    let drop_pos =
-                        WorldPos::new(camera.x * 24, camera.y * 24, ZLevel::new(camera.z as i8));
+                    let drop_pos = WorldPos::new(
+                        camera.x * TILES_PER_OMT,
+                        camera.y * TILES_PER_OMT,
+                        ZLevel::new(camera.z as i8),
+                    );
                     move_writer.write(ItemMoveEvent {
                         item: item_entity,
                         from: MoveLocation::Container(player_entity),
@@ -933,9 +936,10 @@ pub fn merge_or_stack(world: &mut World, target: Entity, incoming: Entity) -> bo
         return false;
     }
 
-    world
-        .entity_mut(target)
-        .insert(StackCount::new(target_count + incoming_count));
+    world.entity_mut(target).insert(
+        StackCount::new(target_count + incoming_count)
+            .expect("target_count + incoming_count >= 1 for any merge"),
+    );
     world
         .entity_mut(target)
         .insert(CurrentCharges(target_charges + incoming_charges));
@@ -1033,7 +1037,7 @@ mod tests {
         t.spawn((
             DefStrId(name.into()),
             ItemName(name.into()),
-            StackCount::new(count),
+            StackCount::new(count).unwrap(),
             ItemVolume(250),
             ItemWeight(100),
         ))
@@ -1043,7 +1047,7 @@ mod tests {
         t.spawn((
             DefStrId(name.into()),
             ItemName(name.into()),
-            StackCount::new(count),
+            StackCount::new(count).unwrap(),
             CurrentCharges(charges),
             ItemVolume(250),
             ItemWeight(100),
@@ -1221,7 +1225,7 @@ mod tests {
         let a = t.spawn((
             DefStrId("knife".into()),
             ItemName("knife".into()),
-            StackCount::new(1),
+            StackCount::new(1).unwrap(),
             ItemDamage(0),
             DefOrigin(10),
             ItemVolume(250),
@@ -1232,7 +1236,7 @@ mod tests {
         let b = t.spawn((
             DefStrId("knife".into()),
             ItemName("knife".into()),
-            StackCount::new(1),
+            StackCount::new(1).unwrap(),
             ItemDamage(1),
             DefOrigin(10),
             ItemVolume(250),

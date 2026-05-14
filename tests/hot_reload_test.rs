@@ -6,10 +6,10 @@
 //! 3. CDDA patch idempotency (in-memory)
 //! 4. Filesystem-based reload: write JSON → load → add file → reload → verify
 
-use cdda_core::data::interner::StringInterner;
-use cdda_core::data::loader::Loader;
-use cdda_core::data::patch::apply_cdda_patch;
-use cdda_core::data::flags::{ItemFlagRegistry, MonsterFlagRegistry};
+use cdda_data::interner::StringInterner;
+use cdda_data::loader::Loader;
+use cdda_data::patch::apply_cdda_patch;
+use cdda_data::flags::{ItemFlagRegistry, MonsterFlagRegistry};
 use serde_json::json;
 use std::io::Write;
 use std::path::PathBuf;

@@ -214,13 +214,18 @@ impl CreatureMutations {
     }
 }
 
+/// Tag: mutation is visually apparent on the creature.
+///
+/// Absence of this component means the mutation is hidden.
+/// Use `With<Visible>` for archetype-level filtering instead of
+/// branching on a bool field.
+#[derive(Component, Debug, Default, Clone, Copy, Reflect)]
+pub struct Visible;
+
 /// Data on a mutation entity: which mutation and whether it is visually apparent.
 #[derive(Component, Debug, Clone, Reflect)]
 pub struct MutationEntry {
     pub id: crate::MutationId,
-    /// TODO: convert this `bool` to a `Visible` / `Hidden` tag component
-    /// so it's archetype-queryable (consistent with the AGENTS.md tag pattern).
-    pub visible: bool,
 }
 
 // ===========================================================================
@@ -273,12 +278,17 @@ impl InstalledBionics {
     }
 }
 
+/// Tag: bionic is currently powered on and consuming energy.
+///
+/// Absence of this component means the bionic is inactive.
+/// Use `With<Active>` for archetype-level filtering instead of
+/// branching on a bool field.
+#[derive(Component, Debug, Default, Clone, Copy, Reflect)]
+pub struct Active;
+
 #[derive(Component, Debug, Clone, Reflect)]
 pub struct Bionic {
     pub bionic_id: crate::BionicId,
-    /// TODO: convert this `bool` to an `Active` / `Inactive` tag component
-    /// so it's archetype-queryable (consistent with the AGENTS.md tag pattern).
-    pub active: bool,
     pub power_used: crate::Energy,
 }
 

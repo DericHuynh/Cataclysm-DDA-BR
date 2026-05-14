@@ -46,7 +46,7 @@ fn set_skill_level(
 ) -> Entity {
     t.spawn((
         SkillEntry {
-            skill_id: cdda_components::SkillId::from(skill_id),
+            skill_id: cdda_components::SkillId(skill_id as u16),
             level: practice_level.min(MAX_SKILL),
             exercise: 0,
             knowledge_level: knowledge_level.min(MAX_SKILL),
@@ -66,7 +66,7 @@ fn set_knowledge_level(
 ) -> Entity {
     t.spawn((
         SkillEntry {
-            skill_id: cdda_components::SkillId::from(skill_id),
+            skill_id: cdda_components::SkillId(skill_id as u16),
             level: 0,
             exercise: 0,
             knowledge_level: knowledge_level.min(MAX_SKILL),
@@ -359,12 +359,12 @@ fn proficiency_gain_from_practice() {
     // Simulate 5 craft cycles, each adding 2500 turns of practice.
     let mut total_practice: u64 = 0;
     let craft_time: u64 = 2500;
-    let prof_id = t.get::<ProficiencyEntry>(prof).unwrap().id;
+    let prof_id = t.get::<ProficiencyEntry>(prof).unwrap().id.clone();
     for _ in 0..5 {
         total_practice += craft_time;
         let known = total_practice >= time_to_learn;
         t.world_mut().entity_mut(prof).insert(ProficiencyEntry {
-            id: prof_id,
+            id: prof_id.clone(),
             known,
             practiced: total_practice,
             time_to_learn,
@@ -406,7 +406,7 @@ fn proficiency_partial_from_long_craft() {
 
     // Simulate one craft tick (~5% progress).
     let one_tick: u64 = 5000;
-    let prof_id = t.get::<ProficiencyEntry>(prof).unwrap().id;
+    let prof_id = t.get::<ProficiencyEntry>(prof).unwrap().id.clone();
     t.world_mut().entity_mut(prof).insert(ProficiencyEntry {
         id: prof_id,
         known: false,
@@ -452,7 +452,7 @@ fn partial_proficiency_mitigation() {
     assert_eq!(remaining, 4000, "4000 turns remaining");
 
     // Complete the proficiency.
-    let prof_id = entry.id;
+    let prof_id = entry.id.clone();
     let ttl = entry.time_to_learn;
     t.world_mut().entity_mut(prof).insert(ProficiencyEntry {
         id: prof_id,

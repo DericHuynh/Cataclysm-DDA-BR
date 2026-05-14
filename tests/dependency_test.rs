@@ -1,4 +1,4 @@
-use cdda_core::data::mod_info::{check_dependencies, resolve_load_order, ModError, ModInfo};
+use cdda_data::mod_info::{check_dependencies, resolve_load_order, ModError, ModInfo};
 
 // ---------------------------------------------------------------------------
 // check_dependencies

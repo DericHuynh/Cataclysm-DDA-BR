@@ -9,11 +9,11 @@
 //! entities atomically before the new state's `OnEnter` runs, preventing
 //! overlay glitches.
 
-use crate::context::ctx::Ctx as Screen;
 use bevy::prelude::*;
 use bevy_state::condition::in_state;
 use bevy_state::state::OnEnter;
 use cdda_components::schedule::GameSet;
+use cdda_context::ctx::Ctx as Screen;
 
 pub mod character;
 pub mod crafting;
@@ -24,6 +24,7 @@ pub mod inventory;
 pub mod item_detail;
 pub mod main_menu;
 pub mod overmap;
+pub mod registry;
 pub mod settings;
 pub mod theme;
 pub mod tiles;
@@ -42,12 +43,12 @@ pub struct FooterHint;
 /// `ActiveKeybindings`.  Registered once in `CddaRenderPlugin` — no
 /// per-screen footer update systems needed.
 pub fn refresh_all_footer_hints(
-    ctx_actions: Res<crate::context::ContextActions>,
-    active_keys: Res<crate::input::ActiveKeybindings>,
+    ctx_actions: Res<cdda_context::ContextActions>,
+    active_keys: Res<cdda_input::ActiveKeybindings>,
     mut footer_q: Query<&mut Text, With<FooterHint>>,
 ) {
     for mut text in &mut footer_q {
-        let cancel_key = active_keys.key_for(crate::input::BindableAction::Cancel);
+        let cancel_key = active_keys.key_for(cdda_input::BindableAction::Cancel);
         let mut hints = format!("[{}] close", cancel_key);
         for entry in &ctx_actions.actions {
             let key = active_keys.key_for(entry.action);

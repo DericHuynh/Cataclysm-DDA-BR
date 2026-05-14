@@ -7,6 +7,7 @@ use cdda_components::def::{
     ItemCategory, ItemMaterials, ItemName, ItemPrice, ItemStackSize, ItemVolume, ItemWeight,
     WeaponData,
 };
+use cdda_components::tokens::SkillId;
 use cdda_sim::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------
@@ -64,7 +65,7 @@ fn weapon_combat_knife() {
     test.register::<ItemPrice>();
     test.register::<ItemStackSize>();
     test.register::<ItemCategory>();
-    test.register::<cdda_core::data::flags::ItemFlagList>();
+    test.register::<cdda_data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
 
     let e = test.spawn((
@@ -87,7 +88,7 @@ fn weapon_combat_knife() {
             techniques: vec!["RAPID".to_string(), "BLOCK".to_string()],
             dice: 1,
             dice_sides: 4,
-            skill: "cutting".to_string(),
+            skill: SkillId(1),
         },
     ));
 
@@ -101,7 +102,7 @@ fn weapon_combat_knife() {
     assert_eq!(weapon.techniques, vec!["RAPID", "BLOCK"]);
     assert_eq!(weapon.dice, 1);
     assert_eq!(weapon.dice_sides, 4);
-    assert_eq!(weapon.skill, "cutting");
+    assert_eq!(weapon.skill, SkillId(1));
 }
 
 #[test]
@@ -114,7 +115,7 @@ fn weapon_heavy_hammer() {
     test.register::<ItemPrice>();
     test.register::<ItemStackSize>();
     test.register::<ItemCategory>();
-    test.register::<cdda_core::data::flags::ItemFlagList>();
+    test.register::<cdda_data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
 
     let e = test.spawn((
@@ -137,7 +138,7 @@ fn weapon_heavy_hammer() {
             techniques: vec!["SWEEP".to_string(), "BLOCK".to_string()],
             dice: 4,
             dice_sides: 6,
-            skill: "bashing".to_string(),
+            skill: SkillId(2),
         },
     ));
 
@@ -151,7 +152,7 @@ fn weapon_heavy_hammer() {
     assert_eq!(weapon.techniques, vec!["SWEEP", "BLOCK"]);
     assert_eq!(weapon.dice, 4);
     assert_eq!(weapon.dice_sides, 6);
-    assert_eq!(weapon.skill, "bashing");
+    assert_eq!(weapon.skill, SkillId(2));
 }
 
 #[test]
@@ -164,7 +165,7 @@ fn weapon_spear() {
     test.register::<ItemPrice>();
     test.register::<ItemStackSize>();
     test.register::<ItemCategory>();
-    test.register::<cdda_core::data::flags::ItemFlagList>();
+    test.register::<cdda_data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
 
     let e = test.spawn((
@@ -187,7 +188,7 @@ fn weapon_spear() {
             techniques: vec!["IMPALE".to_string()],
             dice: 2,
             dice_sides: 6,
-            skill: "stabbing".to_string(),
+            skill: SkillId(3),
         },
     ));
 
@@ -208,7 +209,7 @@ fn weapon_no_techniques() {
     test.register::<ItemPrice>();
     test.register::<ItemStackSize>();
     test.register::<ItemCategory>();
-    test.register::<cdda_core::data::flags::ItemFlagList>();
+    test.register::<cdda_data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
 
     let e = test.spawn((
@@ -231,7 +232,7 @@ fn weapon_no_techniques() {
             techniques: vec![],
             dice: 2,
             dice_sides: 4,
-            skill: "bashing".to_string(),
+            skill: SkillId(2),
         },
     ));
 
@@ -249,7 +250,7 @@ fn weapon_negative_to_hit() {
     test.register::<ItemPrice>();
     test.register::<ItemStackSize>();
     test.register::<ItemCategory>();
-    test.register::<cdda_core::data::flags::ItemFlagList>();
+    test.register::<cdda_data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
 
     let e = test.spawn((
@@ -272,7 +273,7 @@ fn weapon_negative_to_hit() {
             techniques: vec!["SWEEP".to_string()],
             dice: 3,
             dice_sides: 6,
-            skill: "bashing".to_string(),
+            skill: SkillId(2),
         },
     ));
 
@@ -290,7 +291,7 @@ fn weapon_zero_damage() {
     test.register::<ItemPrice>();
     test.register::<ItemStackSize>();
     test.register::<ItemCategory>();
-    test.register::<cdda_core::data::flags::ItemFlagList>();
+    test.register::<cdda_data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
 
     let e = test.spawn((
@@ -313,7 +314,7 @@ fn weapon_zero_damage() {
             techniques: vec![],
             dice: 1,
             dice_sides: 2,
-            skill: "bashing".to_string(),
+            skill: SkillId(2),
         },
     ));
 
@@ -335,7 +336,7 @@ fn weapon_high_dice() {
     test.register::<ItemPrice>();
     test.register::<ItemStackSize>();
     test.register::<ItemCategory>();
-    test.register::<cdda_core::data::flags::ItemFlagList>();
+    test.register::<cdda_data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
 
     let e = test.spawn((
@@ -358,7 +359,7 @@ fn weapon_high_dice() {
             techniques: vec!["RAPID".to_string(), "BLOCK".to_string(), "WIDE".to_string()],
             dice: 5,
             dice_sides: 10,
-            skill: "cutting".to_string(),
+            skill: SkillId(1),
         },
     ));
 
@@ -377,7 +378,7 @@ fn weapon_many_techniques() {
     test.register::<ItemPrice>();
     test.register::<ItemStackSize>();
     test.register::<ItemCategory>();
-    test.register::<cdda_core::data::flags::ItemFlagList>();
+    test.register::<cdda_data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
 
     let e = test.spawn((
@@ -406,7 +407,7 @@ fn weapon_many_techniques() {
             ],
             dice: 3,
             dice_sides: 8,
-            skill: "cutting".to_string(),
+            skill: SkillId(1),
         },
     ));
 
@@ -435,7 +436,7 @@ fn average_melee_damage_combat_knife() {
         techniques: vec!["RAPID".to_string(), "BLOCK".to_string()],
         dice: 1,
         dice_sides: 4,
-        skill: "cutting".to_string(),
+        skill: SkillId(1),
     };
     // avg = 1 * (4+1)/2 = 2.5
     let result = average_melee_damage(&weapon);
@@ -454,7 +455,7 @@ fn average_melee_damage_hammer() {
         techniques: vec!["SWEEP".to_string(), "BLOCK".to_string()],
         dice: 4,
         dice_sides: 6,
-        skill: "bashing".to_string(),
+        skill: SkillId(2),
     };
     // avg = 4 * (6+1)/2 = 4 * 3.5 = 14.0
     let result = average_melee_damage(&weapon);
@@ -473,7 +474,7 @@ fn total_melee_damage_test() {
         techniques: vec!["RAPID".to_string(), "BLOCK".to_string()],
         dice: 1,
         dice_sides: 4,
-        skill: "cutting".to_string(),
+        skill: SkillId(1),
     };
     // base = round(2.5) = 3, fixed = 6+14+0 = 20, skill=5, stat=3 => 3+20+5+3 = 31
     let result = total_melee_damage(&weapon, 5, 3);
@@ -517,7 +518,7 @@ fn reach_attack_test() {
         techniques: vec![],
         dice: 1,
         dice_sides: 4,
-        skill: "bashing".to_string(),
+        skill: SkillId(2),
     };
     let long_weapon = WeaponData {
         damage_bash: 5,
@@ -529,7 +530,7 @@ fn reach_attack_test() {
         techniques: vec!["IMPALE".to_string()],
         dice: 2,
         dice_sides: 6,
-        skill: "stabbing".to_string(),
+        skill: SkillId(3),
     };
     // Short weapon can reach distance 1 but not 2
     assert!(can_reach_attack(&short_weapon, 1));

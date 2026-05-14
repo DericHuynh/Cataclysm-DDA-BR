@@ -9,7 +9,7 @@ name = "cdda-cli"
 path = "src/main.rs"
 
 [dependencies]
-cdda_core.workspace = true
+cdda_data.workspace = true
 serde_json.workspace = true
 schemars.workspace = true
 tracing.workspace = true

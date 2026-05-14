@@ -45,6 +45,10 @@ pub enum OvermapGenPhase {
     Complete,
 }
 
+/// Default noise seed for deterministic world generation.
+/// Change this value to generate a different world layout.
+pub const DEFAULT_NOISE_SEED: u32 = 1920237457;
+
 /// Configuration for generation.
 #[derive(Resource, Debug, Clone)]
 pub struct OvermapGenConfig {
@@ -60,7 +64,7 @@ pub struct OvermapGenConfig {
 impl Default for OvermapGenConfig {
     fn default() -> Self {
         Self {
-            noise_seed: 1920237457,
+            noise_seed: DEFAULT_NOISE_SEED,
             om_x: 0,
             om_y: 0,
             region_id: "default".into(),

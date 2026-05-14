@@ -10,9 +10,9 @@
 use bevy_ecs::world::World;
 use cdda_components::actor::Health;
 use cdda_components::def::*;
-use cdda_core::data::def_world::build_def_world;
-use cdda_core::data::flags::ItemFlagList;
-use cdda_core::data::loader::Loader;
+use cdda_data::def_world::build_def_world;
+use cdda_data::flags::ItemFlagList;
+use cdda_data::loader::Loader;
 use cdda_core_types::core::id::DefId;
 use cdda_core_types::core::raw_defs::{
     FurnitureDef, ItemDef, MonsterDef, StringOrArray, TerrainDef,
@@ -25,8 +25,8 @@ use std::sync::Arc;
 
 /// Helper: create a World, get Commands, call build_def_world, return (World, DefinitionWorld).
 fn build_def_world_in_world(
-    reg: &cdda_core::data::DefRegistry,
-) -> (World, cdda_core::data::def_world::DefinitionWorld) {
+    reg: &cdda_data::DefRegistry,
+) -> (World, cdda_data::def_world::DefinitionWorld) {
     let mut world = World::new();
     // We need to register all def components so World knows about them
     // (in production this is done by setup_world, but tests register selectively)
@@ -95,8 +95,8 @@ fn data_core_path() -> std::path::PathBuf {
         .join("core")
 }
 
-fn registry_from_item_json(items: Vec<(&str, &str)>) -> cdda_core::data::DefRegistry {
-    let mut reg = cdda_core::data::DefRegistry::empty();
+fn registry_from_item_json(items: Vec<(&str, &str)>) -> cdda_data::DefRegistry {
+    let mut reg = cdda_data::DefRegistry::empty();
     for (id, json_body) in items {
         let full_json = format!(r#"{{"type": "ITEM", "id": "{}", {} }}"#, id, json_body);
         let item: ItemDef = serde_json::from_str(&full_json).unwrap_or_else(|e| {
@@ -108,8 +108,8 @@ fn registry_from_item_json(items: Vec<(&str, &str)>) -> cdda_core::data::DefRegi
     reg
 }
 
-fn registry_from_monster_json(items: Vec<(&str, &str)>) -> cdda_core::data::DefRegistry {
-    let mut reg = cdda_core::data::DefRegistry::empty();
+fn registry_from_monster_json(items: Vec<(&str, &str)>) -> cdda_data::DefRegistry {
+    let mut reg = cdda_data::DefRegistry::empty();
     for (id, json_body) in items {
         let full_json = format!(r#"{{"type": "MONSTER", "id": "{}", {} }}"#, id, json_body);
         let monster: MonsterDef = serde_json::from_str(&full_json).unwrap_or_else(|e| {
@@ -124,8 +124,8 @@ fn registry_from_monster_json(items: Vec<(&str, &str)>) -> cdda_core::data::DefR
     reg
 }
 
-fn registry_from_terrain_json(items: Vec<(&str, &str)>) -> cdda_core::data::DefRegistry {
-    let mut reg = cdda_core::data::DefRegistry::empty();
+fn registry_from_terrain_json(items: Vec<(&str, &str)>) -> cdda_data::DefRegistry {
+    let mut reg = cdda_data::DefRegistry::empty();
     for (id, json_body) in items {
         let full_json = format!(r#"{{"type": "terrain", "id": "{}", {} }}"#, id, json_body);
         let terrain: TerrainDef = serde_json::from_str(&full_json).unwrap_or_else(|e| {
@@ -140,8 +140,8 @@ fn registry_from_terrain_json(items: Vec<(&str, &str)>) -> cdda_core::data::DefR
     reg
 }
 
-fn registry_from_furniture_json(items: Vec<(&str, &str)>) -> cdda_core::data::DefRegistry {
-    let mut reg = cdda_core::data::DefRegistry::empty();
+fn registry_from_furniture_json(items: Vec<(&str, &str)>) -> cdda_data::DefRegistry {
+    let mut reg = cdda_data::DefRegistry::empty();
     for (id, json_body) in items {
         let full_json = format!(r#"{{"type": "furniture", "id": "{}", {} }}"#, id, json_body);
         let furniture: FurnitureDef = serde_json::from_str(&full_json).unwrap_or_else(|e| {
@@ -162,7 +162,7 @@ fn registry_from_furniture_json(items: Vec<(&str, &str)>) -> cdda_core::data::De
 
 #[test]
 fn test_empty_registry_produces_empty_world() {
-    let reg = cdda_core::data::DefRegistry::empty();
+    let reg = cdda_data::DefRegistry::empty();
     let (_world, def_world) = build_def_world_in_world(&reg);
     assert_eq!(def_world.len(), 0);
 }
@@ -330,11 +330,11 @@ fn test_terrain_def_gets_correct_components() {
 
 #[test]
 fn test_terrain_with_flags() {
-    use cdda_core::data::flags::{
+    use cdda_data::flags::{
         FurnitureFlagRegistry, ItemFlagRegistry, MonsterFlagRegistry, TerrainFlagRegistry,
         TerrainFlags,
     };
-    use cdda_core::data::populate_flags::populate_def_flags;
+    use cdda_data::populate_flags::populate_def_flags;
 
     let reg = registry_from_terrain_json(vec![(
         "t_wall",
@@ -373,14 +373,14 @@ fn test_furniture_def_gets_correct_components() {
 
 #[test]
 fn test_entity_by_str_returns_none_for_missing() {
-    let (_world, def_world) = build_def_world_in_world(&cdda_core::data::DefRegistry::empty());
+    let (_world, def_world) = build_def_world_in_world(&cdda_data::DefRegistry::empty());
     assert!(def_world.entity_by_str("nothing_here").is_none());
 }
 
 #[test]
 fn test_flags_to_vec_single() {
     assert_eq!(
-        cdda_core::data::def_world::flags_to_vec(&StringOrArray::Single("FLAG_A".to_string())),
+        cdda_data::def_world::flags_to_vec(&StringOrArray::Single("FLAG_A".to_string())),
         vec!["FLAG_A".to_string()]
     );
 }
@@ -388,7 +388,7 @@ fn test_flags_to_vec_single() {
 #[test]
 fn test_flags_to_vec_empty() {
     assert_eq!(
-        cdda_core::data::def_world::flags_to_vec(&StringOrArray::Single(String::new())),
+        cdda_data::def_world::flags_to_vec(&StringOrArray::Single(String::new())),
         Vec::<String>::new()
     );
 }
@@ -396,7 +396,7 @@ fn test_flags_to_vec_empty() {
 #[test]
 fn test_flags_to_vec_multi() {
     assert_eq!(
-        cdda_core::data::def_world::flags_to_vec(&StringOrArray::Multi(vec![
+        cdda_data::def_world::flags_to_vec(&StringOrArray::Multi(vec![
             "FLAG_A".to_string(),
             "FLAG_B".to_string()
         ])),

@@ -9,8 +9,8 @@ use cdda_components::def::{
     ItemVolume, ItemWeight,
 };
 use cdda_components::BodyPartId;
-use cdda_core::sim::test_utils::TestBed;
 use cdda_data::interner::BodyPartRegistry;
+use cdda_sim::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------
 // Helper: pure formula functions (as declared in the test plan)
@@ -66,7 +66,7 @@ fn armour_single_part() {
     test.register::<ItemVolume>();
     test.register::<ItemPrice>();
     test.register::<ItemInsulation>();
-    test.register::<cdda_core::data::flags::ItemFlagList>();
+    test.register::<cdda_data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
     test.register::<ItemStackSize>();
 
@@ -97,7 +97,10 @@ fn armour_single_part() {
 
     let armour = test.get::<ArmourData>(e).unwrap();
     assert_eq!(armour.parts.len(), 1);
-    assert_eq!(armour.parts[0].body_part, BodyPartRegistry::default().intern("torso"));
+    assert_eq!(
+        armour.parts[0].body_part,
+        BodyPartRegistry::default().intern("torso")
+    );
     assert_eq!(armour.parts[0].coverage, 90);
     assert_eq!(armour.parts[0].encumbrance, 2);
     assert_eq!(armour.parts[0].warmth, 10);
@@ -115,7 +118,7 @@ fn armour_multi_part() {
     test.register::<ItemVolume>();
     test.register::<ItemPrice>();
     test.register::<ItemInsulation>();
-    test.register::<cdda_core::data::flags::ItemFlagList>();
+    test.register::<cdda_data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
     test.register::<ItemStackSize>();
 
@@ -157,8 +160,14 @@ fn armour_multi_part() {
 
     let armour = test.get::<ArmourData>(e).unwrap();
     assert_eq!(armour.parts.len(), 2);
-    assert_eq!(armour.parts[0].body_part, BodyPartRegistry::default().intern("torso"));
-    assert_eq!(armour.parts[0].body_part, BodyPartRegistry::default().intern("arm_l"));
+    assert_eq!(
+        armour.parts[0].body_part,
+        BodyPartRegistry::default().intern("torso")
+    );
+    assert_eq!(
+        armour.parts[0].body_part,
+        BodyPartRegistry::default().intern("arm_l")
+    );
     assert_eq!(armour.parts[1].coverage, 60);
     assert_eq!(armour.parts[1].encumbrance, 1);
 }
@@ -172,7 +181,7 @@ fn armour_full_coverage() {
     test.register::<ItemVolume>();
     test.register::<ItemPrice>();
     test.register::<ItemInsulation>();
-    test.register::<cdda_core::data::flags::ItemFlagList>();
+    test.register::<cdda_data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
     test.register::<ItemStackSize>();
 
@@ -214,7 +223,7 @@ fn armour_no_coverage() {
     test.register::<ItemVolume>();
     test.register::<ItemPrice>();
     test.register::<ItemInsulation>();
-    test.register::<cdda_core::data::flags::ItemFlagList>();
+    test.register::<cdda_data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
     test.register::<ItemStackSize>();
 
@@ -256,7 +265,7 @@ fn armour_encumbrance() {
     test.register::<ItemVolume>();
     test.register::<ItemPrice>();
     test.register::<ItemInsulation>();
-    test.register::<cdda_core::data::flags::ItemFlagList>();
+    test.register::<cdda_data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
     test.register::<ItemStackSize>();
 
@@ -298,7 +307,7 @@ fn armour_warmth() {
     test.register::<ItemVolume>();
     test.register::<ItemPrice>();
     test.register::<ItemInsulation>();
-    test.register::<cdda_core::data::flags::ItemFlagList>();
+    test.register::<cdda_data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
     test.register::<ItemStackSize>();
 
@@ -370,7 +379,7 @@ fn armour_material_thickness() {
     test.register::<ItemVolume>();
     test.register::<ItemPrice>();
     test.register::<ItemInsulation>();
-    test.register::<cdda_core::data::flags::ItemFlagList>();
+    test.register::<cdda_data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
     test.register::<ItemStackSize>();
 
@@ -420,7 +429,7 @@ fn armour_env_protection() {
     test.register::<ItemVolume>();
     test.register::<ItemPrice>();
     test.register::<ItemInsulation>();
-    test.register::<cdda_core::data::flags::ItemFlagList>();
+    test.register::<cdda_data::flags::ItemFlagList>();
     test.register::<ItemMaterials>();
     test.register::<ItemStackSize>();
 

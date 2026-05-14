@@ -1,4 +1,4 @@
-use cdda_core::data::mod_info::{check_conflicts, ModError, ModInfo};
+use cdda_data::mod_info::{check_conflicts, ModError, ModInfo};
 
 // ---------------------------------------------------------------------------
 // No conflicts

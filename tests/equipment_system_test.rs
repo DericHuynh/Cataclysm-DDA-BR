@@ -2,14 +2,14 @@
 
 use bevy_ecs::prelude::Entity;
 use cdda_components::actor::*;
-use cdda_components::*;
-use cdda_core_types::core::*;
-use cdda_components::schedule::*;
-use cdda_components::item::*;
-use cdda_components::sim::*;
 use cdda_components::def::*;
-use cdda_core::equipment::systems::*;
-use cdda_core::sim::test_utils::TestBed;
+use cdda_components::item::*;
+use cdda_components::schedule::*;
+use cdda_components::sim::*;
+use cdda_components::*;
+use cdda_equipment::systems::*;
+use cdda_sim::test_utils::TestBed;
+use cdda_core_types::core::*;
 
 // ===========================================================================
 // Helper: create a basic creature entity
@@ -46,7 +46,7 @@ fn spawn_item(test: &mut TestBed) -> Entity {
     test.spawn((
         ItemName("test_item".to_string()),
         ItemWeight(500),
-        StackCount::new(1),
+        StackCount::new(1).unwrap(),
     ))
 }
 
@@ -339,7 +339,7 @@ fn wield_item_too_heavy() {
     let _heavy_item = test.spawn((
         ItemName("heavy_rock".to_string()),
         ItemWeight(1_000_000),
-        StackCount::new(1),
+        StackCount::new(1).unwrap(),
     ));
 
     // Creature with str 10 can lift 10 * 100 = 1000 grams = 1 kg

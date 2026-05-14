@@ -69,6 +69,8 @@ pub enum Ctx {
     Overmap,
     /// Debug item-spawn panel (press F2 in gameplay).
     DevSpawnPanel,
+    /// Debug registry viewer — browse all definition registries.
+    RegistryViewer,
     /// Extensible fallback.
     Custom(u32),
 }

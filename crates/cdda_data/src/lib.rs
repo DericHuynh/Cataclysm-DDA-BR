@@ -13,6 +13,7 @@
 
 pub mod assets;
 pub mod def_kinds;
+pub mod def_registry_resource;
 pub mod def_world;
 pub mod flags;
 pub mod interner;
@@ -21,6 +22,7 @@ pub mod mod_info;
 pub mod mod_layer;
 pub mod patch;
 pub mod populate_flags;
+pub mod raw_values;
 pub mod registry;
 pub mod resolve;
 pub mod schema;

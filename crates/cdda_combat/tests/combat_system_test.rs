@@ -8,12 +8,14 @@
 #![allow(unused_imports)]
 
 use bevy_ecs::prelude::*;
-use cdda_core::combat::systems::*;
-use cdda_core::core::components::actor::*;
-use cdda_core::core::components::def::*;
-use cdda_core::core::components::sim::*;
-use cdda_core::sim::test_utils::TestBed;
-use cdda_core::{Damage, DefId};
+use cdda_components::actor::*;
+use cdda_components::def::*;
+use cdda_components::sim::*;
+use cdda_components::tokens::{AmmoTypeId, SkillId};
+use cdda_combat::systems::*;
+use cdda_sim::test_utils::TestBed;
+use cdda_core_types::core::Damage;
+use cdda_core_types::core::DefId;
 
 // ---------------------------------------------------------------------------
 // Hit chance tests
@@ -237,7 +239,7 @@ fn hit_chance_weapon_bonus() {
         techniques: Vec::new(),
         dice: 1,
         dice_sides: 6,
-        skill: "bashing".to_string(),
+        skill: SkillId(2),
     });
     let _attacker = test.spawn((
         CombatStats {
@@ -387,7 +389,7 @@ fn melee_damage_with_weapon() {
         techniques: Vec::new(),
         dice: 1,
         dice_sides: 6,
-        skill: "bashing".to_string(),
+        skill: SkillId(2),
     });
     let _attacker = test.spawn((
         Stats::new(10, 8, 8, 8),
@@ -698,8 +700,8 @@ fn ranged_hit_short_range() {
     test.register::<IsAlive>();
 
     let _gun = test.spawn(GunData {
-        skill: "rifle".to_string(),
-        ammo_type: "762".to_string(),
+        skill: SkillId(3),
+        ammo_type: AmmoTypeId(1),
         dispersion: 0,
         recoil: 30,
         reload_time: 100,
@@ -708,7 +710,7 @@ fn ranged_hit_short_range() {
         ammo_effects: Vec::new(),
     });
     let _ammo = test.spawn(AmmoData {
-        ammo_type: "762".to_string(),
+        ammo_type: AmmoTypeId(1),
         damage: 20,
         pierce: 5,
         range: 30,
@@ -788,8 +790,8 @@ fn ranged_hit_long_range() {
     test.register::<IsAlive>();
 
     let _gun = test.spawn(GunData {
-        skill: "rifle".to_string(),
-        ammo_type: "223".to_string(),
+        skill: SkillId(3),
+        ammo_type: AmmoTypeId(2),
         dispersion: 10,
         recoil: 15,
         reload_time: 100,
@@ -798,7 +800,7 @@ fn ranged_hit_long_range() {
         ammo_effects: Vec::new(),
     });
     let _ammo = test.spawn(AmmoData {
-        ammo_type: "223".to_string(),
+        ammo_type: AmmoTypeId(2),
         damage: 15,
         pierce: 2,
         range: 5,
@@ -878,8 +880,8 @@ fn ranged_hit_high_dispersion() {
     test.register::<IsAlive>();
 
     let _gun = test.spawn(GunData {
-        skill: "pistol".to_string(),
-        ammo_type: "9mm".to_string(),
+        skill: SkillId(4),
+        ammo_type: AmmoTypeId(3),
         dispersion: 50,
         recoil: 40,
         reload_time: 50,
@@ -888,7 +890,7 @@ fn ranged_hit_high_dispersion() {
         ammo_effects: Vec::new(),
     });
     let _ammo = test.spawn(AmmoData {
-        ammo_type: "9mm".to_string(),
+        ammo_type: AmmoTypeId(3),
         damage: 12,
         pierce: 0,
         range: 12,

@@ -15,8 +15,8 @@ use cdda_components::Energy;
 
 /// Activate a bionic on a creature.
 ///
-/// Checks available power, sets `Bionic.active = true`.
-/// Returns `Err` if insufficient power or the bionic is already active.
+/// Checks available power, inserts the `Active` tag component.
+/// Returns `Err` if insufficient power or the bionic already has `Active`.
 pub fn activate_bionic(world: &mut World, creature: Entity, bionic: Entity) -> Result<(), String> {
     let _ = (world, creature, bionic);
     todo!("bionic activation: check power, set active flag, start passive effects")
@@ -24,7 +24,7 @@ pub fn activate_bionic(world: &mut World, creature: Entity, bionic: Entity) -> R
 
 /// Deactivate an active bionic.
 ///
-/// Sets `Bionic.active = false`, stops any passive effects.
+/// Removes the `Active` tag component, stops any passive effects.
 pub fn deactivate_bionic(world: &mut World, creature: Entity, bionic: Entity) {
     let _ = (world, creature, bionic);
     todo!("bionic deactivation: clear active flag, remove passive effect entities")

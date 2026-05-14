@@ -3,16 +3,18 @@
 //! Uses `DespawnOnExit(Ctx::SettingsMenu)` for automatic cleanup.
 //! Tab content is rebuilt via `rebuild_content_panel`.
 
-use crate::context::config::GameSettings;
-use crate::context::ctx::Ctx;
-use crate::context::nav::ctx_def;
-use crate::input::bindings::ContextInputMaps;
-use crate::input::{BindableAction, InputContextId, RebindCapture, RebindCaptureInner};
 use crate::render::theme::{ThemePreset, UiTheme};
 use bevy::ecs::relationship::RelatedSpawnerCommands;
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
 use bevy_state::state_scoped::DespawnOnExit;
+use cdda_context::config::GameSettings;
+use cdda_context::ctx::Ctx;
+use cdda_context::nav::ctx_def;
+use cdda_input::bindings::ContextInputMaps;
+use cdda_input::{
+    BindableAction, GameAction, InputAction, InputContextId, RebindCapture, RebindCaptureInner,
+};
 
 // ---------------------------------------------------------------------------
 // Settings tab
@@ -491,7 +493,7 @@ fn switch_tab(state: &mut SettingsState, dir: isize) {
 }
 
 pub fn navigate(
-    mut action_reader: bevy::ecs::message::MessageReader<crate::input::InputAction>,
+    mut action_reader: bevy::ecs::message::MessageReader<cdda_input::InputAction>,
     mut state: ResMut<SettingsState>,
     bindings: Res<ContextInputMaps>,
 ) {
@@ -500,13 +502,13 @@ pub fn navigate(
 
     for event in action_reader.read() {
         match &event.action {
-            crate::input::GameAction::NavigatePrevTab => {
+            cdda_input::GameAction::NavigatePrevTab => {
                 switch_tab(&mut state, -1);
             }
-            crate::input::GameAction::NavigateNextTab => {
+            cdda_input::GameAction::NavigateNextTab => {
                 switch_tab(&mut state, 1);
             }
-            crate::input::GameAction::NavigateLeft => {
+            cdda_input::GameAction::NavigateLeft => {
                 // If on Interface tab and focused on Color Scheme, cycle theme left
                 if state.active_tab == SettingsTab::Interface
                     && state.focused_row == COLOR_SCHEME_ROW
@@ -522,7 +524,7 @@ pub fn navigate(
                     switch_tab(&mut state, -1);
                 }
             }
-            crate::input::GameAction::NavigateRight => {
+            cdda_input::GameAction::NavigateRight => {
                 // If on Interface tab and focused on Color Scheme, cycle theme right
                 if state.active_tab == SettingsTab::Interface
                     && state.focused_row == COLOR_SCHEME_ROW
@@ -533,20 +535,20 @@ pub fn navigate(
                     switch_tab(&mut state, 1);
                 }
             }
-            crate::input::GameAction::NavigateUp => {
+            cdda_input::GameAction::NavigateUp => {
                 let count = current_tab_row_count(&state, &bindings);
                 if count > 0 {
                     state.focused_row = state.focused_row.saturating_sub(1);
                 }
             }
-            crate::input::GameAction::NavigateDown => {
+            cdda_input::GameAction::NavigateDown => {
                 let count = current_tab_row_count(&state, &bindings);
                 if count > 0 {
                     state.focused_row = (state.focused_row + 1).min(count.saturating_sub(1));
                 }
             }
-            crate::input::GameAction::NavigateHome => state.focused_row = 0,
-            crate::input::GameAction::NavigateEnd => {
+            cdda_input::GameAction::NavigateHome => state.focused_row = 0,
+            cdda_input::GameAction::NavigateEnd => {
                 let count = current_tab_row_count(&state, &bindings);
                 if count > 0 {
                     state.focused_row = count.saturating_sub(1);
@@ -558,13 +560,13 @@ pub fn navigate(
 }
 
 pub fn handle_confirm(
-    mut action_reader: bevy::ecs::message::MessageReader<crate::input::InputAction>,
+    mut action_reader: bevy::ecs::message::MessageReader<cdda_input::InputAction>,
     mut state: ResMut<SettingsState>,
     bindings: Res<ContextInputMaps>,
     mut rebind_capture: ResMut<RebindCapture>,
 ) {
     for event in action_reader.read() {
-        if event.action == crate::input::GameAction::Confirm {
+        if event.action == cdda_input::GameAction::Confirm {
             if state.active_tab == SettingsTab::Keybindings {
                 if let Some((ctx, action)) = find_binding_at_row(&state, &bindings) {
                     state.rebinding_action = Some((ctx, action.clone()));
@@ -575,7 +577,7 @@ pub fn handle_confirm(
                     });
                 }
             }
-        } else if event.action == crate::input::GameAction::Cancel {
+        } else if event.action == cdda_input::GameAction::Cancel {
             if state.rebinding_action.is_some() {
                 state.rebinding_action = None;
                 state.tab_changed = true;

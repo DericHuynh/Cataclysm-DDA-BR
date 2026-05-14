@@ -3,14 +3,14 @@
 //! Tests call the actual implementations in `cdda_core::sim::systems::inventory`
 //! and verify correct behaviour against CDDA's item-pocket rules.
 
-use cdda_core_types::core::units::*;
+use cdda_components::def::{DefStrId, ItemLongestSide, ItemVolume, ItemWeight};
 use cdda_components::item::{
     Container, ContainerContents, CurrentCharges, DefOrigin, InsideContainer, ItemDamage, Pocket,
     StackCount,
 };
-use cdda_components::def::{DefStrId, ItemLongestSide, ItemVolume, ItemWeight};
-use cdda_core::inventory::systems::*;
-use cdda_core::sim::test_utils::TestBed;
+use cdda_inventory::systems::*;
+use cdda_sim::test_utils::TestBed;
+use cdda_core_types::core::units::*;
 
 // ---- helpers ---------------------------------------------------------------
 
@@ -282,7 +282,7 @@ fn container_volume_includes_stack_count() {
         DefStrId("rock".into()),
         ItemVolume(100),
         ItemWeight(50),
-        StackCount::new(5),
+        StackCount::new(5).unwrap(),
         InsideContainer(container),
     ));
 
@@ -337,13 +337,13 @@ fn same_items_merge() {
 
     let target = test.spawn((
         DefStrId("rock".into()),
-        StackCount::new(1),
+        StackCount::new(1).unwrap(),
         CurrentCharges(0),
         ItemDamage(0),
     ));
     let incoming = test.spawn((
         DefStrId("rock".into()),
-        StackCount::new(1),
+        StackCount::new(1).unwrap(),
         CurrentCharges(0),
         ItemDamage(0),
     ));
@@ -369,13 +369,13 @@ fn different_items_dont_merge() {
 
     let target = test.spawn((
         DefStrId("rock".into()),
-        StackCount::new(1),
+        StackCount::new(1).unwrap(),
         CurrentCharges(0),
         ItemDamage(0),
     ));
     let incoming = test.spawn((
         DefStrId("stick".into()),
-        StackCount::new(1),
+        StackCount::new(1).unwrap(),
         CurrentCharges(0),
         ItemDamage(0),
     ));
@@ -400,13 +400,13 @@ fn different_damage_prevents_merge() {
 
     let target = test.spawn((
         DefStrId("rock".into()),
-        StackCount::new(1),
+        StackCount::new(1).unwrap(),
         CurrentCharges(0),
         ItemDamage(0),
     ));
     let incoming = test.spawn((
         DefStrId("rock".into()),
-        StackCount::new(1),
+        StackCount::new(1).unwrap(),
         CurrentCharges(0),
         ItemDamage(2),
     ));
@@ -434,13 +434,13 @@ fn merge_accumulates_charges() {
 
     let target = test.spawn((
         DefStrId("lighter".into()),
-        StackCount::new(1),
+        StackCount::new(1).unwrap(),
         CurrentCharges(5),
         ItemDamage(0),
     ));
     let incoming = test.spawn((
         DefStrId("lighter".into()),
-        StackCount::new(1),
+        StackCount::new(1).unwrap(),
         CurrentCharges(3),
         ItemDamage(0),
     ));
@@ -472,13 +472,13 @@ fn deforigin_merge_same_origin() {
 
     let target = test.spawn((
         DefOrigin(42),
-        StackCount::new(3),
+        StackCount::new(3).unwrap(),
         CurrentCharges(0),
         ItemDamage(0),
     ));
     let incoming = test.spawn((
         DefOrigin(42),
-        StackCount::new(2),
+        StackCount::new(2).unwrap(),
         CurrentCharges(0),
         ItemDamage(0),
     ));
@@ -505,13 +505,13 @@ fn deforigin_different_origin_no_merge() {
 
     let target = test.spawn((
         DefOrigin(42),
-        StackCount::new(1),
+        StackCount::new(1).unwrap(),
         CurrentCharges(0),
         ItemDamage(0),
     ));
     let incoming = test.spawn((
         DefOrigin(99),
-        StackCount::new(1),
+        StackCount::new(1).unwrap(),
         CurrentCharges(0),
         ItemDamage(0),
     ));

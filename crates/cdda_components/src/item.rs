@@ -20,13 +20,29 @@ pub struct DefOrigin(pub u32);
 // Item state
 // ===========================================================================
 
+/// Stack count for items that can be stacked.
+///
+/// # Zero contract
+/// A `StackCount(0)` is meaningless — the entity should be despawned
+/// rather than kept around with a zero count. Use `new()` which rejects
+/// zero values, and when subtracting results in zero, despawn the entity.
+///
+/// The inner field is private — create via `StackCount::new()` or by
+/// deserializing the component directly (for save/load).
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 pub struct StackCount(u32);
 
 impl StackCount {
-    pub fn new(n: u32) -> Self {
-        assert!(n >= 1, "StackCount must be >= 1");
-        Self(n)
+    /// Create a new `StackCount` with the given value.
+    ///
+    /// Returns `Err` if `n == 0` (zero-count entities should be despawned,
+    /// not kept alive).
+    pub fn new(n: u32) -> Result<Self, &'static str> {
+        if n == 0 {
+            Err("StackCount must be >= 1, zero-count entities should be despawned")
+        } else {
+            Ok(Self(n))
+        }
     }
     pub fn get(self) -> u32 {
         self.0
