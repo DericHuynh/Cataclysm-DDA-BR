@@ -4,23 +4,23 @@ use bevy_ecs::prelude::*;
 
 use cdda_activity::actor::{ActivityActor, CraftActor};
 use cdda_activity::components::{ActivityPhase, PlayerActivity};
-use cdda_context::ContextActions;
 use cdda_components::def::{
     ItemName, RecipeCategory, RecipeComponents, RecipeQualities, RecipeResult, RecipeResultCount,
     RecipeSubcategory, RecipeTime,
 };
-use cdda_components::item::{
-    ContainerContents, InProgressCraft, InsideContainer, Inventory, Invlet, IsPocket,
-    ItemQualities, ItemTypeId, MountedPockets, PocketOf, StackCount, WieldedBy, WieldedItems,
-};
-use cdda_components::sim::WorldPosition;
-use cdda_data::def_world::DefinitionWorld;
+use cdda_components::dev::DevPlayer;
 use cdda_components::input::BindableAction;
+use cdda_components::item::{
+    ContainerContents, InProgressCraft, InsideContainer, ItemQualities, ItemTypeId, MountedPockets,
+    StackCount, WieldedItems,
+};
+pub use cdda_components::recipe::RecipeIndex;
+use cdda_components::sim::WorldPosition;
+use cdda_context::ContextActions;
+use cdda_core_types::core::coords::{WorldPos, ZLevel};
+use cdda_data::def_world::DefinitionWorld;
 use cdda_inventory::examine_resource::ExaminedItem;
 use cdda_overmap_gen::spawning::spawn_item_from_def;
-use cdda_core_types::core::coords::{WorldPos, ZLevel};
-use cdda_components::dev::DevPlayer;
-pub use cdda_components::recipe::RecipeIndex;
 
 // ---------------------------------------------------------------------------
 // CategoryIndex — tabbed category navigation for the crafting menu
@@ -70,9 +70,9 @@ pub fn display_subcategory(raw_category: &str, raw_subcategory: &str) -> String 
 // ---------------------------------------------------------------------------
 
 /// Collect all item entities available for crafting:
-/// items in the player's body pockets (via MountedPockets → ContainerContents),
+/// items in the player's body pockets (via MountedPockets -> ContainerContents),
 /// wielded items (WieldedItems), fallback direct ContainerContents on player,
-/// Inventory component fallback, plus items on the ground in the same OMT tile.
+/// plus items on the ground in the same OMT tile.
 pub fn collect_available_items(world: &mut World, player: Entity) -> Vec<Entity> {
     let player_pos = world.get::<WorldPosition>(player).map(|wp| wp.0);
 
@@ -110,16 +110,7 @@ pub fn collect_available_items(world: &mut World, player: Entity) -> Vec<Entity>
         }
     }
 
-    // Fallback: Inventory component (catches items in needs_invlet, pre-flush).
-    if let Some(inv) = world.get::<Inventory>(player) {
-        for e in inv.item_entities() {
-            if !items.contains(&e) {
-                items.push(e);
-            }
-        }
-    }
-
-    // Items on the ground within the same 24×24 OMT tile as the player
+    // Items on the ground within the same 24x24 OMT tile as the player
     if let Some(pos) = player_pos {
         let px = pos.x.div_euclid(24);
         let py = pos.y.div_euclid(24);
@@ -215,6 +206,10 @@ pub fn check_can_craft(
 
 /// Deduct `needed` items of `type_id` from `available`.
 /// Decrements `StackCount`; despawns the entity when the stack reaches zero.
+///
+/// Since inventory tracking is now relationship-based,
+/// despawning the item entity automatically removes it from `ContainerContents`
+/// and cleans up `Invlet` components.
 pub fn consume_items(world: &mut World, available: &[Entity], type_id: &str, mut needed: u32) {
     for &e in available {
         if needed == 0 {
@@ -230,30 +225,10 @@ pub fn consume_items(world: &mut World, available: &[Entity], type_id: &str, mut
         let stack = world.get::<StackCount>(e).map(|s| s.get()).unwrap_or(1);
         if stack <= needed {
             needed -= stack;
-            // Read relationship info before despawning so we can clean up the
-            // owner's Inventory.invlets (which is NOT a Bevy relationship and
-            // therefore won't be cleaned automatically).
-            let invlet_char = world.get::<Invlet>(e).map(|i| i.0);
-            // Items can be in a body pocket (InsideContainer(pocket)) or in
-            // hands (WieldedBy). For pockets, follow PocketOf to reach the
-            // character who owns the Inventory.
-            let container = world
-                .get::<InsideContainer>(e)
-                .map(|ic| ic.0)
-                .or_else(|| world.get::<WieldedBy>(e).map(|wb| wb.0));
-            let inv_owner = container.map(|c| {
-                if world.get::<IsPocket>(c).is_some() {
-                    world.get::<PocketOf>(c).map(|po| po.0).unwrap_or(c)
-                } else {
-                    c
-                }
-            });
+            // Despawning the entity automatically removes it from all
+            // relationships (InsideContainer, ContainerContents, etc.)
+            // and cleans up Invlet components.
             world.despawn(e);
-            if let (Some(c), Some(owner)) = (invlet_char, inv_owner) {
-                if let Some(mut inv) = world.get_mut::<Inventory>(owner) {
-                    inv.invlets.remove(&c);
-                }
-            }
         } else {
             world.entity_mut(e).insert(StackCount::new(stack - needed));
             needed = 0;
@@ -359,10 +334,6 @@ pub fn start_craft(
         ))
         .id();
 
-    if let Some(mut inv) = world.get_mut::<Inventory>(player) {
-        inv.needs_invlet.insert(craft_entity);
-    }
-
     // Attach a PlayerActivity so the activity system drives the craft.
     // Phase starts as Active — start() has already been accounted for via ap_total.
     let actor = ActivityActor::Craft(CraftActor { craft_entity });
@@ -390,13 +361,8 @@ pub fn complete_craft(world: &mut World, player: Entity, craft_entity: Entity) {
         (craft.result_id.clone(), craft.result_count)
     };
 
-    // Remove from inventory and despawn.
-    let invlet_char = world.get::<Invlet>(craft_entity).map(|i| i.0);
-    if let Some(c) = invlet_char {
-        if let Some(mut inv) = world.get_mut::<Inventory>(player) {
-            inv.invlets.remove(&c);
-        }
-    }
+    // Despawn the craft entity — relationships and components are cleaned up
+    // automatically by Bevy.
     world.despawn(craft_entity);
 
     // Spawn the result item.
@@ -427,10 +393,6 @@ pub fn complete_craft(world: &mut World, player: Entity, craft_entity: Entity) {
             .entity_mut(crafted)
             .remove::<WorldPosition>()
             .insert(InsideContainer(body_pocket));
-
-        if let Some(mut inv) = world.get_mut::<Inventory>(player) {
-            inv.needs_invlet.insert(crafted);
-        }
 
         tracing::info!("Craft complete: {}", result_id);
     }
@@ -617,10 +579,6 @@ pub fn do_craft(
         .entity_mut(crafted)
         .remove::<WorldPosition>()
         .insert(InsideContainer(body_pocket));
-
-    if let Some(mut inv) = world.get_mut::<Inventory>(player) {
-        inv.needs_invlet.insert(crafted);
-    }
 
     Ok(crafted)
 }

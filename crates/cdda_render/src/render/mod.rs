@@ -13,6 +13,7 @@ use crate::context::ctx::Ctx as Screen;
 use bevy::prelude::*;
 use bevy_state::condition::in_state;
 use bevy_state::state::OnEnter;
+use cdda_components::schedule::GameSet;
 
 pub mod character;
 pub mod crafting;
@@ -162,15 +163,21 @@ impl Plugin for CddaRenderPlugin {
         app.add_systems(OnEnter(Screen::Overmap), overmap::spawn_overmap_viewer);
         app.add_systems(
             Update,
-            overmap::overmap_camera_input.run_if(in_state(Screen::Overmap)),
+            overmap::overmap_camera_input
+                .in_set(GameSet::Input)
+                .run_if(in_state(Screen::Overmap)),
         );
         app.add_systems(
             Update,
-            overmap::update_overmap_tiles.run_if(in_state(Screen::Overmap)),
+            overmap::update_overmap_tiles
+                .in_set(GameSet::Render)
+                .run_if(in_state(Screen::Overmap)),
         );
         app.add_systems(
             Update,
-            overmap::update_overmap_info_panel.run_if(in_state(Screen::Overmap)),
+            overmap::update_overmap_info_panel
+                .in_set(GameSet::Render)
+                .run_if(in_state(Screen::Overmap)),
         );
 
         // ── Dev worldgen ───────────────────────────────────────────────────
@@ -182,7 +189,9 @@ impl Plugin for CddaRenderPlugin {
         app.add_systems(OnEnter(Screen::Gameplay), dev_worldgen::spawn_ascii_view);
         app.add_systems(
             Update,
-            dev_worldgen::update_ascii_view.run_if(in_state(Screen::Gameplay)),
+            dev_worldgen::update_ascii_view
+                .in_set(GameSet::Render)
+                .run_if(in_state(Screen::Gameplay)),
         );
     }
 }

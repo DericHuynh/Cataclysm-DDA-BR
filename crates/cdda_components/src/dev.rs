@@ -6,7 +6,7 @@
 use bevy_ecs::component::Component;
 use bevy_ecs::prelude::Resource;
 
-/// Marker for the dev-world player entity that carries the test `Inventory`.
+/// Marker for the dev-world player entity.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct DevPlayer;
 

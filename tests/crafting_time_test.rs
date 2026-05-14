@@ -15,13 +15,11 @@
 //!   ap_total = RecipeTime (turns) * 100
 
 use bevy_ecs::prelude::*;
-use cdda_components::dev::DevPlayer;
-use cdda_core::actor::turn::AP_COST_CRAFT_TICK;
 use cdda_components::actor::{ActionPoints, HandCount, IsAlive};
 use cdda_components::def::{ItemName, RecipeResult, RecipeResultCount, RecipeTime};
-use cdda_components::item::{
-    ContainerContents, InProgressCraft, InsideContainer, Inventory, InvletFavorites,
-};
+use cdda_components::dev::DevPlayer;
+use cdda_components::item::{ContainerContents, InProgressCraft, InsideContainer};
+use cdda_core::actor::turn::AP_COST_CRAFT_TICK;
 use cdda_core::crafting::systems::{continue_crafts, start_craft};
 use cdda_core::sim::test_utils::TestBed;
 
@@ -37,8 +35,7 @@ fn register_crafting_components(test: &mut TestBed) {
 
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
-    test.register::<Inventory>();
-    test.register::<InvletFavorites>();
+
     test.register::<HandCount>();
     test.register::<InsideContainer>();
     test.register::<ContainerContents>();
@@ -58,8 +55,6 @@ fn spawn_player(test: &mut TestBed) -> Entity {
             current: 10_000,
             speed: 100,
         }, // plenty of AP
-        Inventory::default(),
-        InvletFavorites::default(),
         HandCount(2),
     ))
 }

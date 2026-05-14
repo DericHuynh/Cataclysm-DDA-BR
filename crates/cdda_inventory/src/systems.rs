@@ -7,88 +7,232 @@
 //!
 //! - **Items are entities** with components like `StackCount`, `CurrentCharges`,
 //!   `ItemDamage`, and the `InsideContainer` relationship.
-//! - **The `Inventory` component** on a creature tracks invlet assignments
-//!   and provides cached lookups. Items *in* the inventory have
-//!   `InsideContainer(creature_entity)`, which Bevy's relationship hooks
-//!   keep synced with `ContainerContents` on the creature.
+//! - **Ownership** is expressed via relationships: items in containers use
+//!   `InsideContainer`/`ContainerContents`, wielded items use
+//!   `WieldedBy`/`WieldedItems`.
 //! - **Invlets** are `Invlet` components on item entities, assigned when an
-//!   item enters an inventory.
+//!   item enters an inventory. Items lacking an `Invlet` are picked up by
+//!   `assign_invlets_system` via `Without<Invlet>` query filter.
 //! - **Stack merging** — identical items (same `DefOrigin`, same damage,
 //!   same charges) merge into one entity with `StackCount > 1` and the
 //!   incoming entity is despawned.
 //! - **Binned lookup** — `InventoryBin` resource is rebuilt each frame
-//!   for fast `charges_of` / `amount_of` queries.
+//!   by querying items with `Invlet` inside creature containers.
 //!
 //! Reference: CDDA-master `inventory.h` / `inventory.cpp`.
 
-use cdda_actor::turn::{AP_COST_PICKUP, AP_COST_WIELD};
-use cdda_components::actor::{
-    ActionPoints, Gender, HandCount, Health, IsAlive, PlayerData, Stats,
-};
-use cdda_components::context::{ContextStack, Ctx, FocusedCommandIndex, push_ctx};
-use cdda_components::input::{GameAction, InputAction};
-use cdda_components::def::ItemVolume;
-use cdda_components::dev::{DevCamera, DevGroundItemName, DevPlayer};
-use cdda_components::events::{ItemMoveEvent, MoveLocation};
-use cdda_components::item::{
-    Container, ContainerContents, CurrentCharges, DefOrigin, InsideContainer, Inventory,
-    InventoryBin, InventoryFocus, Invlet, InvletFavorites, ItemDamage, ItemTypeId, MountedPockets,
-    Pocket, StackCount, WieldedBy, WieldedItems, FLOOR_CAP_ML,
-};
-use cdda_components::sim::WorldPosition;
-use cdda_core_types::core::coords::{WorldPos, ZLevel};
-use cdda_core_types::core::units::*;
 use bevy_ecs::message::{MessageReader, MessageWriter};
 use bevy_ecs::prelude::*;
 use bevy_ecs::world::World;
 use bevy_state::prelude::NextState;
-use tracing::{info, warn};
+use cdda_actor::turn::{AP_COST_PICKUP, AP_COST_WIELD};
+use cdda_components::actor::{ActionPoints, HandCount};
+use cdda_components::context::{push_ctx, ContextStack, Ctx, FocusedCommandIndex};
+use cdda_components::def::ItemVolume;
+use cdda_components::dev::{DevCamera, DevGroundItemName, DevPlayer};
+use cdda_components::events::{ItemMoveEvent, MoveLocation};
+use cdda_components::input::{GameAction, InputAction};
+use cdda_components::item::{
+    Container, ContainerContents, CurrentCharges, DefOrigin, InsideContainer, InventoryFocus,
+    Invlet, ItemDamage, MountedPockets, Pocket, StackCount, WieldedBy, WieldedItems, FLOOR_CAP_ML,
+    INVLET_CHARS,
+};
+use cdda_components::sim::WorldPosition;
+use cdda_core_types::core::coords::{WorldPos, ZLevel};
+use cdda_core_types::core::units::*;
+use tracing::warn;
 
 use crate::examine_resource::ExaminedItem;
 use crate::pocket;
 
 // ===========================================================================
+// Helper: collect all items reachable from a creature
+// ===========================================================================
+
+/// Collects all item entities that are in `creature`'s inventory domain:
+/// directly in the creature's `ContainerContents`, in mounted pockets,
+/// and in wielded items.
+pub fn all_items_for_creature(creature: Entity, world: &World) -> Vec<Entity> {
+    let mut items = Vec::new();
+
+    // Items directly inside the creature (ContainerContents on creature itself)
+    if let Some(cc) = world.get::<ContainerContents>(creature) {
+        items.extend(cc.iter());
+    }
+
+    // Items inside mounted pockets
+    if let Some(mp) = world.get::<MountedPockets>(creature) {
+        for pocket in mp.iter() {
+            if let Some(cc) = world.get::<ContainerContents>(pocket) {
+                items.extend(cc.iter());
+            }
+        }
+    }
+
+    // Wielded items
+    if let Some(wi) = world.get::<WieldedItems>(creature) {
+        items.extend(wi.iter());
+    }
+
+    items
+}
+
+/// Returns all invlet chars currently in use by items in `creature`'s domain.
+fn used_invlets(creature: Entity, world: &World) -> std::collections::HashSet<char> {
+    let items = all_items_for_creature(creature, world);
+    items
+        .iter()
+        .filter_map(|&e| world.get::<Invlet>(e).map(|i| i.0))
+        .collect()
+}
+
+/// Follow a container entity to find the owning creature.
+/// If it's a pocket, traverse MountedOn. If it's a creature, return it.
+fn find_owning_creature(container: Entity, world: &World) -> Entity {
+    if world
+        .get::<cdda_components::actor::Creature>(container)
+        .is_some()
+    {
+        container
+    } else if world
+        .get::<cdda_components::item::IsPocket>(container)
+        .is_some()
+    {
+        pocket::find_creature_for_pocket(container, world).unwrap_or(container)
+    } else {
+        container
+    }
+}
+
+/// Finds an unassigned invlet char for `creature`, preferring `fav_chars`.
+fn allocate_invlet_for(creature: Entity, world: &World, fav_chars: &[char]) -> Option<char> {
+    let used = used_invlets(creature, world);
+    // Try favourites first
+    for c in fav_chars {
+        if !used.contains(c) {
+            return Some(*c);
+        }
+    }
+    // Fall back to sequential
+    INVLET_CHARS.iter().copied().find(|c| !used.contains(c))
+}
+
+/// Find an existing item in `creature`'s domain that `item` can merge into.
+fn find_merge_target_for_creature(creature: Entity, item: Entity, world: &World) -> Option<Entity> {
+    let incoming_origin = world.get::<DefOrigin>(item).map(|d| d.0);
+    let incoming_damage = world.get::<ItemDamage>(item).map(|d| d.0).unwrap_or(0);
+    let incoming_charges = world.get::<CurrentCharges>(item).map(|c| c.0).unwrap_or(0);
+
+    if incoming_origin.is_none() {
+        return None;
+    }
+
+    for candidate in all_items_for_creature(creature, world) {
+        // Skip items without an invlet (not yet in inventory) and the item itself
+        if candidate == item || world.get::<Invlet>(candidate).is_none() {
+            continue;
+        }
+        let c_origin = world.get::<DefOrigin>(candidate).map(|d| d.0);
+        let c_damage = world.get::<ItemDamage>(candidate).map(|d| d.0).unwrap_or(0);
+        let c_charges = world
+            .get::<CurrentCharges>(candidate)
+            .map(|c| c.0)
+            .unwrap_or(0);
+
+        if c_origin == incoming_origin
+            && c_damage == incoming_damage
+            && c_charges == incoming_charges
+        {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+// ===========================================================================
+// InventoryBin — cached item-type lookup
+// ===========================================================================
+
+/// Cached bins of inventory items keyed by `DefOrigin`.
+///
+/// Built by `build_inventory_bins` each frame. Provides fast `count_of`
+/// and `charges_of` queries without iterating the entire inventory.
+#[derive(Debug, Clone, Default, Resource)]
+pub struct InventoryBin {
+    /// `DefOrigin.0` → list of item entities of that type.
+    pub bins: std::collections::HashMap<u32, Vec<Entity>>,
+}
+
+impl InventoryBin {
+    /// Total stack count for items of this definition origin.
+    pub fn count_of(&self, def_origin: u32, counts: &Query<&StackCount>) -> u32 {
+        self.bins.get(&def_origin).map_or(0, |entities| {
+            entities
+                .iter()
+                .map(|e| counts.get(*e).map(|s| s.get()).unwrap_or(1))
+                .sum()
+        })
+    }
+
+    /// Total charges across all items of this definition origin.
+    pub fn charges_of(&self, def_origin: u32, charges: &Query<&CurrentCharges>) -> i32 {
+        self.bins.get(&def_origin).map_or(0, |entities| {
+            entities
+                .iter()
+                .map(|e| charges.get(*e).map(|c| c.0).unwrap_or(0))
+                .sum()
+        })
+    }
+
+    /// Checks whether the inventory has at least `qty` items of the given origin.
+    pub fn has_amount(&self, def_origin: u32, qty: u32, counts: &Query<&StackCount>) -> bool {
+        self.count_of(def_origin, counts) >= qty
+    }
+
+    /// Checks whether the inventory has at least `qty` charges of the given origin.
+    pub fn has_charges(&self, def_origin: u32, qty: i32, charges: &Query<&CurrentCharges>) -> bool {
+        self.charges_of(def_origin, charges) >= qty
+    }
+}
+
+// ===========================================================================
 // Systems
 // ===========================================================================
 
-/// Assigns invlets to items that entered an inventory via `mark_needs_invlet`.
+/// Assigns invlets to items in a creature's domain that lack `Invlet`.
 ///
-/// Runs in `SimSet::Inventory`. Iterates all `Inventory` components, drains
-/// the `needs_invlet` set, and allocates a letter (favourites first, then
-/// sequential) using `Commands` so the insert is deferred safely.
+/// Runs in `SimSet::Inventory`. Queries items with `InsideContainer` or
+/// `WieldedBy` that lack `Invlet`, groups by owning creature, assigns
+/// invlet letters. Merges identical stacks when possible.
 pub fn assign_invlets_system(
     mut commands: Commands,
-    mut inventories: Query<(Entity, &mut Inventory)>,
-    favs: Query<&InvletFavorites>,
-    item_origins: Query<&DefOrigin>,
+    inside_query: Query<(Entity, &InsideContainer), Without<Invlet>>,
+    wielded_query: Query<(Entity, &WieldedBy), Without<Invlet>>,
+    invlet_query: Query<&Invlet>,
     stack_counts: Query<&StackCount>,
-    item_damages: Query<&ItemDamage>,
-    current_charges_q: Query<&CurrentCharges>,
+    world: World,
 ) {
-    for (inv_owner, mut inv) in &mut inventories {
-        let pending: Vec<Entity> = inv.needs_invlet.drain().collect();
+    // Collect items needing invlets grouped by owning creature
+    let mut by_creature: std::collections::HashMap<Entity, Vec<Entity>> =
+        std::collections::HashMap::new();
 
-        // Track count increments from merges so we don't race with deferred commands.
+    for (item, inside) in &inside_query {
+        let creature = find_owning_creature(inside.0, &world);
+        by_creature.entry(creature).or_default().push(item);
+    }
+    for (item, wielded) in &wielded_query {
+        by_creature.entry(wielded.0).or_default().push(item);
+    }
+
+    for (creature, pending) in by_creature {
         let mut merge_adds: std::collections::HashMap<Entity, u32> =
             std::collections::HashMap::new();
 
         for item in pending {
-            let incoming_origin = item_origins.get(item).ok().map(|d| d.0);
-            let incoming_damage = item_damages.get(item).ok().map(|d| d.0).unwrap_or(0);
-            let incoming_charges = current_charges_q.get(item).ok().map(|c| c.0).unwrap_or(0);
             let incoming_count = stack_counts.get(item).ok().map(|s| s.get()).unwrap_or(1);
 
-            // Try to merge into an existing stack with the same identity.
-            let merge_target = if let Some(origin) = incoming_origin {
-                inv.invlets.values().copied().find(|&stack| {
-                    item_origins.get(stack).ok().map(|d| d.0) == Some(origin)
-                        && item_damages.get(stack).ok().map(|d| d.0).unwrap_or(0) == incoming_damage
-                        && current_charges_q.get(stack).ok().map(|c| c.0).unwrap_or(0)
-                            == incoming_charges
-                })
-            } else {
-                None
-            };
+            // Try to merge into an existing stack in this creature's domain
+            let merge_target = find_merge_target_for_creature(creature, item, &world);
 
             if let Some(target) = merge_target {
                 *merge_adds.entry(target).or_insert(0) += incoming_count;
@@ -96,18 +240,14 @@ pub fn assign_invlets_system(
                 continue;
             }
 
-            // No merge: assign invlet (favourites first, then sequential).
-            let fav_invlet = match (item_origins.get(item), favs.get(inv_owner)) {
-                (Ok(origin), Ok(fav)) => fav
-                    .invlets_for(origin.0)
-                    .into_iter()
-                    .find(|c| !inv.invlets.contains_key(c)),
-                _ => None,
-            };
+            // No merge: assign invlet.
+            // Use any existing Invlet as a favourite hint.
+            let existing_char = invlet_query.get(item).ok().map(|i| i.0);
+            let fav_chars: Vec<char> = existing_char.into_iter().collect();
 
-            if let Some(c) = fav_invlet.or_else(|| inv.allocate_invlet()) {
+            let c = allocate_invlet_for(creature, &world, &fav_chars);
+            if let Some(c) = c {
                 commands.entity(item).insert(Invlet(c));
-                inv.invlets.insert(c, item);
             }
         }
 
@@ -121,23 +261,22 @@ pub fn assign_invlets_system(
     }
 }
 
-/// Rebuilds the `InventoryBin` resource by scanning all inventories.
+/// Rebuilds the `InventoryBin` resource by scanning all creatures' inventories.
 ///
-/// Should run after `assign_invlets_system` so items are properly tracked.
+/// Should run after `assign_invlets_system` so items have invlets.
 pub fn build_inventory_bins(
     mut bin: ResMut<InventoryBin>,
-    inventories: Query<&Inventory>,
-    _contents: Query<&ContainerContents>,
+    creatures: Query<Entity, With<cdda_components::actor::Creature>>,
     origins: Query<&DefOrigin>,
+    world: World,
 ) {
     bin.bins.clear();
-    for inv in &inventories {
-        for &item in inv.invlets.values() {
-            if let Ok(origin) = origins.get(item) {
-                bin.bins.entry(origin.0).or_default().push(item);
+    for creature in &creatures {
+        for item in all_items_for_creature(creature, &world) {
+            // Only include items that have been assigned an invlet
+            if world.get::<Invlet>(item).is_none() {
+                continue;
             }
-        }
-        for &item in &inv.needs_invlet {
             if let Ok(origin) = origins.get(item) {
                 bin.bins.entry(origin.0).or_default().push(item);
             }
@@ -151,12 +290,7 @@ pub fn build_inventory_bins(
 /// Reads from the broadcast `ItemMoveEvent` message queue each frame.
 /// Uses `Commands` for deferred entity mutation so relationship hooks
 /// (`InsideContainer` ↔ `ContainerContents`) fire at the right time.
-pub fn process_item_move_events(
-    mut reader: MessageReader<ItemMoveEvent>,
-    mut commands: Commands,
-    invlet_query: Query<&Invlet>,
-    mut inventory_query: Query<&mut Inventory>,
-) {
+pub fn process_item_move_events(mut reader: MessageReader<ItemMoveEvent>, mut commands: Commands) {
     let events: Vec<ItemMoveEvent> = reader.read().cloned().collect();
     for event in events {
         match (event.from, event.to) {
@@ -166,46 +300,23 @@ pub fn process_item_move_events(
                     .entity(event.item)
                     .remove::<WorldPosition>()
                     .insert(InsideContainer(container));
-
-                if let Ok(mut inv) = inventory_query.get_mut(container) {
-                    inv.needs_invlet.insert(event.item);
-                }
             }
             // Container → Ground (drop)
-            (MoveLocation::Container(container), MoveLocation::Ground(pos)) => {
-                let invlet_char = invlet_query.get(event.item).ok().map(|i| i.0);
+            (MoveLocation::Container(_container), MoveLocation::Ground(pos)) => {
                 commands
                     .entity(event.item)
                     .remove::<InsideContainer>()
                     .remove::<Invlet>()
                     .insert(WorldPosition(pos));
-
-                if let Ok(mut inv) = inventory_query.get_mut(container) {
-                    if let Some(c) = invlet_char {
-                        inv.invlets.remove(&c);
-                    }
-                    inv.needs_invlet.remove(&event.item);
-                }
             }
             // Container → Container (transfer)
-            (MoveLocation::Container(from), MoveLocation::Container(to)) => {
-                let invlet_char = invlet_query.get(event.item).ok().map(|i| i.0);
+            (MoveLocation::Container(_from), MoveLocation::Container(to)) => {
                 // Inserting a new InsideContainer replaces the old one;
                 // relationship hooks handle both ContainerContents updates.
                 commands
                     .entity(event.item)
                     .insert(InsideContainer(to))
                     .remove::<Invlet>();
-
-                if let Ok(mut from_inv) = inventory_query.get_mut(from) {
-                    if let Some(c) = invlet_char {
-                        from_inv.invlets.remove(&c);
-                    }
-                    from_inv.needs_invlet.remove(&event.item);
-                }
-                if let Ok(mut to_inv) = inventory_query.get_mut(to) {
-                    to_inv.needs_invlet.insert(event.item);
-                }
             }
             // Ground → Wielded (pickup into hands)
             (MoveLocation::Ground(_), MoveLocation::Wielded(wielder)) => {
@@ -213,44 +324,22 @@ pub fn process_item_move_events(
                     .entity(event.item)
                     .remove::<WorldPosition>()
                     .insert(WieldedBy(wielder));
-                if let Ok(mut inv) = inventory_query.get_mut(wielder) {
-                    inv.needs_invlet.insert(event.item);
-                }
             }
             // Wielded → Ground (drop from hands)
-            (MoveLocation::Wielded(wielder), MoveLocation::Ground(pos)) => {
-                let invlet_char = invlet_query.get(event.item).ok().map(|i| i.0);
+            (MoveLocation::Wielded(_wielder), MoveLocation::Ground(pos)) => {
                 commands
                     .entity(event.item)
                     .remove::<WieldedBy>()
                     .remove::<Invlet>()
                     .insert(WorldPosition(pos));
-                if let Ok(mut inv) = inventory_query.get_mut(wielder) {
-                    if let Some(c) = invlet_char {
-                        inv.invlets.remove(&c);
-                    }
-                    inv.needs_invlet.remove(&event.item);
-                }
             }
             // Wielded → Container (stow from hands)
-            (MoveLocation::Wielded(wielder), MoveLocation::Container(container)) => {
-                let invlet_char = invlet_query.get(event.item).ok().map(|i| i.0);
+            (MoveLocation::Wielded(_wielder), MoveLocation::Container(container)) => {
                 commands
                     .entity(event.item)
                     .remove::<WieldedBy>()
                     .insert(InsideContainer(container))
                     .remove::<Invlet>();
-                if let Ok(mut from_inv) = inventory_query.get_mut(wielder) {
-                    if let Some(c) = invlet_char {
-                        from_inv.invlets.remove(&c);
-                    }
-                    from_inv.needs_invlet.remove(&event.item);
-                }
-                if wielder != container {
-                    if let Ok(mut to_inv) = inventory_query.get_mut(container) {
-                        to_inv.needs_invlet.insert(event.item);
-                    }
-                }
             }
             _ => {}
         }
@@ -268,8 +357,8 @@ pub fn process_item_move_events(
 pub fn inventory_screen_input(
     mut reader: MessageReader<InputAction>,
     mut focus: ResMut<InventoryFocus>,
-    mut player_query: Query<(Entity, &mut Inventory, &HandCount), With<DevPlayer>>,
-    wielded_items_q: Query<Option<&WieldedItems>>,
+    player_query: Query<(Entity, &HandCount), With<DevPlayer>>,
+    wielded_items_q: Query<&WieldedItems>,
     wielded_by_check: Query<Entity, With<WieldedBy>>,
     mounted_pockets_q: Query<&MountedPockets>,
     mut ap_query: Query<&mut ActionPoints, With<DevPlayer>>,
@@ -277,31 +366,35 @@ pub fn inventory_screen_input(
     mut stack: ResMut<ContextStack>,
     mut next_screen: ResMut<NextState<Ctx>>,
     mut focused_cmd: ResMut<FocusedCommandIndex>,
+    world: World,
 ) {
     let actions: Vec<GameAction> = reader.read().map(|e| e.action.clone()).collect();
     if actions.is_empty() {
         return;
     }
 
-    let Ok((player_entity, inventory, hand_count)) = player_query.single_mut() else {
+    let Ok((player_entity, hand_count)) = player_query.single() else {
         return;
     };
     let hand_limit = hand_count.0 as usize;
 
-    // Panel 0: pocket items (everything not in hand), sorted by invlet char.
-    let mut pocket_items: Vec<(char, Entity)> = inventory
-        .invlets
-        .iter()
-        .filter(|(_, &e)| wielded_by_check.get(e).is_err())
-        .map(|(&c, &e)| (c, e))
-        .collect();
+    // Collect pocket items: all items in creature's containers/pockets that have an Invlet
+    // and are NOT wielded.
+    let mut pocket_items: Vec<(char, Entity)> = Vec::new();
+    for item in all_items_for_creature(player_entity, &world) {
+        if wielded_by_check.get(item).is_ok() {
+            continue; // skip wielded items
+        }
+        if let Some(invlet) = world.get::<Invlet>(item) {
+            pocket_items.push((invlet.0, item));
+        }
+    }
     pocket_items.sort_by_key(|(c, _)| *c);
 
-    // Panel 1: wielded items.
+    // Wielded items
     let wielded_list: Vec<Entity> = wielded_items_q
         .get(player_entity)
         .ok()
-        .flatten()
         .map(|wi| wi.iter().collect())
         .unwrap_or_default();
 
@@ -374,11 +467,9 @@ pub fn inventory_screen_input(
                 } else {
                     // Unwield: hand → body pocket.
                     if let Some(&item_entity) = wielded_list.get(focus.index) {
-                        let body_pocket = pocket::get_body_pocket(
-                            player_entity,
-                            &mounted_pockets_q,
-                        )
-                        .unwrap_or(player_entity);
+                        let body_pocket =
+                            pocket::get_body_pocket(player_entity, &mounted_pockets_q)
+                                .unwrap_or(player_entity);
                         commands
                             .entity(item_entity)
                             .remove::<WieldedBy>()
@@ -416,8 +507,7 @@ pub fn inventory_screen_input(
 /// Handles `Pickup` and `Drop` actions in the dev world.
 ///
 /// - **g / Pickup** — picks up all items at the camera's current OMT tile.
-/// - **d / Drop**   — drops the first item in the player's inventory at the
-///   camera's current OMT tile.
+/// - **d / Drop**   — drops the first invlet-assigned item at the camera's tile.
 ///
 /// Emits `ItemMoveEvent` messages for each item moved. The
 /// `process_item_move_events` system (which runs later in the same
@@ -431,11 +521,11 @@ pub fn dev_pickup_drop_system(
         With<DevGroundItemName>,
     >,
     item_volumes: Query<Option<&ItemVolume>>,
-    inventory_query: Query<&Inventory, With<DevPlayer>>,
     wielded_items_q: Query<Option<&WieldedItems>>,
     mounted_pockets_q: Query<&MountedPockets>,
     mut ap_query: Query<&mut ActionPoints, With<DevPlayer>>,
     mut move_writer: MessageWriter<ItemMoveEvent>,
+    world: World,
 ) {
     let actions: Vec<GameAction> = reader.read().map(|e| e.action.clone()).collect();
     if actions.is_empty() {
@@ -477,11 +567,9 @@ pub fn dev_pickup_drop_system(
                             count: 1,
                         });
                     } else {
-                        let body_pocket = pocket::get_body_pocket(
-                            player_entity,
-                            &mounted_pockets_q,
-                        )
-                        .unwrap_or(player_entity);
+                        let body_pocket =
+                            pocket::get_body_pocket(player_entity, &mounted_pockets_q)
+                                .unwrap_or(player_entity);
                         move_writer.write(ItemMoveEvent {
                             item,
                             from: MoveLocation::Ground(pos),
@@ -496,45 +584,46 @@ pub fn dev_pickup_drop_system(
             }
 
             GameAction::Drop => {
-                // Drop the first invlet-assigned item at the camera position.
-                if let Ok(inventory) = inventory_query.single() {
-                    if let Some((&_invlet_char, &item_entity)) = inventory.invlets.iter().next() {
-                        // Volume check: floor has a hard cap of FLOOR_CAP_ML.
-                        let item_vol = item_volumes
-                            .get(item_entity)
-                            .ok()
-                            .flatten()
-                            .map(|v| v.0)
-                            .unwrap_or(0);
-                        let floor_volume: u32 = ground_item_query
-                            .iter()
-                            .filter(|(_, wp, _)| {
-                                wp.0.x.div_euclid(24) == camera.x
-                                    && wp.0.y.div_euclid(24) == camera.y
-                                    && wp.0.z.0 as i32 == camera.z
-                            })
-                            .filter_map(|(_, _, vol)| vol.map(|v| v.0))
-                            .sum();
-                        if floor_volume + item_vol > FLOOR_CAP_ML {
-                            warn!(
-                                "Floor ({},{}) full: {}/{} mL — cannot drop.",
-                                camera.x, camera.y, floor_volume, FLOOR_CAP_ML
-                            );
-                            continue;
-                        }
+                // Drop the first invlet-assigned item in the player's domain.
+                let invlet_items: Vec<(char, Entity)> =
+                    all_items_for_creature(player_entity, &world)
+                        .iter()
+                        .filter_map(|&e| world.get::<Invlet>(e).map(|i| (i.0, e)))
+                        .collect();
 
-                        let drop_pos = WorldPos::new(
-                            camera.x * 24,
-                            camera.y * 24,
-                            ZLevel::new(camera.z as i8),
+                if let Some(&(_c, item_entity)) = invlet_items.first() {
+                    // Volume check: floor has a hard cap of FLOOR_CAP_ML.
+                    let item_vol = item_volumes
+                        .get(item_entity)
+                        .ok()
+                        .flatten()
+                        .map(|v| v.0)
+                        .unwrap_or(0);
+                    let floor_volume: u32 = ground_item_query
+                        .iter()
+                        .filter(|(_, wp, _)| {
+                            wp.0.x.div_euclid(24) == camera.x
+                                && wp.0.y.div_euclid(24) == camera.y
+                                && wp.0.z.0 as i32 == camera.z
+                        })
+                        .filter_map(|(_, _, vol)| vol.map(|v| v.0))
+                        .sum();
+                    if floor_volume + item_vol > FLOOR_CAP_ML {
+                        warn!(
+                            "Floor ({},{}) full: {}/{} mL — cannot drop.",
+                            camera.x, camera.y, floor_volume, FLOOR_CAP_ML
                         );
-                        move_writer.write(ItemMoveEvent {
-                            item: item_entity,
-                            from: MoveLocation::Container(player_entity),
-                            to: MoveLocation::Ground(drop_pos),
-                            count: 1,
-                        });
+                        continue;
                     }
+
+                    let drop_pos =
+                        WorldPos::new(camera.x * 24, camera.y * 24, ZLevel::new(camera.z as i8));
+                    move_writer.write(ItemMoveEvent {
+                        item: item_entity,
+                        from: MoveLocation::Container(player_entity),
+                        to: MoveLocation::Ground(drop_pos),
+                        count: 1,
+                    });
                 }
             }
             _ => {}
@@ -588,7 +677,7 @@ pub fn items_in_container(container: Entity, world: &World) -> Vec<Entity> {
 /// Check whether `item` can fit into `container` based on pocket/container
 /// volume, weight, and length constraints.
 pub fn can_fit_in_container(world: &World, container: Entity, item: Entity) -> bool {
-    use cdda_components::def::{ItemLongestSide, ItemVolume, ItemWeight};
+    use cdda_components::def::{ItemLongestSide, ItemWeight};
 
     let item_vol = match world.get::<ItemVolume>(item) {
         Some(v) => Volume::from_milliliters(v.0 as u64),
@@ -629,7 +718,6 @@ pub fn can_fit_in_container(world: &World, container: Entity, item: Entity) -> b
 
 /// Total volume occupied by all items inside `container`.
 pub fn total_container_volume(world: &World, container: Entity) -> Volume {
-    use cdda_components::def::ItemVolume;
     let mut total = Volume::ZERO;
     if let Some(contents) = world.get::<ContainerContents>(container) {
         for child in contents.iter() {
@@ -726,101 +814,6 @@ pub fn merge_or_stack(world: &mut World, target: Entity, incoming: Entity) -> bo
     true
 }
 
-/// Find an existing item in `inventory` that `item` can merge into.
-///
-/// Returns `Some(entity)` if a compatible stack exists, `None` otherwise.
-fn find_merge_target(world: &World, inventory: &Inventory, item: Entity) -> Option<Entity> {
-    let incoming_origin = world.get::<DefOrigin>(item).map(|d| d.0);
-    let incoming_damage = world.get::<ItemDamage>(item).map(|d| d.0).unwrap_or(0);
-    let incoming_charges = world.get::<CurrentCharges>(item).map(|c| c.0).unwrap_or(0);
-
-    for &stack in inventory.invlets.values() {
-        let stack_origin = world.get::<DefOrigin>(stack).map(|d| d.0);
-        let stack_damage = world.get::<ItemDamage>(stack).map(|d| d.0).unwrap_or(0);
-        let stack_charges = world.get::<CurrentCharges>(stack).map(|c| c.0).unwrap_or(0);
-
-        if incoming_origin.is_some()
-            && incoming_origin == stack_origin
-            && incoming_damage == stack_damage
-            && incoming_charges == stack_charges
-        {
-            return Some(stack);
-        }
-    }
-    None
-}
-
-// ===========================================================================
-// High-level inventory operations (used by game logic)
-// ===========================================================================
-
-/// Add an item to a creature's inventory.
-///
-/// Attempts to merge with an existing stack first. If merging fails or is
-/// partial, assigns an invlet and adds to the inventory.
-///
-/// Returns the entity that now holds the items (may be `target` after merge,
-/// or `item` if no merge occurred).
-pub fn add_to_inventory(
-    world: &mut World,
-    inventory: &mut Inventory,
-    item: Entity,
-    fav: Option<&mut InvletFavorites>,
-) -> Entity {
-    // Try merge first
-    let merge_target = find_merge_target(world, inventory, item);
-    if let Some(target) = merge_target {
-        if merge_or_stack(world, target, item) {
-            // item was despawned — nothing more to do
-            return target;
-        }
-    }
-
-    // Determine invlet character
-    let def_origin = world.get::<DefOrigin>(item).map(|d| d.0);
-
-    // Try favourite first
-    let invlet = if let (Some(origin), Some(f)) = (def_origin, fav.as_ref()) {
-        let fav_chars = f.invlets_for(origin);
-        fav_chars
-            .into_iter()
-            .find(|c| !inventory.invlets.contains_key(c))
-            .or_else(|| inventory.allocate_invlet())
-            .unwrap_or('`')
-    } else {
-        inventory.allocate_invlet().unwrap_or('`')
-    };
-
-    world.entity_mut(item).insert(Invlet(invlet));
-
-    if let (Some(f), Some(origin)) = (fav, def_origin) {
-        f.set(origin, invlet);
-    }
-
-    inventory.invlets.insert(invlet, item);
-    item
-}
-
-/// Remove an item from a creature's inventory.
-///
-/// Clears the invlet assignment and updates the favourites tracking.
-pub fn remove_from_inventory(
-    world: &mut World,
-    inventory: &mut Inventory,
-    item: Entity,
-    fav: Option<&mut InvletFavorites>,
-) {
-    let invlet_char = world.get::<Invlet>(item).map(|i| i.0);
-    if let Some(c) = invlet_char {
-        inventory.invlets.remove(&c);
-        world.entity_mut(item).remove::<Invlet>();
-        if let (Some(f), Some(origin)) = (fav, world.get::<DefOrigin>(item)) {
-            f.erase(origin.0, c);
-        }
-    }
-    inventory.needs_invlet.remove(&item);
-}
-
 // ===========================================================================
 // Move operations — generate events
 // ===========================================================================
@@ -885,8 +878,8 @@ pub fn transfer_item(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cdda_components::def::{DefStrId, ItemName, ItemVolume, ItemWeight};
-    use cdda_components::item::INVLET_CHARS;
+    use cdda_components::actor::Creature;
+    use cdda_components::def::{DefStrId, ItemName, ItemWeight};
     use cdda_sim::test_utils::TestBed;
 
     fn setup(t: &mut TestBed) {
@@ -899,13 +892,12 @@ mod tests {
         t.register::<CurrentCharges>();
         t.register::<ItemDamage>();
         t.register::<Invlet>();
-        t.register::<InvletFavorites>();
-        t.register::<Inventory>();
         t.register::<InsideContainer>();
         t.register::<ContainerContents>();
         t.register::<Container>();
         t.register::<Pocket>();
         t.register::<WorldPosition>();
+        t.register::<Creature>();
     }
 
     fn make_item(t: &mut TestBed, name: &str, count: u32) -> Entity {
@@ -929,75 +921,84 @@ mod tests {
         ))
     }
 
-    // ── Inventory lifecycle ───────────────────────────────────────────
-
-    #[test]
-    fn empty_inventory() {
-        let inv = Inventory::default();
-        assert!(inv.is_empty());
-        assert_eq!(inv.len(), 0);
+    fn make_creature(t: &mut TestBed) -> Entity {
+        t.spawn((Creature {
+            def_id: "test_creature".into(),
+            name: "Test".into(),
+            species: cdda_components::SpeciesId::from(0u32),
+            symbol: '@',
+        },))
     }
+
+    // ── Invlet allocation ──────────────────────────────────────────────
 
     #[test]
     fn invlet_alloc_first() {
-        let inv = Inventory::default();
-        assert_eq!(inv.allocate_invlet(), Some('a'));
+        let mut t = TestBed::new();
+        setup(&mut t);
+        let creature = make_creature(&mut t);
+        // With no items in inventory, 'a' should be available
+        let c = allocate_invlet_for(creature, &t.world(), &[]);
+        assert_eq!(c, Some('a'));
     }
 
     #[test]
     fn invlet_alloc_after_used() {
-        let mut inv = Inventory::default();
-        inv.invlets.insert('a', Entity::PLACEHOLDER);
-        assert_eq!(inv.allocate_invlet(), Some('b'));
+        let mut t = TestBed::new();
+        setup(&mut t);
+        let creature = make_creature(&mut t);
+        // Put an item with invlet 'a' in creature's ContainerContents
+        let item = make_item(&mut t, "rock", 1);
+        t.world_mut().entity_mut(item).insert(Invlet('a'));
+        t.world_mut()
+            .entity_mut(item)
+            .insert(InsideContainer(creature));
+        let c = allocate_invlet_for(creature, &t.world(), &[]);
+        assert_eq!(c, Some('b'));
     }
 
     #[test]
     fn invlet_alloc_all_full() {
-        let mut inv = Inventory::default();
-        for (_i, c) in INVLET_CHARS.iter().enumerate() {
-            inv.invlets.insert(*c, Entity::PLACEHOLDER);
+        let mut t = TestBed::new();
+        setup(&mut t);
+        let creature = make_creature(&mut t);
+        // Fill all invlet slots
+        for ch in INVLET_CHARS.iter() {
+            let item = make_item(&mut t, "filler", 1);
+            t.world_mut().entity_mut(item).insert(Invlet(*ch));
+            t.world_mut()
+                .entity_mut(item)
+                .insert(InsideContainer(creature));
         }
-        assert_eq!(inv.allocate_invlet(), None);
+        let c = allocate_invlet_for(creature, &t.world(), &[]);
+        assert_eq!(c, None);
     }
 
-    // ── Add & remove ──────────────────────────────────────────────────
+    // ── NeedsInvlet assignment ─────────────────────────────────────────
 
     #[test]
-    fn add_assigns_invlet() {
+    fn item_without_invlet_gets_assigned() {
         let mut t = TestBed::new();
         setup(&mut t);
-        let mut inv = Inventory::default();
+        let creature = make_creature(&mut t);
         let item = make_item(&mut t, "rock", 1);
-        let _result = add_to_inventory(&mut t.world_mut(), &mut inv, item, None);
-        assert_eq!(inv.len(), 1);
-        assert!(t.get::<Invlet>(item).is_some());
-        assert_eq!(_result, item);
+        t.world_mut()
+            .entity_mut(item)
+            .insert(InsideContainer(creature));
+
+        // Verify the item is inside the creature
+        assert!(t.get::<InsideContainer>(item).is_some());
     }
 
     #[test]
-    fn remove_clears_invlet() {
+    fn remove_invlet_on_drop() {
         let mut t = TestBed::new();
         setup(&mut t);
-        let mut inv = Inventory::default();
         let item = make_item(&mut t, "rock", 1);
-        add_to_inventory(&mut t.world_mut(), &mut inv, item, None);
-        remove_from_inventory(&mut t.world_mut(), &mut inv, item, None);
-        assert!(inv.is_empty());
+        t.world_mut().entity_mut(item).insert(Invlet('a'));
+        // Simulate drop: remove container relationship and invlet
+        t.world_mut().entity_mut(item).remove::<Invlet>();
         assert!(t.get::<Invlet>(item).is_none());
-    }
-
-    #[test]
-    fn add_multiple_unique_invlets() {
-        let mut t = TestBed::new();
-        setup(&mut t);
-        let mut inv = Inventory::default();
-        let a = make_item(&mut t, "rock", 1);
-        let b = make_item(&mut t, "stick", 1);
-        add_to_inventory(&mut t.world_mut(), &mut inv, a, None);
-        add_to_inventory(&mut t.world_mut(), &mut inv, b, None);
-        assert_eq!(inv.len(), 2);
-        let keys: Vec<char> = inv.invlets.keys().copied().collect();
-        assert_ne!(keys[0], keys[1]);
     }
 
     // ── Stack merging ─────────────────────────────────────────────────
@@ -1006,18 +1007,23 @@ mod tests {
     fn merge_identical_items() {
         let mut t = TestBed::new();
         setup(&mut t);
-        let mut inv = Inventory::default();
+        let creature = make_creature(&mut t);
         let a = make_item(&mut t, "rock", 3);
         let b = make_item(&mut t, "rock", 2);
-        let _merged = add_to_inventory(&mut t.world_mut(), &mut inv, a, None);
-        t.world_mut().entity_mut(b).insert(DefStrId("rock".into()));
-        t.world_mut().entity_mut(a).insert(DefStrId("rock".into()));
-        // Manually merge (since DefOrigin not set)
         t.world_mut().entity_mut(a).insert(DefOrigin(1));
         t.world_mut().entity_mut(b).insert(DefOrigin(1));
-        let _result = add_to_inventory(&mut t.world_mut(), &mut inv, b, None);
-        // Should have merged into a
-        assert_eq!(inv.len(), 1);
+        t.world_mut().entity_mut(a).insert(Invlet('a'));
+        t.world_mut()
+            .entity_mut(a)
+            .insert(InsideContainer(creature));
+
+        // b should find a as merge target
+        let target = find_merge_target_for_creature(creature, b, &t.world());
+        assert_eq!(target, Some(a));
+
+        // Perform merge
+        let merged = merge_or_stack(&mut t.world_mut(), a, b);
+        assert!(merged);
         assert_eq!(t.get::<StackCount>(a).unwrap().get(), 5);
     }
 
@@ -1025,28 +1031,37 @@ mod tests {
     fn merge_diff_types() {
         let mut t = TestBed::new();
         setup(&mut t);
-        let mut inv = Inventory::default();
+        let creature = make_creature(&mut t);
         let r = make_item(&mut t, "rock", 1);
         let s = make_item(&mut t, "stick", 1);
         t.world_mut().entity_mut(r).insert(DefOrigin(1));
         t.world_mut().entity_mut(s).insert(DefOrigin(2));
-        add_to_inventory(&mut t.world_mut(), &mut inv, r, None);
-        add_to_inventory(&mut t.world_mut(), &mut inv, s, None);
-        assert_eq!(inv.len(), 2);
+        t.world_mut().entity_mut(r).insert(Invlet('a'));
+        t.world_mut()
+            .entity_mut(r)
+            .insert(InsideContainer(creature));
+
+        // s should NOT find r as merge target
+        let target = find_merge_target_for_creature(creature, s, &t.world());
+        assert_eq!(target, None);
     }
 
     #[test]
     fn merge_same_charges() {
         let mut t = TestBed::new();
         setup(&mut t);
-        let mut inv = Inventory::default();
+        let creature = make_creature(&mut t);
         let a = make_item_charges(&mut t, "battery", 2, 100);
         let b = make_item_charges(&mut t, "battery", 1, 100);
         t.world_mut().entity_mut(a).insert(DefOrigin(3));
         t.world_mut().entity_mut(b).insert(DefOrigin(3));
-        add_to_inventory(&mut t.world_mut(), &mut inv, a, None);
-        let _result = add_to_inventory(&mut t.world_mut(), &mut inv, b, None);
-        assert_eq!(inv.len(), 1);
+        t.world_mut().entity_mut(a).insert(Invlet('a'));
+        t.world_mut()
+            .entity_mut(a)
+            .insert(InsideContainer(creature));
+
+        let merged = merge_or_stack(&mut t.world_mut(), a, b);
+        assert!(merged);
         assert_eq!(t.get::<CurrentCharges>(a).unwrap().0, 200);
     }
 
@@ -1054,22 +1069,26 @@ mod tests {
     fn merge_diff_charges() {
         let mut t = TestBed::new();
         setup(&mut t);
-        let mut inv = Inventory::default();
+        let creature = make_creature(&mut t);
         let a = make_item_charges(&mut t, "battery", 1, 100);
         let b = make_item_charges(&mut t, "battery", 1, 50);
         t.world_mut().entity_mut(a).insert(DefOrigin(3));
         t.world_mut().entity_mut(b).insert(DefOrigin(3));
-        add_to_inventory(&mut t.world_mut(), &mut inv, a, None);
-        add_to_inventory(&mut t.world_mut(), &mut inv, b, None);
-        // Auto-stacking via add_to_inventory requires same charge level; stays as 2 stacks.
-        assert_eq!(inv.len(), 2);
+        t.world_mut().entity_mut(a).insert(Invlet('a'));
+        t.world_mut()
+            .entity_mut(a)
+            .insert(InsideContainer(creature));
+
+        // Different charges — should NOT find merge target
+        let target = find_merge_target_for_creature(creature, b, &t.world());
+        assert_eq!(target, None);
     }
 
     #[test]
     fn merge_diff_damage() {
         let mut t = TestBed::new();
         setup(&mut t);
-        let mut inv = Inventory::default();
+        let creature = make_creature(&mut t);
         let a = t.spawn((
             DefStrId("knife".into()),
             ItemName("knife".into()),
@@ -1078,6 +1097,8 @@ mod tests {
             DefOrigin(10),
             ItemVolume(250),
             ItemWeight(100),
+            Invlet('a'),
+            InsideContainer(creature),
         ));
         let b = t.spawn((
             DefStrId("knife".into()),
@@ -1088,11 +1109,11 @@ mod tests {
             ItemVolume(250),
             ItemWeight(100),
         ));
-        t.world_mut().entity_mut(a).insert(DefOrigin(10));
-        t.world_mut().entity_mut(b).insert(DefOrigin(10));
-        add_to_inventory(&mut t.world_mut(), &mut inv, a, None);
-        add_to_inventory(&mut t.world_mut(), &mut inv, b, None);
-        // Different damage levels prevent stacking
-        assert_eq!(inv.len(), 2);
+
+        // Different damage — should NOT find merge target
+        let target = find_merge_target_for_creature(creature, b, &t.world());
+        assert_eq!(target, None);
+        assert!(t.get::<StackCount>(a).is_some());
+        assert!(t.get::<StackCount>(b).is_some());
     }
 }

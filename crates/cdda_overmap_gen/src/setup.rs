@@ -93,8 +93,6 @@ pub fn register_game_components(world: &mut World) {
     world.register_component::<cdda_components::item::AttachmentSlot>();
 
     // ── Inventory ─────────────────────────────────────────────────────
-    world.register_component::<cdda_components::item::Inventory>();
-    world.register_component::<cdda_components::item::InvletFavorites>();
     world.register_component::<cdda_components::item::Invlet>();
     world.register_component::<cdda_components::dev::DevPlayer>();
     world.register_component::<cdda_components::dev::DevGroundItemName>();

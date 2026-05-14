@@ -40,12 +40,9 @@ impl Plugin for ItemPlugin {
         app.register_type::<AttachmentType>();
         app.register_type::<Container>();
         app.register_type::<IsPocket>();
-        app.register_type::<PocketOf>();
 
         // Inventory
         app.register_type::<Invlet>();
-        app.register_type::<InvletFavorites>();
-        app.register_type::<Inventory>();
         app.register_type::<ItemQualities>();
 
         // In-progress crafting

@@ -21,8 +21,9 @@ use cdda_core::context::ContextStack;
 use cdda_core::{GameSet, SimSet};
 
 use cdda_activity::plugin::ActivityPlugin;
-use cdda_components::dev::DevPlayer;
+use cdda_components::dev::{DevCamera, DevPlayer};
 use cdda_components::events::ItemMoveEvent;
+use cdda_components::messages;
 use cdda_components::sim::WorldPosition;
 use cdda_core::actor::bionics::tick_bionics;
 use cdda_core::actor::effects::effects_phase;
@@ -41,10 +42,6 @@ use cdda_core::context::overlay::{
 use cdda_core::crafting::plugin::CraftingPlugin;
 use cdda_core::crafting::systems::on_examine_item_changed;
 use cdda_core::data::assets::CddaAssetsPlugin;
-use cdda_core::inventory::systems::{
-    assign_invlets_system, build_inventory_bins, dev_pickup_drop_system, inventory_screen_input,
-    process_item_move_events,
-};
 use cdda_core::item::plugin::ItemPlugin;
 use cdda_core::overmap::spatial::EntitySpatialIndex;
 use cdda_core::overmap_gen::pipeline::OvermapGenPlugin;
@@ -53,6 +50,10 @@ use cdda_core::overmap_gen::spatial_systems::{cleanup_spatial_index, update_spat
 use cdda_core::sim::state::{AppState, StartupConfig};
 use cdda_core::startup::load_data_system;
 use cdda_core::startup::{examine_item_input, spawn_dev_world};
+use cdda_inventory::systems::{
+    assign_invlets_system, build_inventory_bins, dev_pickup_drop_system, inventory_screen_input,
+    process_item_move_events, InventoryBin,
+};
 use cdda_overmap::OvermapCamera;
 
 // ---------------------------------------------------------------------------
@@ -83,23 +84,31 @@ impl Default for CddaStartupConfig {
 // Dev player movement
 // ---------------------------------------------------------------------------
 
-/// Move the dev player with arrow keys / hjkl.
+/// Move the dev player using raw keyboard input, gated on Screen::Gameplay.
+///
+/// Uses `ButtonInput<KeyCode>` (not `MessageReader`) to avoid ordering
+/// dependencies on `bridge_actionstate`. The y-axis follows CDDA convention:
+/// ArrowUp / K = north = -y, ArrowDown / J = south = +y.
+///
+/// Updates both `DevCamera` (ASCII viewport follows) and `OvermapCamera`
+/// (overmap viewer follows).
 pub fn dev_player_move(
-    keys: Res<bevy::prelude::ButtonInput<bevy::prelude::KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     mut query: Query<&mut WorldPosition, With<DevPlayer>>,
-    mut camera: ResMut<cdda_overmap::OvermapCamera>,
+    mut dev_cam: ResMut<DevCamera>,
+    mut overmap_cam: ResMut<OvermapCamera>,
 ) {
     let dx = if keys.just_pressed(KeyCode::ArrowRight) || keys.just_pressed(KeyCode::KeyL) {
-        1
+        1 // east = +x
     } else if keys.just_pressed(KeyCode::ArrowLeft) || keys.just_pressed(KeyCode::KeyH) {
-        -1
+        -1 // west = -x
     } else {
         0
     };
     let dy = if keys.just_pressed(KeyCode::ArrowUp) || keys.just_pressed(KeyCode::KeyK) {
-        1
+        -1 // CDDA: north = -y
     } else if keys.just_pressed(KeyCode::ArrowDown) || keys.just_pressed(KeyCode::KeyJ) {
-        -1
+        1 // CDDA: south = +y
     } else {
         0
     };
@@ -108,7 +117,12 @@ pub fn dev_player_move(
         for mut pos in &mut query {
             pos.0.x += dx * 24; // 24 tiles per OMT
             pos.0.y += dy * 24;
-            camera.move_to(pos.0.x.div_euclid(24), pos.0.y.div_euclid(24));
+            let omt_x = pos.0.x.div_euclid(24);
+            let omt_y = pos.0.y.div_euclid(24);
+            dev_cam.x = omt_x;
+            dev_cam.y = omt_y;
+            dev_cam.z = 0;
+            overmap_cam.move_to(omt_x, omt_y);
         }
     }
 }
@@ -121,7 +135,6 @@ pub struct CddaPlugin;
 
 impl Plugin for CddaPlugin {
     fn build(&self, app: &mut App) {
-        // Register ECS components first.
         register_game_components(app.world_mut());
 
         app.add_plugins((
@@ -133,19 +146,17 @@ impl Plugin for CddaPlugin {
             cdda_core::data::flags::CddaDataPlugin,
         ));
 
-        // Entity spatial index for dynamic entity queries.
         app.init_resource::<EntitySpatialIndex>();
         app.init_resource::<OvermapCamera>();
 
-        // Overmap generation pipeline.
         app.add_plugins(OvermapGenPlugin);
 
         app.init_state::<AppState>();
         app.init_resource::<StartupConfig>();
         app.init_resource::<TurnQueue>();
-        app.init_resource::<cdda_components::item::InventoryBin>();
-        app.init_resource::<cdda_core::inventory::examine_resource::ExaminedItem>();
-        app.init_resource::<cdda_components::dev::DevCamera>();
+        app.init_resource::<InventoryBin>();
+        app.init_resource::<cdda_inventory::examine_resource::ExaminedItem>();
+        app.init_resource::<DevCamera>();
         app.init_resource::<cdda_core::sim::state::LoadingStatus>();
         app.init_resource::<cdda_core::sim::state::GameTime>();
 
@@ -195,9 +206,9 @@ impl Plugin for CddaPlugin {
         );
 
         app.add_message::<ItemMoveEvent>();
-        app.add_message::<cdda_components::messages::TurnAdvanced>();
+        app.add_message::<messages::TurnAdvanced>();
 
-        // ── Context action registration ────────────────────────────────
+        // ── Screen plugins ─────────────────────────────────────────────
         app.add_plugins(ScreenPlugin::<
             cdda_render::render::inventory::InventoryScreen,
         >::default());
@@ -277,7 +288,6 @@ impl Plugin for CddaPlugin {
                 inventory_screen_input
                     .in_set(SimSet::Inventory)
                     .run_if(in_state(Screen::Inventory)),
-                // Spatial index updates track entity positions.
                 update_spatial_index.in_set(SimSet::SpatialUpdate),
                 cleanup_spatial_index.in_set(SimSet::SpatialUpdate),
                 debug_turn_queue.in_set(SimSet::SpatialUpdate),
@@ -285,8 +295,14 @@ impl Plugin for CddaPlugin {
                 .run_if(in_state(AppState::InGame)),
         );
 
-        // ── Dev player movement ────────────────────────────────────
-        app.add_systems(Update, dev_player_move.run_if(in_state(AppState::InGame)));
+        // ── Dev player movement — gated on Screen::Gameplay ────────
+        // Must run before render systems so the viewport updates immediately.
+        app.add_systems(
+            Update,
+            dev_player_move
+                .in_set(GameSet::Input)
+                .run_if(in_state(Screen::Gameplay)),
+        );
 
         // ── Overmap viewer toggle ─────────────────────────────────────
         app.add_systems(Update, toggle_overmap.run_if(in_state(AppState::InGame)));
@@ -326,12 +342,12 @@ impl Plugin for CddaPlugin {
 
 /// Toggle the overmap viewer with the M key.
 pub fn toggle_overmap(
-    keys: Res<bevy::prelude::ButtonInput<bevy::prelude::KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     state: Res<State<Screen>>,
     mut next: ResMut<NextState<Screen>>,
     mut stack: ResMut<ContextStack>,
 ) {
-    if keys.just_pressed(bevy::prelude::KeyCode::KeyM) {
+    if keys.just_pressed(KeyCode::KeyM) {
         match state.get() {
             Screen::Gameplay => {
                 stack.0.push(Screen::Gameplay);

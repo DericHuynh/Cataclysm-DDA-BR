@@ -12,13 +12,13 @@
 //! - **Z-level**: `<` / `>` keys change the viewed z-level.
 
 use bevy::prelude::*;
-use cdda_components::input::{GameAction, InputAction};
 use bevy_ecs::message::MessageReader;
 use bevy_state::state_scoped::DespawnOnExit;
+use cdda_components::input::{GameAction, InputAction};
 use cdda_core::context::ctx::Ctx as Screen;
 use cdda_core::overmap_gen::pipeline::OvermapGenConfig;
 use cdda_overmap::camera::OvermapCamera;
-use cdda_overmap::registry::{TerrainHandle, TerrainFlags};
+use cdda_overmap::registry::{TerrainFlags, TerrainHandle};
 use cdda_overmap::TerrainQuery;
 
 // ---------------------------------------------------------------------------
@@ -93,7 +93,10 @@ pub fn spawn_overmap_viewer(
                     for col in 0..GRID_COLS {
                         grid.spawn((
                             Button,
-                            OvermapTileCell { grid_col: col, grid_row: row },
+                            OvermapTileCell {
+                                grid_col: col,
+                                grid_row: row,
+                            },
                             Node {
                                 width: Val::Px(TILE_SIZE_PX),
                                 height: Val::Px(TILE_SIZE_PX),
@@ -131,22 +134,34 @@ pub fn spawn_overmap_viewer(
             .with_children(|sidebar| {
                 sidebar.spawn((
                     Text::new("OVERMAP"),
-                    TextFont { font_size: 22.0, ..default() },
+                    TextFont {
+                        font_size: 22.0,
+                        ..default()
+                    },
                     TextColor(Color::srgb(0.8, 0.8, 0.8)),
-                    Node { margin: UiRect::bottom(Val::Px(16.0)), ..default() },
+                    Node {
+                        margin: UiRect::bottom(Val::Px(16.0)),
+                        ..default()
+                    },
                 ));
 
                 sidebar.spawn((
                     OvermapInfoPanel,
                     Text::new("Hover a tile to see info"),
-                    TextFont { font_size: 14.0, ..default() },
+                    TextFont {
+                        font_size: 14.0,
+                        ..default()
+                    },
                     TextColor(Color::srgb(0.6, 0.6, 0.6)),
                     Node { ..default() },
                 ));
 
                 sidebar.spawn((
                     Text::new("Arrow keys: pan   </>: z-level   M: back"),
-                    TextFont { font_size: 11.0, ..default() },
+                    TextFont {
+                        font_size: 11.0,
+                        ..default()
+                    },
                     TextColor(Color::srgb(0.4, 0.4, 0.4)),
                     Node { ..default() },
                 ));
@@ -169,8 +184,15 @@ pub fn overmap_camera_input(
             GameAction::NavigateDown => camera.pan(0, 1),
             GameAction::NavigateLeft => camera.pan(-1, 0),
             GameAction::NavigateRight => camera.pan(1, 0),
-            GameAction::Custom(1) => { let z = camera.z.saturating_sub(1); camera.set_z(z); }
-            GameAction::Custom(2) => { let z = camera.z.saturating_add(1); camera.set_z(z); }
+            // CDDA convention: < (Custom1) = ascend (z+), > (Custom2) = descend (z-)
+            GameAction::Custom(1) => {
+                let z = camera.z.saturating_add(1);
+                camera.set_z(z);
+            }
+            GameAction::Custom(2) => {
+                let z = camera.z.saturating_sub(1);
+                camera.set_z(z);
+            }
             // Cancel and OpenMap are handled by the nav system to pop the context
             _ => {}
         }
@@ -216,11 +238,14 @@ pub fn update_overmap_info_panel(
                  Flags: {}\n\
                  Overmap: ({}, {})\n\
                  Seed: {}",
-                hx, hy, z,
+                hx,
+                hy,
+                z,
                 name,
                 handle.type_index(),
                 flag_str,
-                camera.center_overmap().x, camera.center_overmap().y,
+                camera.center_overmap().x,
+                camera.center_overmap().y,
                 config.noise_seed,
             );
         }
@@ -235,7 +260,10 @@ pub fn update_overmap_info_panel(
 pub fn update_overmap_tiles(
     terrain: TerrainQuery,
     camera: Res<OvermapCamera>,
-    mut grid_tiles: Query<(&OvermapTileCell, &mut BackgroundColor, &Children), Without<OvermapInfoPanel>>,
+    mut grid_tiles: Query<
+        (&OvermapTileCell, &mut BackgroundColor, &Children),
+        Without<OvermapInfoPanel>,
+    >,
     mut text_q: Query<&mut Text>,
 ) {
     let (tl_x, tl_y) = camera.top_left();
@@ -251,19 +279,36 @@ pub fn update_overmap_tiles(
 
         let flags = terrain.registry.flags_for(handle);
         let color = if is_center {
-            Color::srgb(1.0, 0.3, 0.3)
+            Color::srgb(1.0, 0.3, 0.3) // red — camera center
         } else if is_null {
-            Color::srgb(0.05, 0.05, 0.08)
-        } else if flags.contains(TerrainFlags::FOREST) {
-            Color::srgb(0.15, 0.45, 0.15)
-        } else if flags.contains(TerrainFlags::LAKE) || flags.contains(TerrainFlags::OCEAN) {
-            Color::srgb(0.1, 0.2, 0.6)
+            Color::srgb(0.05, 0.05, 0.08) // void
+        } else if flags.contains(TerrainFlags::HIGHWAY) {
+            Color::srgb(0.45, 0.40, 0.35) // tan-brown
+        } else if flags.contains(TerrainFlags::ROAD) {
+            Color::srgb(0.4, 0.35, 0.3) // dark tan
+        } else if flags.contains(TerrainFlags::BRIDGE) {
+            Color::srgb(0.5, 0.45, 0.35) // light bridge
+        } else if flags.contains(TerrainFlags::RAILROAD) {
+            Color::srgb(0.35, 0.32, 0.30) // rail brown
         } else if flags.contains(TerrainFlags::RIVER) {
-            Color::srgb(0.2, 0.3, 0.7)
-        } else if flags.contains(TerrainFlags::ROAD) || flags.contains(TerrainFlags::HIGHWAY) {
-            Color::srgb(0.4, 0.35, 0.3)
+            Color::srgb(0.2, 0.3, 0.7) // blue
+        } else if flags.contains(TerrainFlags::OCEAN) {
+            Color::srgb(0.1, 0.15, 0.55) // deep blue
+        } else if flags.contains(TerrainFlags::LAKE) {
+            Color::srgb(0.1, 0.2, 0.6) // medium blue
+        } else if flags.contains(TerrainFlags::FOREST) && flags.contains(TerrainFlags::LAKE) {
+            Color::srgb(0.2, 0.35, 0.25) // swamp green
+        } else if flags.contains(TerrainFlags::FOREST) {
+            Color::srgb(0.15, 0.45, 0.15) // forest green
+        } else if flags.contains(TerrainFlags::UNDERGROUND)
+            || flags.contains(TerrainFlags::SEWER)
+            || flags.contains(TerrainFlags::SUBWAY)
+        {
+            Color::srgb(0.28, 0.25, 0.30) // underground gray-purple
+        } else if flags.contains(TerrainFlags::IMPASSABLE) {
+            Color::srgb(0.35, 0.20, 0.20) // dark red
         } else {
-            Color::srgb(0.22, 0.22, 0.20)
+            Color::srgb(0.22, 0.22, 0.20) // default field
         };
 
         bg.0 = color;
@@ -281,40 +326,100 @@ pub fn update_overmap_tiles(
 // Helpers
 // ---------------------------------------------------------------------------
 
+/// Map a terrain handle to a Unicode glyph for the overmap tile grid.
+///
+/// Uses `TerrainFlags` for robust classification (no fragile string matching).
+/// Priority order matches CDDA `overmap_ui.cpp` tile rendering conventions.
 fn tile_glyph(handle: TerrainHandle, terrain: &TerrainQuery) -> String {
     if handle == TerrainHandle::NULL {
         return " ".to_string();
     }
-    let id = terrain.registry.string_id_for(handle).unwrap_or("");
-    match id {
-        s if s.starts_with("forest_thick") => "\u{2663}".to_string(),
-        s if s.starts_with("forest") => "\u{2663}".to_string(),
-        s if s.starts_with("lake") => "~".to_string(),
-        s if s.starts_with("ocean") => "~".to_string(),
-        s if s.starts_with("river") => "~".to_string(),
-        s if s.starts_with("road") => "#".to_string(),
-        s if s.starts_with("highway") => "#".to_string(),
-        s if s.starts_with("field") => ".".to_string(),
-        s if s.starts_with("house") => "\u{2302}".to_string(),
-        _ => id.chars().next().map(|c| c.to_string()).unwrap_or_else(|| "?".to_string()),
+    let flags = terrain.registry.flags_for(handle);
+
+    if flags.contains(TerrainFlags::HIGHWAY) {
+        "\u{2550}".to_string() // ═ double horizontal
+    } else if flags.contains(TerrainFlags::BRIDGE) {
+        "\u{2550}".to_string() // ═
+    } else if flags.contains(TerrainFlags::ROAD) {
+        "#".to_string()
+    } else if flags.contains(TerrainFlags::RAILROAD) {
+        "\u{2500}".to_string() // ─
+    } else if flags.contains(TerrainFlags::RIVER) {
+        "~".to_string()
+    } else if flags.contains(TerrainFlags::OCEAN) {
+        "~".to_string()
+    } else if flags.contains(TerrainFlags::LAKE) {
+        "~".to_string()
+    } else if flags.contains(TerrainFlags::SEWER) {
+        "\u{2591}".to_string() // ░
+    } else if flags.contains(TerrainFlags::SUBWAY) {
+        "\u{2592}".to_string() // ▒
+    } else if flags.contains(TerrainFlags::UNDERGROUND) {
+        "\u{2593}".to_string() // ▓
+    } else if flags.contains(TerrainFlags::IMPASSABLE) {
+        "\u{2588}".to_string() // █
+    } else {
+        // Fallback: first character of the terrain string ID.
+        terrain
+            .registry
+            .string_id_for(handle)
+            .and_then(|id| id.chars().next())
+            .map(|c| c.to_string())
+            .unwrap_or_else(|| "?".to_string())
     }
 }
 
+/// Build a human-readable flags string for the info panel.
+///
+/// Ordered by CDDA debug overmap display convention: infrastructure first,
+/// then water, then biomes, then underground, then meta flags.
 fn describe_flags(flags: TerrainFlags) -> String {
     let mut parts = Vec::new();
-    if flags.contains(TerrainFlags::FOREST) { parts.push("forest"); }
-    if flags.contains(TerrainFlags::LAKE) { parts.push("lake"); }
-    if flags.contains(TerrainFlags::OCEAN) { parts.push("ocean"); }
-    if flags.contains(TerrainFlags::RIVER) { parts.push("river"); }
-    if flags.contains(TerrainFlags::ROAD) { parts.push("road"); }
-    if flags.contains(TerrainFlags::HIGHWAY) { parts.push("highway"); }
-    if flags.contains(TerrainFlags::RAILROAD) { parts.push("railroad"); }
-    if flags.contains(TerrainFlags::IMPASSABLE) { parts.push("impassable"); }
-    if flags.contains(TerrainFlags::UNDERGROUND) { parts.push("underground"); }
-    if flags.contains(TerrainFlags::BRIDGE) { parts.push("bridge"); }
-    if flags.contains(TerrainFlags::SEWER) { parts.push("sewer"); }
-    if flags.contains(TerrainFlags::SUBWAY) { parts.push("subway"); }
-    if flags.contains(TerrainFlags::MANHOLE) { parts.push("manhole"); }
-    if flags.contains(TerrainFlags::LINE_DRAWING) { parts.push("line"); }
-    if parts.is_empty() { "none".to_string() } else { parts.join(", ") }
+    if flags.contains(TerrainFlags::HIGHWAY) {
+        parts.push("highway");
+    }
+    if flags.contains(TerrainFlags::ROAD) {
+        parts.push("road");
+    }
+    if flags.contains(TerrainFlags::BRIDGE) {
+        parts.push("bridge");
+    }
+    if flags.contains(TerrainFlags::RAILROAD) {
+        parts.push("railroad");
+    }
+    if flags.contains(TerrainFlags::RIVER) {
+        parts.push("river");
+    }
+    if flags.contains(TerrainFlags::LAKE) {
+        parts.push("lake");
+    }
+    if flags.contains(TerrainFlags::OCEAN) {
+        parts.push("ocean");
+    }
+    if flags.contains(TerrainFlags::FOREST) {
+        parts.push("forest");
+    }
+    if flags.contains(TerrainFlags::SEWER) {
+        parts.push("sewer");
+    }
+    if flags.contains(TerrainFlags::SUBWAY) {
+        parts.push("subway");
+    }
+    if flags.contains(TerrainFlags::UNDERGROUND) {
+        parts.push("underground");
+    }
+    if flags.contains(TerrainFlags::IMPASSABLE) {
+        parts.push("impassable");
+    }
+    if flags.contains(TerrainFlags::MANHOLE) {
+        parts.push("manhole");
+    }
+    if flags.contains(TerrainFlags::LINE_DRAWING) {
+        parts.push("line");
+    }
+    if parts.is_empty() {
+        "field".to_string()
+    } else {
+        parts.join(", ")
+    }
 }

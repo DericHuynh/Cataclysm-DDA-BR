@@ -1,7 +1,7 @@
-use cdda_core_types::core::raw_defs::*;
-use cdda_core_types::core::id::DefId;
 use crate::registry::DefRegistry;
 use crate::resolve;
+use cdda_core_types::core::id::DefId;
+use cdda_core_types::core::raw_defs::*;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -283,10 +283,12 @@ impl Loader {
         };
 
         // Extract the identifying field
-        // Most CDDA defs have an "id" field, but some (like recipes) use "result"
+        // Most CDDA defs have an "id" field, but some (like recipes) use "result".
+        // "id" may be a string or an array of strings; use the first element.
         let id = obj
             .get("id")
-            .and_then(|v| v.as_str().map(|s| s.to_string()));
+            .and_then(Self::first_id_from_value)
+            .map(|s| s.to_string());
 
         let raw = RawDef {
             id,
@@ -301,6 +303,19 @@ impl Loader {
     // Pass 2: Resolution
     // ========================================================================
 
+    /// Extract the primary ID from a JSON "id" field, which may be a string
+    /// or an array of strings (e.g. `["field", "isherwood_barry_rescue_field"]`).
+    /// Returns the first string element for arrays, or the string itself.
+    fn first_id_from_value(v: &Value) -> Option<&str> {
+        if let Some(s) = v.as_str() {
+            Some(s)
+        } else if let Some(arr) = v.as_array() {
+            arr.first().and_then(|s| s.as_str())
+        } else {
+            None
+        }
+    }
+
     /// Build a map from def ID string to raw JSON Value for copy-from resolution.
     ///
     /// For types where the identifying key is "id", this extracts that field.
@@ -313,8 +328,8 @@ impl Loader {
         };
 
         for raw in raws {
-            // Try "id" first
-            if let Some(id) = raw.value.get("id").and_then(|v| v.as_str()) {
+            // Try "id" first (supports both string and array IDs)
+            if let Some(id) = raw.value.get("id").and_then(Self::first_id_from_value) {
                 // If duplicate ID, later defs override earlier ones (last-write-wins)
                 map.insert(id.to_string(), raw.value.clone());
             } else if let Some(result) = raw.value.get("result").and_then(|v| v.as_str()) {
@@ -333,11 +348,12 @@ impl Loader {
 
     /// Extract the def ID from a resolved JSON value for insertion into the registry.
     ///
-    /// Tries "id" first, then "result" (for recipes), then "abstract".
+    /// Tries "id" first (supports string or array), then "result" (for recipes),
+    /// then "abstract".
     fn extract_def_id(resolved: &Value) -> Option<String> {
         resolved
             .get("id")
-            .and_then(|v| v.as_str())
+            .and_then(Self::first_id_from_value)
             .or_else(|| resolved.get("result").and_then(|v| v.as_str()))
             .or_else(|| resolved.get("abstract").and_then(|v| v.as_str()))
             .map(|s| s.to_string())
@@ -428,7 +444,11 @@ impl Loader {
 
             // If the def has "abstract": "some_name" instead of "id": "some_name",
             // promote the abstract field value to id for deserialization.
-            let has_id = resolved_value.get("id").and_then(|v| v.as_str()).is_some();
+            // Supports both string and array "id" fields.
+            let has_id = resolved_value
+                .get("id")
+                .and_then(Self::first_id_from_value)
+                .is_some();
             let normalized_value = if !has_id {
                 if let Some(abs_id) = resolved_value.get("abstract").and_then(|v| v.as_str()) {
                     let mut obj = resolved_value.as_object().cloned().unwrap_or_default();

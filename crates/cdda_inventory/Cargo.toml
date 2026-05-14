@@ -13,3 +13,6 @@ cdda_components = { path = "../cdda_components" }
 cdda_events = { path = "../cdda_events" }
 cdda_actor = { path = "../cdda_actor" }
 tracing.workspace = true
+
+[dev-dependencies]
+cdda_sim = { path = "../cdda_sim" }

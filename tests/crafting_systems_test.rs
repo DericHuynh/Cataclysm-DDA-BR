@@ -9,8 +9,8 @@ use cdda_components::def::{
 };
 use cdda_components::dev::DevPlayer;
 use cdda_components::item::{
-    ContainerContents, CurrentCharges, DefOrigin, InsideContainer, Inventory, Invlet, ItemTypeId,
-    StackCount, WieldedBy, WieldedItems,
+    ContainerContents, CurrentCharges, DefOrigin, InsideContainer, Invlet, ItemTypeId, StackCount,
+    WieldedBy, WieldedItems,
 };
 use cdda_components::sim::WorldPosition;
 use cdda_crafting::systems::{
@@ -26,7 +26,6 @@ fn setup(t: &mut TestBed) {
     t.register::<StackCount>();
     t.register::<CurrentCharges>();
     t.register::<Invlet>();
-    t.register::<Inventory>();
     t.register::<InsideContainer>();
     t.register::<ContainerContents>();
     t.register::<WorldPosition>();
@@ -297,25 +296,23 @@ fn check_can_craft_no_components_needed() {
 // ── collect_available_items with Inventory ─────────────────────────
 
 #[test]
-fn collect_items_from_inventory_fallback() {
+fn collect_items_from_container_contents_direct() {
     let mut t = TestBed::new();
     setup(&mut t);
 
-    // Create a player with Inventory but no ContainerContents
-    let player = t.spawn((DevPlayer, Inventory::default()));
+    // Create a player
+    let player = t.spawn((DevPlayer,));
 
-    // Add an item directly to Inventory (simulating command not yet flushed)
+    // Add an item with InsideContainer(player) — no Inventory needed
     let item = make_item(&mut t, "string_6", 6);
-    {
-        let world = t.world_mut();
-        let mut inv = world.get_mut::<Inventory>(player).unwrap();
-        inv.needs_invlet.insert(item);
-    }
+    t.world_mut()
+        .entity_mut(item)
+        .insert(InsideContainer(player));
 
     let items = collect_available_items(t.world_mut(), player);
     assert!(
         items.contains(&item),
-        "collect_available_items should find items from Inventory fallback"
+        "collect_available_items should find items via ContainerContents relationship"
     );
 }
 
@@ -325,7 +322,7 @@ fn collect_items_from_container_contents_primary() {
     setup(&mut t);
 
     // Create a player
-    let player = t.spawn((DevPlayer, Inventory::default()));
+    let player = t.spawn((DevPlayer,));
 
     // Create an item with InsideContainer(player) — relationship hooks
     // auto-add ContainerContents to the player.
@@ -355,16 +352,11 @@ fn craft_with_merged_inventory_stack() {
     let mut t = TestBed::new();
     setup_with_wield(&mut t);
 
-    let player = t.spawn((DevPlayer, Inventory::default()));
+    let player = t.spawn((DevPlayer,));
 
     // One merged entity of 6 short strings in the player's inventory.
     let stack = make_item(&mut t, "string_6", 6);
     t.world_mut().entity_mut(stack).insert(Invlet('a'));
-    {
-        let world = t.world_mut();
-        let mut inv = world.get_mut::<Inventory>(player).unwrap();
-        inv.invlets.insert('a', stack);
-    }
     t.world_mut()
         .entity_mut(stack)
         .insert(InsideContainer(player));
@@ -388,25 +380,20 @@ fn craft_with_merged_inventory_stack() {
     );
 }
 
-/// When consume_items despawns a wielded item (WieldedBy, not InsideContainer),
-/// the invlet entry must be cleaned up so the inventory has no stale references.
+/// When consume_items despawns a wielded item, the entity is removed
+/// and all relationships/components (WieldedBy, Invlet) are cleaned up automatically.
 #[test]
-fn consume_items_cleans_invlets_for_wielded_item() {
+fn consume_items_despawns_wielded_item() {
     let mut t = TestBed::new();
     setup_with_wield(&mut t);
 
-    let player = t.spawn((DevPlayer, Inventory::default()));
+    let player = t.spawn((DevPlayer,));
 
-    // Item is in hands (WieldedBy) — not InsideContainer.
+    // Item is in hands (WieldedBy).
     let item = make_item(&mut t, "string_6", 6);
     t.world_mut()
         .entity_mut(item)
         .insert((Invlet('a'), WieldedBy(player)));
-    {
-        let world = t.world_mut();
-        let mut inv = world.get_mut::<Inventory>(player).unwrap();
-        inv.invlets.insert('a', item);
-    }
 
     let available = vec![item];
     consume_items(t.world_mut(), &available, "string_6", 6);
@@ -416,13 +403,7 @@ fn consume_items_cleans_invlets_for_wielded_item() {
         !t.world().entities().contains(item),
         "consumed item should be despawned"
     );
-    // invlets must not contain the dead entity.
-    let inv = t.world().get::<Inventory>(player).unwrap();
-    assert!(
-        inv.invlets.is_empty(),
-        "invlets should be empty after consuming the only item, but got {:?}",
-        inv.invlets
-    );
+    // The entity no longer exists, so no stale references can remain.
 }
 
 /// After consuming a wielded item, the inventory has no stale entity that
@@ -432,32 +413,20 @@ fn no_stale_invlet_after_consuming_wielded_item() {
     let mut t = TestBed::new();
     setup_with_wield(&mut t);
 
-    let player = t.spawn((DevPlayer, Inventory::default()));
+    let player = t.spawn((DevPlayer,));
 
     let item = make_item(&mut t, "string_6", 6);
     t.world_mut()
         .entity_mut(item)
         .insert((Invlet('a'), WieldedBy(player)));
-    {
-        let world = t.world_mut();
-        let mut inv = world.get_mut::<Inventory>(player).unwrap();
-        inv.invlets.insert('a', item);
-    }
 
     // Consume all 6.
     let available = vec![item];
     consume_items(t.world_mut(), &available, "string_6", 6);
 
-    // A subsequent count_available (simulating the next craft menu open)
-    // must return 0, not panic, even though the slot was recycled.
-    // We use an empty available list — the Inventory fallback path
-    // is what would be used in build_craft_state.
-    let available_after: Vec<Entity> = t
-        .world()
-        .get::<Inventory>(player)
-        .map(|inv| inv.item_entities())
-        .unwrap_or_default();
-
+    // A subsequent collect_available_items must return an empty list
+    // since the item was despawned.
+    let available_after = collect_available_items(t.world_mut(), player);
     let count = count_available(t.world(), &available_after, "string_6");
     assert_eq!(count, 0, "no string_6 should remain after consuming all");
 }

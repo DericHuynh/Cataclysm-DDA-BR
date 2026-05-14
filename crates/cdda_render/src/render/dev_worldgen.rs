@@ -6,19 +6,19 @@
 
 use crate::context::ctx::Ctx as Screen;
 use crate::context::nav::{ctx_def, FocusedCommandIndex};
-use cdda_components::actor::HandCount;
-use cdda_components::def::ItemSymbol;
-use cdda_components::def::ItemVolume;
-use cdda_components::item::ItemTypeId;
-use cdda_components::item::WieldedItems;
-use cdda_components::item::{Inventory, FLOOR_CAP_ML};
-use cdda_components::sim::WorldPosition;
 use crate::render::theme::{self, UiTheme};
 use crate::render::tiles::TileRegistry;
 use bevy::prelude::*;
 use bevy::text::LineBreak;
 use bevy_state::state_scoped::DespawnOnExit;
+use cdda_components::actor::HandCount;
+use cdda_components::def::ItemSymbol;
+use cdda_components::def::ItemVolume;
 use cdda_components::dev::{DevCamera, DevGroundItemName, DevPlayer};
+use cdda_components::item::{
+    ContainerContents, Invlet, ItemTypeId, MountedPockets, WieldedItems, FLOOR_CAP_ML,
+};
+use cdda_components::sim::WorldPosition;
 use std::collections::HashMap;
 use tracing::info;
 
@@ -41,7 +41,11 @@ pub const VIEW_ROWS: usize = 24;
 // DevWorldgen menu screen
 // ---------------------------------------------------------------------------
 
-pub fn spawn_dev_menu(mut commands: Commands, focused: Res<FocusedCommandIndex>, theme: Res<UiTheme>) {
+pub fn spawn_dev_menu(
+    mut commands: Commands,
+    focused: Res<FocusedCommandIndex>,
+    theme: Res<UiTheme>,
+) {
     let def = ctx_def(Screen::DevWorldgen);
 
     commands
@@ -326,7 +330,7 @@ pub(crate) fn update_ascii_view(
         Option<&ItemVolume>,
         Option<&DevGroundItemName>,
     )>,
-    player_inv: Query<&Inventory, With<DevPlayer>>,
+    player_inv: Query<(&ContainerContents, Option<&MountedPockets>), With<DevPlayer>>,
     item_names: Query<&DevGroundItemName>,
     player_hands: Query<(&HandCount, Option<&WieldedItems>), With<DevPlayer>>,
 ) {
@@ -451,9 +455,7 @@ fn _render_viewport(cx: i32, cy: i32, _cz: i32) -> String {
 }
 
 fn status_text(cx: i32, cy: i32, cz: i32) -> String {
-    format!(
-        "Pos: ({cx}, {cy}, z={cz}) | Building: n/a | Bubbles: n/a | Placements: n/a"
-    )
+    format!("Pos: ({cx}, {cy}, z={cz}) | Building: n/a | Bubbles: n/a | Placements: n/a")
 }
 
 fn status_text_with_items(
@@ -468,7 +470,7 @@ fn status_text_with_items(
         Option<&ItemVolume>,
         Option<&DevGroundItemName>,
     )>,
-    player_inv: &Query<&Inventory, With<DevPlayer>>,
+    player_inv: &Query<(&ContainerContents, Option<&MountedPockets>), With<DevPlayer>>,
     item_names: &Query<&DevGroundItemName>,
     player_hands: &Query<(&HandCount, Option<&WieldedItems>), With<DevPlayer>>,
 ) -> String {
@@ -480,7 +482,12 @@ fn status_text_with_items(
         .filter(|(_, wp, _, _, _, _)| {
             wp.0.x.div_euclid(24) == cx && wp.0.y.div_euclid(24) == cy && wp.0.z.0 as i32 == cz
         })
-        .map(|(_, _, _, _, vol, name)| (name.map(|n| n.0.as_str()).unwrap_or("?"), vol.map(|v| v.0).unwrap_or(0)))
+        .map(|(_, _, _, _, vol, name)| {
+            (
+                name.map(|n| n.0.as_str()).unwrap_or("?"),
+                vol.map(|v| v.0).unwrap_or(0),
+            )
+        })
         .collect();
 
     let floor_vol_ml: u32 = at_tile.iter().map(|(_, v)| *v).sum();
@@ -503,19 +510,19 @@ fn status_text_with_items(
         )
     };
 
-    // Inventory contents (all items with invlets)
+    // Inventory contents — collect items with Invlet from ContainerContents
     let inv_contents: Vec<String> = player_inv
         .single()
-        .map(|inv| {
-            let mut pairs: Vec<(char, String)> = inv
-                .invlets
+        .map(|(cc, _mp)| {
+            let items: Vec<Entity> = cc.iter().collect();
+            let mut pairs: Vec<(char, String)> = items
                 .iter()
-                .map(|(&c, &entity)| {
+                .filter_map(|&entity| {
                     let name = item_names
                         .get(entity)
                         .map(|n| n.0.clone())
                         .unwrap_or_else(|_| "?".to_string());
-                    (c, format!("{c}:{name}"))
+                    Some(('?', format!("?:{name}")))
                 })
                 .collect();
             pairs.sort_by_key(|(c, _)| *c);

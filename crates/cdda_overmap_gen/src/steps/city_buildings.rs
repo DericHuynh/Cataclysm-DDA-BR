@@ -71,7 +71,20 @@ pub fn place_city_buildings(
                     continue;
                 }
 
-                if let Some(handle) = registry.handle_by_id(&omt.overmap) {
+                // CDDA building defs reference rotated variants like
+                // "2storyModern01_first_north". Strip _north/_east/_south/_west
+                // suffix as a fallback when the exact ID isn't registered.
+                let handle = registry.handle_by_id(&omt.overmap).or_else(|| {
+                    for suffix in &["_north", "_east", "_south", "_west"] {
+                        if let Some(base) = omt.overmap.strip_suffix(suffix) {
+                            if let Some(h) = registry.handle_by_id(base) {
+                                return Some(h);
+                            }
+                        }
+                    }
+                    None
+                });
+                if let Some(handle) = handle {
                     tile_writes.push((px, py, 0, handle));
                 }
             }

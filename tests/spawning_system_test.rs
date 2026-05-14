@@ -2,15 +2,14 @@
 
 use bevy_ecs::prelude::Entity;
 use cdda_components::actor::*;
-use cdda_components::item::*;
-use cdda_components::*;
-use cdda_core_types::core::*;
-use cdda_components::schedule::*;
-use cdda_core_types::core::coords::WorldPos;
-use cdda_components::sim::*;
 use cdda_components::def::*;
 use cdda_components::events::SpawnEvent;
-use cdda_core::worldgen::spawning::*;
+use cdda_components::item::*;
+use cdda_components::schedule::*;
+use cdda_components::sim::*;
+use cdda_components::*;
+use cdda_core_types::core::coords::WorldPos;
+use cdda_core_types::core::*;
 use cdda_sim::test_utils::TestBed;
 
 // ===========================================================================
@@ -188,8 +187,5 @@ fn spawning_phase_processes_events() {
     assert!(test.get::<Creature>(spawned).is_some());
     assert!(test.get::<IsAlive>(spawned).is_some());
     assert!(test.get::<WorldPosition>(spawned).is_some());
-    assert_eq!(
-        test.get::<WorldPosition>(spawned).unwrap().0,
-        pos
-    );
+    assert_eq!(test.get::<WorldPosition>(spawned).unwrap().0, pos);
 }

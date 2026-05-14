@@ -13,18 +13,18 @@ use super::FooterHint;
 use crate::context::ctx::Ctx;
 use crate::context::screen::CddaScreen;
 use crate::context::ContextActions;
-use cdda_components::def::{ItemName, ItemSymbol};
-use cdda_components::item::{
-    ContainerContents, InProgressCraft, Inventory, InventoryFocus, Invlet, ItemTypeId,
-    MountedPockets, StackCount, WieldedBy, WieldedItems, WornBy,
-};
 use crate::input::ActiveKeybindings;
 use crate::input::BindableAction;
 use crate::render::theme::{self, UiTheme};
 use crate::render::tiles::TileRegistry;
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
+use cdda_components::def::{ItemName, ItemSymbol};
 use cdda_components::dev::{DevGroundItemName, DevPlayer};
+use cdda_components::item::{
+    ContainerContents, InProgressCraft, InventoryFocus, Invlet, ItemTypeId, MountedPockets,
+    StackCount, WieldedBy, WieldedItems, WornBy,
+};
 
 // ---------------------------------------------------------------------------
 // Markers
@@ -88,7 +88,12 @@ pub fn spawn_inventory_screen(world: &mut World) {
     spawn_inventory_ui(&mut cmds, &hints, &font_handle, &theme);
 }
 
-fn spawn_inventory_ui(commands: &mut Commands, hints: &str, ui_font: &Option<Handle<Font>>, theme: &UiTheme) {
+fn spawn_inventory_ui(
+    commands: &mut Commands,
+    hints: &str,
+    ui_font: &Option<Handle<Font>>,
+    theme: &UiTheme,
+) {
     commands
         .spawn((
             DespawnOnExit(Ctx::Inventory),
@@ -423,7 +428,11 @@ fn build_item_panel_from_data(
         } else {
             theme::ITEM_BG
         };
-        let text_color = if is_crafting { theme::TEXT_CRAFT } else { theme::TEXT_BRIGHT };
+        let text_color = if is_crafting {
+            theme::TEXT_CRAFT
+        } else {
+            theme::TEXT_BRIGHT
+        };
 
         let has_sprite = !data.cdda_id.is_empty() && registry.has_tile(&data.cdda_id);
 
@@ -532,21 +541,19 @@ pub(crate) fn update_inventory_screen(world: &mut World) {
         }
     };
 
-    // Player data
-    let (inv_invlets, mounted_pockets_entities, wielded_items_entities, worn_by_entities) = {
+    // Player data — use relationships instead of Inventory hashmap
+    let (mounted_pockets_entities, wielded_items_entities, worn_by_entities) = {
         let mut q = world.query_filtered::<(
-            &Inventory,
             Option<&MountedPockets>,
             Option<&WieldedItems>,
             Option<&WornBy>,
         ), With<DevPlayer>>();
         match q.single(world) {
-            Ok((inv, mp, wi, wb)) => {
-                let inv_invlets: HashMap<char, Entity> = inv.invlets.clone();
+            Ok((mp, wi, wb)) => {
                 let mp_entities: Vec<Entity> = mp.map(|m| m.iter().collect()).unwrap_or_default();
                 let wi_entities: Vec<Entity> = wi.map(|w| w.iter().collect()).unwrap_or_default();
                 let wb_entities: Vec<Entity> = wb.map(|w| w.iter().collect()).unwrap_or_default();
-                (inv_invlets, mp_entities, wi_entities, wb_entities)
+                (mp_entities, wi_entities, wb_entities)
             }
             Err(_) => return,
         }
@@ -555,28 +562,39 @@ pub(crate) fn update_inventory_screen(world: &mut World) {
     // ── Build pocket item list ─────────────────────────────────────────
     let mut pocket_items: Vec<(char, Entity)> = Vec::new();
 
-    // For items in mounted pockets
+    // Collect items from mounted pockets via ContainerContents relationship
     {
         let mut pocket_contents_q = world.query::<&ContainerContents>();
         let mut invlet_q = world.query::<&Invlet>();
+        let mut wielded_by_check = world.query_filtered::<Entity, With<WieldedBy>>();
 
         for pocket in &mounted_pockets_entities {
             if let Ok(cc) = pocket_contents_q.get(world, *pocket) {
                 for item in cc.iter() {
+                    // Skip wielded items
+                    if wielded_by_check.get(world, item).is_ok() {
+                        continue;
+                    }
                     let c = invlet_q.get(world, item).map(|i| i.0).unwrap_or('?');
                     pocket_items.push((c, item));
                 }
             }
         }
-    }
 
-    // Fallback: items in inv.invlets not wielded and not already listed
-    {
-        let mut wielded_by_check = world.query_filtered::<Entity, With<WieldedBy>>();
-        for (&c, &e) in &inv_invlets {
-            let already_listed = pocket_items.iter().any(|(_, ent)| *ent == e);
-            if !already_listed && wielded_by_check.get(world, e).is_err() {
-                pocket_items.push((c, e));
+        // Also include items directly in the player's ContainerContents
+        let player_entity = {
+            let mut q = world.query_filtered::<Entity, With<DevPlayer>>();
+            q.single(world).ok()
+        };
+        if let Some(player) = player_entity {
+            if let Ok(cc) = pocket_contents_q.get(world, player) {
+                for item in cc.iter() {
+                    let already_listed = pocket_items.iter().any(|(_, ent)| *ent == item);
+                    if !already_listed && wielded_by_check.get(world, item).is_err() {
+                        let c = invlet_q.get(world, item).map(|i| i.0).unwrap_or('?');
+                        pocket_items.push((c, item));
+                    }
+                }
             }
         }
     }

@@ -2124,6 +2124,7 @@ dependencies = [
  "cdda_components",
  "cdda_core",
  "cdda_events",
+ "cdda_inventory",
  "cdda_overmap",
  "cdda_render",
  "clap",
@@ -2331,6 +2332,7 @@ dependencies = [
  "cdda_components",
  "cdda_core_types",
  "cdda_events",
+ "cdda_sim",
  "tracing",
 ]
 

@@ -1,9 +1,23 @@
 //! Generation pipeline — system sets, plugin, and state.
 //!
-//! Each phase is a `SystemSet` in the `Update` schedule. The sets are
-//! chained so they execute in order. Within each set, multiple systems
-//! may run in parallel if they access disjoint chunks (Bevy handles this
-//! automatically via component access tracking).
+//! ## Ordering — 1:1 with CDDA master `overmap::generate()`
+//!
+//! C++ generation order (overmap.cpp L932–1060):
+//! 1. populate_connections_out_from_neighbors (if neighbor_connections)
+//! 2. place_rivers → place_lakes → place_oceans → place_forests
+//!    → place_swamps → place_ravines → polish_river(#1)
+//! 3. place_highways
+//! 4. place_cities
+//! 5. place_highway_interchanges → build_cities
+//! 6. place_forest_trails → place_roads/place_railroads (order per flag)
+//! 7. place_specials
+//! 8. finalize_highways → place_forest_trailheads → polish_river(#2)
+//! 9. generate_sub → generate_over
+//! 10. place_mongroups → place_radios
+//!
+//! Within each set, systems are **chained** so they execute sequentially.
+//! This guarantees deterministic output matching C++. Each system uses
+//! internal `par_iter()` parallelism over chunks for performance.
 //!
 //! Mods inject additional generation steps by adding systems to the
 //! appropriate set without modifying this file.
@@ -12,6 +26,7 @@ use bevy_app::{App, Plugin, Update};
 use bevy_ecs::prelude::*;
 use bevy_state::prelude::*;
 
+use crate::region_settings::OvermapRegionSettings;
 use crate::steps;
 
 // ---------------------------------------------------------------------------
@@ -62,34 +77,59 @@ pub struct OvermapEntity {
 }
 
 // ---------------------------------------------------------------------------
-// System sets
+// System sets — exact match for C++ `overmap::generate()` order
 // ---------------------------------------------------------------------------
 
 /// Ordered phases of overmap generation.
+///
+/// Systems within a set are `.chain()`-ed to guarantee deterministic,
+/// C++-compatible sequential execution.  Each system still uses internal
+/// `par_iter()` parallelism for chunk-level throughput.
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum OvermapGenSet {
     /// Fill all chunks with default terrain.
     InitBase,
-    /// Noise-driven natural terrain.
+    /// Populate cross-overmap connection exits (mirrored from neighbor edges).
+    NeighborConnections,
+    /// Natural terrain, chained: rivers → lakes → oceans → forests
+    /// → swamps → ravines → polish_river(#1).
     NaturalTerrain,
-    /// River placement and shore building.
-    Rivers,
+    /// Highway path placement (before cities so cities avoid highways).
+    Highways,
     /// City center placement.
     Cities,
-    /// City street building (needs CityTiles from place_cities flush).
-    CityBuilding,
+    /// Post-city: highway interchanges (after city centers placed)
+    /// then city street grids (after interchanges).
+    PostCities,
     /// Roads, railroads, forest trails via pathfinding.
+    /// Two sub-chains with run_if for place_railroads_before_roads flag.
     Connections,
     /// Buildings within cities, overmap specials.
     Structures,
+    /// Pre-underground finalization: highways → trailheads → polish_river(#2).
+    PreUnderground,
     /// Underground layers (z < 0).
     Underground,
     /// Elevated layers (z > 0).
     Elevated,
-    /// Monster groups, NPCs.
+    /// Monster groups, radio towers (no chunk writes — safe to parallelize).
     Population,
     /// Finalize and fire completion.
     Finalize,
+}
+
+// ---------------------------------------------------------------------------
+// Run conditions
+// ---------------------------------------------------------------------------
+
+/// True when region settings want railroads before roads.
+fn railroads_before_roads(settings: Option<Res<OvermapRegionSettings>>) -> bool {
+    settings.map_or(false, |s| s.place_railroads_before_roads)
+}
+
+/// True when region settings want roads before railroads (the default).
+fn roads_before_railroads(settings: Option<Res<OvermapRegionSettings>>) -> bool {
+    settings.map_or(true, |s| !s.place_railroads_before_roads)
 }
 
 // ---------------------------------------------------------------------------
@@ -108,17 +148,19 @@ impl Plugin for OvermapGenPlugin {
         app.add_systems(Update, cdda_overmap::index::index_added_chunks);
         app.add_systems(Update, cdda_overmap::index::index_removed_chunks);
 
-        // Chain generation sets
+        // Chain generation sets — overall order matches C++ overmap::generate()
         app.configure_sets(
             Update,
             (
                 OvermapGenSet::InitBase,
+                OvermapGenSet::NeighborConnections,
                 OvermapGenSet::NaturalTerrain,
-                OvermapGenSet::Rivers,
+                OvermapGenSet::Highways,
                 OvermapGenSet::Cities,
-                OvermapGenSet::CityBuilding,
+                OvermapGenSet::PostCities,
                 OvermapGenSet::Connections,
                 OvermapGenSet::Structures,
+                OvermapGenSet::PreUnderground,
                 OvermapGenSet::Underground,
                 OvermapGenSet::Elevated,
                 OvermapGenSet::Population,
@@ -128,46 +170,81 @@ impl Plugin for OvermapGenPlugin {
                 .run_if(in_state(OvermapGenPhase::Generating)),
         );
 
-        // Register step systems
-        app.add_systems(Update, steps::init_base_terrain.in_set(OvermapGenSet::InitBase));
+        // ── InitBase ───────────────────────────────────────────────────
         app.add_systems(
             Update,
-            (
-                steps::place_forests,
-                steps::place_lakes,
-                steps::place_oceans,
-                steps::place_swamps,
-                steps::place_ravines,
-            )
-                .in_set(OvermapGenSet::NaturalTerrain),
+            steps::init_base_terrain.in_set(OvermapGenSet::InitBase),
         );
+
+        // ── NeighborConnections — mirrors exit points from adjacent
+        //    overmaps to ensure road/rail continuity across boundaries.
+        app.add_systems(
+            Update,
+            steps::populate_connections_out_from_neighbors
+                .in_set(OvermapGenSet::NeighborConnections),
+        );
+
+        // ── NaturalTerrain — chained C++ order: rivers → lakes → oceans
+        //    → forests → swamps → ravines → polish_river(#1)
         app.add_systems(
             Update,
             (
                 steps::place_rivers,
-                steps::build_river_shores,
+                steps::place_lakes,
+                steps::place_oceans,
+                steps::place_forests,
+                steps::place_swamps,
+                steps::place_ravines,
+                steps::polish_river, // #1 — shore tiles for highway predecessors
             )
-                .in_set(OvermapGenSet::Rivers),
+                .chain()
+                .in_set(OvermapGenSet::NaturalTerrain),
         );
+
+        // ── Highways — before cities so cities avoid highways ──────────
         app.add_systems(
             Update,
-            steps::place_cities.in_set(OvermapGenSet::Cities),
+            steps::place_highways.in_set(OvermapGenSet::Highways),
         );
+
+        // ── Cities — city center placement ─────────────────────────────
+        app.add_systems(Update, steps::place_cities.in_set(OvermapGenSet::Cities));
+
+        // ── PostCities — highway interchanges then city street grids ───
         app.add_systems(
             Update,
-            steps::build_cities.in_set(OvermapGenSet::CityBuilding),
+            (steps::place_highway_interchanges, steps::build_cities)
+                .chain()
+                .in_set(OvermapGenSet::PostCities),
         );
+
+        // ── Connections — two chains gated by place_railroads_before_roads ─
+        //    Default: forest_trails → roads → railroads
         app.add_systems(
             Update,
             (
+                steps::place_forest_trails,
                 steps::place_roads,
                 steps::place_railroads,
-                steps::place_forest_trails,
-                steps::place_highways,
-                steps::place_highway_interchanges,
             )
+                .chain()
+                .run_if(roads_before_railroads)
                 .in_set(OvermapGenSet::Connections),
         );
+        //    Alternative: forest_trails → railroads → roads
+        app.add_systems(
+            Update,
+            (
+                steps::place_forest_trails,
+                steps::place_railroads,
+                steps::place_roads,
+            )
+                .chain()
+                .run_if(railroads_before_roads)
+                .in_set(OvermapGenSet::Connections),
+        );
+
+        // ── Structures — city buildings → specials → mutable specials ──
         app.add_systems(
             Update,
             (
@@ -175,38 +252,48 @@ impl Plugin for OvermapGenPlugin {
                 steps::place_specials,
                 steps::place_mutable_specials,
             )
+                .chain()
                 .in_set(OvermapGenSet::Structures),
         );
-        app.add_systems(Update, steps::generate_sub.in_set(OvermapGenSet::Underground));
-        app.add_systems(Update, steps::generate_over.in_set(OvermapGenSet::Elevated));
-        app.add_systems(
-            Update,
-            (
-                steps::place_mongroups,
-                steps::place_radios,
-            )
-                .in_set(OvermapGenSet::Population),
-        );
-        app.add_systems(Update, steps::finalize_overmap.in_set(OvermapGenSet::Finalize));
-        app.add_systems(Update, steps::polish_river.in_set(OvermapGenSet::Finalize));
+
+        // ── PreUnderground — finalize highways, trailheads, polish(#2) ─
         app.add_systems(
             Update,
             (
                 steps::finalize_highways,
                 steps::place_forest_trailheads,
+                steps::polish_river, // #2 — fix shores after specials
             )
-                .in_set(OvermapGenSet::Finalize),
+                .chain()
+                .in_set(OvermapGenSet::PreUnderground),
         );
 
-        // Transition to Complete after Finalize — use explicit ordering
+        // ── Underground / Elevated ─────────────────────────────────────
         app.add_systems(
             Update,
-            (
-                |mut next: ResMut<NextState<OvermapGenPhase>>| {
-                    next.set(OvermapGenPhase::Complete);
-                }
-            )
-                .in_set(OvermapGenSet::Finalize),
+            steps::generate_sub.in_set(OvermapGenSet::Underground),
+        );
+        app.add_systems(Update, steps::generate_over.in_set(OvermapGenSet::Elevated));
+
+        // ── Population — mongroups + radios (no chunk writes, safe parallel) ─
+        app.add_systems(
+            Update,
+            (steps::place_mongroups, steps::place_radios).in_set(OvermapGenSet::Population),
+        );
+
+        // ── Finalize ───────────────────────────────────────────────────
+        app.add_systems(
+            Update,
+            steps::finalize_overmap.in_set(OvermapGenSet::Finalize),
+        );
+
+        // Transition to Complete after Finalize
+        app.add_systems(
+            Update,
+            (|mut next: ResMut<NextState<OvermapGenPhase>>| {
+                next.set(OvermapGenPhase::Complete);
+            })
+            .in_set(OvermapGenSet::Finalize),
         );
     }
 }

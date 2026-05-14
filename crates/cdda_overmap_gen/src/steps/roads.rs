@@ -11,6 +11,7 @@
 use crate::pipeline::OvermapGenConfig;
 use crate::region_settings::OvermapRegionSettings;
 use crate::steps::cities::City;
+use crate::steps::neighbor_connections::ConnectionExits;
 use bevy_ecs::prelude::*;
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, OMAP_DIM};
 use cdda_overmap::connections::{
@@ -48,9 +49,6 @@ fn get_terrain_at(
 }
 
 /// Score a candidate road node for A\* pathfinding.
-///
-/// Returns lower costs for existing roads and fields, higher costs for
-/// forests and swamps, and rejects water, ravines, and impassable terrain.
 fn score_road_node(
     node: DirectedNode,
     _prev: Option<DirectedNode>,
@@ -65,7 +63,6 @@ fn score_road_node(
     let handle = TerrainHandle(terrain_grid[x as usize][y as usize]);
     let flags = registry.flags_for(handle);
 
-    // Reject water, ravines, highways, impassable.
     if flags.contains(TerrainFlags::RIVER)
         || flags.contains(TerrainFlags::LAKE)
         || flags.contains(TerrainFlags::OCEAN)
@@ -75,19 +72,18 @@ fn score_road_node(
         return NodeScore::REJECTED;
     }
 
-    // Cost by terrain type (lower = preferred).
     let ct = handle.type_index();
     let base_cost = if flags.contains(TerrainFlags::ROAD) || flags.contains(TerrainFlags::BRIDGE) {
-        0 // existing road / bridge is free
+        0
     } else if ct == registry.field_index {
-        2 // open field
+        2
     } else if ct == registry.forest_index
         || ct == registry.forest_thick_index
         || ct == registry.forest_water_index
     {
-        5 // forest
+        5
     } else {
-        3 // default — light vegetation / other passable
+        3
     };
 
     NodeScore::new(base_cost, 0)
@@ -97,7 +93,6 @@ fn score_road_node(
 // Build helpers
 // ---------------------------------------------------------------------------
 
-/// Mark every tile in `path` as a road in `road_grid`.
 fn build_connection_from_path(path: &[DirectedNode], road_grid: &mut [[bool; 180]]) {
     for node in path {
         let (x, y) = node.pos;
@@ -107,7 +102,6 @@ fn build_connection_from_path(path: &[DirectedNode], road_grid: &mut [[bool; 180
     }
 }
 
-/// Return `true` if `handle` is water (river, lake, ocean).
 fn is_water(handle: TerrainHandle, registry: &TerrainRegistry) -> bool {
     let flags = registry.flags_for(handle);
     flags.contains(TerrainFlags::RIVER)
@@ -121,15 +115,9 @@ fn is_water(handle: TerrainHandle, registry: &TerrainRegistry) -> bool {
 
 /// Place inter-city roads using MST + A\* pathfinding.
 ///
-/// # Algorithm (port of `overmap::place_roads`)
-///
-/// 1. Generate 2–3 border exit points (avoiding rivers) for cross-overmap
-///    road continuity.
-/// 2. Collect `road_points`: exit points + city centers (or a fallback center).
-/// 3. Build a dense terrain grid from chunk data for the scoring function.
-/// 4. Call `connect_closest_points` to build an MST-based road network.
-///    The build function uses `greedy_path` for A\* routing around obstacles.
-/// 5. Write road tiles back to chunks with correct NS/EW/intersection rotation.
+/// Reads `ConnectionExits` (populated by `populate_connections_out_from_neighbors`)
+/// for cross-overmap road continuity. Falls back to random exit generation
+/// if the resource is absent.
 pub fn place_roads(
     chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
     par_commands: ParallelCommands,
@@ -137,8 +125,8 @@ pub fn place_roads(
     config: Res<OvermapGenConfig>,
     registry: Res<TerrainRegistry>,
     settings: Res<OvermapRegionSettings>,
+    exits: Option<Res<ConnectionExits>>,
 ) {
-    // CDDA: no roads if there are no cities
     let op_city_size = settings.city_size;
     if op_city_size <= 0 || !settings.place_roads {
         return;
@@ -152,63 +140,66 @@ pub fn place_roads(
         city_centers.push((city.omt_x, city.omt_y));
     }
     if city_centers.is_empty() {
-        return; // CDDA: no cities, no roads
+        return;
     }
 
     // ---- 2. Generate border exit points ----
     let mut roads_out: Vec<(i32, i32)> = Vec::new();
 
-    // Try N/E, S/W pairs for at least 3 exits, avoiding rivers.
-    // Shuffle direction pairs.
-    let mut dir_groups = [(0, 1), (2, 3)]; // (North, East), (South, West)
-    for i in (1..dir_groups.len()).rev() {
-        let j = rng.range_i32(0, i as i32) as usize;
-        dir_groups.swap(i, j);
+    // Prefer deterministic neighbor exits (cross-overmap continuity).
+    if let Some(ref exits_res) = exits {
+        for &p in &exits_res.all() {
+            let handle = get_terrain_at(&chunks, p.0, p.1, 0);
+            if !is_water(handle, &registry) {
+                roads_out.push(p);
+            }
+        }
     }
 
-    for &(d1, d2) in &dir_groups {
-        if roads_out.len() >= 3 {
-            break;
+    // Fallback: random exit generation on non-water border tiles.
+    if roads_out.is_empty() {
+        let mut dir_groups = [(0, 1), (2, 3)];
+        for i in (1..dir_groups.len()).rev() {
+            let j = rng.range_i32(0, i as i32) as usize;
+            dir_groups.swap(i, j);
         }
-        for &edge in &[d1, d2] {
+        for &(d1, d2) in &dir_groups {
             if roads_out.len() >= 3 {
                 break;
             }
-            // Try several positions along this edge.
-            for _ in 0..50 {
-                let coord = rng.range_i32(10, OMAP_DIM - 11);
-                let p = match edge {
-                    0 => (coord, 0),            // North
-                    1 => (OMAP_DIM - 1, coord), // East
-                    2 => (coord, OMAP_DIM - 1), // South
-                    3 => (0, coord),            // West
-                    _ => continue,
-                };
-                let handle = get_terrain_at(&chunks, p.0, p.1, 0);
-                if !is_water(handle, &registry) {
-                    roads_out.push(p);
+            for &edge in &[d1, d2] {
+                if roads_out.len() >= 3 {
                     break;
+                }
+                for _ in 0..50 {
+                    let coord = rng.range_i32(10, OMAP_DIM - 11);
+                    let p = match edge {
+                        0 => (coord, 0),
+                        1 => (OMAP_DIM - 1, coord),
+                        2 => (coord, OMAP_DIM - 1),
+                        3 => (0, coord),
+                        _ => continue,
+                    };
+                    let handle = get_terrain_at(&chunks, p.0, p.1, 0);
+                    if !is_water(handle, &registry) {
+                        roads_out.push(p);
+                        break;
+                    }
                 }
             }
         }
     }
 
-    // ---- 2. Assemble road_points ----
-    let city_centers: Vec<(i32, i32)> = cities.iter().map(|c| (c.omt_x, c.omt_y)).collect();
-
+    // ---- 3. Assemble road_points ----
     let mut road_points: Vec<(i32, i32)> = Vec::new();
     road_points.extend_from_slice(&roads_out);
-
-    if city_centers.is_empty() {
-        return; // no cities, no roads
-    }
     road_points.extend_from_slice(&city_centers);
 
     if road_points.len() < 2 {
         return;
     }
 
-    // ---- 3. Build dense terrain grid for the scoring function ----
+    // ---- 4. Build dense terrain grid ----
     let mut terrain_grid = [[0u32; 180]; 180];
     for (_entity, chunk_pos, chunk) in &chunks {
         if chunk_pos.z.0 != 0 {
@@ -227,10 +218,8 @@ pub fn place_roads(
         }
     }
 
-    // ---- 4. Build road network via MST + A\* ----
+    // ---- 5. Build road network via MST + A\* ----
     let mut road_grid = [[false; 180]; 180];
-
-    // Mark city center tiles as road.
     for &(x, y) in &road_points {
         if inbounds_omt((x, y)) {
             road_grid[x as usize][y as usize] = true;
@@ -246,8 +235,6 @@ pub fn place_roads(
             if z != 0 {
                 return;
             }
-
-            // Build the A\* scoring function for this connection.
             let scoring_fn = {
                 let terrain_grid = &terrain_grid;
                 let registry = &*registry;
@@ -255,14 +242,10 @@ pub fn place_roads(
                     score_road_node(node, prev, terrain_grid, registry)
                 }
             };
-
             let path = greedy_path(from, to, (OMAP_DIM, OMAP_DIM), &scoring_fn);
-
             if !path.is_empty() {
                 build_connection_from_path(&path, &mut road_grid);
             } else {
-                // Fallback: straight Bresenham line when A\* fails
-                // (e.g. all paths blocked).
                 let line = line_between(from, to);
                 for &(x, y) in &line {
                     if inbounds_omt((x, y)) {
@@ -273,7 +256,7 @@ pub fn place_roads(
         },
     );
 
-    // ---- 5. Write road grid back to chunks ----
+    // ---- 6. Write road grid back to chunks ----
     let road_ns = registry
         .handle_by_id("road_ns")
         .unwrap_or(TerrainHandle::NULL);
@@ -283,6 +266,12 @@ pub fn place_roads(
     let road_nesw = registry
         .handle_by_id("road_nesw")
         .unwrap_or(TerrainHandle::NULL);
+
+    // Bail out if road terrain handles are missing.
+    if road_ns == TerrainHandle::NULL || road_ew == TerrainHandle::NULL {
+        info!("Road terrain handles missing, skipping inter-city roads");
+        return;
+    }
 
     let field_index = registry.field_index;
     let forest_index = registry.forest_index;
@@ -313,12 +302,10 @@ pub fn place_roads(
                 let current = chunk.terrain[idx];
                 let ct = current.type_index();
 
-                // Never overwrite water.
                 if is_water(current, reg) {
                     continue;
                 }
 
-                // Only overwrite field, forest types, and existing roads.
                 let is_field = ct == field_index;
                 let is_forest =
                     ct == forest_index || ct == forest_thick_index || ct == forest_water_index;
@@ -328,7 +315,6 @@ pub fn place_roads(
                     continue;
                 }
 
-                // Determine road orientation from neighbours in the road grid.
                 let north = gy > 0 && road_grid[gx][gy - 1];
                 let south = gy + 1 < 180 && road_grid[gx][gy + 1];
                 let east = gx + 1 < 180 && road_grid[gx + 1][gy];
@@ -338,11 +324,11 @@ pub fn place_roads(
                 let has_ew = east || west;
 
                 let handle = if has_ns && has_ew {
-                    road_nesw // intersection / curve
+                    road_nesw
                 } else if has_ew {
-                    road_ew // horizontal road
+                    road_ew
                 } else {
-                    road_ns // vertical road (default for endpoints)
+                    road_ns
                 };
                 new_terrain[idx] = handle;
                 modified = true;

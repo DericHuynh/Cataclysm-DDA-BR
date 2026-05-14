@@ -21,10 +21,6 @@ pub struct City {
 }
 
 /// Tracks which OMT tiles belong to cities.
-///
-/// Populated by `place_cities` (center tiles) and expanded by
-/// `build_cities` (street + flood-fill tiles).  Used by road placement
-/// and special placement to avoid cities.
 #[derive(Resource, Debug, Clone, Default)]
 pub struct CityTiles {
     pub tiles: HashSet<(i32, i32)>,
@@ -101,11 +97,6 @@ pub fn calculate_urbanity(om_x: i32, om_y: i32, settings: &OvermapRegionSettings
 // ---------------------------------------------------------------------------
 
 /// Place city centers on the overmap.
-///
-/// Uses CDDA's coverage-ratio formula to determine how many cities to place,
-/// then selects random locations inside a central-radius candidate set.
-/// Supports megacity mode (5 equidistant large cities) when
-/// `OvermapRegionSettings::is_megacity` is set.
 pub fn place_cities(
     mut commands: Commands,
     chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
@@ -124,7 +115,11 @@ pub fn place_cities(
     let max_urbanity = settings.max_urban;
 
     // --- Adjust city size / spacing by forestosity & urbanity ---
-    let forestosity = calculate_forestosity(config.om_x, config.om_y, &settings);
+    // C++ calculate_forestosity stores BOTH forest_size_adjust (raw, for
+    // noise threshold) AND forestosity = forest_size_adjust * 25.0 (for
+    // city sizing).  Our fn returns the raw adjust — scale here to match.
+    let forest_adjust = calculate_forestosity(config.om_x, config.om_y, &settings);
+    let forestosity = forest_adjust * 25.0;
     let urbanity = calculate_urbanity(config.om_x, config.om_y, &settings);
 
     let city_size_adjust = (urbanity - (forestosity / 2.0) as i32).min(-op_city_size + 2);
@@ -145,14 +140,12 @@ pub fn place_cities(
     let city_map_coverage_ratio = 1.0 / (2.0_f64).powi(op_city_spacing);
     let omts_per_city = (op_city_size * 2 + 1) as f64 * (max_city_size * 2 + 1) as f64 * 3.0 / 4.0;
 
-    // Resolve road_nesw handle once.
     let road_nesw = registry
         .handle_by_id("road_nesw")
         .unwrap_or(TerrainHandle::new(0, 0));
 
     let field_index = registry.field_index;
 
-    // Collect tile writes for deferred application via par_commands.
     let mut tile_writes: Vec<(i32, i32, i8, TerrainHandle)> = Vec::new();
 
     // --- Megacity mode (CDDA L152-167) ---
@@ -180,7 +173,6 @@ pub fn place_cities(
             });
         }
 
-        // Apply tile writes.
         apply_tile_writes(&chunks, &par_commands, &tile_writes);
 
         commands.insert_resource(city_tiles);
@@ -201,7 +193,7 @@ pub fn place_cities(
         return;
     }
 
-    // ---- Phase 1: build candidate list (read-only access) ----
+    // ---- Phase 1: build candidate list ----
     let half = OMAP_DIM / 2;
     let margin = max_city_size;
     let mut city_candidates: Vec<(i32, i32)> = Vec::new();
@@ -212,7 +204,6 @@ pub fn place_cities(
             if dist > half - max_city_size {
                 continue;
             }
-            // Check that this tile is still default terrain.
             let mut is_field = false;
             for (_entity, chunk_pos, chunk) in &chunks {
                 if chunk_pos.z.0 != 0 {
@@ -233,39 +224,33 @@ pub fn place_cities(
         }
     }
 
-    // ---- Phase 2: place cities (write access) ----
+    // ---- Phase 2: place cities ----
     let mut cities_placed_count: usize = 0;
     let mut city_tiles = CityTiles::default();
 
     while cities_placed_count < num_cities && !city_candidates.is_empty() {
-        // Pick a random candidate.
         let idx = rng.range_i32(0, city_candidates.len() as i32 - 1) as usize;
         let selected = city_candidates.remove(idx);
 
         // City size distribution (CDDA L173-183):
-        //   33% tiny  (1/3 of base)
-        //   33% small (2/3 of base)
-        //   17% large (3/2 of base)
-        //   17% huge  (2x of base)
+        //   33% tiny  (1/3), 33% small (2/3), 17% large (3/2), 17% huge (2×)
         let base = rng.range_i32(op_city_size - 1, max_city_size);
         let roll = rng.next_u32() as f64 / ((u32::MAX as f64) + 1.0);
         let size = if roll < 0.33 {
-            (base as f64 * 1.0 / 3.0) as i32 // tiny
+            (base as f64 * 1.0 / 3.0) as i32
         } else if roll < 0.66 {
-            (base as f64 * 2.0 / 3.0) as i32 // small
+            (base as f64 * 2.0 / 3.0) as i32
         } else if roll < 0.83 {
-            (base as f64 * 3.0 / 2.0) as i32 // large
+            (base as f64 * 3.0 / 2.0) as i32
         } else {
-            base * 2 // huge
+            base * 2
         }
         .max(2)
         .min(55);
 
-        // Place road_nesw at center.
         tile_writes.push((selected.0, selected.1, 0, road_nesw));
         city_tiles.tiles.insert(selected);
 
-        // Spawn city entity.
         commands.spawn(City {
             size: size as u8,
             omt_x: selected.0,
@@ -274,13 +259,12 @@ pub fn place_cities(
 
         cities_placed_count += 1;
 
-        // Remove candidates within radius 2 of the selected point (CDDA L192-198).
+        // Remove candidates within radius 2 (CDDA L192-198).
         let r2 = 2;
         city_candidates
             .retain(|&(cx, cy)| (cx - selected.0).abs() > r2 || (cy - selected.1).abs() > r2);
     }
 
-    // Apply tile writes.
     apply_tile_writes(&chunks, &par_commands, &tile_writes);
 
     commands.insert_resource(city_tiles);
@@ -295,7 +279,6 @@ pub fn place_cities(
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Apply collected tile writes to chunks using par_iter + ParallelCommands.
 fn apply_tile_writes(
     chunks: &Query<(Entity, &ChunkPosition, &OvermapChunk)>,
     par_commands: &ParallelCommands,

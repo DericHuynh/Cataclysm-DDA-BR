@@ -50,6 +50,12 @@ pub fn build_cities(
         .unwrap_or(road_nesw);
     let field_index = registry.field_index;
 
+    // Bail out if road terrain handles are missing.
+    if road_ns == TerrainHandle::NULL || road_ew == TerrainHandle::NULL {
+        info!("Road terrain handles missing, skipping city street grid");
+        return;
+    }
+
     // Build a mutable OMAP_DIM × OMAP_DIM grid (true = road/city tile).
     let mut grid = [[false; OMAP_DIM as usize]; OMAP_DIM as usize];
 
@@ -105,7 +111,8 @@ pub fn build_cities(
             let has_ns = north || south;
             let has_ew = east || west;
             if has_ns && has_ew {
-                manhole_grid[x][y] = rng.one_in(2);
+                // CDDA: manholes are rare — roughly 1 in 40 intersections.
+                manhole_grid[x][y] = rng.one_in(40);
             }
         }
     }

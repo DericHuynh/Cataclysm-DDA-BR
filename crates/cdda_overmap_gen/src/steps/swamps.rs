@@ -5,25 +5,25 @@
 //! Swamps are placed on FOREST tiles adjacent to rivers (floodplain)
 //! or as isolated marshland in low-lying areas.
 
-use bevy_ecs::prelude::*;
-use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM};
-use cdda_overmap::registry::{TerrainHandle, TerrainFlags, TerrainRegistry};
-use cdda_overmap::rng::XorShiftRng;
-use cdda_noise;
 use crate::pipeline::OvermapGenConfig;
 use crate::region_settings::OvermapRegionSettings;
+use bevy_ecs::prelude::*;
+use cdda_noise;
+use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM};
+use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};
+use cdda_overmap::rng::XorShiftRng;
 use tracing::info;
 
 /// Place `forest_water` on FOREST tiles that meet swamp criteria.
 ///
-/// Algorithm:
-/// 1. Build a floodplain array: buffer each river tile by a random radius
-///    in `[river_floodplain_buffer_dist_min, river_floodplain_buffer_dist_max]`,
+/// Algorithm (matching C++ overmap.cpp L2111-2166):
+/// 1. Build a floodplain array: buffer each river tile by a random radius,
 ///    incrementing a counter for every tile within radius.
 /// 2. For each FOREST tile:
-///    - `should_flood`: floodplain[x][y] > 0 && !one_in(floodplain[x][y])
+///    - `should_flood`: floodplain counter > 0 && !one_in(counter)
 ///      && floodplain_noise > swamp_noise_threshold_adjacent
-///    - `should_isolated_swamp`: forest_noise > swamp_noise_threshold_isolated
+///    - `should_isolated_swamp`: floodplain_noise > swamp_noise_threshold_isolated
+///      (C++ uses the SAME floodplain noise layer for both checks)
 ///    - Place `forest_water` if either condition is true.
 pub fn place_swamps(
     chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
@@ -33,7 +33,10 @@ pub fn place_swamps(
     settings: Res<OvermapRegionSettings>,
 ) {
     if !settings.place_swamps {
-        info!("Swamps disabled for overmap ({}, {})", config.om_x, config.om_y);
+        info!(
+            "Swamps disabled for overmap ({}, {})",
+            config.om_x, config.om_y
+        );
         return;
     }
 
@@ -42,7 +45,7 @@ pub fn place_swamps(
     let seed = config.noise_seed;
     let mut rng = XorShiftRng::new(seed as u64 + 3);
 
-    // Phase 1: build a dense terrain array and floodplain buffer.
+    // Phase 1: build dense terrain array and floodplain buffer.
     let mut terrain = [[0u32; 180]; 180];
     let mut floodplain = [[0u32; 180]; 180];
 
@@ -63,7 +66,7 @@ pub fn place_swamps(
         }
     }
 
-    // Buffer each river tile to build the floodplain.
+    // Buffer each river tile to build the floodplain (matching C++ `closest_points_first`).
     let buffer_min = settings.river_floodplain_buffer_dist_min;
     let buffer_max = settings.river_floodplain_buffer_dist_max;
 
@@ -77,6 +80,7 @@ pub fn place_swamps(
             if dist <= 0 {
                 continue;
             }
+            // Chebyshev radius (same as C++ closest_points_first bounded by distance).
             for dx in -dist..=dist {
                 for dy in -dist..=dist {
                     let nx = x as i32 + dx;
@@ -108,12 +112,15 @@ pub fn place_swamps(
             }
 
             let fp_val = floodplain[x][y];
-            let should_flood = fp_val > 0
-                && !rng.one_in(fp_val as i32)
-                && cdda_noise::floodplain_noise_at(x as i32, y as i32, seed) > swamp_adj_threshold;
+            // C++: floodplain noise layer used for BOTH checks.
+            let fp_noise = cdda_noise::floodplain_noise_at(x as i32, y as i32, seed);
 
-            let should_isolated =
-                cdda_noise::forest_noise_at(x as i32, y as i32, seed) > swamp_iso_threshold;
+            let should_flood =
+                fp_val > 0 && !rng.one_in(fp_val as i32) && fp_noise > swamp_adj_threshold;
+
+            // DRIFT #7 fix: C++ uses floodplain noise (same `f` noise layer)
+            // for the isolated swamp check, NOT forest noise.
+            let should_isolated = fp_noise > swamp_iso_threshold;
 
             if should_flood || should_isolated {
                 swamp_tiles[x][y] = Some(forest_water);
@@ -123,7 +130,9 @@ pub fn place_swamps(
 
     // Phase 3: write back using par_iter.
     chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
-        if chunk_pos.z.0 != 0 { return; }
+        if chunk_pos.z.0 != 0 {
+            return;
+        }
         let (ox, oy) = chunk_pos.omt_origin();
         let mut modified = false;
         let mut new_terrain = chunk.terrain.clone();
@@ -132,7 +141,9 @@ pub fn place_swamps(
             for lx in 0u8..CHUNK_DIM as u8 {
                 let gx = (ox + lx as i32) as usize;
                 let gy = (oy + ly as i32) as usize;
-                if gx >= 180 || gy >= 180 { continue; }
+                if gx >= 180 || gy >= 180 {
+                    continue;
+                }
                 if let Some(new_handle) = swamp_tiles[gx][gy] {
                     let idx = ly as usize * CHUNK_DIM as usize + lx as usize;
                     if new_terrain[idx] != new_handle {
@@ -145,7 +156,9 @@ pub fn place_swamps(
 
         if modified {
             par_commands.command_scope(|mut cmd| {
-                cmd.entity(entity).insert(OvermapChunk { terrain: new_terrain });
+                cmd.entity(entity).insert(OvermapChunk {
+                    terrain: new_terrain,
+                });
             });
         }
     });

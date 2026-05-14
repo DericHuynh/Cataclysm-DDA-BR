@@ -10,6 +10,7 @@
 use crate::pipeline::OvermapGenConfig;
 use crate::region_settings::OvermapRegionSettings;
 use crate::steps::cities::City;
+use crate::steps::neighbor_connections::ConnectionExits;
 use bevy_ecs::prelude::*;
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, OMAP_DIM};
 use cdda_overmap::connections::{
@@ -22,11 +23,9 @@ use cdda_overmap::Rng;
 use tracing::info;
 
 // ---------------------------------------------------------------------------
-// Helpers (shared with roads.rs logic)
+// Helpers
 // ---------------------------------------------------------------------------
 
-/// Return all OMT points on the edge of the overmap for `dir`, excluding
-/// `margin` tiles from each corner.
 fn get_border(dir: OmDirection, margin: i32) -> Vec<(i32, i32)> {
     let mut pts = Vec::new();
     let max = OMAP_DIM;
@@ -56,7 +55,6 @@ fn get_border(dir: OmDirection, margin: i32) -> Vec<(i32, i32)> {
     pts
 }
 
-/// Return all integer points within a Chebyshev radius of `center`.
 fn points_in_radius(center: (i32, i32), radius: i32) -> Vec<(i32, i32)> {
     let mut pts = Vec::new();
     for dy in -radius..=radius {
@@ -70,7 +68,6 @@ fn points_in_radius(center: (i32, i32), radius: i32) -> Vec<(i32, i32)> {
     pts
 }
 
-/// Check whether a terrain handle represents a water-type tile (river, lake, ocean).
 fn is_water(handle: TerrainHandle, registry: &TerrainRegistry) -> bool {
     let flags = registry.flags_for(handle);
     flags.contains(TerrainFlags::RIVER)
@@ -79,10 +76,9 @@ fn is_water(handle: TerrainHandle, registry: &TerrainRegistry) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// build_rail_segment — places rail tiles along the line between two points
+// build_rail_segment
 // ---------------------------------------------------------------------------
 
-/// Place railroad tiles along the straight-line path from `from` to `to`.
 fn build_rail_segment(
     from: (i32, i32),
     to: (i32, i32),
@@ -109,13 +105,8 @@ fn build_rail_segment(
 
 /// Connect cities with railroads.
 ///
-/// # Algorithm (port of `overmap::place_railroads`)
-///
-/// 1. Generate 2–3 border exit points to ensure railroad continuity across overmaps.
-/// 2. For each city, pick a random point within `city.size * 4` radius.
-/// 3. Assemble railroad_points: exit points + city rail points.
-/// 4. Call `connect_closest_points` with `ConnectionType::Railroad`.
-/// 5. Write railroad tiles back to chunks, only overwriting FIELD and FOREST tiles.
+/// Reads `ConnectionExits` for cross-overmap continuity.
+/// Falls back to random exit generation if the resource is absent.
 pub fn place_railroads(
     chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
     par_commands: ParallelCommands,
@@ -123,9 +114,8 @@ pub fn place_railroads(
     config: Res<OvermapGenConfig>,
     registry: Res<TerrainRegistry>,
     settings: Res<OvermapRegionSettings>,
+    exits: Option<Res<ConnectionExits>>,
 ) {
-    // no railroads if there are no cities (matching C++ behavior)
-    // CDDA: no railroads if there are no cities
     let op_city_size = settings.city_size;
     if op_city_size <= 0 || !settings.place_railroads {
         return;
@@ -140,8 +130,15 @@ pub fn place_railroads(
     let mut rng = XorShiftRng::new(config.noise_seed as u64 + 7);
     let mut rails_out: Vec<(i32, i32)> = Vec::new();
 
-    // At least 3 exit points for cross-overmap continuity.
-    if rails_out.len() < 3 {
+    // Prefer deterministic neighbor exits (cross-overmap continuity).
+    if let Some(ref exits_res) = exits {
+        for &p in &exits_res.all() {
+            rails_out.push(p);
+        }
+    }
+
+    // Fallback: random exit generation (at least 3 exit points).
+    if rails_out.is_empty() {
         let mut dirs: Vec<OmDirection> = vec![
             OmDirection::North,
             OmDirection::East,
@@ -200,21 +197,15 @@ pub fn place_railroads(
         rail_points.push(p);
     }
 
-    // Place railroads at random points around the center of each city.
     for city in cities.iter() {
         let radius = (city.size as i32).saturating_mul(4).max(1);
         let candidates = points_in_radius((city.omt_x, city.omt_y), radius);
         if candidates.is_empty() {
-            // Fallback: use the city center itself.
             rail_points.push((city.omt_x, city.omt_y));
         } else {
             let idx = rng.random_usize(candidates.len());
             rail_points.push(candidates[idx]);
         }
-    }
-
-    for &p in &rail_points {
-        tracing::trace!("Rail point: ({}, {})", p.0, p.1);
     }
 
     if rail_points.len() < 2 {
@@ -225,11 +216,11 @@ pub fn place_railroads(
     let rail_handle = registry
         .handle_by_id("railroad")
         .unwrap_or(TerrainHandle::NULL);
-    let rail_ns_handle = registry.rotate(rail_handle, 0); // north-south
-    let rail_ew_handle = registry.rotate(rail_handle, 1); // east-west
+    let rail_ns_handle = registry.rotate(rail_handle, 0);
+    let rail_ew_handle = registry.rotate(rail_handle, 1);
     let rail_nesw_handle = registry
         .handle_by_id("railroad_nesw")
-        .unwrap_or_else(|| registry.rotate(rail_handle, 3)); // fallback: use rotation
+        .unwrap_or_else(|| registry.rotate(rail_handle, 3));
 
     let rail_ew_idx = rail_ew_handle.type_index();
     let rail_ns_idx = rail_ns_handle.type_index();
@@ -237,14 +228,12 @@ pub fn place_railroads(
 
     let mut grid = [[false; 180]; 180];
 
-    // Mark rail point tiles.
     for &(x, y) in &rail_points {
         if x >= 0 && x < 180 && y >= 0 && y < 180 {
             grid[x as usize][y as usize] = true;
         }
     }
 
-    // Build connections.
     connect_closest_points(
         &rail_points,
         0,
@@ -256,7 +245,6 @@ pub fn place_railroads(
     );
 
     // --- 4. Write grid back to chunks ---
-    // Only overwrite FIELD and FOREST-type tiles. Never overwrite water or roads.
     let field_index = registry.field_index;
     let forest_index = registry.forest_index;
     let forest_thick_index = registry.forest_thick_index;
@@ -264,7 +252,9 @@ pub fn place_railroads(
     let reg = &*registry;
 
     chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
-        if chunk_pos.z.0 != 0 { return; }
+        if chunk_pos.z.0 != 0 {
+            return;
+        }
         let (ox, oy) = chunk_pos.omt_origin();
         let mut modified = false;
         let mut new_terrain = chunk.terrain.clone();
@@ -281,23 +271,19 @@ pub fn place_railroads(
                 let current = chunk.terrain[idx];
                 let ct = current.type_index();
 
-                // Skip water tiles.
                 if is_water(current, reg) {
                     continue;
                 }
 
-                // Only overwrite field and forest-type tiles.
                 let is_field = ct == field_index;
-                let is_forest = ct == forest_index
-                    || ct == forest_thick_index
-                    || ct == forest_water_index;
+                let is_forest =
+                    ct == forest_index || ct == forest_thick_index || ct == forest_water_index;
                 let is_rail = ct == rail_ew_idx || ct == rail_ns_idx || ct == rail_nesw_idx;
 
                 if !is_field && !is_forest && !is_rail {
                     continue;
                 }
 
-                // Determine railroad tile orientation based on neighbors.
                 let north = gy > 0 && grid[gx][gy - 1];
                 let south = gy + 1 < 180 && grid[gx][gy + 1];
                 let east = gx + 1 < 180 && grid[gx + 1][gy];
@@ -319,7 +305,9 @@ pub fn place_railroads(
         }
         if modified {
             par_commands.command_scope(|mut cmd| {
-                cmd.entity(entity).insert(OvermapChunk { terrain: new_terrain });
+                cmd.entity(entity).insert(OvermapChunk {
+                    terrain: new_terrain,
+                });
             });
         }
     });
