@@ -17,6 +17,8 @@ use bevy_ecs::component::Component;
 use bevy_ecs::entity::Entity;
 use bevy_reflect::Reflect;
 
+use crate::BodyPartToken;
+
 // ===========================================================================
 // Creature identity
 // ===========================================================================
@@ -357,7 +359,7 @@ impl CreatureBodyParts {
 pub struct BodyPartDef(pub Entity);
 
 #[derive(Component, Debug, Clone, Reflect)]
-pub struct BodyPartSlot(pub String);
+pub struct BodyPartSlot(pub BodyPartToken);
 
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 pub struct BodyPartHp {

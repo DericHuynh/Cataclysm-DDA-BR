@@ -37,6 +37,11 @@ use bevy_app::{App, Plugin};
 use bevy_ecs::prelude::*;
 use fixedbitset::FixedBitSet;
 
+use crate::interner::{
+    AmmoTypeRegistry, BodyPartRegistry, ComestibleRegistry, ItemTypeRegistry, QualityRegistry,
+    SkillRegistry,
+};
+
 const MAX_CATEGORY_FLAGS: usize = 4096;
 
 // ---------------------------------------------------------------------------
@@ -273,5 +278,11 @@ impl Plugin for CddaDataPlugin {
         app.init_resource::<MeleeFlagRegistry>();
         app.init_resource::<ArmorFlagRegistry>();
         app.init_resource::<GunFlagRegistry>();
+        app.init_resource::<QualityRegistry>();
+        app.init_resource::<ItemTypeRegistry>();
+        app.init_resource::<SkillRegistry>();
+        app.init_resource::<AmmoTypeRegistry>();
+        app.init_resource::<BodyPartRegistry>();
+        app.init_resource::<ComestibleRegistry>();
     }
 }

@@ -17,6 +17,12 @@
 //! `DefinitionWorld`), never in the gameplay world. Runtime entities
 //! reference definition entities via a single component.
 
+use crate::item::QualityToken;
+use crate::AmmoTypeToken;
+use crate::BodyPartToken;
+use crate::ComestibleToken;
+use crate::ItemTypeToken;
+use crate::SkillToken;
 use bevy_ecs::prelude::*;
 
 // ===========================================================================
@@ -117,10 +123,10 @@ pub struct WeaponData {
     pub techniques: Vec<String>,
     /// Number of melee damage dice.
     pub dice: u32,
-    /// Sides on each melee damage die.
+    /// Number of sides on each die.
     pub dice_sides: u32,
     /// Weapon skill used (e.g. "bashing", "cutting", "stabbing").
-    pub skill: String,
+    pub skill: SkillToken,
 }
 
 // ── Ranged weapon (gun) ────────────────────────────────────────────────────
@@ -128,8 +134,8 @@ pub struct WeaponData {
 /// Present on guns and other ranged weapons.
 #[derive(Component, Debug, Clone)]
 pub struct GunData {
-    pub skill: String,
-    pub ammo_type: String,
+    pub skill: SkillToken,
+    pub ammo_type: AmmoTypeToken,
     pub dispersion: i32,
     pub recoil: i32,
     pub reload_time: i32,
@@ -145,7 +151,7 @@ pub struct GunData {
 /// Present on ammunition items.
 #[derive(Component, Debug, Clone)]
 pub struct AmmoData {
-    pub ammo_type: String,
+    pub ammo_type: AmmoTypeToken,
     pub damage: i32,
     pub pierce: i32,
     pub range: i32,
@@ -165,7 +171,7 @@ pub struct AmmoData {
 /// Present on magazine items.
 #[derive(Component, Debug, Clone)]
 pub struct MagazineData {
-    pub ammo_type: String,
+    pub ammo_type: AmmoTypeToken,
     pub capacity: i32,
     pub reload_time: i32,
     /// Item ID of the belt linkage (for belt-fed weapons).
@@ -180,7 +186,7 @@ pub struct MagazineData {
 #[derive(Debug, Clone)]
 pub struct ArmourPart {
     /// Body parts covered (joined from `covers` array, e.g. "head,torso").
-    pub body_part: String,
+    pub body_part: BodyPartToken,
     pub coverage: u8,
     pub encumbrance: i32,
     pub warmth: i32,
@@ -211,8 +217,8 @@ pub struct FoodData {
     pub fun: i32,
     pub healthy: i32,
     pub stim: i32,
-    pub spoils_in: u32,          // turns until rotten
-    pub comestible_type: String, // "FOOD", "DRINK", "MED"
+    pub spoils_in: u32,                   // turns until rotten
+    pub comestible_type: ComestibleToken, // "FOOD", "DRINK", "MED"
 }
 
 // ── Tool ───────────────────────────────────────────────────────────────────
@@ -235,7 +241,7 @@ pub struct ToolData {
 /// Present on books and learnable items.
 #[derive(Component, Debug, Clone)]
 pub struct BookData {
-    pub skill: String,
+    pub skill: SkillToken,
     pub required_level: u8,
     pub max_level: u8,
     pub fun: i32,
@@ -493,7 +499,7 @@ pub struct FurnitureMass(pub u32);
 /// String ID of a body part type (e.g. "head", "arm_l", "torso").
 /// Present on body part DEF entities.
 #[derive(Component, Debug, Clone)]
-pub struct BodyPartDefId(pub String);
+pub struct BodyPartDefId(pub BodyPartToken);
 
 /// Display name (e.g. "head", "left arm").
 #[derive(Component, Debug, Clone)]
@@ -517,7 +523,7 @@ pub struct BodyPartDrenchCapacity(pub u32);
 
 /// Side: "left", "right", or "both".
 #[derive(Component, Debug, Clone)]
-pub struct BodyPartSide(pub String);
+pub struct BodyPartSide(pub BodyPartToken);
 
 /// Legacy ID for save compatibility (e.g. "HEAD", "TORSO").
 #[derive(Component, Debug, Clone)]
@@ -570,7 +576,7 @@ pub struct IsRecipeDef;
 
 /// Primary skill used for this recipe (e.g. "fabrication", "cooking").
 #[derive(Component, Debug, Clone)]
-pub struct RecipeSkillUsed(pub String);
+pub struct RecipeSkillUsed(pub SkillToken);
 
 /// Skill difficulty rating (1-10).
 #[derive(Component, Debug, Clone, Copy)]
@@ -607,21 +613,19 @@ pub struct RecipeResultCharges(pub u32);
 /// One component requirement — a specific item and quantity.
 #[derive(Debug, Clone)]
 pub struct RecipeComponentEntry {
-    pub item_id: String,
+    /// Interned item type token (from `ItemTypeRegistry`).
+    pub item_id: ItemTypeToken,
     pub count: u32,
-    /// TODO: convert this `bool` to a `Recovered` / `Consumed` tag component
-    /// so it's archetype-queryable (consistent with the AGENTS.md tag pattern).
     pub recovered: bool,
 }
 
-/// Component requirements: outer Vec is alternatives, inner Vec is all required.
 #[derive(Component, Debug, Clone)]
 pub struct RecipeComponents(pub Vec<Vec<RecipeComponentEntry>>);
 
 /// A tool requirement.
-#[derive(Debug, Clone)]
+#[derive(Component, Debug, Clone)]
 pub struct RecipeToolEntry {
-    pub item_id: String,
+    pub item_id: ItemTypeToken,
     pub amount: u32,
 }
 
@@ -631,11 +635,11 @@ pub struct RecipeTools(pub Vec<Vec<RecipeToolEntry>>);
 
 /// A required tool quality.
 #[derive(Component, Debug, Clone)]
-pub struct RecipeQuality(pub String, pub u32);
+pub struct RecipeQuality(pub QualityToken, pub u32);
 
 /// Required qualities for the recipe.
 #[derive(Component, Debug, Clone)]
-pub struct RecipeQualities(pub Vec<(String, u32)>);
+pub struct RecipeQualities(pub Vec<(QualityToken, u32)>);
 
 /// Recipe category (e.g. "CC_WEAPON", "CC_FOOD").
 #[derive(Component, Debug, Clone)]
@@ -652,7 +656,7 @@ pub struct RecipeFlags(pub Vec<String>);
 /// Byproducts produced alongside the result.
 #[derive(Debug, Clone)]
 pub struct RecipeByproduct {
-    pub item_id: String,
+    pub item_id: ItemTypeToken,
     pub count: u32,
 }
 

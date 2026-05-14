@@ -12,13 +12,15 @@ use cdda_components::dev::DevPlayer;
 use cdda_components::input::BindableAction;
 use cdda_components::item::{
     ContainerContents, InProgressCraft, InsideContainer, ItemQualities, ItemTypeId, MountedPockets,
-    StackCount, WieldedItems,
+    QualityToken, StackCount, WieldedItems,
 };
 pub use cdda_components::recipe::RecipeIndex;
 use cdda_components::sim::WorldPosition;
+use cdda_components::ItemTypeToken;
 use cdda_context::ContextActions;
 use cdda_core_types::core::coords::{WorldPos, ZLevel};
 use cdda_data::def_world::DefinitionWorld;
+use cdda_data::interner::ItemTypeRegistry;
 use cdda_inventory::examine_resource::ExaminedItem;
 use cdda_overmap_gen::spawning::spawn_item_from_def;
 
@@ -138,13 +140,13 @@ pub fn collect_available_items(world: &mut World, player: Entity) -> Vec<Entity>
 // ---------------------------------------------------------------------------
 
 /// Sum `StackCount` across all items in `available` whose `ItemTypeId` matches.
-pub fn count_available(world: &World, available: &[Entity], type_id: &str) -> u32 {
+pub fn count_available(world: &World, available: &[Entity], type_id: ItemTypeToken) -> u32 {
     available
         .iter()
         .filter_map(|&e| {
             let matches = world
                 .get::<ItemTypeId>(e)
-                .map(|t| t.0.as_str() == type_id)
+                .map(|t| t.0 == type_id)
                 .unwrap_or(false);
             matches.then(|| world.get::<StackCount>(e).map(|s| s.get()).unwrap_or(1))
         })
@@ -152,13 +154,18 @@ pub fn count_available(world: &World, available: &[Entity], type_id: &str) -> u3
 }
 
 /// Return `true` if any item in `available` has `quality_id` at `>= min_level`.
-pub fn has_quality(world: &World, available: &[Entity], quality_id: &str, min_level: u32) -> bool {
+pub fn has_quality(
+    world: &World,
+    available: &[Entity],
+    quality_id: QualityToken,
+    min_level: u32,
+) -> bool {
     available.iter().any(|&e| {
         world
             .get::<ItemQualities>(e)
             .map(|iq| {
                 iq.0.iter()
-                    .any(|(qid, lvl)| qid.as_str() == quality_id && *lvl >= min_level as i32)
+                    .any(|(qid, lvl)| *qid == quality_id && *lvl >= min_level as i32)
             })
             .unwrap_or(false)
     })
@@ -175,8 +182,8 @@ pub fn check_can_craft(
     // Quality requirements
     if let Some(quals) = world.get::<RecipeQualities>(recipe_entity) {
         for (quality_id, min_level) in &quals.0 {
-            if !has_quality(world, available, quality_id, *min_level) {
-                return Err(format!("Need quality {} level {}", quality_id, min_level));
+            if !has_quality(world, available, *quality_id, *min_level) {
+                return Err(format!("Need quality {:?} level {}", quality_id, min_level));
             }
         }
     }
@@ -186,11 +193,11 @@ pub fn check_can_craft(
         for slot in &comps.0 {
             let satisfied = slot
                 .iter()
-                .any(|entry| count_available(world, available, &entry.item_id) >= entry.count);
+                .any(|entry| count_available(world, available, entry.item_id) >= entry.count);
             if !satisfied {
                 let needed: Vec<String> = slot
                     .iter()
-                    .map(|e| format!("{} x{}", e.item_id, e.count))
+                    .map(|e| format!("{:?} x{}", e.item_id, e.count))
                     .collect();
                 return Err(format!("Need: {}", needed.join(" OR ")));
             }
@@ -210,14 +217,19 @@ pub fn check_can_craft(
 /// Since inventory tracking is now relationship-based,
 /// despawning the item entity automatically removes it from `ContainerContents`
 /// and cleans up `Invlet` components.
-pub fn consume_items(world: &mut World, available: &[Entity], type_id: &str, mut needed: u32) {
+pub fn consume_items(
+    world: &mut World,
+    available: &[Entity],
+    type_id: ItemTypeToken,
+    mut needed: u32,
+) {
     for &e in available {
         if needed == 0 {
             break;
         }
         let matches = world
             .get::<ItemTypeId>(e)
-            .map(|t| t.0.as_str() == type_id)
+            .map(|t| t.0 == type_id)
             .unwrap_or(false);
         if !matches {
             continue;
@@ -268,7 +280,7 @@ pub fn start_craft(
     check_can_craft(world, recipe_entity, &available)?;
 
     // Build consume plan from available components.
-    let consume_plan: Vec<(String, u32)> = world
+    let consume_plan: Vec<(ItemTypeToken, u32)> = world
         .get::<RecipeComponents>(recipe_entity)
         .map(|comps| {
             comps
@@ -277,16 +289,16 @@ pub fn start_craft(
                 .filter_map(|slot| {
                     slot.iter()
                         .find(|entry| {
-                            count_available(world, &available, &entry.item_id) >= entry.count
+                            count_available(world, &available, entry.item_id) >= entry.count
                         })
-                        .map(|entry| (entry.item_id.clone(), entry.count))
+                        .map(|entry| (entry.item_id, entry.count))
                 })
                 .collect()
         })
         .unwrap_or_default();
 
     for (type_id, count) in &consume_plan {
-        consume_items(world, &available, type_id, *count);
+        consume_items(world, &available, *type_id, *count);
     }
 
     // Gather result metadata.
@@ -319,6 +331,9 @@ pub fn start_craft(
         .and_then(|mp| mp.iter().next())
         .unwrap_or(player);
 
+    let craft_type_token = world
+        .resource_mut::<ItemTypeRegistry>()
+        .intern(&format!("craft:in_progress:{result_id}"));
     let craft_entity = world
         .spawn((
             InProgressCraft {
@@ -329,7 +344,7 @@ pub fn start_craft(
                 ap_total,
                 ap_spent: 0,
             },
-            ItemTypeId(format!("craft:in_progress:{result_id}")),
+            ItemTypeId(craft_type_token),
             InsideContainer(body_pocket),
         ))
         .id();
@@ -378,10 +393,10 @@ pub fn complete_craft(world: &mut World, player: Entity, craft_entity: Entity) {
     if let Some(def_entity) = def_entity {
         let crafted = spawn_item_from_def(world, def_entity, player_pos, result_count);
 
+        // Intern the result_id for ItemTypeId
+        let type_token = world.resource_mut::<ItemTypeRegistry>().intern(&result_id);
         if world.get::<ItemTypeId>(crafted).is_none() {
-            world
-                .entity_mut(crafted)
-                .insert(ItemTypeId(result_id.clone()));
+            world.entity_mut(crafted).insert(ItemTypeId(type_token));
         }
 
         let body_pocket = world
@@ -518,7 +533,7 @@ pub fn do_craft(
     check_can_craft(world, recipe_entity, &available)?;
 
     // Plan: which alternative to consume for each component slot
-    let consume_plan: Vec<(String, u32)> = world
+    let consume_plan: Vec<(ItemTypeToken, u32)> = world
         .get::<RecipeComponents>(recipe_entity)
         .map(|comps| {
             comps
@@ -527,9 +542,9 @@ pub fn do_craft(
                 .filter_map(|slot| {
                     slot.iter()
                         .find(|entry| {
-                            count_available(world, &available, &entry.item_id) >= entry.count
+                            count_available(world, &available, entry.item_id) >= entry.count
                         })
-                        .map(|entry| (entry.item_id.clone(), entry.count))
+                        .map(|entry| (entry.item_id, entry.count))
                 })
                 .collect()
         })
@@ -537,7 +552,7 @@ pub fn do_craft(
 
     // Consume components (live reads from world — handles partial stacks correctly)
     for (type_id, count) in &consume_plan {
-        consume_items(world, &available, type_id, *count);
+        consume_items(world, &available, *type_id, *count);
     }
 
     // Resolve result item def
@@ -565,8 +580,9 @@ pub fn do_craft(
     let crafted = spawn_item_from_def(world, def_entity, player_pos, result_count);
 
     // Ensure ItemTypeId is present for crafting/quality checks on next open
+    let type_token = world.resource_mut::<ItemTypeRegistry>().intern(&result_id);
     if world.get::<ItemTypeId>(crafted).is_none() {
-        world.entity_mut(crafted).insert(ItemTypeId(result_id));
+        world.entity_mut(crafted).insert(ItemTypeId(type_token));
     }
 
     // Move into body pocket (remove ground position, add containment).
@@ -746,10 +762,10 @@ pub fn build_craft_state(world: &mut World) {
                         .iter()
                         .filter_map(|slot| slot.first())
                         .map(|entry| {
-                            if slot_has_alternatives(world, re, &entry.item_id) {
-                                format!("  {} x{}  (or alternatives)", entry.item_id, entry.count)
+                            if slot_has_alternatives(world, re, entry.item_id) {
+                                format!("  {:?} x{}  (or alternatives)", entry.item_id, entry.count)
                             } else {
-                                format!("  {} x{}", entry.item_id, entry.count)
+                                format!("  {:?} x{}", entry.item_id, entry.count)
                             }
                         })
                         .collect()
@@ -762,7 +778,7 @@ pub fn build_craft_state(world: &mut World) {
                     quals
                         .0
                         .iter()
-                        .map(|(id, lvl)| format!("  {} (level {})", id, lvl))
+                        .map(|(id, lvl)| format!("  {:?} (level {})", id, lvl))
                         .collect()
                 })
                 .unwrap_or_default();
@@ -810,7 +826,7 @@ pub fn build_craft_state(world: &mut World) {
     });
 }
 
-fn slot_has_alternatives(world: &World, re: Entity, first_id: &str) -> bool {
+fn slot_has_alternatives(world: &World, re: Entity, first_id: ItemTypeToken) -> bool {
     world
         .get::<RecipeComponents>(re)
         .map(|comps| {

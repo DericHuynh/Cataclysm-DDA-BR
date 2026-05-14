@@ -11,12 +11,13 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
+use crate::data::interner::QualityRegistry;
 use cdda_components::def::{
     AmmoData, ArmourData, BookData, ContainerData, FoodData, GunData, ItemCategory, ItemColor,
     ItemDescription, ItemMaterials, ItemPhase, ItemSymbol, ItemVolume, ItemWeight, MagazineData,
     Phase, ToolData, WeaponData,
 };
-use cdda_components::item::ItemQualities;
+use cdda_components::item::{ItemQualities, QualityToken};
 
 // ---------------------------------------------------------------------------
 // Bundled queries — a SystemParam to avoid Bevy's 16-query limit
@@ -62,6 +63,7 @@ pub fn spawn_item_detail(
     id: &str,
     def: Entity,
     q: &ItemDetailQueries,
+    quality_registry: &QualityRegistry,
 ) {
     // Name + ID header
     parent.spawn((
@@ -147,7 +149,8 @@ pub fn spawn_item_detail(
             divider(parent);
             section_header(parent, "Tool Qualities");
             for (quality_id, level) in &quals.0 {
-                stat_row(parent, quality_id, &level.to_string());
+                let name = quality_registry.resolve(*quality_id).unwrap_or("?");
+                stat_row(parent, name, &level.to_string());
             }
         }
     }
@@ -390,7 +393,7 @@ pub(crate) struct ItemDetailSnapshot {
     pub category: Option<String>,
     pub materials: Option<Vec<String>>,
     pub phase: Option<String>,
-    pub qualities: Option<Vec<(String, i32)>>,
+    pub qualities: Option<Vec<(QualityToken, i32)>>,
     pub weapon: Option<WeaponSnapshot>,
     pub gun: Option<GunSnapshot>,
     pub ammo: Option<AmmoSnapshot>,
@@ -700,7 +703,11 @@ impl ItemDetailSnapshot {
         }
     }
 
-    pub fn spawn_into(&self, parent: &mut ChildSpawnerCommands) {
+    pub fn spawn_into(
+        &self,
+        parent: &mut ChildSpawnerCommands,
+        quality_registry: &QualityRegistry,
+    ) {
         if let Some(ref desc) = self.description {
             if !desc.is_empty() {
                 parent.spawn((
@@ -755,7 +762,8 @@ impl ItemDetailSnapshot {
                 divider(parent);
                 section_header(parent, "Tool Qualities");
                 for (qid, level) in quals {
-                    stat_row(parent, qid, &level.to_string());
+                    let name = quality_registry.resolve(*qid).unwrap_or("?");
+                    stat_row(parent, name, &level.to_string());
                 }
             }
         }

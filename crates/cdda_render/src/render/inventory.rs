@@ -13,6 +13,7 @@ use super::FooterHint;
 use crate::context::ctx::Ctx;
 use crate::context::screen::CddaScreen;
 use crate::context::ContextActions;
+use crate::data::interner::ItemTypeRegistry;
 use crate::input::ActiveKeybindings;
 use crate::input::BindableAction;
 use crate::render::theme::{self, UiTheme};
@@ -370,9 +371,15 @@ fn collect_item_display_data(
                 .get(world, item_entity)
                 .map(|s| s.get())
                 .unwrap_or(1);
-            let cdda_id = item_type_ids
+            let cdda_id: String = item_type_ids
                 .get(world, item_entity)
-                .map(|t| t.0.clone())
+                .map(|t| {
+                    world
+                        .resource::<ItemTypeRegistry>()
+                        .resolve(t.0)
+                        .unwrap_or("?")
+                        .to_string()
+                })
                 .unwrap_or_default();
             let sym: char = item_symbols
                 .get(world, item_entity)

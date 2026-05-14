@@ -7,6 +7,8 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::Resource;
 use bevy_reflect::Reflect;
 
+use crate::ItemTypeToken;
+
 // ===========================================================================
 // Item identity
 // ===========================================================================
@@ -191,7 +193,9 @@ pub enum PocketType {
 
 #[derive(Component, Debug, Clone, Reflect)]
 pub struct PocketRestriction {
-    pub allowed_flags: Vec<String>,
+    /// Flag indices (from `ItemFlagRegistry`) that are allowed in this pocket.
+    /// Items must have at least one of these flags set to be placed in the pocket.
+    pub allowed_flags: Vec<u16>,
     #[reflect(ignore)]
     pub allowed_items: Vec<crate::ItemId>,
     pub ammo_type: Option<String>,
@@ -228,30 +232,36 @@ pub struct Container {
 // ===========================================================================
 /// Display / render hints
 
-/// CDDA type-string ID used for tileset sprite lookup.
+/// CDDA type-string ID used for tileset sprite lookup and crafting matching.
 ///
-/// Added to items that have a known CDDA type. Distinct from `DefStrId`
-/// which lives on definition entities only.
-///
-/// The render crate queries this to find the right `TileInfo` in
-/// `TileRegistry`. When no tile is registered for the ID renders fall
-/// back to `crate::core::components::def::ItemSymbol` if present.
-#[derive(Component, Debug, Clone, Reflect)]
-pub struct ItemTypeId(pub String);
+/// Added to items that have a known CDDA type. Interned via `ItemTypeRegistry`.
+/// Resolve back to a string via `ItemTypeRegistry::resolve()` for display.
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+pub struct ItemTypeId(pub ItemTypeToken);
 
 // ===========================================================================
 // Tool qualities on runtime items
 // ===========================================================================
 
+/// Interned identifier for a tool quality (e.g. "CUT", "BOIL", "HAMMER").
+///
+/// Stored in `ItemQualities` and `RecipeQualities` components instead of
+/// the raw string.  Resolve back to a string via `QualityRegistry::resolve()`
+/// (in the `cdda_data` crate).
+///
+/// Distinct from `QualityId` (a def-registry index from `cdda_core_types`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Reflect)]
+pub struct QualityToken(pub u16);
+
 /// Tool qualities present on a runtime item entity.
 ///
-/// Populated during def-to-runtime cloning: `build_def_world` inserts this
-/// on the def entity from the JSON `qualities` field, and `EntityCloner`
-/// carries it forward to runtime spawns.
+/// Populated during def-to-runtime cloning: `build_def_world` interns
+/// quality names via `QualityRegistry` and stores the resulting IDs.
 ///
-/// Each entry is `(quality_id, level)` — e.g. `("CUT", 2)`.
+/// Each entry is `(QualityToken, level)` — e.g. `(QualityToken(3), 2)` for "CUT" at level 2.
+/// Resolve back to a string via `QualityRegistry::resolve()` for display.
 #[derive(Component, Debug, Clone, Reflect)]
-pub struct ItemQualities(pub Vec<(String, i32)>);
+pub struct ItemQualities(pub Vec<(QualityToken, i32)>);
 
 impl ItemQualities {
     pub fn is_empty(&self) -> bool {

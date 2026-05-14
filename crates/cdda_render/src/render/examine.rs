@@ -7,14 +7,16 @@
 use crate::context::ctx::Ctx;
 use crate::context::screen::CddaScreen;
 use crate::context::ContextActions;
-use cdda_components::item::{ItemTypeId, StackCount};
 use crate::data::def_world::DefinitionWorld;
+use crate::data::interner::ItemTypeRegistry;
+use crate::data::interner::QualityRegistry;
 use crate::input::{ActiveKeybindings, BindableAction};
 use crate::inventory::examine_resource::ExaminedItem;
 use crate::render::item_detail::ItemDetailSnapshot;
 use crate::render::theme::{self, UiTheme};
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
+use cdda_components::item::{ItemTypeId, StackCount};
 
 // ---------------------------------------------------------------------------
 // CddaScreen trait impl
@@ -45,7 +47,13 @@ fn spawn_examine_from_world(world: &mut World) {
     let type_id: String = {
         let mut q = world.query::<&ItemTypeId>();
         q.get(world, item_entity)
-            .map(|t| t.0.to_string())
+            .map(|t| {
+                world
+                    .resource::<ItemTypeRegistry>()
+                    .resolve(t.0)
+                    .unwrap_or("?")
+                    .to_string()
+            })
             .unwrap_or_default()
     };
     let qty: u32 = {
@@ -66,6 +74,7 @@ fn spawn_examine_from_world(world: &mut World) {
     // Pre-extract item detail data from the def entity
     let detail_data: Option<ItemDetailSnapshot> =
         def_entity.map(|def| ItemDetailSnapshot::extract(world, def));
+    let quality_registry = world.resource::<QualityRegistry>().clone();
 
     // ── Phase 2: build UI ───────────────────────────────────────────────
     let mut cmds = world.commands();
@@ -139,7 +148,7 @@ fn spawn_examine_from_world(world: &mut World) {
                 ..default()
             },))
                 .with_children(|d| {
-                    snapshot.spawn_into(d);
+                    snapshot.spawn_into(d, &quality_registry);
                 });
         } else {
             root.spawn((

@@ -19,9 +19,10 @@ use bevy_state::state_scoped::DespawnOnExit;
 use super::FooterHint;
 use crate::context::ctx::Ctx;
 use crate::context::screen::CddaScreen;
-use crate::input::BindableAction;
 use crate::crafting::systems::{CategoryIndex, CraftEntry, CraftState};
 use crate::data::def_world::DefinitionWorld;
+use crate::data::interner::QualityRegistry;
+use crate::input::BindableAction;
 use crate::render::item_detail::{spawn_item_detail, ItemDetailQueries};
 use crate::render::theme::{self, UiTheme};
 
@@ -264,6 +265,7 @@ pub fn update_crafting_ui(
     def_world: Res<DefinitionWorld>,
     containers: CraftingContainers,
     defs: ItemDetailQueries,
+    quality_registry: Res<QualityRegistry>,
     theme: Res<UiTheme>,
 ) {
     let Ok(_root) = containers.root.single() else {
@@ -405,7 +407,11 @@ pub fn update_crafting_ui(
                 } else {
                     Color::NONE
                 };
-                let text_color = if is_active { theme.accent() } else { theme::TEXT_DIM };
+                let text_color = if is_active {
+                    theme.accent()
+                } else {
+                    theme::TEXT_DIM
+                };
                 tabs.spawn((
                     Node {
                         padding: UiRect::axes(Val::Px(10.0), Val::Px(4.0)),
@@ -417,7 +423,11 @@ pub fn update_crafting_ui(
                         ..default()
                     },
                     BackgroundColor(tab_bg),
-                    BorderColor::all(if is_active { theme.accent() } else { Color::NONE }),
+                    BorderColor::all(if is_active {
+                        theme.accent()
+                    } else {
+                        Color::NONE
+                    }),
                 ))
                 .with_child((
                     Text::new(cat_name.clone()),
@@ -445,7 +455,11 @@ pub fn update_crafting_ui(
                 } else {
                     Color::NONE
                 };
-                let text_color = if is_active { theme::TEXT_BRIGHT } else { theme::TEXT_DIM };
+                let text_color = if is_active {
+                    theme::TEXT_BRIGHT
+                } else {
+                    theme::TEXT_DIM
+                };
                 tabs.spawn((
                     Node {
                         padding: UiRect::axes(Val::Px(8.0), Val::Px(3.0)),
@@ -517,7 +531,11 @@ pub fn update_crafting_ui(
             {
                 let abs_index = scroll_start + i;
                 let is_focused = abs_index == focus_clamped;
-                let row_bg = if is_focused { theme.item_focus_bg() } else { theme::PANEL_BG };
+                let row_bg = if is_focused {
+                    theme.item_focus_bg()
+                } else {
+                    theme::PANEL_BG
+                };
 
                 let mark = if entry.craftable { "+" } else { "-" };
                 let row_label = if entry.result_count > 1 {
@@ -762,7 +780,7 @@ pub fn update_crafting_ui(
                 .as_ref()
                 .map(|e| e.result_name.as_str())
                 .unwrap_or("");
-            spawn_item_detail(d, name_str, result_id, def, &defs);
+            spawn_item_detail(d, name_str, result_id, def, &defs, &quality_registry);
         });
 
     // ── Filter bar (bottom) ────────────────────────────────────────────────
@@ -796,7 +814,11 @@ pub fn update_crafting_ui(
                     font_size: 13.0,
                     ..default()
                 },
-                TextColor(if filtering { theme::TEXT_BRIGHT } else { theme::TEXT_DIM }),
+                TextColor(if filtering {
+                    theme::TEXT_BRIGHT
+                } else {
+                    theme::TEXT_DIM
+                }),
             ));
         });
 }

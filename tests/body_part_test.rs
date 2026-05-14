@@ -11,6 +11,7 @@
 
 use bevy_ecs::entity::Entity;
 use cdda_core::sim::test_utils::TestBed;
+use cdda_data::interner::BodyPartRegistry;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -22,7 +23,13 @@ fn spawn_def(test: &mut TestBed, name: &str) -> Entity {
 }
 
 /// Spawn a body part entity linked to a creature.
-fn spawn_body_part(test: &mut TestBed, creature: Entity, def_entity: Entity, slot: &str) -> Entity {
+fn spawn_body_part(
+    test: &mut TestBed,
+    creature: Entity,
+    def_entity: Entity,
+    slot: &str,
+    reg: &mut BodyPartRegistry,
+) -> Entity {
     test.register::<cdda_components::actor::BodyPartOf>();
     test.register::<cdda_components::actor::BodyPartDef>();
     test.register::<cdda_components::actor::BodyPartSlot>();
@@ -30,7 +37,7 @@ fn spawn_body_part(test: &mut TestBed, creature: Entity, def_entity: Entity, slo
     test.spawn((
         cdda_components::actor::BodyPartOf(creature),
         cdda_components::actor::BodyPartDef(def_entity),
-        cdda_components::actor::BodyPartSlot(slot.to_string()),
+        cdda_components::actor::BodyPartSlot(reg.intern(slot)),
         cdda_components::actor::BodyPartHp {
             max: 100.0,
             current: 100.0,
@@ -45,23 +52,25 @@ fn spawn_body_part(test: &mut TestBed, creature: Entity, def_entity: Entity, slo
 
 #[test]
 fn body_part_has_slot_and_def() {
+    let mut reg = BodyPartRegistry::default();
     let mut test = TestBed::new();
     test.register::<cdda_components::actor::BodyPartSlot>();
     test.register::<cdda_components::actor::BodyPartDef>();
 
     let def_entity = test.spawn(());
     let e = test.spawn((
-        cdda_components::actor::BodyPartSlot("torso".to_string()),
+        cdda_components::actor::BodyPartSlot(reg.intern("torso")),
         cdda_components::actor::BodyPartDef(def_entity),
     ));
     let slot = test.get::<cdda_components::actor::BodyPartSlot>(e).unwrap();
     let def = test.get::<cdda_components::actor::BodyPartDef>(e).unwrap();
-    assert_eq!(slot.0, "torso");
+    assert_eq!(slot.0, reg.intern("torso"));
     assert_eq!(def.0, def_entity);
 }
 
 #[test]
 fn body_part_of_creature() {
+    let mut reg = BodyPartRegistry::default();
     let mut test = TestBed::new();
     test.register::<cdda_components::actor::BodyPartOf>();
 
@@ -70,7 +79,7 @@ fn body_part_of_creature() {
     let part = test.spawn((
         cdda_components::actor::BodyPartOf(creature),
         cdda_components::actor::BodyPartDef(def),
-        cdda_components::actor::BodyPartSlot("arm_l".to_string()),
+        cdda_components::actor::BodyPartSlot(reg.intern("arm_l")),
     ));
     let rel = test
         .get::<cdda_components::actor::BodyPartOf>(part)
@@ -84,11 +93,12 @@ fn body_part_of_creature() {
 
 #[test]
 fn creature_body_parts_auto_populated() {
+    let mut reg = BodyPartRegistry::default();
     let mut test = TestBed::new();
 
     let creature = test.spawn(());
     let def = spawn_def(&mut test, "torso_def");
-    let part = spawn_body_part(&mut test, creature, def, "torso");
+    let part = spawn_body_part(&mut test, creature, def, "torso", &mut reg);
 
     let parts = test.get::<cdda_components::actor::CreatureBodyParts>(creature);
     assert!(parts.is_some());
@@ -98,6 +108,7 @@ fn creature_body_parts_auto_populated() {
 
 #[test]
 fn multiple_body_parts() {
+    let mut reg = BodyPartRegistry::default();
     let mut test = TestBed::new();
 
     let creature = test.spawn(());
@@ -108,12 +119,12 @@ fn multiple_body_parts() {
     let def_leg_r = spawn_def(&mut test, "leg_r_def");
     let def_head = spawn_def(&mut test, "head_def");
 
-    let torso = spawn_body_part(&mut test, creature, def_torso, "torso");
-    let arm_l = spawn_body_part(&mut test, creature, def_arm_l, "arm_l");
-    let arm_r = spawn_body_part(&mut test, creature, def_arm_r, "arm_r");
-    let leg_l = spawn_body_part(&mut test, creature, def_leg_l, "leg_l");
-    let leg_r = spawn_body_part(&mut test, creature, def_leg_r, "leg_r");
-    let head = spawn_body_part(&mut test, creature, def_head, "head");
+    let torso = spawn_body_part(&mut test, creature, def_torso, "torso", &mut reg);
+    let arm_l = spawn_body_part(&mut test, creature, def_arm_l, "arm_l", &mut reg);
+    let arm_r = spawn_body_part(&mut test, creature, def_arm_r, "arm_r", &mut reg);
+    let leg_l = spawn_body_part(&mut test, creature, def_leg_l, "leg_l", &mut reg);
+    let leg_r = spawn_body_part(&mut test, creature, def_leg_r, "leg_r", &mut reg);
+    let head = spawn_body_part(&mut test, creature, def_head, "head", &mut reg);
 
     let parts = test
         .get::<cdda_components::actor::CreatureBodyParts>(creature)
@@ -206,11 +217,12 @@ fn body_part_hp_damage_multiplier() {
 
 #[test]
 fn body_part_broken_marker() {
+    let mut reg = BodyPartRegistry::default();
     let mut test = TestBed::new();
     test.register::<cdda_components::actor::BodyPartBroken>();
 
     let e = test.spawn((
-        cdda_components::actor::BodyPartSlot("arm_l".to_string()),
+        cdda_components::actor::BodyPartSlot(reg.intern("arm_l")),
         cdda_components::actor::BodyPartBroken,
     ));
     assert!(test
@@ -221,11 +233,12 @@ fn body_part_broken_marker() {
 
 #[test]
 fn body_part_severed_marker() {
+    let mut reg = BodyPartRegistry::default();
     let mut test = TestBed::new();
     test.register::<cdda_components::actor::BodyPartSevered>();
 
     let e = test.spawn((
-        cdda_components::actor::BodyPartSlot("arm_l".to_string()),
+        cdda_components::actor::BodyPartSlot(reg.intern("arm_l")),
         cdda_components::actor::BodyPartSevered,
     ));
     assert!(test
@@ -236,13 +249,14 @@ fn body_part_severed_marker() {
 
 #[test]
 fn body_part_broken_and_not_severed() {
+    let mut reg = BodyPartRegistry::default();
     let mut test = TestBed::new();
     test.register::<cdda_components::actor::BodyPartBroken>();
     test.register::<cdda_components::actor::BodyPartSevered>();
 
     // Broken without Severed
     let e = test.spawn((
-        cdda_components::actor::BodyPartSlot("arm_l".to_string()),
+        cdda_components::actor::BodyPartSlot(reg.intern("arm_l")),
         cdda_components::actor::BodyPartBroken,
         // BodyPartSevered deliberately NOT inserted
     ));
@@ -257,11 +271,12 @@ fn body_part_broken_and_not_severed() {
 
 #[test]
 fn body_part_removed() {
+    let mut reg = BodyPartRegistry::default();
     let mut test = TestBed::new();
 
     let creature = test.spawn(());
     let def = spawn_def(&mut test, "torso_def");
-    let part = spawn_body_part(&mut test, creature, def, "torso");
+    let part = spawn_body_part(&mut test, creature, def, "torso", &mut reg);
 
     // Verify it's present
     {

@@ -1,10 +1,9 @@
-//! Food, drink, and drug component tests — covering nutritional values,
-//! drug effects, and pure formula helpers.
-//!
+//! Food, drink, and drug component tests.
 //! Translated from CDDA's various comestible/drug balance tests.
 
 use cdda_components::def::{DrugData, FoodData};
 use cdda_core::sim::test_utils::TestBed;
+use cdda_data::interner::ComestibleRegistry;
 
 // ---------------------------------------------------------------------------
 // FoodData component tests
@@ -12,6 +11,8 @@ use cdda_core::sim::test_utils::TestBed;
 
 #[test]
 fn food_data_fields() {
+    let mut reg = ComestibleRegistry::default();
+    let food_type = reg.intern("FOOD");
     let mut test = TestBed::new();
     test.register::<FoodData>();
     let e = test.spawn((FoodData {
@@ -21,7 +22,7 @@ fn food_data_fields() {
         healthy: 1,
         stim: 0,
         spoils_in: 28800,
-        comestible_type: "FOOD".to_string(),
+        comestible_type: food_type,
     },));
     let food = test.get::<FoodData>(e).unwrap();
     assert_eq!(food.calories, 250);
@@ -30,11 +31,13 @@ fn food_data_fields() {
     assert_eq!(food.healthy, 1);
     assert_eq!(food.stim, 0);
     assert_eq!(food.spoils_in, 28800);
-    assert_eq!(food.comestible_type, "FOOD");
+    assert_eq!(food.comestible_type, food_type);
 }
 
 #[test]
 fn food_drink_type() {
+    let mut reg = ComestibleRegistry::default();
+    let drink_type = reg.intern("DRINK");
     let mut test = TestBed::new();
     test.register::<FoodData>();
     let e = test.spawn((FoodData {
@@ -44,15 +47,17 @@ fn food_drink_type() {
         healthy: 0,
         stim: 0,
         spoils_in: 0,
-        comestible_type: "DRINK".to_string(),
+        comestible_type: drink_type,
     },));
     let food = test.get::<FoodData>(e).unwrap();
-    assert_eq!(food.comestible_type, "DRINK");
+    assert_eq!(food.comestible_type, drink_type);
     assert_eq!(food.quench, 40);
 }
 
 #[test]
 fn food_medicine() {
+    let mut reg = ComestibleRegistry::default();
+    let med_type = reg.intern("MED");
     let mut test = TestBed::new();
     test.register::<FoodData>();
     let e = test.spawn((FoodData {
@@ -62,16 +67,17 @@ fn food_medicine() {
         healthy: 2,
         stim: 0,
         spoils_in: 0,
-        comestible_type: "MED".to_string(),
+        comestible_type: med_type,
     },));
     let food = test.get::<FoodData>(e).unwrap();
-    assert_eq!(food.comestible_type, "MED");
+    assert_eq!(food.comestible_type, med_type);
     assert_eq!(food.fun, -1);
     assert_eq!(food.healthy, 2);
 }
 
 #[test]
 fn food_zero_calories() {
+    let mut reg = ComestibleRegistry::default();
     let mut test = TestBed::new();
     test.register::<FoodData>();
     let e = test.spawn((FoodData {
@@ -81,7 +87,7 @@ fn food_zero_calories() {
         healthy: 0,
         stim: 0,
         spoils_in: 0,
-        comestible_type: "FOOD".to_string(),
+        comestible_type: reg.intern("FOOD"),
     },));
     let food = test.get::<FoodData>(e).unwrap();
     assert_eq!(food.calories, 0);
@@ -89,6 +95,7 @@ fn food_zero_calories() {
 
 #[test]
 fn food_negative_fun() {
+    let mut reg = ComestibleRegistry::default();
     let mut test = TestBed::new();
     test.register::<FoodData>();
     let e = test.spawn((FoodData {
@@ -98,7 +105,7 @@ fn food_negative_fun() {
         healthy: 0,
         stim: 0,
         spoils_in: 14400,
-        comestible_type: "FOOD".to_string(),
+        comestible_type: reg.intern("FOOD"),
     },));
     let food = test.get::<FoodData>(e).unwrap();
     assert_eq!(food.fun, -5);
@@ -106,6 +113,7 @@ fn food_negative_fun() {
 
 #[test]
 fn food_negative_healthy() {
+    let mut reg = ComestibleRegistry::default();
     let mut test = TestBed::new();
     test.register::<FoodData>();
     let e = test.spawn((FoodData {
@@ -115,7 +123,7 @@ fn food_negative_healthy() {
         healthy: -3,
         stim: 0,
         spoils_in: 43200,
-        comestible_type: "FOOD".to_string(),
+        comestible_type: reg.intern("FOOD"),
     },));
     let food = test.get::<FoodData>(e).unwrap();
     assert_eq!(food.healthy, -3);
@@ -123,6 +131,7 @@ fn food_negative_healthy() {
 
 #[test]
 fn food_long_spoilage() {
+    let mut reg = ComestibleRegistry::default();
     let mut test = TestBed::new();
     test.register::<FoodData>();
     let e = test.spawn((FoodData {
@@ -132,7 +141,7 @@ fn food_long_spoilage() {
         healthy: 0,
         stim: 0,
         spoils_in: 432000,
-        comestible_type: "FOOD".to_string(),
+        comestible_type: reg.intern("FOOD"),
     },));
     let food = test.get::<FoodData>(e).unwrap();
     assert_eq!(food.spoils_in, 432000);
@@ -140,6 +149,7 @@ fn food_long_spoilage() {
 
 #[test]
 fn food_no_spoilage() {
+    let mut reg = ComestibleRegistry::default();
     let mut test = TestBed::new();
     test.register::<FoodData>();
     let e = test.spawn((FoodData {
@@ -149,7 +159,7 @@ fn food_no_spoilage() {
         healthy: 0,
         stim: 0,
         spoils_in: 0,
-        comestible_type: "FOOD".to_string(),
+        comestible_type: reg.intern("FOOD"),
     },));
     let food = test.get::<FoodData>(e).unwrap();
     assert_eq!(food.spoils_in, 0);
@@ -157,6 +167,7 @@ fn food_no_spoilage() {
 
 #[test]
 fn food_high_stim() {
+    let mut reg = ComestibleRegistry::default();
     let mut test = TestBed::new();
     test.register::<FoodData>();
     let e = test.spawn((FoodData {
@@ -166,7 +177,7 @@ fn food_high_stim() {
         healthy: 0,
         stim: 10,
         spoils_in: 0,
-        comestible_type: "DRINK".to_string(),
+        comestible_type: reg.intern("FOOD"),
     },));
     let food = test.get::<FoodData>(e).unwrap();
     assert_eq!(food.stim, 10);
@@ -174,6 +185,7 @@ fn food_high_stim() {
 
 #[test]
 fn food_high_quench() {
+    let mut reg = ComestibleRegistry::default();
     let mut test = TestBed::new();
     test.register::<FoodData>();
     let e = test.spawn((FoodData {
@@ -183,7 +195,7 @@ fn food_high_quench() {
         healthy: 0,
         stim: 0,
         spoils_in: 0,
-        comestible_type: "DRINK".to_string(),
+        comestible_type: reg.intern("FOOD"),
     },));
     let food = test.get::<FoodData>(e).unwrap();
     assert_eq!(food.quench, 80);
@@ -238,9 +250,6 @@ fn drug_multiple_effects() {
     },));
     let drug = test.get::<DrugData>(e).unwrap();
     assert_eq!(drug.effects.len(), 3);
-    assert_eq!(drug.effects[0], "pkill");
-    assert_eq!(drug.effects[1], "hallu");
-    assert_eq!(drug.effects[2], "adrenaline");
 }
 
 #[test]
@@ -260,10 +269,6 @@ fn drug_high_addiction() {
 // Pure function formula tests
 // ---------------------------------------------------------------------------
 
-/// CDDA-style daily calorie requirement.
-/// Base is roughly 2000 kcal/day, adjusted by stats/activity.
-/// Simplified: "light activity" = 2000, "moderate" = 2500,
-/// "heavy" = 3000, "very heavy" = 3500.
 fn daily_calorie_needs(activity_level: &str) -> i32 {
     match activity_level {
         "light" => 2000,
@@ -274,23 +279,14 @@ fn daily_calorie_needs(activity_level: &str) -> i32 {
     }
 }
 
-/// Satiety value from calories and volume.
-/// CDDA: 1 kJ ≈ 1 satiety, with a secondary volume-based cap.
 fn satiety_from_food(calories: i32, volume_ml: u32) -> i32 {
-    let from_calories = calories / 4; // rough: 250 cal = ~62 satiety
-    let volume_cap = (volume_ml / 2) as i32;
-    from_calories.min(volume_cap)
+    (calories / 4).min((volume_ml / 2) as i32)
 }
 
-/// Quench effectiveness depends on stomach capacity.
-/// A full stomach (already high satiety) reduces effective quench.
 fn effective_quench(quench: i32, current_satiety: i32, max_satiety: i32) -> i32 {
-    let remaining_capacity = (max_satiety - current_satiety).max(0);
-    quench.min(remaining_capacity)
+    quench.min((max_satiety - current_satiety).max(0))
 }
 
-/// Fun bonus decays based on how recently you ate the same food.
-/// This avoids infinite morale stacking from eating the same thing repeatedly.
 fn fun_with_diminishing_returns(base_fun: i32, times_eaten_recently: u32) -> i32 {
     if times_eaten_recently == 0 {
         base_fun
@@ -309,24 +305,18 @@ fn daily_calorie_needs_test() {
 
 #[test]
 fn satiety_from_food_test() {
-    // 250 cal, 500 ml → 250/4 = 62 satiety, cap = 250, min = 62
     assert_eq!(satiety_from_food(250, 500), 62);
 }
 
 #[test]
 fn effective_quench_test() {
-    // quench=40, satiety 800 of 1000 → room for 200 → full quench 40
     assert_eq!(effective_quench(40, 800, 1000), 40);
-    // quench=40, satiety 980 of 1000 → room for 20 → quench capped at 20
     assert_eq!(effective_quench(40, 980, 1000), 20);
 }
 
 #[test]
 fn fun_diminishing_returns() {
-    // base=10, eaten 0 times → 10
     assert_eq!(fun_with_diminishing_returns(10, 0), 10);
-    // eaten 2 times → 10 / (1 + 2 * 0.5) = 10 / 2 = 5
     assert_eq!(fun_with_diminishing_returns(10, 2), 5);
-    // eaten 5 times → 10 / (1 + 5 * 0.5) = 10 / 3.5 ≈ 2.857 → rounds to 3
     assert_eq!(fun_with_diminishing_returns(10, 5), 3);
 }

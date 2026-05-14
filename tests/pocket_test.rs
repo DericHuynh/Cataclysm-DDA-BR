@@ -4,9 +4,12 @@
 //! and inventory relationships.
 
 use bevy_ecs::entity::Entity;
-use cdda_core::{Length, Volume, Weight};
+use cdda_components::item::IsPocket;
+use cdda_components::item::PocketRestriction;
+use cdda_components::item::PocketType;
 use cdda_components::item::*;
 use cdda_core::sim::test_utils::TestBed;
+use cdda_core::{Length, Volume, Weight};
 
 // ===========================================================================
 // Helpers
@@ -119,7 +122,7 @@ fn pocket_type_magazine_restriction() {
 #[test]
 fn pocket_ammo_type_filter() {
     let restriction = PocketRestriction {
-        allowed_flags: vec![],
+        allowed_flags: Vec::new(),
         allowed_items: vec![],
         ammo_type: Some("223".to_string()),
         item_category: None,
@@ -320,15 +323,12 @@ fn container_tags() {
 #[test]
 fn pocket_restriction_flag_filter() {
     let restriction = PocketRestriction {
-        allowed_flags: vec!["FIREPROOF".to_string(), "WATERPROOF".to_string()],
+        allowed_flags: Vec::new(),
         allowed_items: vec![],
         ammo_type: None,
         item_category: None,
         max_item_volume: Volume::from_milliliters(1000),
     };
-    assert!(restriction.allowed_flags.contains(&"FIREPROOF".to_string()));
-    assert!(restriction
-        .allowed_flags
-        .contains(&"WATERPROOF".to_string()));
-    assert!(!restriction.allowed_flags.contains(&"LEAKY".to_string()));
+    // allowed_flags is now Vec<u16> (flag indices), checked via registry lookups
+    assert!(restriction.allowed_flags.is_empty());
 }

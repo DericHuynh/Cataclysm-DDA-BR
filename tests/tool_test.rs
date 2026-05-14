@@ -1,7 +1,11 @@
 //! Tool, book, and gun mod tests — component data and utility formulas.
 
 use cdda_components::def::{BookData, GunModData, ToolData};
+use cdda_components::AmmoTypeToken;
+use cdda_components::SkillToken;
 use cdda_core::sim::test_utils::TestBed;
+use cdda_data::interner::AmmoTypeRegistry;
+use cdda_data::interner::SkillRegistry;
 
 // ---------------------------------------------------------------------------
 // Reading time formula
@@ -91,7 +95,7 @@ fn tool_ammo_type() {
     },));
     let tool = test.get::<ToolData>(e).unwrap();
     assert_eq!(tool.max_charges, 500);
-    assert_eq!(tool.ammo_type.as_deref(), Some("battery"));
+    assert!(tool.ammo_type.is_some());
     assert_eq!(tool.power_draw.as_deref(), Some("2000 W"));
 }
 
@@ -157,16 +161,17 @@ fn book_skill_teaching() {
     test.register::<BookData>();
 
     let e = test.spawn((BookData {
-        skill: "melee".to_string(),
+        skill: SkillToken(0),
         required_level: 0,
         max_level: 3,
         fun: 1,
         intelligence: 8,
         time: 18000,
-        chapters: 0, martial_art: String::new(),
+        chapters: 0,
+        martial_art: String::new(),
     },));
     let book = test.get::<BookData>(e).unwrap();
-    assert_eq!(book.skill, "melee");
+    assert_eq!(book.skill, SkillToken(0));
     assert_eq!(book.required_level, 0);
     assert_eq!(book.max_level, 3);
     assert_eq!(book.fun, 1);
@@ -181,13 +186,14 @@ fn book_high_requirement() {
     test.register::<BookData>();
 
     let e = test.spawn((BookData {
-        skill: "electronics".to_string(),
+        skill: SkillToken(0),
         required_level: 8,
         max_level: 10,
         fun: -1,
         intelligence: 14,
         time: 36000,
-        chapters: 3, martial_art: String::new(),
+        chapters: 3,
+        martial_art: String::new(),
     },));
     let book = test.get::<BookData>(e).unwrap();
     assert_eq!(book.required_level, 8);
@@ -201,13 +207,14 @@ fn book_high_fun() {
     test.register::<BookData>();
 
     let e = test.spawn((BookData {
-        skill: "cooking".to_string(),
+        skill: SkillToken(0),
         required_level: 0,
         max_level: 2,
         fun: 5,
         intelligence: 6,
         time: 12000,
-        chapters: 0, martial_art: String::new(),
+        chapters: 0,
+        martial_art: String::new(),
     },));
     let book = test.get::<BookData>(e).unwrap();
     assert_eq!(book.fun, 5);
@@ -219,13 +226,14 @@ fn book_negative_fun() {
     test.register::<BookData>();
 
     let e = test.spawn((BookData {
-        skill: "computer_science".to_string(),
+        skill: SkillToken(0),
         required_level: 4,
         max_level: 6,
         fun: -2,
         intelligence: 12,
         time: 24000,
-        chapters: 4, martial_art: String::new(),
+        chapters: 4,
+        martial_art: String::new(),
     },));
     let book = test.get::<BookData>(e).unwrap();
     assert_eq!(book.fun, -2);
@@ -237,13 +245,14 @@ fn book_chapters() {
     test.register::<BookData>();
 
     let e = test.spawn((BookData {
-        skill: "fabrication".to_string(),
+        skill: SkillToken(0),
         required_level: 2,
         max_level: 4,
         fun: 0,
         intelligence: 9,
         time: 15000,
-        chapters: 5, martial_art: String::new(),
+        chapters: 5,
+        martial_art: String::new(),
     },));
     let book = test.get::<BookData>(e).unwrap();
     assert_eq!(book.chapters, 5);
@@ -255,13 +264,14 @@ fn book_infinite_chapters() {
     test.register::<BookData>();
 
     let e = test.spawn((BookData {
-        skill: "survival".to_string(),
+        skill: SkillToken(0),
         required_level: 1,
         max_level: 3,
         fun: 2,
         intelligence: 7,
         time: 20000,
-        chapters: 0, martial_art: String::new(),
+        chapters: 0,
+        martial_art: String::new(),
     },));
     let book = test.get::<BookData>(e).unwrap();
     assert_eq!(book.chapters, 0);

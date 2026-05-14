@@ -8,7 +8,9 @@ use cdda_components::def::{
     ArmourData, ArmourPart, ItemInsulation, ItemMaterials, ItemName, ItemPrice, ItemStackSize,
     ItemVolume, ItemWeight,
 };
+use cdda_components::BodyPartToken;
 use cdda_core::sim::test_utils::TestBed;
+use cdda_data::interner::BodyPartRegistry;
 
 // ---------------------------------------------------------------------------
 // Helper: pure formula functions (as declared in the test plan)
@@ -80,7 +82,7 @@ fn armour_single_part() {
         ItemStackSize(1),
         ArmourData {
             parts: vec![ArmourPart {
-                body_part: "torso".to_string(),
+                body_part: BodyPartRegistry::default().intern("torso"),
                 coverage: 90,
                 encumbrance: 2,
                 warmth: 10,
@@ -95,7 +97,7 @@ fn armour_single_part() {
 
     let armour = test.get::<ArmourData>(e).unwrap();
     assert_eq!(armour.parts.len(), 1);
-    assert_eq!(armour.parts[0].body_part, "torso");
+    assert_eq!(armour.parts[0].body_part, BodyPartRegistry::default().intern("torso"));
     assert_eq!(armour.parts[0].coverage, 90);
     assert_eq!(armour.parts[0].encumbrance, 2);
     assert_eq!(armour.parts[0].warmth, 10);
@@ -130,7 +132,7 @@ fn armour_multi_part() {
         ArmourData {
             parts: vec![
                 ArmourPart {
-                    body_part: "torso".to_string(),
+                    body_part: BodyPartRegistry::default().intern("torso"),
                     coverage: 90,
                     encumbrance: 2,
                     warmth: 20,
@@ -139,7 +141,7 @@ fn armour_multi_part() {
                     material: vec![("leather".to_string(), 1.0, 100.0)],
                 },
                 ArmourPart {
-                    body_part: "arm_l".to_string(),
+                    body_part: BodyPartRegistry::default().intern("arm_l"),
                     coverage: 60,
                     encumbrance: 1,
                     warmth: 15,
@@ -155,8 +157,8 @@ fn armour_multi_part() {
 
     let armour = test.get::<ArmourData>(e).unwrap();
     assert_eq!(armour.parts.len(), 2);
-    assert_eq!(armour.parts[0].body_part, "torso");
-    assert_eq!(armour.parts[1].body_part, "arm_l");
+    assert_eq!(armour.parts[0].body_part, BodyPartRegistry::default().intern("torso"));
+    assert_eq!(armour.parts[0].body_part, BodyPartRegistry::default().intern("arm_l"));
     assert_eq!(armour.parts[1].coverage, 60);
     assert_eq!(armour.parts[1].encumbrance, 1);
 }
@@ -186,7 +188,7 @@ fn armour_full_coverage() {
         ItemStackSize(1),
         ArmourData {
             parts: vec![ArmourPart {
-                body_part: "torso".to_string(),
+                body_part: BodyPartRegistry::default().intern("torso"),
                 coverage: 100,
                 encumbrance: 5,
                 warmth: 30,
@@ -228,7 +230,7 @@ fn armour_no_coverage() {
         ItemStackSize(1),
         ArmourData {
             parts: vec![ArmourPart {
-                body_part: "torso".to_string(),
+                body_part: BodyPartRegistry::default().intern("torso"),
                 coverage: 0,
                 encumbrance: 0,
                 warmth: 0,
@@ -270,7 +272,7 @@ fn armour_encumbrance() {
         ItemStackSize(1),
         ArmourData {
             parts: vec![ArmourPart {
-                body_part: "torso".to_string(),
+                body_part: BodyPartRegistry::default().intern("torso"),
                 coverage: 95,
                 encumbrance: 20,
                 warmth: 40,
@@ -313,7 +315,7 @@ fn armour_warmth() {
         ItemStackSize(1),
         ArmourData {
             parts: vec![ArmourPart {
-                body_part: "torso".to_string(),
+                body_part: BodyPartRegistry::default().intern("torso"),
                 coverage: 95,
                 encumbrance: 8,
                 warmth: 40,
@@ -342,7 +344,7 @@ fn armour_warmth() {
         ItemStackSize(1),
         ArmourData {
             parts: vec![ArmourPart {
-                body_part: "torso".to_string(),
+                body_part: BodyPartRegistry::default().intern("torso"),
                 coverage: 70,
                 encumbrance: 0,
                 warmth: 0,
@@ -384,7 +386,7 @@ fn armour_material_thickness() {
         ItemStackSize(1),
         ArmourData {
             parts: vec![ArmourPart {
-                body_part: "torso".to_string(),
+                body_part: BodyPartRegistry::default().intern("torso"),
                 coverage: 85,
                 encumbrance: 10,
                 warmth: 25,
@@ -434,7 +436,7 @@ fn armour_env_protection() {
         ItemStackSize(1),
         ArmourData {
             parts: vec![ArmourPart {
-                body_part: "torso".to_string(),
+                body_part: BodyPartRegistry::default().intern("torso"),
                 coverage: 100,
                 encumbrance: 12,
                 warmth: 30,

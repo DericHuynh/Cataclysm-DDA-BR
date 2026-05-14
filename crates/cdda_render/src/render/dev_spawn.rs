@@ -13,9 +13,10 @@ use bevy_state::state_scoped::DespawnOnExit;
 use super::FooterHint;
 use crate::context::ctx::Ctx;
 use crate::context::screen::CddaScreen;
-use crate::input::BindableAction;
 use crate::context::ContextActions;
+use crate::data::interner::QualityRegistry;
 use crate::input::ActiveKeybindings;
+use crate::input::BindableAction;
 use crate::render::item_detail::{spawn_item_detail, ItemDetailQueries};
 use crate::render::theme::{self, UiTheme};
 
@@ -242,6 +243,7 @@ pub(crate) fn update_dev_spawn_panel(
     detail_panel: Query<Entity, With<SpawnDetailPanel>>,
     filter_bar: Query<Entity, With<SpawnFilterBar>>,
     detail: ItemDetailQueries,
+    quality_registry: Res<QualityRegistry>,
     theme: Res<UiTheme>,
 ) {
     let filtered = focus.filtered_entries();
@@ -309,18 +311,18 @@ pub(crate) fn update_dev_spawn_panel(
 
                 // Position indicator
                 list.spawn((
-                            Node {
-                                padding: UiRect::new(
-                                    Val::Px(14.0),
-                                    Val::Px(14.0),
-                                    Val::Px(3.0),
-                                    Val::Px(3.0),
-                                ),
-                                border: UiRect::bottom(Val::Px(1.0)),
-                                ..default()
-                            },
-                            BorderColor::all(theme::DIVIDER),
-                        ))
+                    Node {
+                        padding: UiRect::new(
+                            Val::Px(14.0),
+                            Val::Px(14.0),
+                            Val::Px(3.0),
+                            Val::Px(3.0),
+                        ),
+                        border: UiRect::bottom(Val::Px(1.0)),
+                        ..default()
+                    },
+                    BorderColor::all(theme::DIVIDER),
+                ))
                 .with_child((
                     Text::new(format!("{} / {}", focus.index + 1, total)),
                     TextFont {
@@ -333,7 +335,11 @@ pub(crate) fn update_dev_spawn_panel(
                 for i in scroll_start..scroll_end {
                     let entry = &filtered[i];
                     let is_focused = i == focus.index;
-                    let row_bg = if is_focused { theme.item_focus_bg() } else { theme::ITEM_BG };
+                    let row_bg = if is_focused {
+                        theme.item_focus_bg()
+                    } else {
+                        theme::ITEM_BG
+                    };
 
                     list.spawn((
                         Node {
@@ -395,7 +401,14 @@ pub(crate) fn update_dev_spawn_panel(
                     ));
                     return;
                 };
-                spawn_item_detail(d, selected_name, selected_id, def, &detail);
+                spawn_item_detail(
+                    d,
+                    selected_name,
+                    selected_id,
+                    def,
+                    &detail,
+                    &quality_registry,
+                );
             });
     }
 

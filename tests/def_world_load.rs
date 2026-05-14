@@ -10,11 +10,17 @@
 use bevy_ecs::world::World;
 use cdda_components::actor::Health;
 use cdda_components::def::*;
-use cdda_core_types::core::id::DefId;
-use cdda_core_types::core::raw_defs::{FurnitureDef, ItemDef, MonsterDef, StringOrArray, TerrainDef};
 use cdda_core::data::def_world::build_def_world;
 use cdda_core::data::flags::ItemFlagList;
 use cdda_core::data::loader::Loader;
+use cdda_core_types::core::id::DefId;
+use cdda_core_types::core::raw_defs::{
+    FurnitureDef, ItemDef, MonsterDef, StringOrArray, TerrainDef,
+};
+use cdda_data::interner::{
+    AmmoTypeRegistry, BodyPartRegistry, ComestibleRegistry, ItemTypeRegistry, QualityRegistry,
+    SkillRegistry,
+};
 use std::sync::Arc;
 
 /// Helper: create a World, get Commands, call build_def_world, return (World, DefinitionWorld).
@@ -71,6 +77,13 @@ fn build_def_world_in_world(
     world.register_component::<FurnitureCoverage>();
     world.register_component::<FurnitureLightEmitted>();
     world.register_component::<FurnitureMaxVolume>();
+
+    world.init_resource::<AmmoTypeRegistry>();
+    world.init_resource::<BodyPartRegistry>();
+    world.init_resource::<ComestibleRegistry>();
+    world.init_resource::<ItemTypeRegistry>();
+    world.init_resource::<QualityRegistry>();
+    world.init_resource::<SkillRegistry>();
 
     let def_world = build_def_world(&mut world, reg, true);
     (world, def_world)
@@ -208,12 +221,16 @@ fn test_ammo_subtype_gets_ammo_data() {
         "test_ammo",
         r#""name": "Test Ammo", "subtypes": ["AMMO"], "volume": "115 ml", "weight": "12 g", "material": ["brass"], "ammo_type": "9mm", "charges": 50"#,
     )]);
-    let (world, def_world) = build_def_world_in_world(&reg);
+    let (mut world, def_world) = build_def_world_in_world(&reg);
     let entity = def_world.entity_by_str("test_ammo").unwrap();
+    let ammo_type_token = {
+        let mut reg = world.resource_mut::<AmmoTypeRegistry>();
+        reg.intern("9mm")
+    };
     let ammo = world
         .get::<AmmoData>(entity)
         .expect("AMMO subtype should get AmmoData");
-    assert_eq!(ammo.ammo_type, "9mm");
+    assert_eq!(ammo.ammo_type, ammo_type_token);
     assert!(ammo.count > 0, "ammo count should be positive");
 }
 
@@ -223,13 +240,16 @@ fn test_armor_subtype_gets_armour_data() {
         "test_armor",
         r#""name": "Test Armor", "subtypes": ["ARMOR"], "volume": "1 L", "weight": "500 g", "material": ["cotton"], "material_thickness": 2.0, "armor": [{"covers": ["torso"], "coverage": 90, "encumbrance": 5}]"#,
     )]);
-    let (world, def_world) = build_def_world_in_world(&reg);
+    let (mut world, def_world) = build_def_world_in_world(&reg);
     let entity = def_world.entity_by_str("test_armor").unwrap();
+    let bp_token = {
+        let mut reg = world.resource_mut::<BodyPartRegistry>();
+        reg.intern("torso")
+    };
     let armor = world
         .get::<ArmourData>(entity)
         .expect("ARMOR subtype should get ArmourData");
-    assert_eq!(armor.parts.len(), 1);
-    assert_eq!(armor.parts[0].body_part, "torso");
+    assert_eq!(armor.parts[0].body_part, bp_token);
     assert_eq!(armor.parts[0].coverage, 90);
     assert_eq!(armor.parts[0].encumbrance, 5);
 }

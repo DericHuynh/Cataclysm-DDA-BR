@@ -12,8 +12,14 @@
 //! `Query<&GunData, With<IsDef>>` — the entities are in the main World.
 
 use cdda_components::def::*;
-use cdda_components::item::ItemQualities;
+use cdda_components::item::{ItemQualities, QualityToken};
 use cdda_components::recipe::RecipeIndex;
+use cdda_components::SkillToken;
+
+use crate::interner::{
+    AmmoTypeRegistry, BodyPartRegistry, ComestibleRegistry, ItemTypeRegistry, QualityRegistry,
+    SkillRegistry,
+};
 
 use bevy_ecs::prelude::*;
 
@@ -147,7 +153,9 @@ fn color_to_string(c: &cdda_core_types::core::raw_defs::CddaColor) -> String {
     match c {
         cdda_core_types::core::raw_defs::CddaColor::Named(s) => s.clone(),
         cdda_core_types::core::raw_defs::CddaColor::Multi(v) => v.join(","),
-        cdda_core_types::core::raw_defs::CddaColor::Structured(s) => s.fg.clone().unwrap_or_default(),
+        cdda_core_types::core::raw_defs::CddaColor::Structured(s) => {
+            s.fg.clone().unwrap_or_default()
+        }
     }
 }
 
@@ -178,6 +186,7 @@ fn materials_to_vec(m: &cdda_core_types::core::raw_defs::MaterialList) -> Vec<St
 /// Convert a slice of raw `ComponentOption` lists into `RecipeComponentEntry` slots.
 fn parse_component_slots(
     slots: &[Vec<cdda_core_types::core::raw_defs::recipe::ComponentOption>],
+    reg: &mut ItemTypeRegistry,
 ) -> Vec<Vec<RecipeComponentEntry>> {
     slots
         .iter()
@@ -191,15 +200,17 @@ fn parse_component_slots(
                         cdda_core_types::core::raw_defs::recipe::ComponentOption::Simple(id, c) => {
                             (id.clone(), *c)
                         }
-                        cdda_core_types::core::raw_defs::recipe::ComponentOption::WithFlag(id, c, _) => {
-                            (id.clone(), *c)
-                        }
+                        cdda_core_types::core::raw_defs::recipe::ComponentOption::WithFlag(
+                            id,
+                            c,
+                            _,
+                        ) => (id.clone(), *c),
                         cdda_core_types::core::raw_defs::recipe::ComponentOption::Object(o) => {
                             (o.item.clone(), o.count.unwrap_or(1))
                         }
                     };
                     RecipeComponentEntry {
-                        item_id,
+                        item_id: reg.intern(&item_id),
                         count,
                         recovered: false,
                     }
@@ -272,7 +283,9 @@ pub fn build_def_world(
                             .unwrap_or_default(),
                     ),
                     ItemWeight(item.weight.map(|w| w.as_grams() as u32).unwrap_or(0)),
-                    ItemVolume(cdda_core_types::core::units::Volume::as_milliliters(&item.volume) as u32),
+                    ItemVolume(
+                        cdda_core_types::core::units::Volume::as_milliliters(&item.volume) as u32,
+                    ),
                     ItemSymbol(item.symbol.chars().next().unwrap_or('#')),
                     ItemColor(item.color.as_ref().map(color_to_string).unwrap_or_default()),
                     ItemMaterials(materials_to_vec(&item.material)),
@@ -301,29 +314,41 @@ pub fn build_def_world(
                     }),
                     ItemStackSize(item.stack_size.unwrap_or(1)),
                     ItemCategory(item.category.clone().unwrap_or_default()),
-                    ItemQualities(item.qualities.as_ref().map_or(Vec::new(), |q| {
-                        q.iter().map(|tq| (tq.id.clone(), tq.level)).collect()
-                    })),
                 ))
                 .id();
+            // Intern quality strings and add ItemQualities after spawn
+            {
+                let qualities: Vec<(QualityToken, i32)> = item
+                    .qualities
+                    .as_ref()
+                    .map(|q| {
+                        let mut reg = world.resource_mut::<QualityRegistry>();
+                        q.iter().map(|tq| (reg.intern(&tq.id), tq.level)).collect()
+                    })
+                    .unwrap_or_default();
+                if !qualities.is_empty() {
+                    world.entity_mut(entity).insert(ItemQualities(qualities));
+                }
+            }
 
             // ── AMMO subtype ────────────────────────────────────────────
             if subtypes.iter().any(|s| s == "AMMO") {
-                // Extract damage from the ammo `damage` field (RawValue).
-                // CDDA formats: a bare number, {"damage_type":"bullet", "amount":25},
-                // or [{"damage_type":"bullet", "amount":25}].
                 let ammo_damage = item
                     .damage
                     .as_ref()
                     .and_then(|raw| extract_ammo_damage(raw))
                     .unwrap_or(0);
 
-                world.entity_mut(entity).insert(AmmoData {
-                    ammo_type: item
+                let ammo_type = world.resource_mut::<AmmoTypeRegistry>().intern(
+                    &item
                         .ammo_type
                         .as_ref()
                         .map(|sa| sa.first_or_default().to_string())
                         .unwrap_or_default(),
+                );
+
+                world.entity_mut(entity).insert(AmmoData {
+                    ammo_type,
                     damage: ammo_damage,
                     pierce: item.pierce.unwrap_or(0),
                     range: item.range.unwrap_or(0),
@@ -339,13 +364,16 @@ pub fn build_def_world(
 
             // ── GUN subtype ─────────────────────────────────────────────
             if subtypes.iter().any(|s| s == "GUN") {
-                world.entity_mut(entity).insert(GunData {
-                    skill: String::new(),
-                    ammo_type: item
+                let gun_ammo = world.resource_mut::<AmmoTypeRegistry>().intern(
+                    &item
                         .ammo_type
                         .as_ref()
                         .map(|sa| sa.first_or_default().to_string())
                         .unwrap_or_default(),
+                );
+                world.entity_mut(entity).insert(GunData {
+                    skill: SkillToken(0),
+                    ammo_type: gun_ammo,
                     dispersion: i32::try_from(item.charges.unwrap_or(0))
                         .expect("gun dispersion overflow"),
                     recoil: i32::try_from(item.charges_per_use.unwrap_or(0))
@@ -381,19 +409,22 @@ pub fn build_def_world(
                                         }
                                     })
                                     .unwrap_or(0);
-                                ArmourPart {
-                                    body_part: bp
-                                        .covers
-                                        .as_ref()
-                                        .map(|c| match c {
-                                            cdda_core_types::core::raw_defs::StringOrArray::Single(s) => {
-                                                s.clone()
-                                            }
-                                            cdda_core_types::core::raw_defs::StringOrArray::Multi(v) => {
-                                                v.join(", ")
-                                            }
-                                        })
-                                        .unwrap_or_default(),
+                            let body_part_str = bp
+                                .covers
+                                .as_ref()
+                                .map(|c| match c {
+                                    cdda_core_types::core::raw_defs::StringOrArray::Single(s) => {
+                                        s.clone()
+                                    }
+                                    cdda_core_types::core::raw_defs::StringOrArray::Multi(v) => {
+                                        v.join(", ")
+                                    }
+                                })
+                                .unwrap_or_default();
+                            let body_part_token =
+                                world.resource_mut::<BodyPartRegistry>().intern(&body_part_str);
+                            ArmourPart {
+                                body_part: body_part_token,
                                     coverage: bp.coverage.unwrap_or(0) as u8,
                                     encumbrance: enc,
                                     warmth: 0,
@@ -432,6 +463,13 @@ pub fn build_def_world(
 
             // ── COMESTIBLE subtype ──────────────────────────────────────
             if subtypes.iter().any(|s| s == "COMESTIBLE") {
+                let comestible = world.resource_mut::<ComestibleRegistry>().intern(
+                    &item
+                        .comestible_type
+                        .as_ref()
+                        .map(|ct| format!("{:?}", ct))
+                        .unwrap_or_else(|| "INVALID".to_string()),
+                );
                 world.entity_mut(entity).insert(FoodData {
                     calories: i32::try_from(item.calories.unwrap_or(0)).expect("calories overflow"),
                     quench: item.quench.unwrap_or(0),
@@ -450,11 +488,7 @@ pub fn build_def_world(
                                 .unwrap_or(0),
                         })
                         .unwrap_or(0),
-                    comestible_type: item
-                        .comestible_type
-                        .as_ref()
-                        .map(|ct| format!("{:?}", ct))
-                        .unwrap_or_else(|| "INVALID".to_string()),
+                    comestible_type: comestible,
                 });
             }
 
@@ -477,8 +511,11 @@ pub fn build_def_world(
 
             // ── BOOK subtype ────────────────────────────────────────────
             if subtypes.iter().any(|s| s == "BOOK") {
+                let book_skill = world
+                    .resource_mut::<SkillRegistry>()
+                    .intern(&item.read_skill.clone().unwrap_or_default());
                 world.entity_mut(entity).insert(BookData {
-                    skill: item.read_skill.clone().unwrap_or_default(),
+                    skill: book_skill,
                     required_level: item.required_level.unwrap_or(0) as u8,
                     max_level: item.max_level.unwrap_or(0) as u8,
                     // `read_fun` is the book-specific field; fall back to `fun`
@@ -495,12 +532,15 @@ pub fn build_def_world(
 
             // ── MAGAZINE subtype ────────────────────────────────────────
             if subtypes.iter().any(|s| s == "MAGAZINE") {
-                world.entity_mut(entity).insert(MagazineData {
-                    ammo_type: item
+                let mag_ammo = world.resource_mut::<AmmoTypeRegistry>().intern(
+                    &item
                         .ammo_type
                         .as_ref()
                         .map(|sa| sa.first_or_default().to_string())
                         .unwrap_or_default(),
+                );
+                world.entity_mut(entity).insert(MagazineData {
+                    ammo_type: mag_ammo,
                     capacity: i32::try_from(item.max_charges.unwrap_or(0))
                         .expect("mag capacity overflow"),
                     reload_time: i32::try_from(item.charges.unwrap_or(0))
@@ -599,7 +639,7 @@ pub fn build_def_world(
                     techniques: item.techniques.as_ref().cloned().unwrap_or_default(),
                     dice: 0,
                     dice_sides: 0,
-                    skill: String::new(),
+                    skill: SkillToken(0),
                 });
             }
 
@@ -618,7 +658,10 @@ pub fn build_def_world(
                                 // max_contains_volume string.
                                 let max_vol = p
                                     .max_volume
-                                    .map(|v| cdda_core_types::core::units::Volume::as_milliliters(&v) as u32)
+                                    .map(|v| {
+                                        cdda_core_types::core::units::Volume::as_milliliters(&v)
+                                            as u32
+                                    })
                                     .or_else(|| {
                                         p.max_contains_volume
                                             .as_ref()
@@ -799,7 +842,9 @@ pub fn build_def_world(
                     FurnitureMaxVolume(
                         furniture
                             .max_volume
-                            .map(|v| cdda_core_types::core::units::Volume::as_milliliters(&v) as u32)
+                            .map(|v| {
+                                cdda_core_types::core::units::Volume::as_milliliters(&v) as u32
+                            })
                             .unwrap_or(0),
                     ),
                 ))
@@ -858,9 +903,12 @@ pub fn build_def_world(
                 .id();
 
             if let Some(skill) = &recipe.skill_used {
+                let skill_token = world
+                    .resource_mut::<SkillRegistry>()
+                    .intern(&skill.as_str().to_string());
                 world
                     .entity_mut(entity)
-                    .insert(RecipeSkillUsed(skill.as_str().to_string()));
+                    .insert(RecipeSkillUsed(skill_token));
             }
 
             if let Some(cat) = &recipe.category {
@@ -874,22 +922,28 @@ pub fn build_def_world(
 
             let autolearn = match &recipe.autolearn {
                 Some(cdda_core_types::core::raw_defs::recipe::Autolearn::Bool(b)) => *b,
-                Some(cdda_core_types::core::raw_defs::recipe::Autolearn::Skills(v)) => !v.is_empty(),
+                Some(cdda_core_types::core::raw_defs::recipe::Autolearn::Skills(v)) => {
+                    !v.is_empty()
+                }
                 None => false,
             };
             world.entity_mut(entity).insert(RecipeAutolearn(autolearn));
 
             // Qualities: flatten alternatives, taking the first of each slot.
             if let Some(quals) = &recipe.qualities {
-                let flat: Vec<(String, u32)> = quals
+                let flat: Vec<(QualityToken, u32)> = quals
                     .iter()
                     .filter_map(|q| match q {
                         cdda_core_types::core::raw_defs::recipe::QualityEntry::Single(qr) => {
-                            Some((qr.id.clone(), qr.level))
+                            let id = world.resource_mut::<QualityRegistry>().intern(&qr.id);
+                            Some((id, qr.level))
                         }
-                        cdda_core_types::core::raw_defs::recipe::QualityEntry::Alternative(alts) => {
-                            alts.first().map(|qr| (qr.id.clone(), qr.level))
-                        }
+                        cdda_core_types::core::raw_defs::recipe::QualityEntry::Alternative(
+                            alts,
+                        ) => alts.first().map(|qr| {
+                            let id = world.resource_mut::<QualityRegistry>().intern(&qr.id);
+                            (id, qr.level)
+                        }),
                     })
                     .collect();
                 if !flat.is_empty() {
@@ -903,7 +957,8 @@ pub fn build_def_world(
 
                 // Direct component slots from this recipe's `components` field.
                 if let Some(slots) = &recipe.components {
-                    let parsed = parse_component_slots(slots);
+                    let parsed =
+                        parse_component_slots(slots, &mut world.resource_mut::<ItemTypeRegistry>());
                     all_slots.extend(parsed);
                 }
 
@@ -919,7 +974,10 @@ pub fn build_def_world(
                                         Vec<Vec<cdda_core_types::core::raw_defs::recipe::ComponentOption>>,
                                     >(comp_val.clone())
                                 {
-                                    let scaled = parse_component_slots(&slots)
+                                    let scaled = parse_component_slots(
+                                        &slots,
+                                        &mut world.resource_mut::<ItemTypeRegistry>(),
+                                    )
                                         .into_iter()
                                         .map(|slot| {
                                             slot.into_iter()
@@ -972,11 +1030,15 @@ pub fn build_def_world(
             })
             .unwrap_or(0.0);
 
+        let bp_id = world.resource_mut::<BodyPartRegistry>().intern(&id_str);
+        let bp_side = world
+            .resource_mut::<BodyPartRegistry>()
+            .intern(&bp.side.clone().unwrap_or_else(|| "both".to_string()));
         let entity = world
             .spawn((
                 IsDef,
                 DefStrId(id_str.clone()),
-                BodyPartDefId(id_str.clone()),
+                BodyPartDefId(bp_id),
                 BodyPartName(
                     bp.name
                         .as_ref()
@@ -987,7 +1049,7 @@ pub fn build_def_world(
                 BodyPartHitDifficulty(hit_difficulty),
                 BodyPartBaseHp(bp.base_hp.unwrap_or(60) as f32),
                 BodyPartDrenchCapacity(bp.drench_capacity.unwrap_or(100)),
-                BodyPartSide(bp.side.clone().unwrap_or_else(|| "both".to_string())),
+                BodyPartSide(bp_side),
             ))
             .id();
 

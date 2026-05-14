@@ -6,6 +6,7 @@
 
 use crate::context::ctx::Ctx as Screen;
 use crate::context::nav::{ctx_def, FocusedCommandIndex};
+use crate::data::interner::ItemTypeRegistry;
 use crate::render::theme::{self, UiTheme};
 use crate::render::tiles::TileRegistry;
 use bevy::prelude::*;
@@ -248,10 +249,13 @@ fn place_ground_item_tile(
     name: Option<&DevGroundItemName>,
     col: i32,
     row: i32,
+    item_type_registry: &ItemTypeRegistry,
 ) -> Entity {
     let base_x = col as f32 * TILE_SIZE;
     let base_y = row as f32 * TILE_SIZE;
-    let cdda_id = type_id.map(|t| t.0.as_str()).unwrap_or("");
+    let cdda_id = type_id
+        .and_then(|t| item_type_registry.resolve(t.0))
+        .unwrap_or("");
 
     if !cdda_id.is_empty() && registry.has_tile(cdda_id) {
         let info = registry.tile_info(cdda_id);
@@ -333,6 +337,7 @@ pub(crate) fn update_ascii_view(
     player_inv: Query<(&ContainerContents, Option<&MountedPockets>), With<DevPlayer>>,
     item_names: Query<&DevGroundItemName>,
     player_hands: Query<(&HandCount, Option<&WieldedItems>), With<DevPlayer>>,
+    item_type_registry: Res<ItemTypeRegistry>,
 ) {
     let cz = camera.z;
 
@@ -397,6 +402,7 @@ pub(crate) fn update_ascii_view(
             name,
             col,
             row,
+            &item_type_registry,
         );
     }
 

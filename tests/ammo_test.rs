@@ -4,7 +4,10 @@
 //! Translated from CDDA's ranged balance and ammo type tests.
 
 use cdda_components::def::{AmmoData, GunData, MagazineData};
+use cdda_components::{AmmoTypeToken, SkillToken};
 use cdda_core::sim::test_utils::TestBed;
+use cdda_data::interner::AmmoTypeRegistry;
+use cdda_data::interner::*;
 
 // ---------------------------------------------------------------------------
 // AmmoData component tests
@@ -15,7 +18,7 @@ fn ammo_data_fields() {
     let mut test = TestBed::new();
     test.register::<AmmoData>();
     let e = test.spawn((AmmoData {
-        ammo_type: "9mm".to_string(),
+        ammo_type: AmmoTypeRegistry::default().intern("9mm"),
         damage: 18,
         pierce: 0,
         range: 14,
@@ -27,7 +30,7 @@ fn ammo_data_fields() {
         stack_size: 50,
     },));
     let ammo = test.get::<AmmoData>(e).unwrap();
-    assert_eq!(ammo.ammo_type, "9mm");
+    assert_eq!(ammo.ammo_type, AmmoTypeRegistry::default().intern("9mm"));
     assert_eq!(ammo.damage, 18);
     assert_eq!(ammo.pierce, 0);
     assert_eq!(ammo.range, 14);
@@ -44,7 +47,7 @@ fn ammo_no_casing() {
     let mut test = TestBed::new();
     test.register::<AmmoData>();
     let e = test.spawn((AmmoData {
-        ammo_type: "shot".to_string(),
+        ammo_type: AmmoTypeRegistry::default().intern("shot"),
         damage: 70,
         pierce: 0,
         range: 6,
@@ -64,7 +67,7 @@ fn ammo_shotgun() {
     let mut test = TestBed::new();
     test.register::<AmmoData>();
     let e = test.spawn((AmmoData {
-        ammo_type: "shot".to_string(),
+        ammo_type: AmmoTypeRegistry::default().intern("shot"),
         damage: 70,
         pierce: 0,
         range: 6,
@@ -76,7 +79,7 @@ fn ammo_shotgun() {
         stack_size: 20,
     },));
     let ammo = test.get::<AmmoData>(e).unwrap();
-    assert_eq!(ammo.ammo_type, "shot");
+    assert_eq!(ammo.ammo_type, AmmoTypeRegistry::default().intern("shot"));
     assert_eq!(ammo.damage, 70);
     assert_eq!(ammo.pierce, 0);
     assert_eq!(ammo.range, 6);
@@ -89,7 +92,7 @@ fn ammo_high_pierce() {
     let mut test = TestBed::new();
     test.register::<AmmoData>();
     let e = test.spawn((AmmoData {
-        ammo_type: "rifle".to_string(),
+        ammo_type: AmmoTypeRegistry::default().intern("rifle"),
         damage: 40,
         pierce: 15,
         range: 60,
@@ -110,7 +113,7 @@ fn ammo_effects_empty() {
     let mut test = TestBed::new();
     test.register::<AmmoData>();
     let e = test.spawn((AmmoData {
-        ammo_type: "9mm".to_string(),
+        ammo_type: AmmoTypeRegistry::default().intern("9mm"),
         damage: 18,
         pierce: 0,
         range: 14,
@@ -130,7 +133,7 @@ fn ammo_incendiary() {
     let mut test = TestBed::new();
     test.register::<AmmoData>();
     let e = test.spawn((AmmoData {
-        ammo_type: "rifle".to_string(),
+        ammo_type: AmmoTypeRegistry::default().intern("rifle"),
         damage: 35,
         pierce: 5,
         range: 40,
@@ -154,8 +157,8 @@ fn gun_data_fields() {
     let mut test = TestBed::new();
     test.register::<GunData>();
     let e = test.spawn((GunData {
-        skill: "pistol".to_string(),
-        ammo_type: "9mm".to_string(),
+        skill: SkillToken(0),
+        ammo_type: AmmoTypeRegistry::default().intern("9mm"),
         dispersion: 400,
         recoil: 45,
         reload_time: 100,
@@ -164,8 +167,8 @@ fn gun_data_fields() {
         ammo_effects: vec![],
     },));
     let gun = test.get::<GunData>(e).unwrap();
-    assert_eq!(gun.skill, "pistol");
-    assert_eq!(gun.ammo_type, "9mm");
+    assert_eq!(gun.skill, SkillToken(0));
+    assert_eq!(gun.ammo_type, AmmoTypeRegistry::default().intern("9mm"));
     assert_eq!(gun.dispersion, 400);
     assert_eq!(gun.recoil, 45);
     assert_eq!(gun.reload_time, 100);
@@ -179,8 +182,8 @@ fn gun_shotgun() {
     let mut test = TestBed::new();
     test.register::<GunData>();
     let e = test.spawn((GunData {
-        skill: "shotgun".to_string(),
-        ammo_type: "shot".to_string(),
+        skill: SkillToken(0),
+        ammo_type: AmmoTypeRegistry::default().intern("shot"),
         dispersion: 525,
         recoil: 60,
         reload_time: 150,
@@ -189,8 +192,8 @@ fn gun_shotgun() {
         ammo_effects: vec![],
     },));
     let gun = test.get::<GunData>(e).unwrap();
-    assert_eq!(gun.skill, "shotgun");
-    assert_eq!(gun.ammo_type, "shot");
+    assert_eq!(gun.skill, SkillToken(0));
+    assert_eq!(gun.ammo_type, AmmoTypeRegistry::default().intern("shot"));
     assert_eq!(gun.dispersion, 525);
     assert_eq!(gun.clip_size, 6);
     assert_eq!(gun.burst, 1);
@@ -201,8 +204,8 @@ fn gun_burst_fire() {
     let mut test = TestBed::new();
     test.register::<GunData>();
     let e = test.spawn((GunData {
-        skill: "rifle".to_string(),
-        ammo_type: "rifle".to_string(),
+        skill: SkillToken(0),
+        ammo_type: AmmoTypeRegistry::default().intern("rifle"),
         dispersion: 200,
         recoil: 35,
         reload_time: 150,
@@ -219,8 +222,8 @@ fn gun_no_ammo_effects() {
     let mut test = TestBed::new();
     test.register::<GunData>();
     let e = test.spawn((GunData {
-        skill: "pistol".to_string(),
-        ammo_type: "9mm".to_string(),
+        skill: SkillToken(0),
+        ammo_type: AmmoTypeRegistry::default().intern("9mm"),
         dispersion: 400,
         recoil: 45,
         reload_time: 100,
@@ -237,8 +240,8 @@ fn gun_with_ammo_effects() {
     let mut test = TestBed::new();
     test.register::<GunData>();
     let e = test.spawn((GunData {
-        skill: "pistol".to_string(),
-        ammo_type: "9mm".to_string(),
+        skill: SkillToken(0),
+        ammo_type: AmmoTypeRegistry::default().intern("9mm"),
         dispersion: 400,
         recoil: 45,
         reload_time: 100,
@@ -255,8 +258,8 @@ fn gun_zero_clip() {
     let mut test = TestBed::new();
     test.register::<GunData>();
     let e = test.spawn((GunData {
-        skill: "rifle".to_string(),
-        ammo_type: "rifle".to_string(),
+        skill: SkillToken(0),
+        ammo_type: AmmoTypeRegistry::default().intern("rifle"),
         dispersion: 150,
         recoil: 30,
         reload_time: 200,
@@ -277,14 +280,14 @@ fn magazine_fields() {
     let mut test = TestBed::new();
     test.register::<MagazineData>();
     let e = test.spawn((MagazineData {
-        ammo_type: "9mm".to_string(),
+        ammo_type: AmmoTypeRegistry::default().intern("9mm"),
         capacity: 15,
         reload_time: 100,
         linkage: None,
         default_ammo: "9mm".to_string(),
     },));
     let mag = test.get::<MagazineData>(e).unwrap();
-    assert_eq!(mag.ammo_type, "9mm");
+    assert_eq!(mag.ammo_type, AmmoTypeRegistry::default().intern("9mm"));
     assert_eq!(mag.capacity, 15);
     assert_eq!(mag.reload_time, 100);
     assert!(mag.linkage.is_none());
@@ -296,7 +299,7 @@ fn magazine_belt_linkage() {
     let mut test = TestBed::new();
     test.register::<MagazineData>();
     let e = test.spawn((MagazineData {
-        ammo_type: "rifle".to_string(),
+        ammo_type: AmmoTypeRegistry::default().intern("rifle"),
         capacity: 200,
         reload_time: 300,
         linkage: Some("belt_link".to_string()),
@@ -311,7 +314,7 @@ fn magazine_high_capacity() {
     let mut test = TestBed::new();
     test.register::<MagazineData>();
     let e = test.spawn((MagazineData {
-        ammo_type: "9mm".to_string(),
+        ammo_type: AmmoTypeRegistry::default().intern("9mm"),
         capacity: 50,
         reload_time: 200,
         linkage: None,

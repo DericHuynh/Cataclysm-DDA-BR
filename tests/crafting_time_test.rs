@@ -22,6 +22,7 @@ use cdda_components::item::{ContainerContents, InProgressCraft, InsideContainer}
 use cdda_core::actor::turn::AP_COST_CRAFT_TICK;
 use cdda_core::crafting::systems::{continue_crafts, start_craft};
 use cdda_core::sim::test_utils::TestBed;
+use cdda_data::interner::{ItemTypeRegistry, QualityRegistry};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -44,6 +45,9 @@ fn register_crafting_components(test: &mut TestBed) {
     test.register::<RecipeResult>();
     test.register::<RecipeResultCount>();
     test.register::<ItemName>();
+
+    test.world_mut().init_resource::<ItemTypeRegistry>();
+    test.world_mut().init_resource::<QualityRegistry>();
 }
 
 /// Spawn a player entity with all components needed for crafting + AP system.
