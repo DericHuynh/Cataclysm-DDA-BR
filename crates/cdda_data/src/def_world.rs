@@ -12,9 +12,9 @@
 //! `Query<&GunData, With<IsDef>>` — the entities are in the main World.
 
 use cdda_components::def::*;
-use cdda_components::item::{ItemQualities, QualityToken};
+use cdda_components::item::{ItemQualities, QualityId};
 use cdda_components::recipe::RecipeIndex;
-use cdda_components::SkillToken;
+use cdda_components::SkillId;
 
 use crate::interner::{
     AmmoTypeRegistry, BodyPartRegistry, ComestibleRegistry, ItemTypeRegistry, QualityRegistry,
@@ -318,7 +318,7 @@ pub fn build_def_world(
                 .id();
             // Intern quality strings and add ItemQualities after spawn
             {
-                let qualities: Vec<(QualityToken, i32)> = item
+                let qualities: Vec<(QualityId, i32)> = item
                     .qualities
                     .as_ref()
                     .map(|q| {
@@ -372,7 +372,7 @@ pub fn build_def_world(
                         .unwrap_or_default(),
                 );
                 world.entity_mut(entity).insert(GunData {
-                    skill: SkillToken(0),
+                    skill: SkillId(0),
                     ammo_type: gun_ammo,
                     dispersion: i32::try_from(item.charges.unwrap_or(0))
                         .expect("gun dispersion overflow"),
@@ -639,7 +639,7 @@ pub fn build_def_world(
                     techniques: item.techniques.as_ref().cloned().unwrap_or_default(),
                     dice: 0,
                     dice_sides: 0,
-                    skill: SkillToken(0),
+                    skill: SkillId(0),
                 });
             }
 
@@ -931,7 +931,7 @@ pub fn build_def_world(
 
             // Qualities: flatten alternatives, taking the first of each slot.
             if let Some(quals) = &recipe.qualities {
-                let flat: Vec<(QualityToken, u32)> = quals
+                let flat: Vec<(QualityId, u32)> = quals
                     .iter()
                     .filter_map(|q| match q {
                         cdda_core_types::core::raw_defs::recipe::QualityEntry::Single(qr) => {

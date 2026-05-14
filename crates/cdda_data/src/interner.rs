@@ -6,30 +6,30 @@
 //!
 //! ## Registry types
 //!
-//! - `QualityRegistry` — quality-name → QualityToken mapping
-//! - `ItemTypeRegistry` — item-type string → ItemTypeToken mapping
+//! - `QualityRegistry` — quality-name → QualityId mapping
+//! - `ItemTypeRegistry` — item-type string → ItemTypeId mapping
 //! - Additional registries via the `token_registry!` macro
 //!
 //! ## Adding a new token type
 //!
 //! 1. Define the newtype in `cdda_components/src/tokens.rs`:
 //!    ```ignore
-//!    intern_token!(SkillToken, u16);
+//!    intern_token!(SkillId, u16);
 //!    ```
 //! 2. Create the registry via the macro:
 //!    ```ignore
-//!    token_registry!(SkillRegistry, SkillToken, u16);
+//!    token_registry!(SkillRegistry, SkillId, u16);
 //!    ```
 //! 3. Init it in `CddaDataPlugin::build()`.
 
 use bevy_ecs::prelude::*;
 use bidimap::BiMap;
-use cdda_components::item::QualityToken;
-use cdda_components::AmmoTypeToken;
-use cdda_components::BodyPartToken;
-use cdda_components::ComestibleToken;
-use cdda_components::ItemTypeToken;
-use cdda_components::SkillToken;
+use cdda_components::item::QualityId;
+use cdda_components::AmmoTypeId;
+use cdda_components::BodyPartId;
+use cdda_components::ComestibleId;
+use cdda_components::ItemTypeId;
+use cdda_components::SkillId;
 
 // ---------------------------------------------------------------------------
 // Macro: token_registry! — generates a typed string-interning registry
@@ -38,7 +38,7 @@ use cdda_components::SkillToken;
 /// Generates a typed `Resource` registry for interning strings.
 ///
 /// ```ignore
-/// token_registry!(SkillRegistry, SkillToken, u16);
+/// token_registry!(SkillRegistry, SkillId, u16);
 /// ```
 ///
 /// Produces a struct with `intern`, `get`, `resolve`, `iter`, `len`, `is_empty`.
@@ -104,17 +104,17 @@ macro_rules! token_registry {
 // ItemTypeRegistry — item type strings
 // ---------------------------------------------------------------------------
 
-token_registry!(ItemTypeRegistry, ItemTypeToken, u32);
-token_registry!(SkillRegistry, SkillToken, u16);
-token_registry!(AmmoTypeRegistry, AmmoTypeToken, u16);
-token_registry!(BodyPartRegistry, BodyPartToken, u16);
-token_registry!(ComestibleRegistry, ComestibleToken, u16);
+token_registry!(ItemTypeRegistry, ItemTypeId, u32);
+token_registry!(SkillRegistry, SkillId, u16);
+token_registry!(AmmoTypeRegistry, AmmoTypeId, u16);
+token_registry!(BodyPartRegistry, BodyPartId, u16);
+token_registry!(ComestibleRegistry, ComestibleId, u16);
 
 // ---------------------------------------------------------------------------
-// QualityRegistry — quality-name ↔ QualityToken mapping
+// QualityRegistry — quality-name ↔ QualityId mapping
 // ---------------------------------------------------------------------------
 
-/// Bidirectional mapping from quality-name string to `QualityToken`.
+/// Bidirectional mapping from quality-name string to `QualityId`.
 ///
 /// Populated during `build_def_world`.  Append-only — once a quality name
 /// gets an ID, that ID is stable for the lifetime of the session.
@@ -123,7 +123,7 @@ token_registry!(ComestibleRegistry, ComestibleToken, u16);
 ///
 /// ```ignore
 /// // Filter: find all items with a quality matching "CUT*"
-/// let matching: Vec<QualityToken> = quality_registry
+/// let matching: Vec<QualityId> = quality_registry
 ///     .iter()
 ///     .filter(|(name, _)| name.starts_with("CUT"))
 ///     .map(|(_, id)| id)
@@ -138,7 +138,7 @@ token_registry!(ComestibleRegistry, ComestibleToken, u16);
 /// ```
 #[derive(Resource, Debug, Clone)]
 pub struct QualityRegistry {
-    map: BiMap<String, QualityToken>,
+    map: BiMap<String, QualityId>,
     next_id: u16,
 }
 
@@ -152,29 +152,29 @@ impl Default for QualityRegistry {
 }
 
 impl QualityRegistry {
-    /// Get the `QualityToken` for a quality name, allocating one if new.
-    pub fn intern(&mut self, name: &str) -> QualityToken {
+    /// Get the `QualityId` for a quality name, allocating one if new.
+    pub fn intern(&mut self, name: &str) -> QualityId {
         if let Some(&id) = self.map.get_by_left(name) {
             return id;
         }
-        let id = QualityToken(self.next_id);
+        let id = QualityId(self.next_id);
         self.next_id += 1;
         self.map.insert(name.to_string(), id);
         id
     }
 
     /// Look up a quality name without allocating.  Returns `None` if unknown.
-    pub fn get(&self, name: &str) -> Option<QualityToken> {
+    pub fn get(&self, name: &str) -> Option<QualityId> {
         self.map.get_by_left(name).copied()
     }
 
     /// Look up a quality name by its ID.
-    pub fn resolve(&self, id: QualityToken) -> Option<&str> {
+    pub fn resolve(&self, id: QualityId) -> Option<&str> {
         self.map.get_by_right(&id).map(|s| s.as_str())
     }
 
     /// Iterate over all registered (name, QualityId) pairs.
-    pub fn iter(&self) -> impl Iterator<Item = (&str, QualityToken)> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = (&str, QualityId)> + '_ {
         self.map.iter().map(|(s, &id)| (s.as_str(), id))
     }
 

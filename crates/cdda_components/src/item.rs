@@ -7,8 +7,6 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::Resource;
 use bevy_reflect::Reflect;
 
-use crate::ItemTypeToken;
-
 // ===========================================================================
 // Item identity
 // ===========================================================================
@@ -235,9 +233,8 @@ pub struct Container {
 /// CDDA type-string ID used for tileset sprite lookup and crafting matching.
 ///
 /// Added to items that have a known CDDA type. Interned via `ItemTypeRegistry`.
-/// Resolve back to a string via `ItemTypeRegistry::resolve()` for display.
 #[derive(Component, Debug, Clone, Copy, Reflect)]
-pub struct ItemTypeId(pub ItemTypeToken);
+pub struct ItemType(pub crate::tokens::ItemTypeId);
 
 // ===========================================================================
 // Tool qualities on runtime items
@@ -248,20 +245,18 @@ pub struct ItemTypeId(pub ItemTypeToken);
 /// Stored in `ItemQualities` and `RecipeQualities` components instead of
 /// the raw string.  Resolve back to a string via `QualityRegistry::resolve()`
 /// (in the `cdda_data` crate).
-///
-/// Distinct from `QualityId` (a def-registry index from `cdda_core_types`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Reflect)]
-pub struct QualityToken(pub u16);
+pub struct QualityId(pub u16);
 
 /// Tool qualities present on a runtime item entity.
 ///
 /// Populated during def-to-runtime cloning: `build_def_world` interns
 /// quality names via `QualityRegistry` and stores the resulting IDs.
 ///
-/// Each entry is `(QualityToken, level)` — e.g. `(QualityToken(3), 2)` for "CUT" at level 2.
+/// Each entry is `(QualityId, level)` — e.g. `(QualityId(3), 2)` for "CUT" at level 2.
 /// Resolve back to a string via `QualityRegistry::resolve()` for display.
 #[derive(Component, Debug, Clone, Reflect)]
-pub struct ItemQualities(pub Vec<(QualityToken, i32)>);
+pub struct ItemQualities(pub Vec<(QualityId, i32)>);
 
 impl ItemQualities {
     pub fn is_empty(&self) -> bool {

@@ -11,13 +11,16 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
-use crate::data::interner::QualityRegistry;
+use crate::data::interner::{
+    AmmoTypeRegistry, BodyPartRegistry, ComestibleRegistry, ItemTypeRegistry, QualityRegistry,
+    SkillRegistry,
+};
 use cdda_components::def::{
     AmmoData, ArmourData, BookData, ContainerData, FoodData, GunData, ItemCategory, ItemColor,
     ItemDescription, ItemMaterials, ItemPhase, ItemSymbol, ItemVolume, ItemWeight, MagazineData,
     Phase, ToolData, WeaponData,
 };
-use cdda_components::item::{ItemQualities, QualityToken};
+use cdda_components::item::{ItemQualities, QualityId};
 
 // ---------------------------------------------------------------------------
 // Bundled queries — a SystemParam to avoid Bevy's 16-query limit
@@ -64,6 +67,10 @@ pub fn spawn_item_detail(
     def: Entity,
     q: &ItemDetailQueries,
     quality_registry: &QualityRegistry,
+    skill_registry: &SkillRegistry,
+    ammo_registry: &AmmoTypeRegistry,
+    body_part_registry: &BodyPartRegistry,
+    comestible_registry: &ComestibleRegistry,
 ) {
     // Name + ID header
     parent.spawn((
@@ -178,8 +185,16 @@ pub fn spawn_item_detail(
     if let Ok(g) = q.gun_data.get(def) {
         divider(parent);
         section_header(parent, "Ranged");
-        stat_row(parent, "Skill", &g.skill);
-        stat_row(parent, "Ammo type", &g.ammo_type);
+        stat_row(
+            parent,
+            "Skill",
+            skill_registry.resolve(g.skill).unwrap_or("?"),
+        );
+        stat_row(
+            parent,
+            "Ammo type",
+            ammo_registry.resolve(g.ammo_type).unwrap_or("?"),
+        );
         stat_row(parent, "Clip", &g.clip_size.to_string());
         stat_row(parent, "Reload time", &g.reload_time.to_string());
         stat_row(parent, "Dispersion", &g.dispersion.to_string());
@@ -192,7 +207,11 @@ pub fn spawn_item_detail(
     if let Ok(a) = q.ammo_data.get(def) {
         divider(parent);
         section_header(parent, "Ammo");
-        stat_row(parent, "Type", &a.ammo_type);
+        stat_row(
+            parent,
+            "Type",
+            ammo_registry.resolve(a.ammo_type).unwrap_or("?"),
+        );
         stat_row(parent, "Damage", &a.damage.to_string());
         stat_row(parent, "Pierce", &a.pierce.to_string());
         stat_row(parent, "Range", &a.range.to_string());
@@ -208,7 +227,11 @@ pub fn spawn_item_detail(
     if let Ok(m) = q.magazine_data.get(def) {
         divider(parent);
         section_header(parent, "Magazine");
-        stat_row(parent, "Ammo type", &m.ammo_type);
+        stat_row(
+            parent,
+            "Ammo type",
+            ammo_registry.resolve(m.ammo_type).unwrap_or("?"),
+        );
         stat_row(parent, "Capacity", &m.capacity.to_string());
         stat_row(parent, "Reload time", &m.reload_time.to_string());
     }
@@ -224,10 +247,13 @@ pub fn spawn_item_detail(
                     ..default()
                 });
             }
-            let covers_str = if part.body_part.is_empty() {
+            let covers_str = if part.body_part.0 == 0 {
                 "?".to_string()
             } else {
-                part.body_part.clone()
+                body_part_registry
+                    .resolve(part.body_part)
+                    .unwrap_or("?")
+                    .to_string()
             };
             let layers_str = if part.layers.is_empty() {
                 "NORMAL".to_string()
@@ -268,7 +294,13 @@ pub fn spawn_item_detail(
     if let Ok(food) = q.food_data.get(def) {
         divider(parent);
         section_header(parent, "Food");
-        stat_row(parent, "Type", &food.comestible_type);
+        stat_row(
+            parent,
+            "Type",
+            comestible_registry
+                .resolve(food.comestible_type)
+                .unwrap_or("?"),
+        );
         stat_row(parent, "Calories", &food.calories.to_string());
         stat_row(parent, "Quench", &food.quench.to_string());
         stat_row(parent, "Fun", &food.fun.to_string());
@@ -359,7 +391,11 @@ pub fn spawn_item_detail(
     if let Ok(book) = q.book_data.get(def) {
         divider(parent);
         section_header(parent, "Book");
-        stat_row(parent, "Skill", &book.skill);
+        stat_row(
+            parent,
+            "Skill",
+            skill_registry.resolve(book.skill).unwrap_or("?"),
+        );
         stat_row(
             parent,
             "Levels",
@@ -393,7 +429,7 @@ pub(crate) struct ItemDetailSnapshot {
     pub category: Option<String>,
     pub materials: Option<Vec<String>>,
     pub phase: Option<String>,
-    pub qualities: Option<Vec<(QualityToken, i32)>>,
+    pub qualities: Option<Vec<(QualityId, i32)>>,
     pub weapon: Option<WeaponSnapshot>,
     pub gun: Option<GunSnapshot>,
     pub ammo: Option<AmmoSnapshot>,
@@ -566,8 +602,14 @@ impl ItemDetailSnapshot {
             .get(world, def)
             .ok()
             .map(|g| GunSnapshot {
-                skill: g.skill.clone(),
-                ammo_type: g.ammo_type.clone(),
+                skill: {
+                    let reg = world.resource::<SkillRegistry>();
+                    reg.resolve(g.skill).unwrap_or("?").to_string()
+                },
+                ammo_type: {
+                    let reg = world.resource::<AmmoTypeRegistry>();
+                    reg.resolve(g.ammo_type).unwrap_or("?").to_string()
+                },
                 clip_size: g.clip_size,
                 reload_time: g.reload_time,
                 dispersion: g.dispersion,
@@ -579,7 +621,10 @@ impl ItemDetailSnapshot {
             .get(world, def)
             .ok()
             .map(|a| AmmoSnapshot {
-                ammo_type: a.ammo_type.clone(),
+                ammo_type: {
+                    let reg = world.resource::<AmmoTypeRegistry>();
+                    reg.resolve(a.ammo_type).unwrap_or("?").to_string()
+                },
                 damage: a.damage,
                 pierce: a.pierce,
                 range: a.range,
@@ -592,7 +637,10 @@ impl ItemDetailSnapshot {
             .get(world, def)
             .ok()
             .map(|m| MagazineSnapshot {
-                ammo_type: m.ammo_type.clone(),
+                ammo_type: {
+                    let reg = world.resource::<AmmoTypeRegistry>();
+                    reg.resolve(m.ammo_type).unwrap_or("?").to_string()
+                },
                 capacity: m.capacity,
                 reload_time: m.reload_time,
             });
@@ -606,7 +654,10 @@ impl ItemDetailSnapshot {
                     .parts
                     .iter()
                     .map(|p| ArmourPartSnapshot {
-                        body_part: p.body_part.clone(),
+                        body_part: {
+                            let reg = world.resource::<BodyPartRegistry>();
+                            reg.resolve(p.body_part).unwrap_or("?").to_string()
+                        },
                         layers: p.layers.clone(),
                         coverage: p.coverage as i32,
                         encumbrance: p.encumbrance,
@@ -625,7 +676,10 @@ impl ItemDetailSnapshot {
             .get(world, def)
             .ok()
             .map(|f| FoodSnapshot {
-                comestible_type: f.comestible_type.clone(),
+                comestible_type: {
+                    let reg = world.resource::<ComestibleRegistry>();
+                    reg.resolve(f.comestible_type).unwrap_or("?").to_string()
+                },
                 calories: f.calories,
                 quench: f.quench,
                 fun: f.fun,
@@ -671,7 +725,10 @@ impl ItemDetailSnapshot {
             .get(world, def)
             .ok()
             .map(|b| BookSnapshot {
-                skill: b.skill.clone(),
+                skill: {
+                    let reg = world.resource::<SkillRegistry>();
+                    reg.resolve(b.skill).unwrap_or("?").to_string()
+                },
                 required_level: b.required_level as i32,
                 max_level: b.max_level as i32,
                 fun: b.fun,
@@ -805,7 +862,11 @@ impl ItemDetailSnapshot {
         if let Some(ref a) = self.ammo {
             divider(parent);
             section_header(parent, "Ammo");
-            stat_row(parent, "Type", &a.ammo_type);
+            stat_row(
+                parent,
+                "Type",
+                &a.ammo_type,
+            );
             stat_row(parent, "Damage", &a.damage.to_string());
             stat_row(parent, "Pierce", &a.pierce.to_string());
             stat_row(parent, "Range", &a.range.to_string());
@@ -821,7 +882,11 @@ impl ItemDetailSnapshot {
         if let Some(ref m) = self.magazine {
             divider(parent);
             section_header(parent, "Magazine");
-            stat_row(parent, "Ammo type", &m.ammo_type);
+            stat_row(
+                parent,
+                "Ammo type",
+                &m.ammo_type,
+            );
             stat_row(parent, "Capacity", &m.capacity.to_string());
             stat_row(parent, "Reload time", &m.reload_time.to_string());
         }
@@ -881,7 +946,11 @@ impl ItemDetailSnapshot {
         if let Some(ref food) = self.food {
             divider(parent);
             section_header(parent, "Food");
-            stat_row(parent, "Type", &food.comestible_type);
+            stat_row(
+                parent,
+                "Type",
+                &food.comestible_type,
+            );
             stat_row(parent, "Calories", &food.calories.to_string());
             stat_row(parent, "Quench", &food.quench.to_string());
             stat_row(parent, "Fun", &food.fun.to_string());
@@ -977,7 +1046,11 @@ impl ItemDetailSnapshot {
         if let Some(ref book) = self.book {
             divider(parent);
             section_header(parent, "Book");
-            stat_row(parent, "Skill", &book.skill);
+            stat_row(
+                parent,
+                "Skill",
+                &book.skill,
+            );
             stat_row(
                 parent,
                 "Levels",

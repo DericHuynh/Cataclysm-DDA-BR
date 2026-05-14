@@ -66,39 +66,40 @@ pub fn calculate_melee_hit_chance(
 /// - Add stat bonus: strength * 0.5 as bash
 /// - Add skill bonus: skill_level * 0.25 as bash
 pub fn calculate_melee_damage(weapon: &WeaponData, stats: &Stats, skill_level: u32) -> Damage {
-    use cdda_core_types::core::id::{DamageTypeId, DefIdx};
+    use cdda_core_types::core::damage::DamageTypeDef;
+    use cdda_core_types::core::DefId;
 
-    let bash_type = DamageTypeId(DefIdx(0));
-    let cut_type = DamageTypeId(DefIdx(1));
-    let stab_type = DamageTypeId(DefIdx(2));
+    let bash_type = DefId::<DamageTypeDef>::new("bash");
+    let cut_type = DefId::<DamageTypeDef>::new("cut");
+    let stab_type = DefId::<DamageTypeDef>::new("stab");
 
     let mut dmg = Damage::ZERO;
 
     // Fixed damage from weapon
     if weapon.damage_bash > 0 {
-        dmg.add(bash_type, weapon.damage_bash as u32);
+        dmg.add(bash_type.clone(), weapon.damage_bash as u32);
     }
     if weapon.damage_cut > 0 {
-        dmg.add(cut_type, weapon.damage_cut as u32);
+        dmg.add(cut_type.clone(), weapon.damage_cut as u32);
     }
     if weapon.damage_stab > 0 {
-        dmg.add(stab_type, weapon.damage_stab as u32);
+        dmg.add(stab_type.clone(), weapon.damage_stab as u32);
     }
 
     // Dice-based damage (average roll, added as bash)
     let avg_die = (weapon.dice_sides as f32 + 1.0) / 2.0;
     let dice_damage = (weapon.dice as f32 * avg_die).round() as u32;
     if dice_damage > 0 {
-        dmg.add(bash_type, dice_damage);
+        dmg.add(bash_type.clone(), dice_damage);
     }
 
-    // Stat bonus (strength → bash)
+    // Stat bonus: strength * 0.5 added as bash
     let stat_bonus = (stats.strength as f32 * 0.5).round() as u32;
     if stat_bonus > 0 {
-        dmg.add(bash_type, stat_bonus);
+        dmg.add(bash_type.clone(), stat_bonus);
     }
 
-    // Skill bonus
+    // Skill bonus: skill_level * 0.25 added as bash
     let skill_bonus = (skill_level as f32 * 0.25).round() as u32;
     if skill_bonus > 0 {
         dmg.add(bash_type, skill_bonus);

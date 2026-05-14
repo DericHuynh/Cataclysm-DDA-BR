@@ -8,9 +8,7 @@
 use bevy_ecs::prelude::*;
 
 use cdda_components::actor::Creature;
-use cdda_components::item::{
-    IsPocket, MountedOn, MountedPockets, Pocket, PocketType, WieldedBy, WornOn,
-};
+use cdda_components::item::{IsPocket, MountedOn, MountedPockets, Pocket, PocketType};
 use cdda_core_types::core::units::{Length, Volume, Weight};
 
 /// Spawn a body-pocket entity owned by `player` and return its `Entity`.
@@ -48,27 +46,21 @@ pub fn get_body_pocket(player: Entity, mounted_pockets: &Query<&MountedPockets>)
 /// - If the target has a `Creature` component, it is the owning creature.
 /// - Otherwise, check `WornOn` or `WieldedBy` on the target to find the
 ///   creature that wears or wields it.
-pub fn find_creature_for_pocket(pocket: Entity, world: &World) -> Option<Entity> {
-    let mounted_on = world.entity(pocket).get::<MountedOn>()?;
+/// Follow `MountedOn` from a pocket entity to find the owning creature using queries.
+pub fn find_creature_for_pocket(
+    pocket: Entity,
+    mounted_q: &Query<&MountedOn>,
+    pocket_q: &Query<(), With<IsPocket>>,
+    creature_q: &Query<(), With<Creature>>,
+) -> Option<Entity> {
+    let mounted_on = mounted_q.get(pocket).ok()?;
     let target = mounted_on.0;
-
-    // Direct creature check
-    if world.entity(target).contains::<Creature>() {
-        return Some(target);
+    if creature_q.get(target).is_ok() {
+        Some(target)
+    } else if pocket_q.get(target).is_ok() {
+        // Nested pocket — recurse
+        find_creature_for_pocket(target, mounted_q, pocket_q, creature_q)
+    } else {
+        Some(target)
     }
-
-    // Check if target is worn by a creature
-    if let Some(worn_on) = world.entity(target).get::<WornOn>() {
-        let wearer = worn_on.wearer;
-        if world.entity(wearer).contains::<Creature>() {
-            return Some(wearer);
-        }
-    }
-
-    // Check if target is wielded by a creature
-    if let Some(wielded_by) = world.entity(target).get::<WieldedBy>() {
-        return Some(wielded_by.0);
-    }
-
-    None
 }

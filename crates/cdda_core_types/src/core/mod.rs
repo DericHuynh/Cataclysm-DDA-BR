@@ -10,7 +10,7 @@ pub mod units;
 pub use damage::Damage;
 pub use error::CoreError;
 pub use flags::FlagSet;
-pub use id::{DefCategory, DefId, DefIdx, GenId};
+pub use id::{DefCategory, DefId};
 
 pub use coords::{BubblePos, OmPos, OmtPos, Pos, SubmapLocal, SubmapPos, WorldPos};
 pub use coords::{Direction, Facing, ZLevel};

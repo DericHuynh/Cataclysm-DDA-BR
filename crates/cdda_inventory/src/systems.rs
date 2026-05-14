@@ -34,8 +34,8 @@ use cdda_components::events::{ItemMoveEvent, MoveLocation};
 use cdda_components::input::{GameAction, InputAction};
 use cdda_components::item::{
     Container, ContainerContents, CurrentCharges, DefOrigin, InsideContainer, InventoryFocus,
-    Invlet, ItemDamage, MountedPockets, Pocket, StackCount, WieldedBy, WieldedItems, FLOOR_CAP_ML,
-    INVLET_CHARS,
+    Invlet, ItemDamage, MountedOn, MountedPockets, Pocket, StackCount, WieldedBy, WieldedItems,
+    FLOOR_CAP_ML, INVLET_CHARS,
 };
 use cdda_components::sim::WorldPosition;
 use cdda_core_types::core::coords::{WorldPos, ZLevel};
@@ -88,20 +88,114 @@ fn used_invlets(creature: Entity, world: &World) -> std::collections::HashSet<ch
 
 /// Follow a container entity to find the owning creature.
 /// If it's a pocket, traverse MountedOn. If it's a creature, return it.
-fn find_owning_creature(container: Entity, world: &World) -> Entity {
-    if world
-        .get::<cdda_components::actor::Creature>(container)
-        .is_some()
-    {
+fn find_owning_creature_q(
+    container: Entity,
+    creature_q: &Query<(), With<cdda_components::actor::Creature>>,
+    pocket_q: &Query<(), With<cdda_components::item::IsPocket>>,
+    mounted_on_q: &Query<&MountedOn>,
+) -> Entity {
+    if creature_q.get(container).is_ok() {
         container
-    } else if world
-        .get::<cdda_components::item::IsPocket>(container)
-        .is_some()
-    {
-        pocket::find_creature_for_pocket(container, world).unwrap_or(container)
+    } else if pocket_q.get(container).is_ok() {
+        pocket::find_creature_for_pocket(container, mounted_on_q, pocket_q, creature_q)
+            .unwrap_or(container)
     } else {
         container
     }
+}
+
+/// Collects all items reachable from a creature using query references.
+pub fn all_items_for_creature_q(
+    creature: Entity,
+    contents_q: &Query<&ContainerContents>,
+    mounted_q: &Query<&MountedPockets>,
+    wielded_q: &Query<&WieldedItems>,
+) -> Vec<Entity> {
+    let mut items = Vec::new();
+    if let Ok(cc) = contents_q.get(creature) {
+        items.extend(cc.iter());
+    }
+    if let Ok(mp) = mounted_q.get(creature) {
+        for pocket in mp.iter() {
+            if let Ok(cc) = contents_q.get(pocket) {
+                items.extend(cc.iter());
+            }
+        }
+    }
+    if let Ok(wi) = wielded_q.get(creature) {
+        items.extend(wi.iter());
+    }
+    items
+}
+
+/// Find an existing item in `creature`'s domain that `item` can merge into.
+fn find_merge_target_for_creature_q(
+    creature: Entity,
+    item: Entity,
+    contents_q: &Query<&ContainerContents>,
+    mounted_q: &Query<&MountedPockets>,
+    wielded_q: &Query<&WieldedItems>,
+    origins_q: &Query<&DefOrigin>,
+    damages_q: &Query<&ItemDamage>,
+    charges_q: &Query<&CurrentCharges>,
+) -> Option<Entity> {
+    let incoming_origin = origins_q.get(item).ok().map(|d| d.0);
+    let incoming_damage = damages_q.get(item).ok().map(|d| d.0).unwrap_or(0);
+    let incoming_charges = charges_q.get(item).ok().map(|c| c.0).unwrap_or(0);
+
+    if incoming_origin.is_none() {
+        return None;
+    }
+
+    for candidate in all_items_for_creature_q(creature, contents_q, mounted_q, wielded_q) {
+        if candidate == item || contents_q.get(candidate).is_err() {
+            continue;
+        }
+        let c_origin = origins_q.get(candidate).ok().map(|d| d.0);
+        let c_damage = damages_q.get(candidate).ok().map(|d| d.0).unwrap_or(0);
+        let c_charges = charges_q.get(candidate).ok().map(|c| c.0).unwrap_or(0);
+
+        if c_origin == incoming_origin
+            && c_damage == incoming_damage
+            && c_charges == incoming_charges
+        {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+/// Returns all invlet chars currently in use by items in `creature`'s domain.
+fn used_invlets_q(
+    creature: Entity,
+    contents_q: &Query<&ContainerContents>,
+    mounted_q: &Query<&MountedPockets>,
+    wielded_q: &Query<&WieldedItems>,
+    _invlet_q: &Query<&Invlet>,
+) -> std::collections::HashSet<char> {
+    let items = all_items_for_creature_q(creature, contents_q, mounted_q, wielded_q);
+    items
+        .iter()
+        .filter_map(|&e| _invlet_q.get(e).ok().map(|i| i.0))
+        .collect()
+}
+
+/// Finds an unassigned invlet char for `creature`, preferring `fav_chars`.
+fn allocate_invlet_for_q(
+    creature: Entity,
+    fav_chars: &[char],
+    contents_q: &Query<&ContainerContents>,
+    mounted_q: &Query<&MountedPockets>,
+    wielded_q: &Query<&WieldedItems>,
+    invlet_q: &Query<&Invlet>,
+) -> Option<char> {
+    let used = used_invlets_q(creature, contents_q, mounted_q, wielded_q, invlet_q);
+    for c in fav_chars {
+        if !used.contains(c) {
+            return Some(*c);
+        }
+    }
+    INVLET_CHARS.iter().copied().find(|c| !used.contains(c))
 }
 
 /// Finds an unassigned invlet char for `creature`, preferring `fav_chars`.
@@ -210,14 +304,23 @@ pub fn assign_invlets_system(
     wielded_query: Query<(Entity, &WieldedBy), Without<Invlet>>,
     invlet_query: Query<&Invlet>,
     stack_counts: Query<&StackCount>,
-    world: World,
+    creature_query: Query<(), With<cdda_components::actor::Creature>>,
+    pocket_query: Query<(), With<cdda_components::item::IsPocket>>,
+    container_contents: Query<&ContainerContents>,
+    mounted_pockets: Query<&MountedPockets>,
+    mounted_on: Query<&MountedOn>,
+    wielded_items: Query<&WieldedItems>,
+    item_origins: Query<&DefOrigin>,
+    item_damages: Query<&ItemDamage>,
+    current_charges_q: Query<&CurrentCharges>,
 ) {
     // Collect items needing invlets grouped by owning creature
     let mut by_creature: std::collections::HashMap<Entity, Vec<Entity>> =
         std::collections::HashMap::new();
 
     for (item, inside) in &inside_query {
-        let creature = find_owning_creature(inside.0, &world);
+        let creature =
+            find_owning_creature_q(inside.0, &creature_query, &pocket_query, &mounted_on);
         by_creature.entry(creature).or_default().push(item);
     }
     for (item, wielded) in &wielded_query {
@@ -231,8 +334,16 @@ pub fn assign_invlets_system(
         for item in pending {
             let incoming_count = stack_counts.get(item).ok().map(|s| s.get()).unwrap_or(1);
 
-            // Try to merge into an existing stack in this creature's domain
-            let merge_target = find_merge_target_for_creature(creature, item, &world);
+            let merge_target = find_merge_target_for_creature_q(
+                creature,
+                item,
+                &container_contents,
+                &mounted_pockets,
+                &wielded_items,
+                &item_origins,
+                &item_damages,
+                &current_charges_q,
+            );
 
             if let Some(target) = merge_target {
                 *merge_adds.entry(target).or_insert(0) += incoming_count;
@@ -240,18 +351,22 @@ pub fn assign_invlets_system(
                 continue;
             }
 
-            // No merge: assign invlet.
-            // Use any existing Invlet as a favourite hint.
             let existing_char = invlet_query.get(item).ok().map(|i| i.0);
             let fav_chars: Vec<char> = existing_char.into_iter().collect();
 
-            let c = allocate_invlet_for(creature, &world, &fav_chars);
+            let c = allocate_invlet_for_q(
+                creature,
+                &fav_chars,
+                &container_contents,
+                &mounted_pockets,
+                &wielded_items,
+                &invlet_query,
+            );
             if let Some(c) = c {
                 commands.entity(item).insert(Invlet(c));
             }
         }
 
-        // Apply accumulated stack count increases from merges.
         for (target, extra) in merge_adds {
             let current = stack_counts.get(target).ok().map(|s| s.get()).unwrap_or(1);
             commands
@@ -268,13 +383,16 @@ pub fn build_inventory_bins(
     mut bin: ResMut<InventoryBin>,
     creatures: Query<Entity, With<cdda_components::actor::Creature>>,
     origins: Query<&DefOrigin>,
-    world: World,
+    contents_q: Query<&ContainerContents>,
+    mounted_pockets_q: Query<&MountedPockets>,
+    wielded_q: Query<&WieldedItems>,
+    invlet_q: Query<&Invlet>,
 ) {
     bin.bins.clear();
     for creature in &creatures {
-        for item in all_items_for_creature(creature, &world) {
-            // Only include items that have been assigned an invlet
-            if world.get::<Invlet>(item).is_none() {
+        for item in all_items_for_creature_q(creature, &contents_q, &mounted_pockets_q, &wielded_q)
+        {
+            if invlet_q.get(item).is_err() {
                 continue;
             }
             if let Ok(origin) = origins.get(item) {
@@ -366,7 +484,8 @@ pub fn inventory_screen_input(
     mut stack: ResMut<ContextStack>,
     mut next_screen: ResMut<NextState<Ctx>>,
     mut focused_cmd: ResMut<FocusedCommandIndex>,
-    world: World,
+    contents_q: Query<&ContainerContents>,
+    invlet_q: Query<&Invlet>,
 ) {
     let actions: Vec<GameAction> = reader.read().map(|e| e.action.clone()).collect();
     if actions.is_empty() {
@@ -380,12 +499,18 @@ pub fn inventory_screen_input(
 
     // Collect pocket items: all items in creature's containers/pockets that have an Invlet
     // and are NOT wielded.
+    let all_items = all_items_for_creature_q(
+        player_entity,
+        &contents_q,
+        &mounted_pockets_q,
+        &wielded_items_q,
+    );
     let mut pocket_items: Vec<(char, Entity)> = Vec::new();
-    for item in all_items_for_creature(player_entity, &world) {
+    for item in all_items {
         if wielded_by_check.get(item).is_ok() {
             continue; // skip wielded items
         }
-        if let Some(invlet) = world.get::<Invlet>(item) {
+        if let Ok(invlet) = invlet_q.get(item) {
             pocket_items.push((invlet.0, item));
         }
     }
@@ -521,11 +646,12 @@ pub fn dev_pickup_drop_system(
         With<DevGroundItemName>,
     >,
     item_volumes: Query<Option<&ItemVolume>>,
-    wielded_items_q: Query<Option<&WieldedItems>>,
+    wielded_items_q: Query<&WieldedItems>,
     mounted_pockets_q: Query<&MountedPockets>,
     mut ap_query: Query<&mut ActionPoints, With<DevPlayer>>,
     mut move_writer: MessageWriter<ItemMoveEvent>,
-    world: World,
+    contents_q: Query<&ContainerContents>,
+    invlet_q: Query<&Invlet>,
 ) {
     let actions: Vec<GameAction> = reader.read().map(|e| e.action.clone()).collect();
     if actions.is_empty() {
@@ -555,7 +681,6 @@ pub fn dev_pickup_drop_system(
                     let wielded_count = wielded_items_q
                         .get(player_entity)
                         .ok()
-                        .flatten()
                         .map(|wi| wi.iter().count())
                         .unwrap_or(0);
 
@@ -585,11 +710,15 @@ pub fn dev_pickup_drop_system(
 
             GameAction::Drop => {
                 // Drop the first invlet-assigned item in the player's domain.
-                let invlet_items: Vec<(char, Entity)> =
-                    all_items_for_creature(player_entity, &world)
-                        .iter()
-                        .filter_map(|&e| world.get::<Invlet>(e).map(|i| (i.0, e)))
-                        .collect();
+                let invlet_items: Vec<(char, Entity)> = all_items_for_creature_q(
+                    player_entity,
+                    &contents_q,
+                    &mounted_pockets_q,
+                    &wielded_items_q,
+                )
+                .iter()
+                .filter_map(|&e| invlet_q.get(e).ok().map(|i| (i.0, e)))
+                .collect();
 
                 if let Some(&(_c, item_entity)) = invlet_items.first() {
                     // Volume check: floor has a hard cap of FLOOR_CAP_ML.

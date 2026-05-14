@@ -648,7 +648,7 @@ pub fn spawn_dev_world(world: &mut World) {
             cdda_components::actor::Creature {
                 def_id: "player".to_string(),
                 name: "Dev".to_string(),
-                species: cdda_core_types::core::id::SpeciesId::from(0u32),
+                species: cdda_components::SpeciesId::new("human"),
                 symbol: '@',
             },
             cdda_components::sim::Solid,

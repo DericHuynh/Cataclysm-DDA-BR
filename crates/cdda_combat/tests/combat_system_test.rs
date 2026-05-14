@@ -8,12 +8,12 @@
 #![allow(unused_imports)]
 
 use bevy_ecs::prelude::*;
-use cdda_core::core::components::actor::*;
-use cdda_core::core::components::sim::*;
-use cdda_core::core::components::def::*;
 use cdda_core::combat::systems::*;
+use cdda_core::core::components::actor::*;
+use cdda_core::core::components::def::*;
+use cdda_core::core::components::sim::*;
 use cdda_core::sim::test_utils::TestBed;
-use cdda_core::{Damage, DamageTypeId, DefIdx};
+use cdda_core::{Damage, DefId};
 
 // ---------------------------------------------------------------------------
 // Hit chance tests

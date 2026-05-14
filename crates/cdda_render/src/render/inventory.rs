@@ -23,7 +23,7 @@ use bevy_state::state_scoped::DespawnOnExit;
 use cdda_components::def::{ItemName, ItemSymbol};
 use cdda_components::dev::{DevGroundItemName, DevPlayer};
 use cdda_components::item::{
-    ContainerContents, InProgressCraft, InventoryFocus, Invlet, ItemTypeId, MountedPockets,
+    ContainerContents, InProgressCraft, InventoryFocus, Invlet, ItemType, MountedPockets,
     StackCount, WieldedBy, WieldedItems, WornBy,
 };
 
@@ -343,7 +343,7 @@ fn collect_item_display_data(
     let mut item_names = world.query::<&DevGroundItemName>();
     let mut item_name_fallback = world.query::<&ItemName>();
     let mut item_counts = world.query::<&StackCount>();
-    let mut item_type_ids = world.query::<&ItemTypeId>();
+    let mut item_type_ids = world.query::<&ItemType>();
     let mut item_symbols = world.query::<&ItemSymbol>();
     let mut in_progress_crafts = world.query::<&InProgressCraft>();
 

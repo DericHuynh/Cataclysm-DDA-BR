@@ -15,15 +15,22 @@
 
 // ── Observer-based Event re-exports ──────────────────────────────────────
 
-pub use cdda_events::{DeathCause, GameEvent, MoveLocation};
 pub use cdda_events::{DamageEvent, DeathEvent, EquipEvent, UnequipEvent, UseItemEvent};
+pub use cdda_events::{DeathCause, GameEvent, MoveLocation};
 
 // ── Buffered Message types ───────────────────────────────────────────────
 
 use bevy_ecs::entity::Entity;
 use bevy_ecs::message::Message;
 use cdda_core_types::core::coords::WorldPos;
-use cdda_core_types::core::id::{DefCategory, DefIdx, FactionId, MonsterId};
+use cdda_core_types::core::id::DefCategory;
+use cdda_core_types::core::DefId;
+
+/// Phantom types for event type parameters.
+#[derive(Debug, Clone, Copy)]
+pub struct MonsterDef;
+#[derive(Debug, Clone, Copy)]
+pub struct FactionDef;
 
 /// An item moved between locations (ground, container, wielded, worn).
 ///
@@ -65,9 +72,9 @@ pub struct SightEvent {
 /// Buffered message — processed in batch by the spawning system.
 #[derive(Message, Debug, Clone)]
 pub struct SpawnEvent {
-    pub template_id: MonsterId,
+    pub template_id: DefId<MonsterDef>,
     pub position: WorldPos,
-    pub faction: FactionId,
+    pub faction: DefId<FactionDef>,
 }
 
 /// One or more definitions changed (e.g. hot-reload).
@@ -76,6 +83,4 @@ pub struct SpawnEvent {
 #[derive(Message, Debug, Clone)]
 pub struct DefChangedEvent {
     pub category: DefCategory,
-    /// Numeric indices of changed definitions.
-    pub ids: Vec<DefIdx>,
 }

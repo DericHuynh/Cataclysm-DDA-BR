@@ -17,7 +17,7 @@ use cdda_components::def::ItemSymbol;
 use cdda_components::def::ItemVolume;
 use cdda_components::dev::{DevCamera, DevGroundItemName, DevPlayer};
 use cdda_components::item::{
-    ContainerContents, Invlet, ItemTypeId, MountedPockets, WieldedItems, FLOOR_CAP_ML,
+    ContainerContents, Invlet, ItemType, MountedPockets, WieldedItems, FLOOR_CAP_ML,
 };
 use cdda_components::sim::WorldPosition;
 use std::collections::HashMap;
@@ -244,7 +244,7 @@ fn place_ground_item_tile(
     visual_entity: Option<Entity>,
     source_entity: Entity,
     registry: &TileRegistry,
-    type_id: Option<&ItemTypeId>,
+    type_id: Option<&ItemType>,
     symbol: Option<&ItemSymbol>,
     name: Option<&DevGroundItemName>,
     col: i32,
@@ -329,7 +329,7 @@ pub(crate) fn update_ascii_view(
     ground_items: Query<(
         Entity,
         &WorldPosition,
-        Option<&ItemTypeId>,
+        Option<&ItemType>,
         Option<&ItemSymbol>,
         Option<&ItemVolume>,
         Option<&DevGroundItemName>,
@@ -471,7 +471,7 @@ fn status_text_with_items(
     ground_items: &Query<(
         Entity,
         &WorldPosition,
-        Option<&ItemTypeId>,
+        Option<&ItemType>,
         Option<&ItemSymbol>,
         Option<&ItemVolume>,
         Option<&DevGroundItemName>,

@@ -14,15 +14,15 @@ use super::FooterHint;
 use crate::context::ctx::Ctx;
 use crate::context::screen::CddaScreen;
 use crate::context::ContextActions;
+use crate::input::ActiveKeybindings;
+use crate::input::{BindableAction, GameAction, InputAction};
+use crate::render::theme::{self, UiTheme};
 use cdda_components::actor::Stats;
 use cdda_components::actor::{
     ActionPoints, ActiveEffects, Bionic, Bleeding, BodyTemperature, CombatStats, CreatureMutations,
     CreatureProficiencies, CreatureSkills, Health, InstalledBionics, Morale, MutationEntry, OnFire,
     PlayerData, ProficiencyEntry, SkillEntry, StatusEffect, Stunned, Vision, Wetness,
 };
-use crate::input::ActiveKeybindings;
-use crate::input::{BindableAction, GameAction, InputAction};
-use crate::render::theme::{self, UiTheme};
 use cdda_components::dev::DevPlayer;
 
 // ---------------------------------------------------------------------------
@@ -318,7 +318,13 @@ pub fn update_character_sheet_screen(
             };
             spawn_info_row(left, "Gender", gender_str, theme::TEXT_BRIGHT, 1);
             spawn_info_row(left, "Age", &format!("{}", pd.age), theme::TEXT_BRIGHT, 0);
-            spawn_info_row(left, "Height", &format!("{} cm", pd.height), theme::TEXT_BRIGHT, 1);
+            spawn_info_row(
+                left,
+                "Height",
+                &format!("{} cm", pd.height),
+                theme::TEXT_BRIGHT,
+                1,
+            );
             spawn_info_row(left, "Blood", &pd.blood_type, theme::TEXT_BRIGHT, 0);
         } else {
             spawn_info_row(left, "Name", "Dev Player", theme::TEXT_BRIGHT, 0);
@@ -366,7 +372,13 @@ pub fn update_character_sheet_screen(
                 format!("skill {}", cs.melee_skill)
             };
             spawn_info_row(left, "Melee", &melee_str, theme::TEXT_BRIGHT, 0);
-            spawn_info_row(left, "Dodge", &format!("{}", cs.dodge), theme::TEXT_BRIGHT, 1);
+            spawn_info_row(
+                left,
+                "Dodge",
+                &format!("{}", cs.dodge),
+                theme::TEXT_BRIGHT,
+                1,
+            );
             let armor = &cs.armor;
             let armor_str = format!(
                 "bash {} / cut {} / pierce {}",
@@ -428,7 +440,11 @@ pub fn update_character_sheet_screen(
                         padding: UiRect::axes(Val::Px(14.0), Val::Px(5.0)),
                         ..default()
                     },
-                    BackgroundColor(if i % 2 == 0 { theme::PANEL_BG } else { theme::ROW_ALT_BG }),
+                    BackgroundColor(if i % 2 == 0 {
+                        theme::PANEL_BG
+                    } else {
+                        theme::ROW_ALT_BG
+                    }),
                 ))
                 .with_child((
                     Text::new(format!("  ● {}", label)),
@@ -465,7 +481,11 @@ pub fn update_character_sheet_screen(
                             border: UiRect::right(Val::Px(1.0)),
                             ..default()
                         },
-                        BackgroundColor(if active { theme.tab_active_bg() } else { theme::TAB_BG }),
+                        BackgroundColor(if active {
+                            theme.tab_active_bg()
+                        } else {
+                            theme::TAB_BG
+                        }),
                         BorderColor::all(theme::DIVIDER),
                     ))
                     .with_child((
@@ -474,7 +494,11 @@ pub fn update_character_sheet_screen(
                             font_size: 15.0,
                             ..default()
                         },
-                        TextColor(if active { theme::TAB_TEXT_ACTIVE } else { theme::TEXT_DIM }),
+                        TextColor(if active {
+                            theme::TAB_TEXT_ACTIVE
+                        } else {
+                            theme::TEXT_DIM
+                        }),
                     ));
                 }
             });
@@ -501,7 +525,7 @@ pub fn update_character_sheet_screen(
                     for (i, entry) in skills.iter().enumerate().skip(state.scroll) {
                         let row_str = format!(
                             "{:<24}  {:>5}  {:>8}",
-                            format!("skill #{}", entry.skill_id.0 .0),
+                            format!("skill #{}", entry.skill_id.0),
                             entry.level,
                             entry.exercise,
                         );
@@ -527,7 +551,7 @@ pub fn update_character_sheet_screen(
                     for (i, entry) in traits.iter().enumerate().skip(state.scroll) {
                         let row_str = format!(
                             "{:<30}  {}",
-                            format!("mutation #{}", entry.id.0 .0),
+                            format!("mutation #{}", entry.id.as_str()),
                             if entry.visible { "yes" } else { "no" },
                         );
                         spawn_content_row(right, &row_str, i % 2 == 0, theme::TEXT_BRIGHT);
@@ -556,7 +580,7 @@ pub fn update_character_sheet_screen(
                         let duration_str = format!("{}t", entry.remaining.0);
                         let row_str = format!(
                             "{:<28}  {:>6}  {}",
-                            format!("effect #{}", entry.effect_id.0 .0),
+                            format!("effect #{}", entry.effect_id.as_str()),
                             entry.intensity,
                             duration_str,
                         );
@@ -592,7 +616,7 @@ pub fn update_character_sheet_screen(
                     for (i, entry) in bionics.iter().enumerate().skip(state.scroll) {
                         let row_str = format!(
                             "{:<30}  {:>8}  {}",
-                            format!("bionic #{}", entry.bionic_id.0 .0),
+                            format!("bionic #{}", entry.bionic_id.as_str()),
                             entry.power_used.0,
                             if entry.active { "yes" } else { "no" },
                         );
@@ -621,7 +645,7 @@ pub fn update_character_sheet_screen(
                 } else {
                     spawn_list_header(right, "Proficiency");
                     for (i, entry) in profs.iter().enumerate().skip(state.scroll) {
-                        let row_str = format!("proficiency #{}", entry.id.0 .0);
+                        let row_str = format!("proficiency #{}", entry.id.as_str());
                         spawn_content_row(right, &row_str, i % 2 == 0, theme::TEXT_BRIGHT);
                     }
                 }
@@ -714,7 +738,11 @@ fn spawn_info_row(
                 justify_content: JustifyContent::SpaceBetween,
                 ..default()
             },
-            BackgroundColor(if alt == 0 { theme::PANEL_BG } else { theme::ROW_ALT_BG }),
+            BackgroundColor(if alt == 0 {
+                theme::PANEL_BG
+            } else {
+                theme::ROW_ALT_BG
+            }),
         ))
         .with_children(|row| {
             row.spawn((
@@ -748,7 +776,11 @@ fn spawn_stat_row(parent: &mut ChildSpawnerCommands, name: &str, value: u32, alt
                 align_items: AlignItems::Center,
                 ..default()
             },
-            BackgroundColor(if alt == 0 { theme::PANEL_BG } else { theme::ROW_ALT_BG }),
+            BackgroundColor(if alt == 0 {
+                theme::PANEL_BG
+            } else {
+                theme::ROW_ALT_BG
+            }),
         ))
         .with_children(|row| {
             row.spawn((
@@ -820,7 +852,11 @@ fn spawn_content_row(parent: &mut ChildSpawnerCommands, text: &str, even: bool, 
                 border: UiRect::bottom(Val::Px(1.0)),
                 ..default()
             },
-            BackgroundColor(if even { theme::PANEL_BG } else { theme::ROW_ALT_BG }),
+            BackgroundColor(if even {
+                theme::PANEL_BG
+            } else {
+                theme::ROW_ALT_BG
+            }),
             BorderColor::all(theme::DIVIDER),
         ))
         .with_child((

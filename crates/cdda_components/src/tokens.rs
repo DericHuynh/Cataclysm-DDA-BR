@@ -16,8 +16,8 @@ macro_rules! intern_token {
     };
 }
 
-intern_token!(ItemTypeToken, u32);
-intern_token!(SkillToken, u16);
-intern_token!(AmmoTypeToken, u16);
-intern_token!(BodyPartToken, u16);
-intern_token!(ComestibleToken, u16);
+intern_token!(ItemTypeId, u32);
+intern_token!(SkillId, u16);
+intern_token!(AmmoTypeId, u16);
+intern_token!(BodyPartId, u16);
+intern_token!(ComestibleId, u16);

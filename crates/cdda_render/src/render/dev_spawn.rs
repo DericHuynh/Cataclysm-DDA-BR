@@ -14,7 +14,10 @@ use super::FooterHint;
 use crate::context::ctx::Ctx;
 use crate::context::screen::CddaScreen;
 use crate::context::ContextActions;
-use crate::data::interner::QualityRegistry;
+use crate::data::interner::{
+    AmmoTypeRegistry, BodyPartRegistry, ComestibleRegistry, ItemTypeRegistry, QualityRegistry,
+    SkillRegistry,
+};
 use crate::input::ActiveKeybindings;
 use crate::input::BindableAction;
 use crate::render::item_detail::{spawn_item_detail, ItemDetailQueries};
@@ -244,6 +247,10 @@ pub(crate) fn update_dev_spawn_panel(
     filter_bar: Query<Entity, With<SpawnFilterBar>>,
     detail: ItemDetailQueries,
     quality_registry: Res<QualityRegistry>,
+    skill_registry: Res<SkillRegistry>,
+    ammo_registry: Res<AmmoTypeRegistry>,
+    body_part_registry: Res<BodyPartRegistry>,
+    comestible_registry: Res<ComestibleRegistry>,
     theme: Res<UiTheme>,
 ) {
     let filtered = focus.filtered_entries();
@@ -408,6 +415,10 @@ pub(crate) fn update_dev_spawn_panel(
                     def,
                     &detail,
                     &quality_registry,
+                    &skill_registry,
+                    &ammo_registry,
+                    &body_part_registry,
+                    &comestible_registry,
                 );
             });
     }

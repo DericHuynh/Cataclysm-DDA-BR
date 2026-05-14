@@ -21,7 +21,10 @@ use crate::context::ctx::Ctx;
 use crate::context::screen::CddaScreen;
 use crate::crafting::systems::{CategoryIndex, CraftEntry, CraftState};
 use crate::data::def_world::DefinitionWorld;
-use crate::data::interner::QualityRegistry;
+use crate::data::interner::{
+    AmmoTypeRegistry, BodyPartRegistry, ComestibleRegistry, ItemTypeRegistry, QualityRegistry,
+    SkillRegistry,
+};
 use crate::input::BindableAction;
 use crate::render::item_detail::{spawn_item_detail, ItemDetailQueries};
 use crate::render::theme::{self, UiTheme};
@@ -266,6 +269,10 @@ pub fn update_crafting_ui(
     containers: CraftingContainers,
     defs: ItemDetailQueries,
     quality_registry: Res<QualityRegistry>,
+    skill_registry: Res<SkillRegistry>,
+    ammo_registry: Res<AmmoTypeRegistry>,
+    body_part_registry: Res<BodyPartRegistry>,
+    comestible_registry: Res<ComestibleRegistry>,
     theme: Res<UiTheme>,
 ) {
     let Ok(_root) = containers.root.single() else {
@@ -780,7 +787,18 @@ pub fn update_crafting_ui(
                 .as_ref()
                 .map(|e| e.result_name.as_str())
                 .unwrap_or("");
-            spawn_item_detail(d, name_str, result_id, def, &defs, &quality_registry);
+            spawn_item_detail(
+                d,
+                name_str,
+                result_id,
+                def,
+                &defs,
+                &quality_registry,
+                &skill_registry,
+                &ammo_registry,
+                &body_part_registry,
+                &comestible_registry,
+            );
         });
 
     // ── Filter bar (bottom) ────────────────────────────────────────────────

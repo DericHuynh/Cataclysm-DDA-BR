@@ -17,7 +17,7 @@ use bevy_ecs::component::Component;
 use bevy_ecs::entity::Entity;
 use bevy_reflect::Reflect;
 
-use crate::BodyPartToken;
+use crate::BodyPartId;
 
 // ===========================================================================
 // Creature identity
@@ -28,6 +28,7 @@ use crate::BodyPartToken;
 pub struct Creature {
     pub def_id: String,
     pub name: String,
+    #[reflect(ignore)]
     pub species: crate::SpeciesId,
     pub symbol: char,
 }
@@ -92,7 +93,7 @@ pub struct Health {
 pub use crate::stats::Stats;
 
 /// Faction affiliation.
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Reflect)]
+#[derive(Component, Debug, Clone, PartialEq, Eq, Reflect)]
 pub struct Faction {
     pub id: crate::FactionId,
 }
@@ -184,7 +185,7 @@ pub struct SkillEntry {
 impl Default for SkillEntry {
     fn default() -> Self {
         SkillEntry {
-            skill_id: crate::SkillId::from(0u32),
+            skill_id: crate::SkillId(0),
             level: 0,
             exercise: 0,
             knowledge_level: 0,
@@ -359,7 +360,7 @@ impl CreatureBodyParts {
 pub struct BodyPartDef(pub Entity);
 
 #[derive(Component, Debug, Clone, Reflect)]
-pub struct BodyPartSlot(pub BodyPartToken);
+pub struct BodyPartSlot(pub BodyPartId);
 
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 pub struct BodyPartHp {

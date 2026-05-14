@@ -4,7 +4,7 @@
 //! Translated from CDDA's ranged balance and ammo type tests.
 
 use cdda_components::def::{AmmoData, GunData, MagazineData};
-use cdda_components::{AmmoTypeToken, SkillToken};
+use cdda_components::{AmmoTypeId, SkillId};
 use cdda_core::sim::test_utils::TestBed;
 use cdda_data::interner::AmmoTypeRegistry;
 use cdda_data::interner::*;
@@ -157,7 +157,7 @@ fn gun_data_fields() {
     let mut test = TestBed::new();
     test.register::<GunData>();
     let e = test.spawn((GunData {
-        skill: SkillToken(0),
+        skill: SkillId(0),
         ammo_type: AmmoTypeRegistry::default().intern("9mm"),
         dispersion: 400,
         recoil: 45,
@@ -167,7 +167,7 @@ fn gun_data_fields() {
         ammo_effects: vec![],
     },));
     let gun = test.get::<GunData>(e).unwrap();
-    assert_eq!(gun.skill, SkillToken(0));
+    assert_eq!(gun.skill, SkillId(0));
     assert_eq!(gun.ammo_type, AmmoTypeRegistry::default().intern("9mm"));
     assert_eq!(gun.dispersion, 400);
     assert_eq!(gun.recoil, 45);
@@ -182,7 +182,7 @@ fn gun_shotgun() {
     let mut test = TestBed::new();
     test.register::<GunData>();
     let e = test.spawn((GunData {
-        skill: SkillToken(0),
+        skill: SkillId(0),
         ammo_type: AmmoTypeRegistry::default().intern("shot"),
         dispersion: 525,
         recoil: 60,
@@ -192,7 +192,7 @@ fn gun_shotgun() {
         ammo_effects: vec![],
     },));
     let gun = test.get::<GunData>(e).unwrap();
-    assert_eq!(gun.skill, SkillToken(0));
+    assert_eq!(gun.skill, SkillId(0));
     assert_eq!(gun.ammo_type, AmmoTypeRegistry::default().intern("shot"));
     assert_eq!(gun.dispersion, 525);
     assert_eq!(gun.clip_size, 6);
@@ -204,7 +204,7 @@ fn gun_burst_fire() {
     let mut test = TestBed::new();
     test.register::<GunData>();
     let e = test.spawn((GunData {
-        skill: SkillToken(0),
+        skill: SkillId(0),
         ammo_type: AmmoTypeRegistry::default().intern("rifle"),
         dispersion: 200,
         recoil: 35,
@@ -222,7 +222,7 @@ fn gun_no_ammo_effects() {
     let mut test = TestBed::new();
     test.register::<GunData>();
     let e = test.spawn((GunData {
-        skill: SkillToken(0),
+        skill: SkillId(0),
         ammo_type: AmmoTypeRegistry::default().intern("9mm"),
         dispersion: 400,
         recoil: 45,
@@ -240,7 +240,7 @@ fn gun_with_ammo_effects() {
     let mut test = TestBed::new();
     test.register::<GunData>();
     let e = test.spawn((GunData {
-        skill: SkillToken(0),
+        skill: SkillId(0),
         ammo_type: AmmoTypeRegistry::default().intern("9mm"),
         dispersion: 400,
         recoil: 45,
@@ -258,7 +258,7 @@ fn gun_zero_clip() {
     let mut test = TestBed::new();
     test.register::<GunData>();
     let e = test.spawn((GunData {
-        skill: SkillToken(0),
+        skill: SkillId(0),
         ammo_type: AmmoTypeRegistry::default().intern("rifle"),
         dispersion: 150,
         recoil: 30,

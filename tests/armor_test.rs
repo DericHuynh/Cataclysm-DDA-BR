@@ -8,7 +8,7 @@ use cdda_components::def::{
     ArmourData, ArmourPart, ItemInsulation, ItemMaterials, ItemName, ItemPrice, ItemStackSize,
     ItemVolume, ItemWeight,
 };
-use cdda_components::BodyPartToken;
+use cdda_components::BodyPartId;
 use cdda_core::sim::test_utils::TestBed;
 use cdda_data::interner::BodyPartRegistry;
 

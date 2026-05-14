@@ -16,7 +16,7 @@ use crate::render::item_detail::ItemDetailSnapshot;
 use crate::render::theme::{self, UiTheme};
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
-use cdda_components::item::{ItemTypeId, StackCount};
+use cdda_components::item::{ItemType, StackCount};
 
 // ---------------------------------------------------------------------------
 // CddaScreen trait impl
@@ -45,7 +45,7 @@ fn spawn_examine_from_world(world: &mut World) {
     };
 
     let type_id: String = {
-        let mut q = world.query::<&ItemTypeId>();
+        let mut q = world.query::<&ItemType>();
         q.get(world, item_entity)
             .map(|t| {
                 world

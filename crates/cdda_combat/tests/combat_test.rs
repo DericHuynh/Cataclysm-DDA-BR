@@ -4,8 +4,8 @@
 //! along with combat formula helpers derived from CDDA rules.
 
 use cdda_components::Damage;
-use cdda_components::DamageTypeId;
-use cdda_core_types::core::id::DefIdx;
+use cdda_core_types::core::damage::DamageTypeDef;
+use cdda_core_types::core::DefId;
 use cdda_sim::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------
@@ -281,9 +281,9 @@ fn armor_reduces_damage() {
 
 #[test]
 fn damage_profile_tracks_types() {
-    let bash = DamageTypeId(DefIdx(0));
-    let cut = DamageTypeId(DefIdx(1));
-    let bullet = DamageTypeId(DefIdx(2));
+    let bash = DefId::<DamageTypeDef>::new("bash");
+    let cut = DefId::<DamageTypeDef>::new("cut");
+    let bullet = DefId::<DamageTypeDef>::new("bullet");
 
     let mut d = Damage::ZERO;
     d.add(bash, 10);
@@ -299,8 +299,8 @@ fn damage_profile_tracks_types() {
 
 #[test]
 fn damage_merge_combat() {
-    let bash = DamageTypeId(DefIdx(0));
-    let cut = DamageTypeId(DefIdx(1));
+    let bash = DefId::<DamageTypeDef>::new("bash");
+    let cut = DefId::<DamageTypeDef>::new("cut");
 
     let mut a = Damage::ZERO;
     a.add(bash, 12);
