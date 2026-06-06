@@ -56,8 +56,6 @@ use cdda_item::plugin::ItemPlugin;
 use cdda_overmap::spatial::EntitySpatialIndex;
 use cdda_overmap::OvermapCamera;
 use cdda_overmap_gen::pipeline::OvermapGenPlugin;
-use cdda_overmap_gen::setup::register_game_components;
-use cdda_overmap_gen::spatial_systems::{cleanup_spatial_index, update_spatial_index};
 use cdda_sim::state::{AppState, StartupConfig};
 
 // ---------------------------------------------------------------------------
@@ -139,8 +137,6 @@ pub struct CddaPlugin;
 
 impl Plugin for CddaPlugin {
     fn build(&self, app: &mut App) {
-        register_game_components(app.world_mut());
-
         app.add_plugins((
             ActivityPlugin,
             ActorPlugin,
@@ -294,8 +290,6 @@ impl Plugin for CddaPlugin {
                 inventory_screen_input
                     .in_set(SimSet::Inventory)
                     .run_if(in_state(Screen::Inventory)),
-                update_spatial_index.in_set(SimSet::SpatialUpdate),
-                cleanup_spatial_index.in_set(SimSet::SpatialUpdate),
                 debug_turn_queue.in_set(SimSet::SpatialUpdate),
             )
                 .run_if(in_state(AppState::InGame)),

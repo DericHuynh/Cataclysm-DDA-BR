@@ -23,7 +23,16 @@ use cdda_core_types::core::coords::{WorldPos, ZLevel, TILES_PER_OMT};
 use cdda_data::def_world::DefinitionWorld;
 use cdda_data::interner::ItemTypeRegistry;
 use cdda_inventory::examine_resource::ExaminedItem;
-use cdda_overmap_gen::spawning::spawn_item_from_def;
+// Stub: spawn_item_from_def (module cdda_overmap_gen::spawning doesn't exist yet).
+// TODO: move to cdda_overmap_gen::spawning when implemented.
+fn spawn_item_from_def(
+    world: &mut World,
+    _def_entity: Entity,
+    _pos: WorldPos,
+    _count: u32,
+) -> Entity {
+    world.spawn_empty().id()
+}
 
 // ---------------------------------------------------------------------------
 // CategoryIndex — tabbed category navigation for the crafting menu

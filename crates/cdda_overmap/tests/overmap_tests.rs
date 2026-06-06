@@ -2,9 +2,9 @@
 //!
 //! Ports CDDA master's overmap test patterns to the Rust ECS architecture.
 
+use cdda_core_types::core::coords::ZLevel;
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, CHUNK_SIZE};
 use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};
-use cdda_core_types::core::coords::ZLevel;
 
 // ===========================================================================
 // TerrainHandle tests
@@ -66,7 +66,7 @@ fn registry_register_and_lookup() {
     let mut flags = TerrainFlags::empty();
     flags.set(TerrainFlags::FOREST);
 
-    let idx = reg.register_no_entity("forest", flags, 3, "forest_mapgen".to_string());
+    let idx = reg.register_no_entity("forest", flags, 3, "forest_mapgen".to_string(), 0);
     assert!(idx > 0);
 
     let handle = reg.handle_by_id("forest").unwrap();
@@ -136,7 +136,7 @@ fn chunk_fill_overwrites() {
     let mut chunk = OvermapChunk::new_filled(TerrainHandle::new(1, 0));
     let h2 = TerrainHandle::new(2, 0);
     chunk.fill(h2);
-    assert_eq!(chunk.get(31, 31), h2);
+    assert_eq!(chunk.get(29, 29), h2);
     assert_eq!(chunk.get(0, 0), h2);
 }
 
@@ -181,8 +181,20 @@ fn chunk_position_to_key() {
 
 #[test]
 fn chunk_position_different_keys() {
-    let a = ChunkPosition { om_x: 0, om_y: 0, z: ZLevel::new(0), chunk_x: 0, chunk_y: 0 };
-    let b = ChunkPosition { om_x: 0, om_y: 0, z: ZLevel::new(0), chunk_x: 1, chunk_y: 0 };
+    let a = ChunkPosition {
+        om_x: 0,
+        om_y: 0,
+        z: ZLevel::new(0),
+        chunk_x: 0,
+        chunk_y: 0,
+    };
+    let b = ChunkPosition {
+        om_x: 0,
+        om_y: 0,
+        z: ZLevel::new(0),
+        chunk_x: 1,
+        chunk_y: 0,
+    };
     assert_ne!(a.to_key(), b.to_key());
 }
 
@@ -196,8 +208,9 @@ fn chunk_position_omt_origin() {
         chunk_y: 2,
     };
     let (ox, oy) = pos.omt_origin();
-    assert_eq!(ox, 32);
-    assert_eq!(oy, 64);
+    // chunk_x * CHUNK_DIM(30) = 30, chunk_y * 30 = 60
+    assert_eq!(ox, 30);
+    assert_eq!(oy, 60);
 }
 
 #[test]
@@ -210,13 +223,15 @@ fn chunk_position_omt_origin_nonzero_overmap() {
         chunk_y: 4,
     };
     let (ox, oy) = pos.omt_origin();
-    assert_eq!(ox, 2 * 180 + 3 * 32);
-    assert_eq!(oy, 3 * 180 + 4 * 32);
+    // om_x * 180 + chunk_x * 30 = 360 + 90 = 450
+    assert_eq!(ox, 2 * 180 + 3 * 30);
+    // om_y * 180 + chunk_y * 30 = 540 + 120 = 660
+    assert_eq!(oy, 3 * 180 + 4 * 30);
 }
 
 #[test]
 fn chunk_position_omt_origin_wraps_correctly() {
-    // Chunk (5, 5) in overmap (0, 0) — should be at (160, 160)
+    // Chunk (5, 5) in overmap (0, 0) — at (150, 150) with CHUNK_DIM=30
     let pos = ChunkPosition {
         om_x: 0,
         om_y: 0,
@@ -225,8 +240,8 @@ fn chunk_position_omt_origin_wraps_correctly() {
         chunk_y: 5,
     };
     let (ox, oy) = pos.omt_origin();
-    assert_eq!(ox, 160);
-    assert_eq!(oy, 160);
+    assert_eq!(ox, 150);
+    assert_eq!(oy, 150);
 }
 
 // ===========================================================================
@@ -266,7 +281,12 @@ fn test_om_direction_rotation_composition() {
     use cdda_overmap::direction::OmDirection;
 
     // Turning left 4 times should return to start.
-    for dir in &[OmDirection::North, OmDirection::East, OmDirection::South, OmDirection::West] {
+    for dir in &[
+        OmDirection::North,
+        OmDirection::East,
+        OmDirection::South,
+        OmDirection::West,
+    ] {
         let mut d = *dir;
         for _ in 0..4 {
             d = d.turn_left();
@@ -275,7 +295,12 @@ fn test_om_direction_rotation_composition() {
     }
 
     // Turning right then left should return to start.
-    for dir in &[OmDirection::North, OmDirection::East, OmDirection::South, OmDirection::West] {
+    for dir in &[
+        OmDirection::North,
+        OmDirection::East,
+        OmDirection::South,
+        OmDirection::West,
+    ] {
         assert_eq!(
             dir.turn_right().turn_left(),
             *dir,
@@ -284,7 +309,12 @@ fn test_om_direction_rotation_composition() {
     }
 
     // Opposite of opposite is self.
-    for dir in &[OmDirection::North, OmDirection::East, OmDirection::South, OmDirection::West] {
+    for dir in &[
+        OmDirection::North,
+        OmDirection::East,
+        OmDirection::South,
+        OmDirection::West,
+    ] {
         assert_eq!(
             dir.opposite().opposite(),
             *dir,

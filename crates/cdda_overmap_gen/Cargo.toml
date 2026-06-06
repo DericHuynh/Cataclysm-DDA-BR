@@ -22,8 +22,3 @@ tracing-subscriber.workspace = true
 [dev-dependencies]
 bevy_ecs.workspace = true
 cdda_noise = { path = "../cdda_noise" }
-
-[[bin]]
-name = "overmap-analyze"
-path = "src/bin/analyze.rs"
-required-features = []

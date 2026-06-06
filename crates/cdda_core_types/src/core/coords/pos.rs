@@ -1,6 +1,7 @@
 use crate::core::coords::origins::{Abs, Rel};
 use crate::core::coords::scales::{Ms, Om, Omt, Sm, OMT_PER_OM, TILES_PER_OMT, TILES_PER_SM};
 use crate::core::coords::z_level::ZLevel;
+use bevy_ecs::prelude::Component;
 use serde::{Deserialize, Serialize};
 use std::ops::{Add, Sub};
 
@@ -14,7 +15,7 @@ use std::ops::{Add, Sub};
 /// All horizontal division uses `div_euclid` / `rem_euclid` to correctly
 /// handle negative coordinates. Rust's `/` truncates toward zero, which
 /// would silently assign negative positions to the wrong submap.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Component)]
 pub struct Pos<Scale, Origin> {
     pub x: i32,
     pub y: i32,

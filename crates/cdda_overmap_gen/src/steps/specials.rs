@@ -1,25 +1,25 @@
-//! Step 7: Place overmap specials from loaded JSON definitions.
+//! Overmap specials placement.
 //!
-//! Port of CDDA master's `overmap::place_specials()` and `overmap::place_special()`.
-//! Uses `SpecialCatalog` (populated from `DefRegistry.overmap_specials` during data loading).
+//! Port of C++ `overmap::place_specials()` and related functions.
+//! Places fixed overmap specials (lab, military base, etc.) by checking
+//! location constraints and city distance/size requirements.
 
 use bevy_ecs::prelude::*;
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, OMAP_DIM};
 use cdda_overmap::query::{is_ot_match, OtMatchType};
 use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};
 use cdda_overmap::rng::XorShiftRng;
+use tracing::info;
 
 use crate::pipeline::OvermapGenConfig;
 use crate::region_settings::OvermapRegionSettings;
-use crate::special_catalog::SpecialCatalog;
 use crate::steps::cities::City;
-use cdda_core_types::core::raw_defs::cdda_types::StringOrArray;
-use cdda_core_types::core::raw_defs::overmap_terrain::OvermapSpecialDef;
-use cdda_overmap::connections::inbounds_omt;
-use std::sync::Arc;
-use tracing::info;
 
-/// A placed overmap special entity marker.
+// ---------------------------------------------------------------------------
+// PlacedSpecial marker component
+// ---------------------------------------------------------------------------
+
+/// Marker component spawned for each placed overmap special.
 #[derive(Component)]
 pub struct PlacedSpecial {
     pub special_id: String,
@@ -27,14 +27,316 @@ pub struct PlacedSpecial {
     pub omt_y: i32,
 }
 
-/// Place overmap specials on the generated terrain.
+// ---------------------------------------------------------------------------
+// SpecialPlacement — simplified representation of a special's placement rules
+// ---------------------------------------------------------------------------
+
+/// Placement constraints for a single overmap special.
+#[derive(Debug, Clone)]
+pub struct SpecialPlacement {
+    /// Unique identifier for this special.
+    pub id: String,
+    /// Minimum occurrences per overmap.
+    pub occ_min: i32,
+    /// Maximum occurrences per overmap.
+    pub occ_max: i32,
+    /// Minimum city distance (OMT tiles). -1 = no constraint.
+    pub min_city_distance: i32,
+    /// Maximum city distance. -1 = no constraint.
+    pub max_city_distance: i32,
+    /// Minimum city size (for distance checks). -1 = any.
+    pub min_city_size: i32,
+    /// Maximum city size (for distance checks). -1 = any.
+    pub max_city_size: i32,
+    /// Location constraint: "land", "forest", "swamp", "water", or a terrain ID prefix.
+    pub location: String,
+    /// OMT terrain writes: for each tile making up this special.
+    /// Each entry is (dx, dy, terrain_string_id) relative to the placed origin.
+    pub overmaps: Vec<(i32, i32, String)>,
+}
+
+impl Default for SpecialPlacement {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            occ_min: 0,
+            occ_max: 1,
+            min_city_distance: -1,
+            max_city_distance: -1,
+            min_city_size: -1,
+            max_city_size: -1,
+            location: String::new(),
+            overmaps: Vec::new(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Location check helper
+// ---------------------------------------------------------------------------
+
+/// Check whether a tile satisfies a location constraint.
 ///
-/// For each special in the catalog:
-/// 1. Check location constraints (e.g. "land", "forest", "swamp")
-/// 2. Check city distance constraints
-/// 3. Find valid placement positions
-/// 4. Place terrain tiles from the special definition
-/// 5. Handle uniqueness flags
+/// | Constraint | Condition |
+/// |---|---|---|
+/// | "land"     | Not LAKE, OCEAN, or RIVER |
+/// | "forest"   | Has FOREST flag |
+/// | "swamp"    | Has FOREST flag AND LAKE flag |
+/// | "water"    | Has LAKE or OCEAN or RIVER flag |
+/// | other      | Uses `is_ot_match` with `OtMatchType::Contains`, then `Prefix` |
+fn matches_location(var: &str, handle: TerrainHandle, registry: &TerrainRegistry) -> bool {
+    let flags = registry.flags_for(handle);
+    let water =
+        TerrainFlags::from_bits(TerrainFlags::LAKE | TerrainFlags::OCEAN | TerrainFlags::RIVER);
+
+    match var {
+        "land" => !flags.intersects(water),
+        "forest" => flags.contains(TerrainFlags::FOREST) && !flags.intersects(water),
+        "swamp" => flags.contains(TerrainFlags::FOREST) && flags.contains(TerrainFlags::LAKE),
+        "water" => flags.intersects(water),
+        _ => {
+            is_ot_match(var, handle, registry, OtMatchType::Contains)
+                || is_ot_match(var, handle, registry, OtMatchType::Prefix)
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// City distance / size check
+// ---------------------------------------------------------------------------
+
+/// Check whether an OMT position satisfies all city distance and size constraints.
+fn check_city_constraints(
+    x: i32,
+    y: i32,
+    placement: &SpecialPlacement,
+    cities: &[&City],
+    _registry: &TerrainRegistry,
+    _grid: &[TerrainHandle],
+    _omap_size: usize,
+) -> bool {
+    if placement.min_city_distance < 0 && placement.max_city_distance < 0 {
+        return true; // No city constraints
+    }
+
+    // Find the closest city
+    let mut closest_dist = i32::MAX;
+    let mut _closest_city_size: i32 = 0;
+
+    for city in cities {
+        let d = (x - city.omt_x).abs().max((y - city.omt_y).abs()); // Chebyshev distance
+        if d < closest_dist {
+            closest_dist = d;
+            _closest_city_size = city.size as i32;
+        }
+    }
+
+    // Check distance bounds
+    if placement.min_city_distance >= 0 && closest_dist < placement.min_city_distance {
+        return false;
+    }
+    if placement.max_city_distance >= 0 && closest_dist > placement.max_city_distance {
+        return false;
+    }
+
+    // Additional city size filtering — if both min and max are specified,
+    // only count cities within the distance range whose size matches
+    if placement.min_city_size >= 0 || placement.max_city_size >= 0 {
+        let mut any_matching_city = false;
+        for city in cities {
+            let d = (x - city.omt_x).abs().max((y - city.omt_y).abs());
+            let in_range = if placement.min_city_distance >= 0 {
+                d >= placement.min_city_distance
+            } else {
+                true
+            } && if placement.max_city_distance >= 0 {
+                d <= placement.max_city_distance
+            } else {
+                true
+            };
+
+            if !in_range {
+                continue;
+            }
+
+            let size_ok = if placement.min_city_size >= 0 {
+                (city.size as i32) >= placement.min_city_size
+            } else {
+                true
+            } && if placement.max_city_size >= 0 {
+                (city.size as i32) <= placement.max_city_size
+            } else {
+                true
+            };
+
+            if size_ok {
+                any_matching_city = true;
+                break;
+            }
+        }
+        if !any_matching_city {
+            return false;
+        }
+    }
+
+    true
+}
+
+// ---------------------------------------------------------------------------
+// Default specials catalog
+// ---------------------------------------------------------------------------
+
+/// Build a default set of specials to place.
+///
+/// In a full implementation this would be loaded from JSON data.
+/// For now we provide a representative set that mirrors CDDA vanilla specials.
+fn default_specials_catalog() -> Vec<SpecialPlacement> {
+    vec![
+        SpecialPlacement {
+            id: "lab".into(),
+            occ_min: 1,
+            occ_max: 4,
+            min_city_distance: 4,
+            max_city_distance: -1,
+            location: "land".into(),
+            overmaps: vec![(0, 0, "lab".into())],
+            ..Default::default()
+        },
+        SpecialPlacement {
+            id: "lab_ice".into(),
+            occ_min: 0,
+            occ_max: 1,
+            min_city_distance: 10,
+            max_city_distance: -1,
+            location: "forest".into(),
+            overmaps: vec![(0, 0, "ice_lab".into())],
+            ..Default::default()
+        },
+        SpecialPlacement {
+            id: "military_base".into(),
+            occ_min: 0,
+            occ_max: 1,
+            min_city_distance: 12,
+            max_city_distance: -1,
+            location: "land".into(),
+            overmaps: vec![
+                (0, 0, "military_base".into()),
+                (0, -1, "mil_base_north".into()),
+                (0, 1, "mil_base_south".into()),
+                (1, 0, "mil_base_east".into()),
+                (-1, 0, "mil_base_west".into()),
+            ],
+            ..Default::default()
+        },
+        SpecialPlacement {
+            id: "mine".into(),
+            occ_min: 1,
+            occ_max: 3,
+            min_city_distance: 6,
+            max_city_distance: -1,
+            location: "land".into(),
+            overmaps: vec![(0, 0, "mine".into())],
+            ..Default::default()
+        },
+        SpecialPlacement {
+            id: "radio_tower".into(),
+            occ_min: 2,
+            occ_max: 6,
+            min_city_distance: 3,
+            max_city_distance: -1,
+            location: "land".into(),
+            overmaps: vec![(0, 0, "radio_tower".into())],
+            ..Default::default()
+        },
+        SpecialPlacement {
+            id: "anthill".into(),
+            occ_min: 2,
+            occ_max: 5,
+            min_city_distance: 5,
+            max_city_distance: -1,
+            location: "forest".into(),
+            overmaps: vec![(0, 0, "anthill".into())],
+            ..Default::default()
+        },
+        SpecialPlacement {
+            id: "triffid_grove".into(),
+            occ_min: 1,
+            occ_max: 3,
+            min_city_distance: 8,
+            max_city_distance: -1,
+            location: "forest".into(),
+            overmaps: vec![(0, 0, "triffid_grove".into())],
+            ..Default::default()
+        },
+        SpecialPlacement {
+            id: "fungal_bloom".into(),
+            occ_min: 1,
+            occ_max: 3,
+            min_city_distance: 6,
+            max_city_distance: -1,
+            location: "swamp".into(),
+            overmaps: vec![(0, 0, "fungal_bloom".into())],
+            ..Default::default()
+        },
+        SpecialPlacement {
+            id: "spider_pit".into(),
+            occ_min: 1,
+            occ_max: 4,
+            min_city_distance: 4,
+            max_city_distance: -1,
+            location: "forest".into(),
+            overmaps: vec![(0, 0, "spider_pit".into())],
+            ..Default::default()
+        },
+        SpecialPlacement {
+            id: "cabin".into(),
+            occ_min: 2,
+            occ_max: 8,
+            min_city_distance: 5,
+            max_city_distance: 40,
+            location: "forest".into(),
+            overmaps: vec![(0, 0, "cabin".into())],
+            ..Default::default()
+        },
+        SpecialPlacement {
+            id: "lmoe".into(),
+            occ_min: 0,
+            occ_max: 1,
+            min_city_distance: 8,
+            max_city_distance: -1,
+            location: "forest".into(),
+            overmaps: vec![(0, 0, "lmoe".into())],
+            ..Default::default()
+        },
+        SpecialPlacement {
+            id: "haz_sar".into(),
+            occ_min: 1,
+            occ_max: 2,
+            min_city_distance: 6,
+            max_city_distance: -1,
+            location: "land".into(),
+            overmaps: vec![(0, 0, "haz_sar".into())],
+            ..Default::default()
+        },
+    ]
+}
+
+// ---------------------------------------------------------------------------
+// place_specials — system entry point
+// ---------------------------------------------------------------------------
+
+/// Place fixed overmap specials.
+///
+/// Port of C++ `overmap::place_specials()`.
+///
+/// Algorithm:
+/// 1. Build terrain grid from z=0 chunks.
+/// 2. Check if overmap has lakes/oceans (for water-flagged specials).
+/// 3. For each special in the catalog:
+///    a. Determine random count to place.
+///    b. Try random positions, checking location + city constraints.
+///    c. If all checks pass, collect terrain writes and spawn a marker.
+/// 4. Write all terrain changes back to chunks.
 pub fn place_specials(
     mut commands: Commands,
     chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
@@ -42,181 +344,164 @@ pub fn place_specials(
     cities: Query<&City>,
     config: Res<OvermapGenConfig>,
     registry: Res<TerrainRegistry>,
-    _settings: Res<OvermapRegionSettings>,
-    catalog: Option<Res<SpecialCatalog>>,
+    settings: Res<OvermapRegionSettings>,
 ) {
-    let Some(catalog) = catalog else {
-        info!("No special catalog — skipping overmap special placement");
-        return;
-    };
-    if catalog.specials.is_empty() {
+    if !settings.place_specials {
+        info!("place_specials: skipped — place_specials is false");
         return;
     }
 
-    let mut rng = XorShiftRng::new(config.noise_seed as u64 + 31);
+    // --- Build terrain grid from z=0 chunks ---------------------------------
+    let omap_size = OMAP_DIM as usize;
+    let mut grid = vec![TerrainHandle::NULL; omap_size * omap_size];
 
-    // Build dense grid of terrain type indices for z=0.
-    let mut grid = [[0u32; 180]; 180];
     for (_entity, chunk_pos, chunk) in &chunks {
         if chunk_pos.z.0 != 0 {
             continue;
         }
         let (ox, oy) = chunk_pos.omt_origin();
-        for ly in 0..CHUNK_DIM as u8 {
-            for lx in 0..CHUNK_DIM as u8 {
-                let gx = (ox + lx as i32) as usize;
-                let gy = (oy + ly as i32) as usize;
-                if gx < 180 && gy < 180 {
-                    grid[gx][gy] = chunk.get(lx, ly).type_index();
+        for ly in 0..CHUNK_DIM as i32 {
+            for lx in 0..CHUNK_DIM as i32 {
+                let gx = ox + lx;
+                let gy = oy + ly;
+                if gx >= 0 && gx < OMAP_DIM && gy >= 0 && gy < OMAP_DIM {
+                    grid[(gy as usize) * omap_size + (gx as usize)] = chunk.get(lx as u8, ly as u8);
                 }
             }
         }
     }
 
-    // Collect writes: (omt_x, omt_y, z, handle)
-    let mut writes: Vec<(i32, i32, i8, TerrainHandle)> = Vec::new();
-
-    // Collect city info for distance checks.
-    let city_positions: Vec<(i32, i32, i32)> = cities
-        .iter()
-        .map(|c| (c.omt_x, c.omt_y, c.size as i32))
-        .collect();
-
-    // Check if overmap has lakes or oceans (for LAKE/OCEAN flagged specials).
-    let has_lake = grid.iter().flatten().any(|&idx| {
-        let flags = registry.flags_for(TerrainHandle::new(idx, 0));
-        flags.contains(TerrainFlags::LAKE)
-    });
-    let has_ocean = grid.iter().flatten().any(|&idx| {
-        let flags = registry.flags_for(TerrainHandle::new(idx, 0));
-        flags.contains(TerrainFlags::OCEAN)
-    });
-
-    let mut placed_count = 0usize;
-
-    for special_def in &catalog.specials {
-        let flags: Vec<&str> = match &special_def.flags {
-            StringOrArray::Single(s) => vec![s.as_str()],
-            StringOrArray::Multi(v) => v.iter().map(|s| s.as_str()).collect(),
-        };
-
-        // Apply overmap-level filters
-        if flags.contains(&"LAKE") && !has_lake {
-            continue;
-        }
-        if flags.contains(&"OCEAN") && !has_ocean {
-            continue;
-        }
-        if flags.contains(&"GLOBALLY_UNIQUE") || flags.contains(&"OVERMAP_UNIQUE") {
-            // For unique specials, skip for now (tracking not yet implemented)
-            continue;
-        }
-
-        // Parse location constraints
-        let location_strs: Vec<&str> = match &special_def.locations {
-            StringOrArray::Single(s) => vec![s.as_str()],
-            StringOrArray::Multi(v) => v.iter().map(|s| s.as_str()).collect(),
-        };
-
-        // Parse occurrence constraints [min, max]
-        let (occ_min, occ_max) = special_def
-            .occurrences
-            .map(|o| (o[0] as usize, o[1] as usize))
-            .unwrap_or((0, 1));
-
-        // Parse city_distance [min, max]
-        let city_dist = special_def.city_distance.unwrap_or([0, i32::MAX as i32]);
-
-        // Parse city_sizes [min, max]
-        let city_sizes = special_def.city_sizes.unwrap_or([0, i32::MAX as i32]);
-
-        // Determine number to place (random between min and max)
-        let to_place = if occ_min >= occ_max {
-            occ_min
+    let ter_at = |x: i32, y: i32| -> TerrainHandle {
+        if x >= 0 && x < OMAP_DIM && y >= 0 && y < OMAP_DIM {
+            grid[(y as usize) * omap_size + (x as usize)]
         } else {
-            rng.range_i32(occ_min as i32, occ_max as i32) as usize
+            TerrainHandle::NULL
+        }
+    };
+
+    // --- Check if overmap has lakes/oceans for water specials ---------------
+    let has_lake = grid
+        .iter()
+        .any(|h| registry.flags_for(*h).contains(TerrainFlags::LAKE));
+    let has_ocean = grid
+        .iter()
+        .any(|h| registry.flags_for(*h).contains(TerrainFlags::OCEAN));
+
+    // --- Collect cities for distance checks ---------------------------------
+    let city_refs: Vec<&City> = cities.iter().collect();
+
+    // --- RNG -----------------------------------------------------------------
+    let mut rng = XorShiftRng::new(config.noise_seed as u64 + 17);
+
+    // --- Get catalog ---------------------------------------------------------
+    let specials = default_specials_catalog();
+
+    let mut tile_writes: Vec<(i32, i32, TerrainHandle)> = Vec::new();
+    let mut placed_count = 0usize;
+    let max_placement_attempts = 200;
+
+    for spec in &specials {
+        // Skip water specials if no water bodies exist on this overmap
+        if spec.location == "water" && !has_lake && !has_ocean {
+            continue;
+        }
+
+        // Determine random count
+        let count = if spec.occ_max <= spec.occ_min {
+            spec.occ_min
+        } else {
+            rng.range_i32(spec.occ_min, spec.occ_max)
         };
 
-        let mut placed = 0usize;
+        let mut placed_for_this = 0;
 
-        // Try random positions
-        for _ in 0..(to_place * 50).max(100) {
-            if placed >= to_place {
+        for _ in 0..count {
+            let mut placed = false;
+
+            for _attempt in 0..max_placement_attempts {
+                let px = rng.range_i32(4, OMAP_DIM - 5);
+                let py = rng.range_i32(4, OMAP_DIM - 5);
+
+                let handle = ter_at(px, py);
+
+                // Check location constraint
+                if !matches_location(&spec.location, handle, &registry) {
+                    continue;
+                }
+
+                // Check city constraints
+                if !check_city_constraints(px, py, spec, &city_refs, &registry, &grid, omap_size) {
+                    continue;
+                }
+
+                // All checks passed — collect terrain writes and place
+                for &(dx, dy, ref terrain_id) in &spec.overmaps {
+                    let tx = px + dx;
+                    let ty = py + dy;
+                    if tx >= 0 && tx < OMAP_DIM && ty >= 0 && ty < OMAP_DIM {
+                        if let Some(handle) = registry.handle_by_id(terrain_id) {
+                            tile_writes.push((tx, ty, handle));
+                        }
+                    }
+                }
+
+                // Spawn marker entity
+                commands.spawn(PlacedSpecial {
+                    special_id: spec.id.clone(),
+                    omt_x: px,
+                    omt_y: py,
+                });
+
+                placed = true;
                 break;
             }
 
-            let x = rng.range_i32(2, OMAP_DIM - 2);
-            let y = rng.range_i32(2, OMAP_DIM - 2);
-
-            // Check city distance constraints
-            let mut city_ok = city_dist[0] == 0 && city_dist[1] == i32::MAX;
-            if !city_ok {
-                for &(cx, cy, csize) in &city_positions {
-                    let dx = (x - cx).abs();
-                    let dy = (y - cy).abs();
-                    let dist = dx.max(dy);
-                    if csize >= city_sizes[0]
-                        && csize <= city_sizes[1]
-                        && dist >= city_dist[0]
-                        && dist <= city_dist[1]
-                    {
-                        city_ok = true;
-                        break;
-                    }
-                }
-                // If no city exists and min distance is 0, also OK
-                if city_positions.is_empty() && city_dist[0] == 0 {
-                    city_ok = true;
-                }
+            if placed {
+                placed_for_this += 1;
             }
-            if !city_ok {
-                continue;
-            }
-
-            // Check that each of the special's OMTs can be placed.
-            if !can_place_special_at(x, y, special_def, &grid, &location_strs, &registry) {
-                continue;
-            }
-
-            // Collect the special's OMT writes
-            collect_special_omts(x, y, special_def, &mut writes, &registry);
-
-            // Spawn marker entity
-            commands.spawn(PlacedSpecial {
-                special_id: special_def.id.as_str().to_string(),
-                omt_x: x,
-                omt_y: y,
-            });
-
-            placed += 1;
-            placed_count += 1;
         }
 
-        if placed > 0 {
-            info!(
-                "Placed special '{}' {} times at overmap ({}, {})",
-                special_def.id.as_str(),
-                placed,
-                config.om_x,
-                config.om_y
-            );
+        if placed_for_this > 0 {
+            placed_count += placed_for_this;
         }
     }
 
-    // ------------------------------------------------------------------
-    // Write-back: apply all collected writes via par_iter
-    // ------------------------------------------------------------------
+    info!(
+        om_x = config.om_x,
+        om_y = config.om_y,
+        specials_placed = placed_count,
+        "place_specials: complete"
+    );
+
+    // --- Write back to chunks -----------------------------------------------
+    flush_tile_writes(&chunks, &par_commands, &tile_writes);
+}
+
+// ---------------------------------------------------------------------------
+// Helper: flush recorded tile writes back to chunk entities via par_iter
+// ---------------------------------------------------------------------------
+
+fn flush_tile_writes(
+    chunks: &Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+    par_commands: &ParallelCommands,
+    tile_writes: &[(i32, i32, TerrainHandle)],
+) {
+    if tile_writes.is_empty() {
+        return;
+    }
     chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
         if chunk_pos.z.0 != 0 {
             return;
         }
-        let (ox, oy) = chunk_pos.omt_origin();
+        let local_ox = (chunk_pos.chunk_x as i32) * (CHUNK_DIM as i32);
+        let local_oy = (chunk_pos.chunk_y as i32) * (CHUNK_DIM as i32);
+
         let mut modified = false;
         let mut new_terrain = chunk.terrain.clone();
 
-        for &(wx, wy, _wz, handle) in &writes {
-            let lx = wx - ox;
-            let ly = wy - oy;
+        for &(wx, wy, handle) in tile_writes {
+            let lx = wx - local_ox;
+            let ly = wy - local_oy;
             if lx >= 0 && lx < CHUNK_DIM as i32 && ly >= 0 && ly < CHUNK_DIM as i32 {
                 let idx = ly as usize * CHUNK_DIM + lx as usize;
                 if new_terrain[idx] != handle {
@@ -234,181 +519,4 @@ pub fn place_specials(
             });
         }
     });
-
-    if placed_count > 0 {
-        info!(
-            "Total overmap specials placed: {} for overmap ({}, {})",
-            placed_count, config.om_x, config.om_y
-        );
-    }
-}
-
-/// Check if a special can be placed at the given position.
-fn can_place_special_at(
-    origin_x: i32,
-    origin_y: i32,
-    special: &Arc<OvermapSpecialDef>,
-    grid: &[[u32; 180]; 180],
-    location_strs: &[&str],
-    registry: &TerrainRegistry,
-) -> bool {
-    // Get the overmaps from the special definition.
-    let overmaps_raw = match &special.overmaps {
-        Some(cdda_core_types::core::raw_defs::cdda_types::RawValue::Array(arr)) => arr,
-        _ => return false,
-    };
-
-    for entry in overmaps_raw {
-        // Each entry can be a string (OMT ID) or an object {overmap, point}
-        let (_omt_id, dx, dy, _dz) = match entry {
-            cdda_core_types::core::raw_defs::cdda_types::RawValue::String(s) => {
-                (s.as_str(), 0i32, 0i32, 0i32)
-            }
-            cdda_core_types::core::raw_defs::cdda_types::RawValue::Object(obj) => {
-                let omt = obj
-                    .get("overmap")
-                    .and_then(|v| match v {
-                        cdda_core_types::core::raw_defs::cdda_types::RawValue::String(s) => {
-                            Some(s.as_str())
-                        }
-                        _ => None,
-                    })
-                    .unwrap_or("");
-                let point = obj.get("point")
-                    .and_then(|v| match v {
-                        cdda_core_types::core::raw_defs::cdda_types::RawValue::Array(a) => {
-                            Some((
-                                a.first().and_then(|v| match v { cdda_core_types::core::raw_defs::cdda_types::RawValue::Number(n) => Some(*n as i32), _ => None }).unwrap_or(0),
-                                a.get(1).and_then(|v| match v { cdda_core_types::core::raw_defs::cdda_types::RawValue::Number(n) => Some(*n as i32), _ => None }).unwrap_or(0),
-                                a.get(2).and_then(|v| match v { cdda_core_types::core::raw_defs::cdda_types::RawValue::Number(n) => Some(*n as i32), _ => None }).unwrap_or(0),
-                            ))
-                        }
-                        _ => None,
-                    })
-                    .unwrap_or((0, 0, 0));
-                (omt, point.0, point.1, point.2)
-            }
-            _ => continue,
-        };
-
-        let px = origin_x + dx;
-        let py = origin_y + dy;
-
-        if !inbounds_omt((px, py)) {
-            return false;
-        }
-
-        let tile_handle = TerrainHandle::new(grid[px as usize][py as usize], 0);
-        let tile_flags = registry.flags_for(tile_handle);
-
-        // Check that this tile matches at least one of the required locations.
-        let mut matches = false;
-        for loc in location_strs {
-            match *loc {
-                "land" => {
-                    if !tile_flags.contains(TerrainFlags::LAKE)
-                        && !tile_flags.contains(TerrainFlags::OCEAN)
-                        && !tile_flags.contains(TerrainFlags::RIVER)
-                    {
-                        matches = true;
-                        break;
-                    }
-                }
-                "forest" => {
-                    if tile_flags.contains(TerrainFlags::FOREST) {
-                        matches = true;
-                        break;
-                    }
-                }
-                "swamp" => {
-                    if tile_flags.contains(TerrainFlags::FOREST)
-                        && tile_flags.contains(TerrainFlags::LAKE)
-                    {
-                        matches = true;
-                        break;
-                    }
-                }
-                "water" => {
-                    if tile_flags.contains(TerrainFlags::LAKE)
-                        || tile_flags.contains(TerrainFlags::OCEAN)
-                        || tile_flags.contains(TerrainFlags::RIVER)
-                    {
-                        matches = true;
-                        break;
-                    }
-                }
-                _ => {
-                    // Try is_ot_match for unknown location types
-                    if is_ot_match(loc, tile_handle, registry, OtMatchType::Contains)
-                        || is_ot_match(loc, tile_handle, registry, OtMatchType::Prefix)
-                    {
-                        matches = true;
-                        break;
-                    }
-                }
-            }
-        }
-        if !matches {
-            return false;
-        }
-    }
-    true
-}
-
-/// Collect the terrain tiles of a special at the given origin.
-fn collect_special_omts(
-    origin_x: i32,
-    origin_y: i32,
-    special: &Arc<OvermapSpecialDef>,
-    writes: &mut Vec<(i32, i32, i8, TerrainHandle)>,
-    registry: &TerrainRegistry,
-) {
-    let overmaps_raw = match &special.overmaps {
-        Some(cdda_core_types::core::raw_defs::cdda_types::RawValue::Array(arr)) => arr,
-        _ => return,
-    };
-
-    for entry in overmaps_raw {
-        let (omt_id, dx, dy, dz) = match entry {
-            cdda_core_types::core::raw_defs::cdda_types::RawValue::String(s) => {
-                (s.as_str(), 0i32, 0i32, 0i32)
-            }
-            cdda_core_types::core::raw_defs::cdda_types::RawValue::Object(obj) => {
-                let omt = obj
-                    .get("overmap")
-                    .and_then(|v| match v {
-                        cdda_core_types::core::raw_defs::cdda_types::RawValue::String(s) => {
-                            Some(s.as_str())
-                        }
-                        _ => None,
-                    })
-                    .unwrap_or("");
-                let point = obj.get("point")
-                    .and_then(|v| match v {
-                        cdda_core_types::core::raw_defs::cdda_types::RawValue::Array(a) => {
-                            Some((
-                                a.first().and_then(|v| match v { cdda_core_types::core::raw_defs::cdda_types::RawValue::Number(n) => Some(*n as i32), _ => None }).unwrap_or(0),
-                                a.get(1).and_then(|v| match v { cdda_core_types::core::raw_defs::cdda_types::RawValue::Number(n) => Some(*n as i32), _ => None }).unwrap_or(0),
-                                a.get(2).and_then(|v| match v { cdda_core_types::core::raw_defs::cdda_types::RawValue::Number(n) => Some(*n as i32), _ => None }).unwrap_or(0),
-                            ))
-                        }
-                        _ => None,
-                    })
-                    .unwrap_or((0, 0, 0));
-                (omt, point.0, point.1, point.2)
-            }
-            _ => continue,
-        };
-
-        let px = origin_x + dx;
-        let py = origin_y + dy;
-
-        if !inbounds_omt((px, py)) {
-            continue;
-        }
-
-        if let Some(handle) = registry.handle_by_id(omt_id) {
-            writes.push((px, py, dz as i8, handle));
-        }
-    }
 }

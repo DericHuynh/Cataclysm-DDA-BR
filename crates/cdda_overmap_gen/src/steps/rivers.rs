@@ -1,143 +1,221 @@
-//! Step: River generation — Bezier curves, meandering, shore building.
+//! River placement and shore construction — verbatim port of CDDA master's
+//! river generation system.
 //!
-//! Port of CDDA master's `overmap_water.cpp` rivers section:
-//! - `place_rivers()` (L544-689)
-//! - `place_river()` (L47-226)
-//! - `river_meander()` (L228-256)
-//! - `build_river_shores()` (L731-791)
-//! - `polish_river()` (overmap.cpp L2735-2742)
-//! - `setup_adjacent_river()` (L692-728) — simplified, no neighbor overmaps
+//! ## C++ references
 //!
-//! ## Implementation notes
+//! | Function | File | Lines |
+//! |---|---|---|
+//! | `place_rivers()` | overmap_water.cpp | L558-654 |
+//! | `place_river()` | overmap_water.cpp | L47-226 |
+//! | `river_meander()` | overmap_water.cpp | L228-256 |
+//! | `polish_river()` | overmap.cpp | L2735-2742 |
+//! | `build_river_shores()` | overmap_water.cpp | L656-792 |
+//! | `setup_adjacent_river()` | overmap_water.cpp | L496-556 |
 //!
-//! Since we don't have neighbor overmaps in Bevy yet, river start/end
-//! points are always on this overmap's border edges. River continuity
-//! across overmap boundaries will be added when neighbor overmap access
-//! is available.
+//! ## Pipeline position
+//!
+//! `place_rivers` runs in NaturalTerrain (before lakes/oceans/forests/swamps/ravines).
+//! `polish_river` runs TWICE: after ravines and after forest trailheads.
+//! Both calls rebuild all river shores from scratch via `build_river_shores`.
+//!
+//! ## Neighbor simplification
+//!
+//! Since we can't read actual neighbor overmaps in the Rust ECS port, we use a
+//! simplified approach: generate rivers with random start/end points on the
+//! edges, using Bezier curves and meandering. `ConnectionExits` exit points
+//! (from `neighbor_connections.rs`) serve as optional starting hints for edge
+//! placement. Shore construction treats out-of-bounds neighbors as river for
+//! border continuity.
+
+use bevy_ecs::prelude::*;
+use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, CHUNK_SIZE, OMAP_DIM};
+use cdda_overmap::connections::{inbounds_omt, line_between, trig_dist};
+use cdda_overmap::direction::FOUR_ADJACENT_OFFSETS;
+use cdda_overmap::registry::{CoreTerrains, TerrainFlags, TerrainHandle, TerrainRegistry};
+use cdda_overmap::rng::XorShiftRng;
+use tracing::info;
 
 use crate::pipeline::OvermapGenConfig;
 use crate::region_settings::OvermapRegionSettings;
-use bevy_ecs::prelude::*;
-use cdda_core_types::rng::SeededRng;
-use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, OMAP_DIM};
-use cdda_overmap::connections::inbounds_omt;
-use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};
-use tracing::info;
+use crate::steps::neighbor_connections::ConnectionExits;
 
 // ---------------------------------------------------------------------------
-// Constants
+// Constants — matching C++ `RIVER_BORDER` / `RIVER_Z`
 // ---------------------------------------------------------------------------
 
-/// Minimum distance from overmap edge where rivers can start/end.
-/// Port of C++ `RIVER_BORDER` (overmap.h L174).
+/// Border margin where river nodes are placed on edges (C++ `RIVER_BORDER`).
 const RIVER_BORDER: i32 = 10;
 
-/// Maximum number of major rivers per overmap.
+/// Z-level for rivers (C++ `RIVER_Z`).
+const RIVER_Z: i32 = 0;
+
+/// Edge coordinate for the far side of the overmap.
+const OMAPX_EDGE: i32 = OMAP_DIM - 1;
+const OMAPY_EDGE: i32 = OMAP_DIM - 1;
+
+/// Maximum number of major rivers per overmap (C++ `max_rivers`).
 const MAX_RIVERS: usize = 2;
 
 // ---------------------------------------------------------------------------
-// Types
+// Data structures
 // ---------------------------------------------------------------------------
 
-/// A river node — marks a river's start and end points on this overmap.
-///
-/// Spawned as an entity so downstream systems can query river locations
-/// for bridge placement, floodplain buffering, etc.
+/// A placed river node entity — mirrors C++ `overmap_river_node`.
 #[derive(Component, Debug, Clone)]
 pub struct RiverNode {
-    /// OMT coordinates of the river start (entry point).
     pub start: (i32, i32),
-    /// OMT coordinates of the river end (exit point).
     pub end: (i32, i32),
 }
 
-/// Borrowed river settings extracted from `OvermapRegionSettings` at
-/// the start of generation.
-#[derive(Debug, Clone)]
-struct RiverSettings {
-    /// Raw river scale from region settings. 0 = no rivers.
-    river_scale: u32,
-    /// 1-in-N chance for a river branch to spawn.
-    river_branch_chance: i32,
-    /// 1-in-N chance for a branch to remerge with the main river.
-    river_branch_remerge_chance: i32,
-    /// How much the river scale decreases per branch level.
-    river_branch_scale_decrease: i32,
-}
-
-impl Default for RiverSettings {
-    fn default() -> Self {
-        Self {
-            river_scale: 1,
-            river_branch_chance: 5,
-            river_branch_remerge_chance: 3,
-            river_branch_scale_decrease: 2,
-        }
-    }
-}
-
-impl RiverSettings {
-    fn from_region(settings: &OvermapRegionSettings) -> Self {
-        Self {
-            river_scale: settings.river_scale,
-            ..Default::default()
-        }
-    }
-
-    /// Effective river scale (width). 0 = no rivers.
-    /// Port of C++: `river_scale = 1 + std::max(1, river_scale)`.
-    fn effective_scale(&self) -> i32 {
-        if self.river_scale == 0 {
-            0
-        } else {
-            1 + (self.river_scale as i32).max(1)
-        }
-    }
+/// Stores control points for river Bezier curves between adjacent overmaps.
+#[derive(Resource, Debug, Clone, Default)]
+pub struct RiverBorderData {
+    /// River node start points from neighbor overmaps (for continuity).
+    pub border_river_nodes_omt: Vec<(i32, i32)>,
+    /// Control point data for smooth curves across boundaries.
+    /// `(start_control, end_control)`
+    pub border_control_points: Vec<((i32, i32), (i32, i32))>,
 }
 
 // ---------------------------------------------------------------------------
-// RNG helpers
+// Grid helpers
 // ---------------------------------------------------------------------------
 
-/// Generate a random i32 in `[lo, hi]` inclusive (handles reversed bounds).
-fn rng_range(rng: &mut SeededRng, lo: i32, hi: i32) -> i32 {
-    if lo > hi {
-        return rng_range(rng, hi, lo);
+/// Build a dense `[[u32; 180]; 180]` grid and collect z=0 chunk entities.
+fn build_omt_grid(
+    chunks: &Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+) -> ([[u32; 180]; 180], Vec<(Entity, ChunkPosition)>) {
+    let mut grid = [[0u32; 180]; 180];
+    let mut z0_chunks: Vec<(Entity, ChunkPosition)> = Vec::with_capacity(36);
+
+    for (entity, pos, chunk) in chunks.iter() {
+        if pos.z.0 as i32 != RIVER_Z {
+            continue;
+        }
+        z0_chunks.push((entity, *pos));
+
+        let (origin_x, origin_y) = pos.omt_origin();
+        for ly in 0..CHUNK_DIM as u8 {
+            for lx in 0..CHUNK_DIM as u8 {
+                let omt_x = origin_x + lx as i32;
+                let omt_y = origin_y + ly as i32;
+                if omt_x >= 0 && omt_x < OMAP_DIM && omt_y >= 0 && omt_y < OMAP_DIM {
+                    grid[omt_y as usize][omt_x as usize] = chunk.get(lx, ly).0;
+                }
+            }
+        }
     }
-    let range = (hi - lo) as u32;
-    lo + rng.gen_range(0, range) as i32
+
+    (grid, z0_chunks)
 }
 
-/// 1-in-N chance.
-fn one_in(rng: &mut SeededRng, n: i32) -> bool {
-    if n <= 0 {
-        return false;
+/// Write the modified grid back to z=0 chunk entities via `Commands`.
+fn write_back_grid(
+    grid: &[[u32; 180]; 180],
+    z0_chunks: &[(Entity, ChunkPosition)],
+    commands: &mut Commands,
+) {
+    for &(entity, pos) in z0_chunks {
+        let (origin_x, origin_y) = pos.omt_origin();
+        let mut new_terrain = [TerrainHandle::NULL; CHUNK_SIZE];
+        let mut any_changed = false;
+
+        for ly in 0..CHUNK_DIM {
+            for lx in 0..CHUNK_DIM {
+                let omt_x = origin_x + lx as i32;
+                let omt_y = origin_y + ly as i32;
+                let idx = ly * CHUNK_DIM + lx;
+                if omt_x >= 0 && omt_x < OMAP_DIM && omt_y >= 0 && omt_y < OMAP_DIM {
+                    new_terrain[idx] = TerrainHandle(grid[omt_y as usize][omt_x as usize]);
+                    any_changed = true;
+                }
+            }
+        }
+
+        if any_changed {
+            commands.entity(entity).insert(OvermapChunk {
+                terrain: Box::new(new_terrain),
+            });
+        }
     }
-    rng.gen_bool(1.0 / n as f64)
 }
 
-/// Generate a random f64 in [0.0, 1.0).
-fn rng_f64(rng: &mut SeededRng) -> f64 {
-    rng.gen_f64()
+/// Returns `true` if the given handle represents a water body (not shore).
+///
+/// Matches C++ `is_water_body_not_shore()` — checks for RIVER, LAKE, or OCEAN
+/// flags.
+fn is_water_body_not_shore(handle: TerrainHandle, registry: &TerrainRegistry) -> bool {
+    let flags = registry.flags_for(handle);
+    flags.contains(TerrainFlags::RIVER)
+        || flags.contains(TerrainFlags::LAKE)
+        || flags.contains(TerrainFlags::OCEAN)
+}
+
+/// Returns `true` if the handle has the RIVER flag.
+///
+/// Matches C++ `is_river()` / `oter_t::is_river()`.
+#[inline]
+fn is_river(handle: TerrainHandle, registry: &TerrainRegistry) -> bool {
+    registry.flags_for(handle).contains(TerrainFlags::RIVER)
+}
+
+/// Returns `true` if the handle represents any water body (including shores).
+///
+/// Matches C++ `is_water_body()`.
+fn is_water_body(handle: TerrainHandle, registry: &TerrainRegistry) -> bool {
+    let flags = registry.flags_for(handle);
+    flags.contains(TerrainFlags::RIVER)
+        || flags.contains(TerrainFlags::LAKE)
+        || flags.contains(TerrainFlags::OCEAN)
 }
 
 // ---------------------------------------------------------------------------
 // Geometry helpers
 // ---------------------------------------------------------------------------
 
+/// Chebyshev distance between two points.
+///
+/// Matches C++ `rl_dist()` with `trigdist == false` (the default).
+/// C++ `square_dist()` = `max(|dx|, |dy|)`.
+#[inline]
+fn rl_dist(a: (i32, i32), b: (i32, i32)) -> i32 {
+    let dx = (a.0 - b.0).abs();
+    let dy = (a.1 - b.1).abs();
+    dx.max(dy)
+}
+
+/// Points within Euclidean radius of `center`.
+///
+/// Iterates the Chebyshev bounding box `[center - radius, center + radius]`
+/// and returns all points where `trig_dist(center, pt) < radius + 0.5`.
+/// Matches C++ `points_in_radius_circ()`.
+fn points_in_radius_circ(center: (i32, i32), radius: i32) -> Vec<(i32, i32)> {
+    let mut pts = Vec::new();
+    let r = radius as f32;
+    for dy in -radius..=radius {
+        for dx in -radius..=radius {
+            let pt = (center.0 + dx, center.1 + dy);
+            if trig_dist(center, pt) < r + 0.5 {
+                pts.push(pt);
+            }
+        }
+    }
+    pts
+}
+
 /// Cubic Bezier curve.
 ///
-/// Port of C++ `cubic_bezier()` from `line.h` L213-227.
-/// Returns `n_segs + 1` points along the curve.
+/// Returns `n_segs + 1` points along a cubic Bezier defined by
+/// `p0 → p1 → p2 → p3`. Matches C++ `cubic_bezier()` in `line.h` L213-227.
 fn cubic_bezier(
-    pa: (i32, i32),
-    pb: (i32, i32),
-    pc: (i32, i32),
-    pd: (i32, i32),
+    p0: (i32, i32),
+    p1: (i32, i32),
+    p2: (i32, i32),
+    p3: (i32, i32),
     n_segs: i32,
 ) -> Vec<(i32, i32)> {
-    let cubic_axis = |a: i32, b: i32, c: i32, d: i32, t: f64| -> i32 {
-        // a(1-t)^3 + 3bt(1-t)^2 + 3ct^2(1-t) + dt^3
+    let single_axis = |a: i32, b: i32, c: i32, d: i32, t: f64| -> i32 {
+        // a(1-t)³ + 3bt(1-t)² + 3ct²(1-t) + dt³
         let u = 1.0 - t;
         (u.powi(3) * a as f64
             + 3.0 * t * u.powi(2) * b as f64
@@ -149,228 +227,39 @@ fn cubic_bezier(
     for i in 0..=n_segs {
         let t = i as f64 / n_segs as f64;
         pts.push((
-            cubic_axis(pa.0, pb.0, pc.0, pd.0, t),
-            cubic_axis(pa.1, pb.1, pc.1, pd.1, t),
+            single_axis(p0.0, p1.0, p2.0, p3.0, t),
+            single_axis(p0.1, p1.1, p2.1, p3.1, t),
         ));
     }
     pts
 }
 
-/// Bresenham line from `p1` to `p2` (inclusive of both endpoints).
+/// River meander — perturbs `current` toward `river_end`.
 ///
-/// Port of C++ `line_to()` from `line.cpp` L224-238.
-fn line_to(p1: (i32, i32), p2: (i32, i32)) -> Vec<(i32, i32)> {
-    let mut points = Vec::new();
-    let (mut x, mut y) = p1;
-    let (x2, y2) = p2;
-    let dx = (x2 - x).abs();
-    let dy = -(y2 - y).abs();
-    let sx: i32 = if x < x2 { 1 } else { -1 };
-    let sy: i32 = if y < y2 { 1 } else { -1 };
-    let mut err = dx + dy;
-
-    loop {
-        points.push((x, y));
-        if x == x2 && y == y2 {
-            break;
-        }
-        let e2 = 2 * err;
-        if e2 >= dy {
-            err += dy;
-            x += sx;
-        }
-        if e2 <= dx {
-            err += dx;
-            y += sy;
-        }
-    }
-    points
-}
-
-/// Points within a circular radius of `center`.
+/// Matches C++ `overmap::river_meander()` (overmap_water.cpp L228-256).
 ///
-/// Port of C++ `points_in_radius_circ()` from `map_iterator.h` L163-172.
-/// Uses Euclidean distance — all integer points where `dist < radius + 0.5`.
-fn points_in_radius_circ(center: (i32, i32), radius: i32) -> Vec<(i32, i32)> {
-    let mut pts = Vec::new();
-    let r2 = (radius as f64 + 0.5).powi(2);
-    for dy in -radius..=radius {
-        for dx in -radius..=radius {
-            let x = center.0 + dx;
-            let y = center.1 + dy;
-            if inbounds_omt((x, y)) && ((dx * dx + dy * dy) as f64) < r2 {
-                pts.push((x, y));
-            }
-        }
-    }
-    pts
-}
-
-/// Manhattan / "rldist" distance.
-fn rl_dist(a: (i32, i32), b: (i32, i32)) -> i32 {
-    (a.0 - b.0).abs().max((a.1 - b.1).abs())
-}
-
-// ---------------------------------------------------------------------------
-// Cardinal direction offsets
-// ---------------------------------------------------------------------------
-
-/// Cardinal offsets in N, E, S, W order (matching C++ `four_adjacent_offsets`).
-const FOUR_ADJACENT: [(i32, i32); 4] = [
-    (0, -1), // N
-    (1, 0),  // E
-    (0, 1),  // S
-    (-1, 0), // W
-];
-
-/// Ordinal (diagonal) offsets in NE, SE, SW, NW order.
-const FOUR_ORDINAL: [(i32, i32); 4] = [
-    (1, -1),  // NE
-    (1, 1),   // SE
-    (-1, 1),  // SW
-    (-1, -1), // NW
-];
-
-// ---------------------------------------------------------------------------
-// Terrain helpers
-// ---------------------------------------------------------------------------
-
-/// Returns true if the terrain handle has the RIVER flag.
-fn is_river(handle: TerrainHandle, registry: &TerrainRegistry) -> bool {
-    registry.flags_for(handle).contains(TerrainFlags::RIVER)
-}
-
-/// Returns true if the terrain is a water body (lake or ocean).
-///
-/// Port of C++ `is_water_body_not_shore()` — checks for lake/ocean
-/// water tiles that rivers should stop at or avoid overwriting.
-fn is_water_body(handle: TerrainHandle, registry: &TerrainRegistry) -> bool {
-    let flags = registry.flags_for(handle);
-    flags.contains(TerrainFlags::LAKE) || flags.contains(TerrainFlags::OCEAN)
-}
-
-// ---------------------------------------------------------------------------
-// River shore terrain lookup
-// ---------------------------------------------------------------------------
-
-/// Map a 4-bit connection mask to the appropriate river shore terrain.
-///
-/// Port of C++ `build_river_shores()` L757-789.
-///
-/// Mask bits (matching C++ loop order):
-/// - bit 0 (value 1): N neighbor is river
-/// - bit 1 (value 2): E neighbor is river
-/// - bit 2 (value 4): S neighbor is river
-/// - bit 3 (value 8): W neighbor is river
-///
-/// The 16-entry lookup table maps each connection pattern to a terrain:
-///
-/// | Mask | Connections | Terrain |
-/// |------|-------------|---------|
-/// | 0000 | none | forest_water |
-/// | 0001 | N | river_south |
-/// | 0010 | E | river_west |
-/// | 0011 | N+E | river_sw |
-/// | 0100 | S | river_north |
-/// | 0101 | N+S | forest_water |
-/// | 0110 | E+S | river_nw |
-/// | 0111 | N+E+S | river_west |
-/// | 1000 | W | river_east |
-/// | 1001 | N+W | river_se |
-/// | 1010 | E+W | forest_water |
-/// | 1011 | N+E+W | river_south |
-/// | 1100 | S+W | river_ne |
-/// | 1101 | N+S+W | river_east |
-/// | 1110 | E+S+W | river_north |
-/// | 1111 | N+E+S+W | river_center |
-fn river_shore_terrain(mask: u8, registry: &TerrainRegistry) -> TerrainHandle {
-    let names: [&str; 16] = [
-        "forest_water", // 0000
-        "river_south",  // 0001 — N only
-        "river_west",   // 0010 — E only
-        "river_sw",     // 0011 — N+E
-        "river_north",  // 0100 — S only
-        "forest_water", // 0101 — N+S (unused)
-        "river_nw",     // 0110 — E+S
-        "river_west",   // 0111 — N+E+S
-        "river_east",   // 1000 — W only
-        "river_se",     // 1001 — N+W
-        "forest_water", // 1010 — E+W (unused)
-        "river_south",  // 1011 — N+E+W
-        "river_ne",     // 1100 — S+W
-        "river_east",   // 1101 — N+S+W
-        "river_north",  // 1110 — E+S+W
-        "river_center", // 1111 — N+E+S+W
-    ];
-    registry
-        .handle_by_id(names[mask as usize])
-        .unwrap_or(TerrainHandle::NULL)
-}
-
-/// For mask 15 (all 4 connections), check if any ordinal corner is
-/// non-water and return the appropriate trimmed-corner terrain.
-///
-/// Port of C++ `build_river_shores()` L780-789.
-fn trimmed_corner_terrain(
-    p: (i32, i32),
-    is_river_center: &[[bool; 180]; 180],
-    registry: &TerrainRegistry,
-) -> Option<TerrainHandle> {
-    let names: [&str; 4] = [
-        "river_c_not_ne",
-        "river_c_not_se",
-        "river_c_not_sw",
-        "river_c_not_nw",
-    ];
-    for i in 0..4 {
-        let (dx, dy) = FOUR_ORDINAL[i];
-        let cx = p.0 + dx;
-        let cy = p.1 + dy;
-        if inbounds_omt((cx, cy)) && !is_river_center[cx as usize][cy as usize] {
-            return registry.handle_by_id(names[i]);
-        }
-    }
-    None
-}
-
-// ---------------------------------------------------------------------------
-// River meander
-// ---------------------------------------------------------------------------
-
-/// Apply random meandering to a river point.
-///
-/// Port of C++ `river_meander()` L228-256.
-///
-/// As distance to the river end decreases, the point meanders closer
-/// toward the end. Additional random jitter is applied for rivers with
-/// scale > 1.
+/// As distance to the river end decreases, meander closer to the end.
+/// Random meander is applied for `river_scale > 1`.
 fn river_meander(
-    rng: &mut SeededRng,
+    rng: &mut XorShiftRng,
     river_end: (i32, i32),
     current: &mut (i32, i32),
     river_scale: i32,
 ) {
-    let omap_dim = OMAP_DIM;
-    // Port of random_uniform: rng(0, OMAPX*1.2-1) < i
-    let random_uniform = |rng: &mut SeededRng, i: i32| -> bool {
-        let max = (omap_dim as f64 * 1.2) as i32 - 1;
-        rng_range(rng, 0, max) < i
+    let random_uniform = |rng: &mut XorShiftRng, i: i32| -> bool {
+        rng.range_i32(0, (OMAP_DIM as f64 * 1.2) as i32 - 1) < i
     };
-    // Port of random_close: rng(0, OMAPX*0.2-1) > i
-    let random_close = |rng: &mut SeededRng, i: i32| -> bool {
-        let max = (omap_dim as f64 * 0.2) as i32 - 1;
-        if max <= 0 {
-            return false;
-        }
-        rng_range(rng, 0, max) > i
+    let random_close = |rng: &mut XorShiftRng, i: i32| -> bool {
+        rng.range_i32(0, (OMAP_DIM as f64 * 0.2) as i32 - 1) > i
     };
 
-    let abs_dx = (river_end.0 - current.0).abs();
-    let abs_dy = (river_end.1 - current.1).abs();
+    let abs_dist_x = (river_end.0 - current.0).abs();
+    let abs_dist_y = (river_end.1 - current.1).abs();
 
-    // As distance decreases, meander closer to river end
+    // As distance to river end decreases, meander closer to the river end.
     if current.0 != river_end.0
-        && (random_uniform(rng, abs_dx) || (random_close(rng, abs_dx) && random_close(rng, abs_dy)))
+        && (random_uniform(rng, abs_dist_x)
+            || (random_close(rng, abs_dist_x) && random_close(rng, abs_dist_y)))
     {
         if river_end.0 > current.0 {
             current.0 += 1;
@@ -379,7 +268,8 @@ fn river_meander(
         }
     }
     if current.1 != river_end.1
-        && (random_uniform(rng, abs_dy) || (random_close(rng, abs_dy) && random_close(rng, abs_dx)))
+        && (random_uniform(rng, abs_dist_y)
+            || (random_close(rng, abs_dist_y) && random_close(rng, abs_dist_x)))
     {
         if river_end.1 > current.1 {
             current.1 += 1;
@@ -387,615 +277,1022 @@ fn river_meander(
             current.1 -= 1;
         }
     }
-    // Random jitter for wider rivers
+
+    // Meander randomly, but not for rivers of size 1 (would exceed above meander).
     if river_scale > 1 {
-        current.0 += rng_range(rng, -1, 1);
-        current.1 += rng_range(rng, -1, 1);
+        current.0 += rng.range_i32(-1, 1);
+        current.1 += rng.range_i32(-1, 1);
     }
-    // Clamp to overmap bounds
-    current.0 = current.0.clamp(0, OMAP_DIM - 1);
-    current.1 = current.1.clamp(0, OMAP_DIM - 1);
 }
 
 // ---------------------------------------------------------------------------
-// Single river placement
+// place_rivers — system entry point
 // ---------------------------------------------------------------------------
 
-/// Place a single river from `start` to `end` using Bezier curves.
+/// Place river terrain on the overmap.
 ///
-/// Port of C++ `place_river()` L47-226 (simplified — no neighbor overmaps).
+/// Verbatim port of C++ `overmap::place_rivers()` (overmap_water.cpp L558-654)
+/// and `overmap::place_river()` (overmap_water.cpp L47-226).
 ///
-/// Returns the river center tiles that were placed.
-fn place_single_river(
-    rng: &mut SeededRng,
-    start: (i32, i32),
-    end: (i32, i32),
-    river_scale: i32,
-    river_settings: &RiverSettings,
-    registry: &TerrainRegistry,
-    terrain: &mut [[TerrainHandle; 180]; 180],
-    river_center_mask: &mut [[bool; 180]; 180],
-    current_type_indices: &[[u32; 180]; 180],
-) -> Option<RiverNode> {
-    let river_center = registry
-        .handle_by_id("river_center")
-        .unwrap_or(TerrainHandle::NULL);
-    if river_center == TerrainHandle::NULL {
-        return None;
-    }
-
-    let omap_edge = OMAP_DIM - 1;
-    let distance = rl_dist(start, end);
-    let amplitude = distance / 2;
-    let n_segs = distance / 2;
-
-    // Need at least 4 segments
-    if n_segs < 4 {
-        return None;
-    }
-
-    // One-third point: 1/3 of the way from start to end
-    let one_third_x = ((end.0 - start.0).abs() as f64 * (1.0 / 3.0)) as i32;
-    let one_third_y = ((end.1 - start.1).abs() as f64 * (1.0 / 3.0)) as i32;
-
-    // Control point 1: near the one-third point, perturbed randomly
-    let one_third_point = (
-        start.0 + one_third_x * (if end.0 >= start.0 { 1 } else { -1 }),
-        start.1 + one_third_y * (if end.1 >= start.1 { 1 } else { -1 }),
-    );
-    let control_p1 = (
-        (one_third_point.0 + rng_range(rng, 0, amplitude)).clamp(0, omap_edge),
-        (one_third_point.1 + rng_range(rng, 0, amplitude)).clamp(0, omap_edge),
-    );
-
-    // Control point 2: near the two-thirds point, perturbed the opposite way
-    let two_third_point = (
-        start.0 + one_third_x * 2 * (if end.0 >= start.0 { 1 } else { -1 }),
-        start.1 + one_third_y * 2 * (if end.1 >= start.1 { 1 } else { -1 }),
-    );
-    let control_p2 = (
-        (two_third_point.0 + rng_range(rng, -amplitude, 0)).clamp(0, omap_edge),
-        (two_third_point.1 + rng_range(rng, -amplitude, 0)).clamp(0, omap_edge),
-    );
-
-    // Generate Bezier curve segments
-    let mut segmented_curve = cubic_bezier(start, control_p1, control_p2, end, n_segs);
-
-    // Remove consecutive duplicates
-    segmented_curve.dedup();
-
-    // The Bezier doesn't include the start point, so prepend it
-    if segmented_curve.first() != Some(&start) {
-        segmented_curve.insert(0, start);
-    }
-
-    let curve_size = segmented_curve.len().saturating_sub(1);
-    if curve_size < 4 {
-        return None;
-    }
-
-    // Check first third of the curve: if any point is already water, abort
-    let check_limit = (curve_size / 3).min(curve_size);
-    let mut river_check_index = 0;
-    for i in 0..check_limit {
-        let pt = segmented_curve[i];
-        if !inbounds_omt(pt) {
-            continue;
-        }
-        let handle = terrain[pt.0 as usize][pt.1 as usize];
-        if is_water_body(handle, registry) || is_river(handle, registry) {
-            break;
-        }
-        river_check_index = i + 1;
-    }
-    if river_check_index == check_limit {
-        // First third is all water — abort
-        return None;
-    }
-
-    // Check remaining points: if water, truncate the river
-    let mut actual_end = end;
-    let mut actual_curve_size = curve_size;
-    for i in river_check_index..curve_size {
-        let pt = segmented_curve[i];
-        if !inbounds_omt(pt) {
-            continue;
-        }
-        let handle = terrain[pt.0 as usize][pt.1 as usize];
-        if is_water_body(handle, registry) {
-            actual_end = pt;
-            actual_curve_size = i;
-            break;
-        }
-    }
-
-    // Draw the river by filling between consecutive Bezier points
-    let mut river_size: usize = 0;
-    for i in 0..actual_curve_size {
-        let seg_start = segmented_curve[i];
-        let seg_end = segmented_curve[i + 1];
-        let bezier_segment = line_to(seg_start, seg_end);
-
-        for &bezier_point in &bezier_segment {
-            let mut meandered = bezier_point;
-            // No meander for first/last segment endpoints
-            if i != 0 && i != actual_curve_size - 1 {
-                river_meander(rng, actual_end, &mut meandered, river_scale);
-            }
-
-            // Draw river in radius [0, river_scale] around the meandered point
-            for pt in points_in_radius_circ(meandered, river_scale) {
-                let (px, py) = pt;
-                let handle = terrain[px as usize][py as usize];
-                // Don't overwrite lakes/oceans
-                if !is_water_body(handle, registry) {
-                    terrain[px as usize][py as usize] = river_center;
-                    river_center_mask[px as usize][py as usize] = true;
-                    river_size += 1;
-                }
-            }
-        }
-    }
-
-    // Create river branches
-    let branch_ahead_points = 2.max(actual_curve_size as i32 / 5) as usize;
-    let mut branch_last_end: usize = 0;
-    for i in 0..actual_curve_size {
-        let bezier_point = segmented_curve[i];
-        if !inbounds_omt(bezier_point) {
-            continue;
-        }
-        // Only branch if we're far enough from the edge
-        let margin = river_scale + 1;
-        if bezier_point.0 >= margin
-            && bezier_point.0 < OMAP_DIM - margin
-            && bezier_point.1 >= margin
-            && bezier_point.1 < OMAP_DIM - margin
-            && one_in(rng, river_settings.river_branch_chance)
-        {
-            let mut branch_end = None;
-
-            if i > branch_last_end {
-                if one_in(rng, river_settings.river_branch_remerge_chance) {
-                    // Re-merge branch: pick a point further along the curve
-                    let end_idx = rng_range(
-                        rng,
-                        (i + branch_ahead_points) as i32,
-                        (i + branch_ahead_points * 2) as i32,
-                    ) as usize;
-                    if end_idx < actual_curve_size {
-                        branch_end = Some(segmented_curve[end_idx]);
-                        branch_last_end = end_idx;
-                    }
-                } else {
-                    // Random branch: pick a point in a 64-tile radius
-                    let rad: i32 = 64;
-                    branch_end = Some((
-                        rng_range(rng, bezier_point.0 + rad / 2, bezier_point.0 + rad),
-                        rng_range(rng, bezier_point.1 + rad / 2, bezier_point.1 + rad),
-                    ));
-                }
-            }
-
-            if let Some(bep) = branch_end {
-                if inbounds_omt(bep) {
-                    let branch_scale = river_scale - river_settings.river_branch_scale_decrease;
-                    if branch_scale > 0 {
-                        // Recursive branch placement
-                        place_single_river(
-                            rng,
-                            bezier_point,
-                            bep,
-                            branch_scale,
-                            river_settings,
-                            registry,
-                            terrain,
-                            river_center_mask,
-                            current_type_indices,
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    info!(
-        "River placed: start={:?}, end={:?}, tiles={}",
-        start, actual_end, river_size
-    );
-
-    Some(RiverNode {
-        start,
-        end: actual_end,
-    })
-}
-
-// ---------------------------------------------------------------------------
-// Systems
-// ---------------------------------------------------------------------------
-
-/// Main river placement system.
+/// # Simplified neighbor handling
 ///
-/// Port of C++ `place_rivers()` L544-689.
-///
-/// 1. Reads river scale from region settings
-/// 2. Picks start/end points on opposite overmap edges
-/// 3. For each river, calls `place_single_river` to generate the Bezier path
-/// 4. Writes river_center terrain to affected chunks
+/// Since we can't read actual neighbor overmaps, we generate rivers with
+/// random start/end points on edges. If [`ConnectionExits`] is present, its
+/// exit points provide candidate edge positions; otherwise purely random
+/// positions are used.
 pub fn place_rivers(
     mut commands: Commands,
     chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
-    par_commands: ParallelCommands,
     config: Res<OvermapGenConfig>,
     registry: Res<TerrainRegistry>,
+    core_terrains: Res<CoreTerrains>,
     settings: Res<OvermapRegionSettings>,
+    exits: Option<Res<ConnectionExits>>,
 ) {
-    let river_settings = RiverSettings::from_region(&settings);
-    let effective_scale = river_settings.effective_scale();
-    if effective_scale == 0 {
-        info!("River scale is 0 — skipping river placement");
+    if !settings.overmap_river {
+        info!("place_rivers: skipped — overmap_river is false");
         return;
     }
 
-    let river_center = registry
-        .handle_by_id("river_center")
-        .unwrap_or(TerrainHandle::NULL);
-    if river_center == TerrainHandle::NULL {
-        info!("river_center terrain not registered — skipping");
+    let settings_river = &settings.river;
+    if settings_river.river_scale == 0 {
+        info!("place_rivers: skipped — river_scale is 0");
         return;
     }
 
-    let omap_edge = OMAP_DIM - 1;
-    let mut rng = SeededRng::new(config.noise_seed as u64 + 173);
+    // C++ L568: `river_scale = 1 + std::max(1, river_scale)`
+    let effective_scale = 1 + settings_river.river_scale.max(1);
 
-    // Read current terrain into dense arrays from the immutable query
-    let mut terrain_dense = [[TerrainHandle::NULL; 180]; 180];
-    let mut river_center_mask = [[false; 180]; 180];
-    for (_entity, chunk_pos, chunk) in &chunks {
-        if chunk_pos.z.0 != 0 {
-            continue;
+    // --- Build grid -----------------------------------------------------------
+    let (mut grid, z0_chunks) = build_omt_grid(&chunks);
+    let river_center_raw = core_terrains.river_center.0;
+
+    // --- RNG seeded for deterministic results ---------------------------------
+    // C++ uses `rng` calls; we seed with `noise_seed + 173` for river-specific
+    // determinism.
+    let mut rng = XorShiftRng::new(config.noise_seed as u64 + 173);
+
+    // --- Determine major river count for frequency check -----------------------
+    // C++ L573-579: `x_in_y(1.0, pow(river_frequency, major_river_count))`
+    // Since we don't have a cross-overmap buffer, use a simplified check:
+    // first overmap always passes (major_river_count = 0 → pow(freq, 0) = 1.0).
+    // We track major rivers locally within this overmap.
+    let mut major_river_count: i32 = 0;
+
+    // --- Generate river start/end points ---------------------------------------
+    // C++ L581-653
+
+    // Start points on North (y=0) or West (x=0) edges.
+    // End points on East (x=179) or South (y=179) edges.
+    let mut river_start: [Option<(i32, i32)>; MAX_RIVERS] = [None, None];
+    let mut river_end: [Option<(i32, i32)>; MAX_RIVERS] = [None, None];
+
+    // Helper: generate a random point on a specific edge or anywhere.
+    // dir: 0=north, 1=east, 2=south, 3=west, -1=anywhere in margins.
+    let generate_edge_point = |rng: &mut XorShiftRng, dir: i32| -> (i32, i32) {
+        match dir {
+            0 => (rng.range_i32(RIVER_BORDER, OMAPX_EDGE - RIVER_BORDER), 0),
+            1 => (
+                OMAPX_EDGE,
+                rng.range_i32(RIVER_BORDER, OMAPY_EDGE - RIVER_BORDER),
+            ),
+            2 => (
+                rng.range_i32(RIVER_BORDER, OMAPX_EDGE - RIVER_BORDER),
+                OMAPY_EDGE,
+            ),
+            3 => (0, rng.range_i32(RIVER_BORDER, OMAPY_EDGE - RIVER_BORDER)),
+            _ => (
+                rng.range_i32(RIVER_BORDER, OMAPX_EDGE - RIVER_BORDER),
+                rng.range_i32(RIVER_BORDER, OMAPY_EDGE - RIVER_BORDER),
+            ),
         }
-        let (ox, oy) = chunk_pos.omt_origin();
-        for ly in 0u8..CHUNK_DIM as u8 {
-            for lx in 0u8..CHUNK_DIM as u8 {
-                let gx = (ox + lx as i32) as usize;
-                let gy = (oy + ly as i32) as usize;
-                if gx < 180 && gy < 180 {
-                    let handle = chunk.get(lx, ly);
-                    terrain_dense[gx][gy] = handle;
-                    if is_river(handle, &registry) {
-                        river_center_mask[gx][gy] = true;
-                    }
-                }
-            }
-        }
-    }
-    let current_type_indices: [[u32; 180]; 180] = {
-        let mut arr = [[0u32; 180]; 180];
-        for x in 0..180 {
-            for y in 0..180 {
-                arr[x][y] = terrain_dense[x][y].type_index();
-            }
-        }
-        arr
     };
 
-    // Simplified start/end selection — no neighbor overmaps.
-    // For each of up to MAX_RIVERS, pick:
-    // - start on N or W edge
-    // - end on E or S edge
-    //
-    // This avoids rivers crossing (N→E, W→S preferred).
+    // Determine which edges have "node present" — i.e. have connection exits.
+    // In C++ this comes from neighbor overmap rivers; we use ConnectionExits.
+    let node_present: [bool; 4] = if let Some(ref exits) = exits {
+        [
+            !exits.north.is_empty(), // dir 0: north
+            !exits.east.is_empty(),  // dir 1: east
+            !exits.south.is_empty(), // dir 2: south
+            !exits.west.is_empty(),  // dir 3: west
+        ]
+    } else {
+        [false; 4]
+    };
 
-    let mut river_nodes: Vec<RiverNode> = Vec::new();
+    let no_neighboring_rivers = !node_present.iter().any(|&b| b);
 
-    for _ in 0..MAX_RIVERS {
-        // Pick start side: prefer N (dir 0), then W (dir 3)
-        let start_side = if rng_f64(&mut rng) < 0.5 { 0 } else { 3 };
-        let start = match start_side {
-            0 => (
-                rng_range(&mut rng, RIVER_BORDER, omap_edge - RIVER_BORDER),
-                0,
-            ),
-            _ => (
-                0,
-                rng_range(&mut rng, RIVER_BORDER, omap_edge - RIVER_BORDER),
-            ),
-        };
+    // C++ L579: frequency check when no neighboring rivers
+    if no_neighboring_rivers {
+        let freq = settings_river.river_frequency;
+        let adjusted = freq.powi(major_river_count);
+        if !rng.x_in_y(1, adjusted as i32) && adjusted > 0.0 {
+            // x_in_y(1, adjusted) — if adjusted < 1, this can fail.
+            // In C++: `x_in_y(1.0, pow(freq, count))` where x_in_y takes doubles.
+            // Simplified: roll with probability 1 / freq^count.
+            // Actually x_in_y(1.0, X) returns true with prob 1/X.
+            // If adjusted is e.g. 1.5, x_in_y(1.0, 1.5) uses roll_remainder effectively.
+            // We approximate: if adjusted <= 1.0 → always true; else 1-in-adjusted.
+            if adjusted <= 1.0 || rng.one_in(adjusted as i32) {
+                // pass — river generation continues
+            } else {
+                info!(
+                    om_x = config.om_x,
+                    om_y = config.om_y,
+                    river_frequency = settings_river.river_frequency,
+                    major_river_count,
+                    "place_rivers: frequency check failed, no rivers placed"
+                );
+                return;
+            }
+        }
+    }
 
-        // Pick end side: prefer E (dir 1), then S (dir 2)
-        let end_side = if rng_f64(&mut rng) < 0.5 { 1 } else { 2 };
-        let end = match end_side {
-            1 => (
-                omap_edge,
-                rng_range(&mut rng, RIVER_BORDER, omap_edge - RIVER_BORDER),
-            ),
-            _ => (
-                rng_range(&mut rng, RIVER_BORDER, omap_edge - RIVER_BORDER),
-                omap_edge,
-            ),
-        };
+    // C++ L617-653: generate river start/end nodes
+    // Simplified: generate one river with start on N/W edge and end on E/S edge.
 
-        // Ensure start and end are on different edges (no same-edge rivers)
-        if (start.0 == 0 && end.0 == 0) || (start.1 == 0 && end.1 == 0) {
-            continue;
+    // No neighbor rivers: generate one river with sensible start/end edges.
+    if no_neighboring_rivers {
+        // Pick a start edge: prefer North (0) or West (3)
+        if node_present[0] && (!node_present[3] || rng.one_in(2)) {
+            river_start[0] = Some(generate_edge_point(&mut rng, 0));
+        } else if node_present[3] {
+            river_start[0] = Some(generate_edge_point(&mut rng, 3));
+        } else {
+            // Random: 50% north, 50% west
+            if rng.one_in(2) {
+                river_start[0] = Some(generate_edge_point(&mut rng, 0));
+            } else {
+                river_start[0] = Some(generate_edge_point(&mut rng, 3));
+            }
         }
 
-        if let Some(node) = place_single_river(
-            &mut rng,
+        // Pick an end edge: prefer South (2) or East (1)
+        if node_present[2] && (!node_present[1] || rng.one_in(2)) {
+            river_end[0] = Some(generate_edge_point(&mut rng, 2));
+        } else if node_present[1] {
+            river_end[0] = Some(generate_edge_point(&mut rng, 1));
+        } else {
+            // Random: 50% east, 50% south
+            if rng.one_in(2) {
+                river_end[0] = Some(generate_edge_point(&mut rng, 1));
+            } else {
+                river_end[0] = Some(generate_edge_point(&mut rng, 2));
+            }
+        }
+    } else {
+        // Has neighbor exits: use them as hints for edge selection.
+        // North/West exits → start points; East/South exits → end points.
+        if node_present[0] {
+            river_start[0] = Some(generate_edge_point(&mut rng, 0));
+        } else if node_present[3] {
+            river_start[0] = Some(generate_edge_point(&mut rng, 3));
+        } else {
+            // Fallback: random start
+            if rng.one_in(2) {
+                river_start[0] = Some(generate_edge_point(&mut rng, 0));
+            } else {
+                river_start[0] = Some(generate_edge_point(&mut rng, 3));
+            }
+        }
+
+        if node_present[2] {
+            river_end[0] = Some(generate_edge_point(&mut rng, 2));
+        } else if node_present[1] {
+            river_end[0] = Some(generate_edge_point(&mut rng, 1));
+        } else {
+            if rng.one_in(2) {
+                river_end[0] = Some(generate_edge_point(&mut rng, 1));
+            } else {
+                river_end[0] = Some(generate_edge_point(&mut rng, 2));
+            }
+        }
+    }
+
+    // --- Place each river -----------------------------------------------------
+    let mut rivers_placed: usize = 0;
+
+    for i in 0..MAX_RIVERS {
+        let start = match river_start[i] {
+            Some(s) => s,
+            None => continue,
+        };
+        let end = match river_end[i] {
+            Some(e) => e,
+            None => continue,
+        };
+
+        place_single_river(
             start,
             end,
             effective_scale,
-            &river_settings,
+            &mut grid,
+            river_center_raw,
             &registry,
-            &mut terrain_dense,
-            &mut river_center_mask,
-            &current_type_indices,
-        ) {
-            river_nodes.push(node);
-        }
-    }
+            &mut rng,
+            &settings_river,
+        );
 
-    // Write terrain back to chunks via par_iter
-    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
-        if chunk_pos.z.0 != 0 {
-            return;
+        rivers_placed += 1;
+        if no_neighboring_rivers {
+            _ = major_river_count; // C++ tracks this across overmaps; we're single-overmap
+            major_river_count += 1;
         }
-        let (ox, oy) = chunk_pos.omt_origin();
-        let mut modified = false;
-        let mut new_terrain = chunk.terrain.clone();
-
-        for ly in 0u8..CHUNK_DIM as u8 {
-            for lx in 0u8..CHUNK_DIM as u8 {
-                let gx = (ox + lx as i32) as usize;
-                let gy = (oy + ly as i32) as usize;
-                if gx < 180 && gy < 180 {
-                    let idx = ly as usize * CHUNK_DIM + lx as usize;
-                    let new_val = terrain_dense[gx][gy];
-                    if new_terrain[idx] != new_val {
-                        new_terrain[idx] = new_val;
-                        modified = true;
-                    }
-                }
-            }
-        }
-
-        if modified {
-            par_commands.command_scope(|mut cmd| {
-                cmd.entity(entity).insert(OvermapChunk {
-                    terrain: new_terrain,
-                });
-            });
-        }
-    });
-
-    // Spawn RiverNode entities
-    for node in &river_nodes {
-        commands.spawn(node.clone());
     }
 
     info!(
-        "Rivers placed: {} rivers for overmap ({}, {})",
-        river_nodes.len(),
-        config.om_x,
-        config.om_y
+        om_x = config.om_x,
+        om_y = config.om_y,
+        rivers = rivers_placed,
+        effective_scale,
+        "place_rivers: terrain computed"
     );
+
+    // --- Write back to chunks -------------------------------------------------
+    write_back_grid(&grid, &z0_chunks, &mut commands);
 }
 
-/// Build river shore tiles around all river center tiles.
+// ---------------------------------------------------------------------------
+// place_single_river — core Bezier river drawing
+// ---------------------------------------------------------------------------
+
+/// Draw a single river from `river_start` to `river_end`.
 ///
-/// Port of C++ `build_river_shores()` L731-791.
+/// Verbatim port of C++ `overmap::place_river()` (overmap_water.cpp L47-226).
 ///
-/// For each river center tile at z=0, checks the 4-connected neighbors
-/// and computes a connection mask. The mask is used to look up the
-/// appropriate shore terrain from a 16-entry table.
+/// Returns `true` if the river was successfully placed.
+fn place_single_river(
+    river_start: (i32, i32),
+    mut river_end: (i32, i32),
+    river_scale: i32,
+    grid: &mut [[u32; 180]; 180],
+    river_center_raw: u32,
+    registry: &TerrainRegistry,
+    rng: &mut XorShiftRng,
+    settings_river: &crate::region_settings::RegionSettingsRiver,
+) {
+    // C++ L52: if river_scale <= 0, return
+    if river_scale <= 0 {
+        return;
+    }
+
+    let distance = rl_dist(river_start, river_end);
+    let amplitude = distance / 2;
+
+    // C++ L80-99: compute control points at 1/3 and 2/3 of the way.
+    let one_third_x = ((river_start.0 - river_end.0).abs() as f64 * (1.0 / 3.0)) as i32;
+    let one_third_y = ((river_start.1 - river_end.1).abs() as f64 * (1.0 / 3.0)) as i32;
+
+    let control_p1 = {
+        let base_x = river_start.0 + one_third_x;
+        let base_y = river_start.1 + one_third_y;
+        let perturb_x = rng.range_i32(0, amplitude);
+        let perturb_y = rng.range_i32(0, amplitude);
+        (
+            (base_x + perturb_x).clamp(0, OMAPX_EDGE),
+            (base_y + perturb_y).clamp(0, OMAPY_EDGE),
+        )
+    };
+
+    let control_p2 = {
+        let base_x = river_start.0 + one_third_x * 2;
+        let base_y = river_start.1 + one_third_y * 2;
+        let perturb_x = rng.range_i32(-amplitude, 0);
+        let perturb_y = rng.range_i32(-amplitude, 0);
+        (
+            (base_x + perturb_x).clamp(0, OMAPX_EDGE),
+            (base_y + perturb_y).clamp(0, OMAPY_EDGE),
+        )
+    };
+
+    // C++ L100-104: number of Bezier segments = distance / 2, minimum 4
+    let n_segs = distance / 2;
+    if n_segs < 4 {
+        return;
+    }
+
+    // C++ L106-110: generate Bezier curve, remove adjacent duplicates
+    let mut segmented_curve = cubic_bezier(river_start, control_p1, control_p2, river_end, n_segs);
+    segmented_curve.dedup();
+    // C++ L113: prepend start
+    segmented_curve.insert(0, river_start);
+
+    let curve_size = segmented_curve.len();
+    let last_idx = curve_size - 1;
+
+    // C++ L119-130: check first third of curve — if already water, abort
+    let check_limit = (last_idx / 3).min(last_idx);
+    let mut river_check_index = 0;
+    for i in 0..check_limit {
+        let pt = segmented_curve[i];
+        if inbounds_omt(pt) {
+            let handle = TerrainHandle(grid[pt.1 as usize][pt.0 as usize]);
+            if !is_water_body_not_shore(handle, registry) {
+                break;
+            }
+        }
+        river_check_index = i + 1;
+    }
+
+    // If first third is all water, abort.
+    if river_check_index >= check_limit && check_limit > 0 {
+        return;
+    }
+
+    // C++ L132-142: check remaining points — if water encountered, truncate
+    let mut effective_curve_size = curve_size;
+    for i in river_check_index..last_idx {
+        let pt = segmented_curve[i];
+        if inbounds_omt(pt) {
+            let handle = TerrainHandle(grid[pt.1 as usize][pt.0 as usize]);
+            if is_water_body_not_shore(handle, registry) {
+                river_end = pt;
+                effective_curve_size = i + 1;
+                break;
+            }
+        }
+    }
+
+    // C++ L145-177: draw river along each Bezier segment
+    let end_idx = effective_curve_size - 1;
+    for i in 0..end_idx {
+        let seg_start = segmented_curve[i];
+        let seg_end = segmented_curve[i + 1];
+
+        // Bresenham line between consecutive Bezier points.
+        let bezier_segment = line_between(seg_start, seg_end);
+
+        for &bezier_point in &bezier_segment {
+            let mut meandered = bezier_point;
+
+            // No meander for first/last segment.
+            if i != 0 && i != end_idx - 1 {
+                river_meander(rng, river_end, &mut meandered, river_scale);
+            }
+
+            // Draw river in radius [-river_scale, +river_scale]
+            for pt in points_in_radius_circ(meandered, river_scale) {
+                if !inbounds_omt(pt) {
+                    continue;
+                }
+                let handle = TerrainHandle(grid[pt.1 as usize][pt.0 as usize]);
+                if !is_water_body_not_shore(handle, registry) {
+                    grid[pt.1 as usize][pt.0 as usize] = river_center_raw;
+                }
+            }
+        }
+    }
+
+    // C++ L180-212: create river branches
+    let branch_ahead_points = (effective_curve_size / 5).max(2);
+    let mut branch_last_end: usize = 0;
+
+    for i in 0..end_idx {
+        let bezier_point = segmented_curve[i];
+
+        if !inbounds_omt(bezier_point) {
+            continue;
+        }
+        // Check if within margin for branch placement.
+        let margin = river_scale + 1;
+        if bezier_point.0 < margin
+            || bezier_point.0 >= OMAP_DIM - margin
+            || bezier_point.1 < margin
+            || bezier_point.1 >= OMAP_DIM - margin
+        {
+            continue;
+        }
+
+        if !rng.one_in(settings_river.river_branch_chance) {
+            continue;
+        }
+
+        let branch_end_point =
+            if i > branch_last_end && rng.one_in(settings_river.river_branch_remerge_chance) {
+                // Re-merge branch: pick a point later along the curve.
+                let end_node = rng.range_i32(
+                    i as i32 + branch_ahead_points as i32,
+                    i as i32 + branch_ahead_points as i32 * 2,
+                );
+                if end_node < end_idx as i32 {
+                    branch_last_end = end_node as usize;
+                    Some(segmented_curve[end_node as usize])
+                } else {
+                    None
+                }
+            } else {
+                // Random branch: pick a point in a 64-radius area.
+                let rad = 64;
+                Some((
+                    rng.range_i32(bezier_point.0 + rad / 2, bezier_point.0 + rad),
+                    rng.range_i32(bezier_point.1 + rad / 2, bezier_point.1 + rad),
+                ))
+            };
+
+        if let Some(branch_end) = branch_end_point {
+            if inbounds_omt(branch_end) {
+                let branch_scale = river_scale - settings_river.river_branch_scale_decrease;
+                if branch_scale > 0 {
+                    place_single_river(
+                        bezier_point,
+                        branch_end,
+                        branch_scale,
+                        grid,
+                        river_center_raw,
+                        registry,
+                        rng,
+                        settings_river,
+                    );
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// build_river_shores — convert river_center to proper shore variants
+// ---------------------------------------------------------------------------
+
+/// The shoreline terrain lookup table, indexed by 4-bit adjacency mask.
 ///
-/// Must run after `place_rivers` because it reads `TerrainFlags::RIVER`
-/// to identify river tiles.
+/// Matches the C++ `river_ters` array (overmap_water.cpp L735-759).
+///
+/// Bit layout (matching C++ `four_adjacent_offsets` order):
+/// - bit 0 (mult 1): North neighbor (0, -1)
+/// - bit 1 (mult 2): East  neighbor (1,  0)
+/// - bit 2 (mult 4): South neighbor (0,  1)
+/// - bit 3 (mult 8): West  neighbor (-1, 0)
+///
+/// Mask → terrain string ID:
+///   0:  "forest_water"     (no adjacent rivers)
+///   1:  "river_south"      (N only)
+///   2:  "river_west"       (E only)
+///   3:  "river_sw"         (N+E)
+///   4:  "river_north"      (S only)
+///   5:  "forest_water"     (N+S — no map)
+///   6:  "river_nw"         (E+S)
+///   7:  "river_west"       (N+E+S)
+///   8:  "river_east"       (W only)
+///   9:  "river_se"         (N+W)
+///  10:  "forest_water"     (E+W — no map)
+///  11:  "river_south"      (N+E+W)
+///  12:  "river_ne"         (S+W)
+///  13:  "river_east"       (N+S+W)
+///  14:  "river_north"      (E+S+W)
+///  15:  "river_center"     (N+E+S+W) — check trimmed corners
+const RIVER_SHORE_TABLE: [&str; 16] = [
+    /*  0 */ "forest_water",
+    /*  1 */ "river_south",
+    /*  2 */ "river_west",
+    /*  3 */ "river_sw",
+    /*  4 */ "river_north",
+    /*  5 */ "forest_water",
+    /*  6 */ "river_nw",
+    /*  7 */ "river_west",
+    /*  8 */ "river_east",
+    /*  9 */ "river_se",
+    /* 10 */ "forest_water",
+    /* 11 */ "river_south",
+    /* 12 */ "river_ne",
+    /* 13 */ "river_east",
+    /* 14 */ "river_north",
+    /* 15 */ "river_center",
+];
+
+/// Trimmed corner variants for mask 15, indexed by ordinal direction.
+///
+/// C++ `four_ordinal_directions` order: NE, SE, SW, NW.
+/// If the corner is NOT water, use the trimmed-corner terrain.
+const TRIMMED_CORNER_TABLE: [&str; 4] = [
+    "river_c_not_ne", // NE corner is not water → trim NE
+    "river_c_not_se", // SE corner is not water → trim SE
+    "river_c_not_sw", // SW corner is not water → trim SW
+    "river_c_not_nw", // NW corner is not water → trim NW
+];
+
+/// Ordinal (diagonal) offsets matching C++ `four_ordinal_directions`:
+/// NE, SE, SW, NW.
+const FOUR_ORDINAL_OFFSETS: [(i32, i32); 4] = [(1, -1), (1, 1), (-1, 1), (-1, -1)];
+
+/// Determine the shore terrain for a river tile at `pt` given the full terrain grid.
+///
+/// Matches C++ `overmap::build_river_shores()` (overmap_water.cpp L656-792).
+///
+/// Computes a 4-bit mask from the 4 cardinal neighbors. Out-of-bounds neighbors
+/// count as river (for border continuity). Looks up the shore terrain from
+/// the mask table. For mask 15 (all 4 connections), checks ordinal corners for
+/// trimmed-corner variants.
+fn compute_river_shore(
+    pt: (i32, i32),
+    grid: &[[u32; 180]; 180],
+    registry: &TerrainRegistry,
+) -> u32 {
+    let mut mask: usize = 0;
+    let mut multiplier: usize = 1;
+
+    // C++ L719-731: check 4 cardinal neighbors
+    for &(dx, dy) in &FOUR_ADJACENT_OFFSETS {
+        let np = (pt.0 + dx, pt.1 + dy);
+
+        if !inbounds_omt(np) {
+            // Out-of-bounds — treat as river (border continuity).
+            mask += multiplier;
+        } else {
+            let handle = TerrainHandle(grid[np.1 as usize][np.0 as usize]);
+            if is_water_body(handle, registry) {
+                mask += multiplier;
+            }
+        }
+        multiplier *= 2;
+    }
+
+    if mask == 15 {
+        // C++ L773-787: check ordinal corners for trimmed-corner terrain
+        for i in 0..4 {
+            let (cdx, cdy) = FOUR_ORDINAL_OFFSETS[i];
+            let corner = (pt.0 + cdx, pt.1 + cdy);
+            if inbounds_omt(corner) {
+                let handle = TerrainHandle(grid[corner.1 as usize][corner.0 as usize]);
+                if !is_water_body(handle, registry) {
+                    // Corner is not water → use trimmed-corner variant
+                    if let Some(h) = registry.handle_by_id(TRIMMED_CORNER_TABLE[i]) {
+                        return h.0;
+                    }
+                }
+            }
+        }
+    }
+
+    // Look up shore terrain from the mask table.
+    let shore_id = RIVER_SHORE_TABLE[mask];
+    registry.handle_by_id(shore_id).map(|h| h.0).unwrap_or(0)
+}
+
+/// Build river shores for all river tiles on the overmap.
+///
+/// Verbatim port of C++ `overmap::build_river_shores()` (overmap_water.cpp L656-792).
+///
+/// For every tile that has the RIVER flag, computes the appropriate shore
+/// variant based on 4-way cardinal adjacency and replaces the tile's terrain.
 pub fn build_river_shores(
     chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
-    par_commands: ParallelCommands,
+    mut commands: Commands,
     registry: Res<TerrainRegistry>,
 ) {
-    // Read terrain into dense array
-    let mut terrain = [[TerrainHandle::NULL; 180]; 180];
-    for (_entity, chunk_pos, chunk) in &chunks {
-        if chunk_pos.z.0 != 0 {
-            continue;
-        }
-        let (ox, oy) = chunk_pos.omt_origin();
-        for ly in 0u8..CHUNK_DIM as u8 {
-            for lx in 0u8..CHUNK_DIM as u8 {
-                let gx = (ox + lx as i32) as usize;
-                let gy = (oy + ly as i32) as usize;
-                if gx < 180 && gy < 180 {
-                    terrain[gx][gy] = chunk.get(lx, ly);
-                }
-            }
-        }
-    }
+    let (mut grid, z0_chunks) = build_omt_grid(&chunks);
 
-    // Build river center mask: which tiles are actual river (not shores yet)?
-    let mut is_river_center = [[false; 180]; 180];
-    for x in 0..180 {
-        for y in 0..180 {
-            is_river_center[x][y] = is_river(terrain[x][y], &registry);
-        }
-    }
+    let mut modified: usize = 0;
 
-    // For each river tile, compute the connection mask and assign shore terrain.
-    // We operate on a copy so that shore assignments don't affect neighbor checks.
-    let mut new_terrain = terrain;
-
-    for x in 0..180i32 {
-        for y in 0..180i32 {
-            if !is_river_center[x as usize][y as usize] {
+    for y in 0..OMAP_DIM as usize {
+        for x in 0..OMAP_DIM as usize {
+            let handle = TerrainHandle(grid[y][x]);
+            if !is_river(handle, &registry) {
                 continue;
             }
 
-            let mut mask: u8 = 0;
-            let mut multiplier: u8 = 1;
-
-            for &(dx, dy) in &FOUR_ADJACENT {
-                let nx = x + dx;
-                let ny = y + dy;
-
-                // Out-of-bounds neighbors count as river (border continuity)
-                if !inbounds_omt((nx, ny)) || is_river(terrain[nx as usize][ny as usize], &registry)
-                {
-                    mask += multiplier;
-                }
-                multiplier *= 2;
-            }
-
-            // For mask 15 (all 4 connections), check trimmed corners
-            if mask == 15 {
-                if let Some(trimmed) = trimmed_corner_terrain((x, y), &is_river_center, &registry) {
-                    new_terrain[x as usize][y as usize] = trimmed;
-                    continue;
-                }
-            }
-
-            new_terrain[x as usize][y as usize] = river_shore_terrain(mask, &registry);
+            grid[y][x] = compute_river_shore((x as i32, y as i32), &grid, &registry);
+            modified += 1;
         }
     }
 
-    // Write back via par_iter
-    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
-        if chunk_pos.z.0 != 0 {
-            return;
-        }
-        let (ox, oy) = chunk_pos.omt_origin();
-        let mut modified = false;
-        let mut chunk_terrain = chunk.terrain.clone();
-
-        for ly in 0u8..CHUNK_DIM as u8 {
-            for lx in 0u8..CHUNK_DIM as u8 {
-                let gx = (ox + lx as i32) as usize;
-                let gy = (oy + ly as i32) as usize;
-                if gx < 180 && gy < 180 {
-                    let idx = ly as usize * CHUNK_DIM + lx as usize;
-                    let new_val = new_terrain[gx][gy];
-                    if chunk_terrain[idx] != new_val {
-                        chunk_terrain[idx] = new_val;
-                        modified = true;
-                    }
-                }
-            }
-        }
-
-        if modified {
-            par_commands.command_scope(|mut cmd| {
-                cmd.entity(entity).insert(OvermapChunk {
-                    terrain: chunk_terrain,
-                });
-            });
-        }
-    });
+    if modified > 0 {
+        info!(
+            river_tiles = modified,
+            "build_river_shores: computed shores for {} tiles", modified
+        );
+        write_back_grid(&grid, &z0_chunks, &mut commands);
+    }
 }
 
-/// Polish rivers — re-run shore building on all tiles.
+/// Polish (recompute) river shores for ALL tiles.
 ///
-/// Port of C++ `polish_river()` (overmap.cpp L2735-2742).
+/// Verbatim port of C++ `overmap::polish_river()` (overmap.cpp L2735-2742).
 ///
-/// This is called after roads and specials are placed to ensure
-/// river shores are consistent. Roads/specials may have overwritten
-/// some shore tiles.
+/// This runs `build_river_shores` across the entire overmap, rebuilding all
+/// river shore variants from scratch. Called twice in the pipeline:
+/// once after ravines and once after forest trailheads.
 ///
-/// In our pipeline, this runs in `OvermapGenSet::Finalize`.
+/// Both calls use the same algorithm — they rebuild shores based on current
+/// terrain, handling any new water tiles that may have been placed by
+/// intervening systems.
 pub fn polish_river(
     chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
-    par_commands: ParallelCommands,
+    commands: Commands,
     registry: Res<TerrainRegistry>,
 ) {
-    // Same logic as build_river_shores — rebuild all shores from scratch
-    let mut terrain = [[TerrainHandle::NULL; 180]; 180];
-    for (_entity, chunk_pos, chunk) in &chunks {
-        if chunk_pos.z.0 != 0 {
-            continue;
-        }
-        let (ox, oy) = chunk_pos.omt_origin();
-        for ly in 0u8..CHUNK_DIM as u8 {
-            for lx in 0u8..CHUNK_DIM as u8 {
-                let gx = (ox + lx as i32) as usize;
-                let gy = (oy + ly as i32) as usize;
-                if gx < 180 && gy < 180 {
-                    terrain[gx][gy] = chunk.get(lx, ly);
-                }
-            }
+    // `polish_river` is `build_river_shores` applied to ALL tiles.
+    // In C++: `for x, y { build_river_shores(neighbor_overmaps, {x, y, 0}); }`
+    // This is equivalent to our `build_river_shores` which already iterates
+    // all tiles.
+    build_river_shores(chunks, commands, registry);
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- Geometry helpers -----------------------------------------------------
+
+    #[test]
+    fn rl_dist_chebyshev() {
+        assert_eq!(rl_dist((0, 0), (3, 4)), 4); // max(3, 4) = 4
+        assert_eq!(rl_dist((10, 10), (10, 10)), 0);
+        assert_eq!(rl_dist((0, 0), (-5, 2)), 5); // max(5, 2) = 5
+    }
+
+    #[test]
+    fn points_in_radius_circ_basic() {
+        let pts = points_in_radius_circ((0, 0), 1);
+        // Should include center and 4 cardinal neighbors
+        assert!(pts.contains(&(0, 0)));
+        assert!(pts.contains(&(1, 0)));
+        assert!(pts.contains(&(-1, 0)));
+        assert!(pts.contains(&(0, 1)));
+        assert!(pts.contains(&(0, -1)));
+        // Should NOT include diagonals (trig_dist = sqrt(2) ≈ 1.414 > 1.5? No, < 1.5).
+        // Actually sqrt(2) ≈ 1.414 < 1.5, so diagonals ARE included.
+        assert!(pts.contains(&(1, 1)));
+        // (2, 0): trig_dist = 2.0 > 1.5, should NOT be included.
+        assert!(!pts.contains(&(2, 0)));
+    }
+
+    #[test]
+    fn cubic_bezier_straight_line() {
+        // Straight line from (0,0) to (9,0) with control points on the line.
+        let pts = cubic_bezier((0, 0), (3, 0), (6, 0), (9, 0), 9);
+        assert_eq!(pts.len(), 10);
+        for (i, &(x, y)) in pts.iter().enumerate() {
+            assert_eq!(x, i as i32);
+            assert_eq!(y, 0);
         }
     }
 
-    let mut is_river_center = [[false; 180]; 180];
-    for x in 0..180 {
-        for y in 0..180 {
-            is_river_center[x][y] = is_river(terrain[x][y], &registry);
-        }
+    #[test]
+    fn cubic_bezier_endpoints() {
+        let pts = cubic_bezier((10, 20), (30, 40), (50, 60), (70, 80), 5);
+        assert_eq!(pts[0], (10, 20));
+        assert_eq!(pts[5], (70, 80));
     }
 
-    let mut new_terrain = terrain;
+    #[test]
+    fn river_meander_moves_toward_end() {
+        let mut rng = XorShiftRng::new(12345);
+        let river_end = (100, 100);
+        let mut current = (10, 10);
 
-    for x in 0..180i32 {
-        for y in 0..180i32 {
-            if !is_river_center[x as usize][y as usize] {
-                continue;
-            }
-
-            let mut mask: u8 = 0;
-            let mut multiplier: u8 = 1;
-
-            for &(dx, dy) in &FOUR_ADJACENT {
-                let nx = x + dx;
-                let ny = y + dy;
-
-                if !inbounds_omt((nx, ny)) || is_river(terrain[nx as usize][ny as usize], &registry)
-                {
-                    mask += multiplier;
-                }
-                multiplier *= 2;
-            }
-
-            if mask == 15 {
-                if let Some(trimmed) = trimmed_corner_terrain((x, y), &is_river_center, &registry) {
-                    new_terrain[x as usize][y as usize] = trimmed;
-                    continue;
-                }
-            }
-
-            new_terrain[x as usize][y as usize] = river_shore_terrain(mask, &registry);
+        // With high river_scale and many iterations, the point should tend
+        // toward the river end.
+        for _ in 0..100 {
+            river_meander(&mut rng, river_end, &mut current, 3);
         }
+        // After 100 meanders, current should be closer to river_end.
+        let initial_dist = rl_dist((10, 10), river_end);
+        let final_dist = rl_dist(current, river_end);
+        // Should have moved at least somewhat toward the end (probabilistic).
+        assert!(final_dist < initial_dist);
     }
 
-    // Write back via par_iter
-    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
-        if chunk_pos.z.0 != 0 {
-            return;
-        }
-        let (ox, oy) = chunk_pos.omt_origin();
-        let mut modified = false;
-        let mut chunk_terrain = chunk.terrain.clone();
+    // --- Shore mask computation -----------------------------------------------
 
-        for ly in 0u8..CHUNK_DIM as u8 {
-            for lx in 0u8..CHUNK_DIM as u8 {
-                let gx = (ox + lx as i32) as usize;
-                let gy = (oy + ly as i32) as usize;
-                if gx < 180 && gy < 180 {
-                    let idx = ly as usize * CHUNK_DIM + lx as usize;
-                    let new_val = new_terrain[gx][gy];
-                    if chunk_terrain[idx] != new_val {
-                        chunk_terrain[idx] = new_val;
-                        modified = true;
-                    }
-                }
+    #[test]
+    fn shore_mask_all_river_neighbors() {
+        // Create a 3x3 grid of river tiles around a center river tile.
+        let mut registry = TerrainRegistry::empty();
+        let river_idx = registry.register_no_entity(
+            "river_center",
+            TerrainFlags::from_bits(TerrainFlags::RIVER),
+            2,
+            String::new(),
+                0,
+            );
+        // Register all shore variants so handle_by_id works.
+        for id in &[
+            "forest_water",
+            "river_south",
+            "river_west",
+            "river_sw",
+            "river_north",
+            "river_nw",
+            "river_east",
+            "river_se",
+            "river_ne",
+            "river_center",
+            "river_c_not_ne",
+            "river_c_not_se",
+            "river_c_not_sw",
+            "river_c_not_nw",
+        ] {
+            registry.register_no_entity(
+                id,
+                TerrainFlags::from_bits(TerrainFlags::RIVER),
+                2,
+                String::new(),
+                0,
+            );
+        }
+
+        // Build a small grid with a 3x3 patch of river at (1,1)-(3,3).
+        let mut grid = [[0u32; 180]; 180];
+        let river_raw = TerrainHandle::new(river_idx, 0).0;
+        for y in 1..=3 {
+            for x in 1..=3 {
+                grid[y][x] = river_raw;
             }
         }
 
-        if modified {
-            par_commands.command_scope(|mut cmd| {
-                cmd.entity(entity).insert(OvermapChunk {
-                    terrain: chunk_terrain,
-                });
-            });
+        // Center tile (2,2) has all 4 cardinal neighbors as river → mask 15.
+        let result = compute_river_shore((2, 2), &grid, &registry);
+        let result_handle = TerrainHandle(result);
+        let result_id = registry.string_id_for(result_handle);
+        // Should be river_center if all ordinal corners are also water.
+        assert!(
+            result_id == Some("river_center"),
+            "expected river_center, got {:?}",
+            result_id
+        );
+    }
+
+    #[test]
+    fn shore_mask_no_neighbors() {
+        let mut registry = TerrainRegistry::empty();
+        let river_idx = registry.register_no_entity(
+            "river_center",
+            TerrainFlags::from_bits(TerrainFlags::RIVER),
+            2,
+            String::new(),
+                0,
+            );
+        for id in &[
+            "forest_water",
+            "river_south",
+            "river_west",
+            "river_sw",
+            "river_north",
+            "river_nw",
+            "river_east",
+            "river_se",
+            "river_ne",
+            "river_center",
+        ] {
+            registry.register_no_entity(
+                id,
+                TerrainFlags::from_bits(TerrainFlags::RIVER),
+                2,
+                String::new(),
+                0,
+            );
         }
-    });
+
+        let mut grid = [[0u32; 180]; 180];
+        let river_raw = TerrainHandle::new(river_idx, 0).0;
+        // Single isolated river tile at (5,5).
+        grid[5][5] = river_raw;
+
+        let result = compute_river_shore((5, 5), &grid, &registry);
+        let result_handle = TerrainHandle(result);
+        let result_id = registry.string_id_for(result_handle);
+        assert_eq!(result_id, Some("forest_water"), "mask 0 → forest_water");
+    }
+
+    #[test]
+    fn shore_mask_north_only() {
+        let mut registry = TerrainRegistry::empty();
+        let river_idx = registry.register_no_entity(
+            "river_center",
+            TerrainFlags::from_bits(TerrainFlags::RIVER),
+            2,
+            String::new(),
+                0,
+            );
+        for id in &[
+            "forest_water",
+            "river_south",
+            "river_west",
+            "river_sw",
+            "river_north",
+            "river_nw",
+            "river_east",
+            "river_se",
+            "river_ne",
+            "river_center",
+        ] {
+            registry.register_no_entity(
+                id,
+                TerrainFlags::from_bits(TerrainFlags::RIVER),
+                2,
+                String::new(),
+                0,
+            );
+        }
+
+        let mut grid = [[0u32; 180]; 180];
+        let river_raw = TerrainHandle::new(river_idx, 0).0;
+        // River at (5,5) and north neighbor at (5,4).
+        grid[5][5] = river_raw;
+        grid[4][5] = river_raw; // north
+
+        let result = compute_river_shore((5, 5), &grid, &registry);
+        let result_id = registry.string_id_for(TerrainHandle(result));
+        assert_eq!(
+            result_id,
+            Some("river_south"),
+            "mask 1 (N only) → river_south"
+        );
+    }
+
+    #[test]
+    fn shore_mask_east_only() {
+        let mut registry = TerrainRegistry::empty();
+        let river_idx = registry.register_no_entity(
+            "river_center",
+            TerrainFlags::from_bits(TerrainFlags::RIVER),
+            2,
+            String::new(),
+                0,
+            );
+        for id in &[
+            "forest_water",
+            "river_south",
+            "river_west",
+            "river_sw",
+            "river_north",
+            "river_nw",
+            "river_east",
+            "river_se",
+            "river_ne",
+            "river_center",
+        ] {
+            registry.register_no_entity(
+                id,
+                TerrainFlags::from_bits(TerrainFlags::RIVER),
+                2,
+                String::new(),
+                0,
+            );
+        }
+
+        let mut grid = [[0u32; 180]; 180];
+        let river_raw = TerrainHandle::new(river_idx, 0).0;
+        // River at (5,5) and east neighbor at (6,5).
+        grid[5][5] = river_raw;
+        grid[5][6] = river_raw; // east
+
+        let result = compute_river_shore((5, 5), &grid, &registry);
+        let result_id = registry.string_id_for(TerrainHandle(result));
+        assert_eq!(
+            result_id,
+            Some("river_west"),
+            "mask 2 (E only) → river_west"
+        );
+    }
+
+    #[test]
+    fn shore_mask_south_only() {
+        let mut registry = TerrainRegistry::empty();
+        let river_idx = registry.register_no_entity(
+            "river_center",
+            TerrainFlags::from_bits(TerrainFlags::RIVER),
+            2,
+            String::new(),
+                0,
+            );
+        for id in &[
+            "forest_water",
+            "river_south",
+            "river_west",
+            "river_sw",
+            "river_north",
+            "river_nw",
+            "river_east",
+            "river_se",
+            "river_ne",
+            "river_center",
+        ] {
+            registry.register_no_entity(
+                id,
+                TerrainFlags::from_bits(TerrainFlags::RIVER),
+                2,
+                String::new(),
+                0,
+            );
+        }
+
+        let mut grid = [[0u32; 180]; 180];
+        let river_raw = TerrainHandle::new(river_idx, 0).0;
+        // River at (5,5) and south neighbor at (6,5).
+        grid[5][5] = river_raw;
+        grid[6][5] = river_raw; // south
+
+        let result = compute_river_shore((5, 5), &grid, &registry);
+        let result_id = registry.string_id_for(TerrainHandle(result));
+        assert_eq!(
+            result_id,
+            Some("river_north"),
+            "mask 4 (S only) → river_north"
+        );
+    }
+
+    #[test]
+    fn shore_mask_west_only() {
+        let mut registry = TerrainRegistry::empty();
+        let river_idx = registry.register_no_entity(
+            "river_center",
+            TerrainFlags::from_bits(TerrainFlags::RIVER),
+            2,
+            String::new(),
+                0,
+            );
+        for id in &[
+            "forest_water",
+            "river_south",
+            "river_west",
+            "river_sw",
+            "river_north",
+            "river_nw",
+            "river_east",
+            "river_se",
+            "river_ne",
+            "river_center",
+        ] {
+            registry.register_no_entity(
+                id,
+                TerrainFlags::from_bits(TerrainFlags::RIVER),
+                2,
+                String::new(),
+                0,
+            );
+        }
+
+        let mut grid = [[0u32; 180]; 180];
+        let river_raw = TerrainHandle::new(river_idx, 0).0;
+        // River at (5,5) and west neighbor at (5,4).
+        grid[5][5] = river_raw;
+        grid[5][4] = river_raw; // west
+
+        let result = compute_river_shore((5, 5), &grid, &registry);
+        let result_id = registry.string_id_for(TerrainHandle(result));
+        assert_eq!(
+            result_id,
+            Some("river_east"),
+            "mask 8 (W only) → river_east"
+        );
+    }
+
+    #[test]
+    fn shore_mask_border_continuity() {
+        // Tiles at the edge of the overmap treat out-of-bounds as river.
+        let mut registry = TerrainRegistry::empty();
+        let river_idx = registry.register_no_entity(
+            "river_center",
+            TerrainFlags::from_bits(TerrainFlags::RIVER),
+            2,
+            String::new(),
+                0,
+            );
+        for id in &[
+            "forest_water",
+            "river_south",
+            "river_west",
+            "river_sw",
+            "river_north",
+            "river_nw",
+            "river_east",
+            "river_se",
+            "river_ne",
+            "river_center",
+            "river_c_not_ne",
+            "river_c_not_se",
+            "river_c_not_sw",
+            "river_c_not_nw",
+        ] {
+            registry.register_no_entity(
+                id,
+                TerrainFlags::from_bits(TerrainFlags::RIVER),
+                2,
+                String::new(),
+                0,
+            );
+        }
+
+        let mut grid = [[0u32; 180]; 180];
+        let river_raw = TerrainHandle::new(river_idx, 0).0;
+
+        // River at (0, 5) — west neighbor out of bounds → counts as river.
+        grid[5][0] = river_raw;
+
+        let result = compute_river_shore((0, 5), &grid, &registry);
+        let result_id = registry.string_id_for(TerrainHandle(result));
+        // West out-of-bounds = river, so at least mask has bit 3 (8).
+        // No other neighbors are river, so mask = 8 → river_east.
+        assert_eq!(
+            result_id,
+            Some("river_east"),
+            "edge tile with OOB west → river_east"
+        );
+    }
 }

@@ -1,4 +1,4 @@
-//! Generation step systems.
+//! Generation step systems — one module per pipeline phase.
 pub mod build_cities;
 pub mod cities;
 pub mod elevated;
@@ -25,26 +25,26 @@ pub mod subway;
 pub mod swamps;
 
 pub use build_cities::build_cities;
-pub use cities::{calculate_urbanity, place_cities, CityTiles};
+pub use cities::place_cities;
 pub use elevated::generate_over;
 pub use finalize::finalize_overmap;
 pub use forest_trailheads::place_forest_trailheads;
 pub use forest_trails::place_forest_trails;
-pub use forests::{calculate_forestosity, place_forests};
+pub use forests::place_forests;
 pub use highway::place_highways;
 pub use highway_interchanges::{finalize_highways, place_highway_interchanges};
 pub use init_base::init_base_terrain;
 pub use lakes::place_lakes;
-pub use mongroups::{place_mongroups, MonsterGroup};
-pub use mutable_specials::{place_mutable_specials, PlacedMutableSpecial};
-pub use neighbor_connections::{populate_connections_out_from_neighbors, ConnectionExits};
-pub use oceans::{calculate_ocean_gradient, place_oceans};
-pub use radios::{place_radios, RadioTower};
+pub use mongroups::place_mongroups;
+pub use mutable_specials::place_mutable_specials;
+pub use neighbor_connections::populate_connections_out_from_neighbors;
+pub use oceans::place_oceans;
+pub use radios::place_radios;
 pub use railroads::place_railroads;
 pub use ravines::place_ravines;
 pub use rivers::{build_river_shores, place_rivers, polish_river};
 pub use roads::place_roads;
-pub use specials::{place_specials, PlacedSpecial};
+pub use specials::place_specials;
 pub use stubs::generate_shore_variants;
 pub use subway::generate_sub;
 pub use swamps::place_swamps;

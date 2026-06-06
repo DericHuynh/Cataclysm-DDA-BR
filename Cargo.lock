@@ -2147,7 +2147,13 @@ dependencies = [
 name = "cdda_cli"
 version = "0.1.0"
 dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_state",
+ "cdda_core_types",
  "cdda_data",
+ "cdda_overmap",
+ "cdda_overmap_gen",
  "clap",
  "schemars",
  "serde_json",

@@ -1,114 +1,222 @@
-//! Step 2a: Place forests using simplex noise.
+//! Forest terrain generation — verbatim port of C++ `overmap::place_forests()`
+//! (overmap.cpp L2051-2077) and `calculate_forestosity()` (L2331-2369).
 //!
-//! Port of CDDA master's `overmap::place_forests()` (C++ L2051-2077) and
-//! `calculate_forestosity()` (C++ L2331-2369).
+//! ## Algorithm
 //!
-//! Only overwrites the default FIELD terrain.
+//! 1. Read all z=0 chunk tiles into a dense `[[u32; 180]; 180]` grid.
+//! 2. Compute `forest_size_adjust` via [`calculate_forestosity`] using the
+//!    region settings and overmap position.
+//! 3. For each tile that is still the default (field) terrain, sample
+//!    forest noise and compare against the adjusted thresholds to decide
+//!    whether to place `forest` or `forest_thick`.
+//! 4. Write modified tiles back to chunks via `ParallelCommands`.
 
-use crate::pipeline::OvermapGenConfig;
-use crate::region_settings::OvermapRegionSettings;
 use bevy_ecs::prelude::*;
-use cdda_noise;
-use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM};
-use cdda_overmap::registry::TerrainRegistry;
+use cdda_noise::forest_noise_at;
+use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, CHUNK_SIZE, OMAP_DIM};
+use cdda_overmap::registry::{CoreTerrains, TerrainHandle};
 use tracing::info;
 
-/// Port of overmap::calculate_forestosity() (C++ L2331-2369).
-///
-/// Computes the directional forest density adjustment based on how far
-/// the overmap is from the origin in each cardinal direction.
-///
-/// `forest_increase` is indexed by om_direction order: [North, East, South, West].
-/// Positive values increase forest density in that direction.
-///
-/// # Return value
-///
-/// Returns the **raw noise adjust** (`forest_size_adjust` in C++), clamped to
-/// `[0, forest_max - forest_noise_threshold]`.  This is the value added to the
-/// forest noise sample before threshold comparison.
-///
-/// Callers that need the C++ `forestosity` value (used for city sizing) must
-/// multiply by 25.0: `forestosity = calculate_forestosity(...) * 25.0`.
-pub fn calculate_forestosity(om_x: i32, om_y: i32, settings: &OvermapRegionSettings) -> f32 {
-    let northern = settings.forest_increase[0]; // North
-    let eastern = settings.forest_increase[1]; // East
-    let southern = settings.forest_increase[2]; // South
-    let western = settings.forest_increase[3]; // West
+use crate::pipeline::OvermapGenConfig;
+use crate::region_settings::{OvermapRegionSettings, RegionSettingsForest};
 
-    let mut adjust = 0.0f32;
-    if northern != 0.0 && om_y < 0 {
-        adjust -= om_y as f32 * northern;
+// ---------------------------------------------------------------------------
+// calculate_forestosity — directional forest density adjustment
+// ---------------------------------------------------------------------------
+
+/// Compute the forest-size adjustment factor for this overmap.
+///
+/// Verbatim port of C++ `overmap::calculate_forestosity()`
+/// (overmap.cpp L2331-2369).
+///
+/// Uses the `forest_increase` directional array indexed in N-E-S-W order
+/// (matching `om_direction::type` discriminants: North=0, East=1, South=2, West=3).
+///
+/// Returns `(forest_size_adjust, forestosity)`.
+pub fn calculate_forestosity(
+    om_x: i32,
+    om_y: i32,
+    settings_forest: &RegionSettingsForest,
+) -> (f32, f32) {
+    let northern_forest_increase = settings_forest.forest_increase[0]; // North
+    let eastern_forest_increase = settings_forest.forest_increase[1]; // East
+    let southern_forest_increase = settings_forest.forest_increase[2]; // South
+    let western_forest_increase = settings_forest.forest_increase[3]; // West
+
+    let mut forest_size_adjust: f32 = 0.0;
+
+    // C++ L2338-2357 — directional adjustments keyed by overmap position relative to origin
+    if western_forest_increase != 0.0 && om_x < 0 {
+        forest_size_adjust -= om_x as f32 * western_forest_increase;
     }
-    if eastern != 0.0 && om_x > 0 {
-        adjust += om_x as f32 * eastern;
+    if northern_forest_increase != 0.0 && om_y < 0 {
+        forest_size_adjust -= om_y as f32 * northern_forest_increase;
     }
-    if western != 0.0 && om_x < 0 {
-        adjust -= om_x as f32 * western;
+    if eastern_forest_increase != 0.0 && om_x > 0 {
+        forest_size_adjust += om_x as f32 * eastern_forest_increase;
     }
-    if southern != 0.0 && om_y > 0 {
-        adjust += om_y as f32 * southern;
+    if southern_forest_increase != 0.0 && om_y > 0 {
+        forest_size_adjust += om_y as f32 * southern_forest_increase;
     }
 
-    adjust.min(settings.forest_max - settings.forest_noise_threshold)
+    let forestosity = forest_size_adjust * 25.0;
+
+    // Cap so forest never totally overwhelms the map
+    forest_size_adjust =
+        forest_size_adjust.min(settings_forest.max_forest - settings_forest.noise_threshold_forest);
+
+    (forest_size_adjust, forestosity)
 }
 
-/// Place FOREST and FOREST_THICK on FIELD tiles using noise.
-pub fn place_forests(
-    chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
-    par_commands: ParallelCommands,
-    config: Res<OvermapGenConfig>,
-    registry: Res<TerrainRegistry>,
-    settings: Res<OvermapRegionSettings>,
-) {
-    let field_index = registry.field_index;
-    let forest_adjust = calculate_forestosity(config.om_x, config.om_y, &settings);
-    let threshold = settings.forest_noise_threshold;
-    let thick_threshold = settings.forest_noise_threshold_thick;
-    let seed = config.noise_seed;
+// ---------------------------------------------------------------------------
+// Grid helpers
+// ---------------------------------------------------------------------------
 
-    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
-        if chunk_pos.z.0 != 0 {
-            return;
+/// Build a dense `[[u32; 180]; 180]` grid from z=0 chunk entities.
+fn build_omt_grid(
+    chunks: &Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+) -> ([[u32; 180]; 180], Vec<(Entity, ChunkPosition)>) {
+    let mut grid = [[0u32; 180]; 180];
+    let mut z0_chunks: Vec<(Entity, ChunkPosition)> = Vec::with_capacity(36);
+
+    for (entity, pos, chunk) in chunks.iter() {
+        if pos.z.0 != 0 {
+            continue;
         }
-        let (ox, oy) = chunk_pos.omt_origin();
-        let mut modified = false;
-        let mut new_terrain = chunk.terrain.clone();
+        z0_chunks.push((entity, *pos));
 
-        for ly in 0u8..CHUNK_DIM as u8 {
-            for lx in 0u8..CHUNK_DIM as u8 {
-                let idx = ly as usize * CHUNK_DIM as usize + lx as usize;
-                let handle = chunk.terrain[idx];
-                if handle.type_index() != field_index {
-                    continue;
-                }
-                let wx = ox + lx as i32;
-                let wy = oy + ly as i32;
-                let n = cdda_noise::forest_noise_at(wx, wy, seed);
-
-                if n + forest_adjust > thick_threshold {
-                    if let Some(h) = registry.handle_by_id("forest_thick") {
-                        new_terrain[idx] = h;
-                        modified = true;
-                    }
-                } else if n + forest_adjust > threshold {
-                    if let Some(h) = registry.handle_by_id("forest") {
-                        new_terrain[idx] = h;
-                        modified = true;
-                    }
+        let (origin_x, origin_y) = pos.omt_origin();
+        for ly in 0..CHUNK_DIM as u8 {
+            for lx in 0..CHUNK_DIM as u8 {
+                let omt_x = origin_x + lx as i32;
+                let omt_y = origin_y + ly as i32;
+                if omt_x >= 0 && omt_x < OMAP_DIM && omt_y >= 0 && omt_y < OMAP_DIM {
+                    grid[omt_y as usize][omt_x as usize] = chunk.get(lx, ly).0;
                 }
             }
         }
-        if modified {
-            par_commands.command_scope(|mut cmd| {
-                cmd.entity(entity).insert(OvermapChunk {
-                    terrain: new_terrain,
-                });
-            });
-        }
-    });
+    }
+
+    (grid, z0_chunks)
+}
+
+// ---------------------------------------------------------------------------
+// place_forests — system entry point
+// ---------------------------------------------------------------------------
+
+/// Place forest and forest-thick terrain on the overmap.
+///
+/// Verbatim port of C++ `overmap::place_forests()` (overmap.cpp L2051-2077).
+pub fn place_forests(
+    chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+    mut commands: Commands,
+    config: Res<OvermapGenConfig>,
+    core_terrains: Res<CoreTerrains>,
+    settings: Res<OvermapRegionSettings>,
+) {
+    if !settings.overmap_forest {
+        info!("place_forests: skipped — overmap_forest is false");
+        return;
+    }
+
+    let settings_forest = &settings.forest;
+
+    // Compute global base-point coordinates for noise.
+    let global_base_x = config.om_x * OMAP_DIM;
+    let global_base_y = config.om_y * OMAP_DIM;
+
+    // Compute forest-size adjustment from region settings.
+    let (forest_size_adjust, forestosity) =
+        calculate_forestosity(config.om_x, config.om_y, settings_forest);
 
     info!(
-        "Forests placed for overmap ({}, {})",
-        config.om_x, config.om_y
+        om_x = config.om_x,
+        om_y = config.om_y,
+        forestosity,
+        forest_size_adjust,
+        "place_forests: adjustment computed"
     );
+
+    // --- Build grid -----------------------------------------------------------
+    let (mut grid, z0_chunks) = build_omt_grid(&chunks);
+
+    let default_terrain_raw = core_terrains.field.0;
+    let forest_raw = core_terrains.forest.0;
+    let forest_thick_raw = core_terrains.forest_thick.0;
+
+    let threshold_forest = settings_forest.noise_threshold_forest;
+    let threshold_forest_thick = settings_forest.noise_threshold_forest_thick;
+
+    let mut forest_count: usize = 0;
+    let mut thick_count: usize = 0;
+
+    // --- Compute terrain -------------------------------------------------------
+    for y in 0..OMAP_DIM as usize {
+        for x in 0..OMAP_DIM as usize {
+            // Skip tiles that aren't the default (field) terrain — C++ L2060-2062
+            if grid[y][x] != default_terrain_raw {
+                continue;
+            }
+
+            let global_x = global_base_x + x as i32;
+            let global_y = global_base_y + y as i32;
+            let n = forest_noise_at(global_x, global_y, config.noise_seed);
+            let adjusted = n + forest_size_adjust;
+
+            if adjusted > threshold_forest_thick {
+                grid[y][x] = forest_thick_raw;
+                thick_count += 1;
+            } else if adjusted > threshold_forest {
+                grid[y][x] = forest_raw;
+                forest_count += 1;
+            }
+        }
+    }
+
+    info!(
+        om_x = config.om_x,
+        om_y = config.om_y,
+        forest_tiles = forest_count,
+        thick_tiles = thick_count,
+        "place_forests: terrain computed"
+    );
+
+    // --- Write back to chunks --------------------------------------------------
+    write_back_grid(&grid, &z0_chunks, &mut commands);
+}
+
+// ---------------------------------------------------------------------------
+// Write-back
+// ---------------------------------------------------------------------------
+
+/// Write the modified grid back to z=0 chunk entities via `Commands`.
+fn write_back_grid(
+    grid: &[[u32; 180]; 180],
+    z0_chunks: &[(Entity, ChunkPosition)],
+    commands: &mut Commands,
+) {
+    for &(entity, pos) in z0_chunks {
+        let (origin_x, origin_y) = pos.omt_origin();
+        let mut new_terrain = [TerrainHandle::NULL; CHUNK_SIZE];
+        let mut any_changed = false;
+
+        for ly in 0..CHUNK_DIM {
+            for lx in 0..CHUNK_DIM {
+                let omt_x = origin_x + lx as i32;
+                let omt_y = origin_y + ly as i32;
+                let idx = ly * CHUNK_DIM + lx;
+                if omt_x >= 0 && omt_x < OMAP_DIM as i32 && omt_y >= 0 && omt_y < OMAP_DIM as i32 {
+                    let new_handle = TerrainHandle(grid[omt_y as usize][omt_x as usize]);
+                    new_terrain[idx] = new_handle;
+                    any_changed = true;
+                }
+            }
+        }
+
+        if any_changed {
+            commands.entity(entity).insert(OvermapChunk {
+                terrain: Box::new(new_terrain),
+            });
+        }
+    }
 }

@@ -1,29 +1,30 @@
-//! Step 8: Generate elevated layers (bridges, railroad bridges).
+//! Elevated terrain generation (bridges, z > 0).
 //!
-//! Port of CDDA master's `overmap::generate_over()` (overmap.cpp L1153-1204).
+//! Port of C++ `overmap::generate_over()` (overmap.cpp L1153-1204).
 //!
-//! Scans ground-level (z=0) for bridge tiles and places elevated bridge
-//! road at z=1 with support columns descending through water.
+//! Algorithm:
+//! 1. Build terrain grids for z=0 (ground) and all z-levels below (for water column).
+//! 2. For every OMT tile at z=0 with BRIDGE flag:
+//!    a. Place bridge road surface at z=1.
+//!    b. Scan downward: while tile at z below is water, place bridge support column.
+//! 3. Write elevated terrain back to chunks.
 
-use crate::pipeline::OvermapGenConfig;
-use crate::region_settings::OvermapRegionSettings;
 use bevy_ecs::prelude::*;
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, OMAP_DIM};
 use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};
+use std::collections::HashMap;
 use tracing::info;
 
-/// Generate elevated layers (bridges).
+use crate::pipeline::OvermapGenConfig;
+use crate::region_settings::OvermapRegionSettings;
+
+// ---------------------------------------------------------------------------
+// generate_over — system entry point
+// ---------------------------------------------------------------------------
+
+/// Generate elevated terrain (bridges) above the overmap.
 ///
-/// Currently only z=1 is generated (matching CDDA master which only
-/// places bridge surfaces at z=1).
-///
-/// # Algorithm
-///
-/// 1. Build a dense grid of ground-level (z=0) terrain.
-/// 2. For every OMT tile flagged [`TerrainFlags::BRIDGE`]:
-///    - Place `bridge_road_ns` (or `bridge_road` fallback) at z=1.
-///    - Scan downward from z=0 through z=-10: while the tile at that
-///      z-level is water, place a bridge support column.
+/// Port of C++ `overmap::generate_over()` (overmap.cpp L1153-1204).
 pub fn generate_over(
     chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
     par_commands: ParallelCommands,
@@ -31,99 +32,151 @@ pub fn generate_over(
     registry: Res<TerrainRegistry>,
     _settings: Res<OvermapRegionSettings>,
 ) {
-    // CDDA only generates bridge surfaces at z=1.
-    let z: i8 = 1;
+    // --- Resolve terrain handles -------------------------------------------
+    let bridge_road_ns = registry
+        .handle_by_id("bridge_road_ns")
+        .or_else(|| registry.handle_by_id("bridge_road"))
+        .map(|h| h.0);
+    let bridge_pillar = registry
+        .handle_by_id("bridge_pillar")
+        .or_else(|| registry.handle_by_id("support_column"))
+        .or_else(|| registry.handle_by_id("bridge_column"))
+        .map(|h| h.0);
 
-    let mut bridge_points: Vec<(i32, i32)> = Vec::new();
+    let Some(bridge_surface) = bridge_road_ns else {
+        info!("generate_over: no bridge_road terrain in registry, skipping");
+        return;
+    };
 
-    // ------------------------------------------------------------------
-    // Build dense grids for z=0 (ground) and all z-levels we check for water.
-    // We need z=0 through z=-10 for the water column scan.
-    // ------------------------------------------------------------------
-    let mut grid_ground = [[0u32; 180]; 180];
-    let mut water_grids: [[[u32; 180]; 180]; 11] = [[[0u32; 180]; 180]; 11]; // indices 0..=10 map to z=0..=-10
+    // --- Build terrain grids for all z-levels -------------------------------
+    let omap_size = OMAP_DIM as usize;
+
+    // Collect grids by z-level
+    let mut grids_by_z: HashMap<i32, Vec<TerrainHandle>> = HashMap::new();
+
+    // First pass: initialize grids
+    let ground_grid = vec![TerrainHandle::NULL; omap_size * omap_size];
+    grids_by_z.insert(0, ground_grid.clone());
 
     for (_entity, chunk_pos, chunk) in &chunks {
-        let gz = chunk_pos.z.0;
+        let z = chunk_pos.z.0 as i32;
+        let grid = grids_by_z
+            .entry(z)
+            .or_insert_with(|| vec![TerrainHandle::NULL; omap_size * omap_size]);
+
         let (ox, oy) = chunk_pos.omt_origin();
-        for ly in 0u8..CHUNK_DIM as u8 {
-            for lx in 0u8..CHUNK_DIM as u8 {
-                let gx = (ox + lx as i32) as usize;
-                let gy = (oy + ly as i32) as usize;
-                if gx >= 180 || gy >= 180 {
-                    continue;
-                }
-                let raw = chunk.get(lx, ly).0;
-                if gz == 0 {
-                    grid_ground[gx][gy] = raw;
-                }
-                // Map z=-10..=0 to indices 10..=0
-                if gz >= -10 && gz <= 0 {
-                    let wi = (-gz) as usize;
-                    water_grids[wi][gx][gy] = raw;
+        for ly in 0..CHUNK_DIM as i32 {
+            for lx in 0..CHUNK_DIM as i32 {
+                let gx = ox + lx;
+                let gy = oy + ly;
+                if gx >= 0 && gx < OMAP_DIM && gy >= 0 && gy < OMAP_DIM {
+                    grid[(gy as usize) * omap_size + (gx as usize)] = chunk.get(lx as u8, ly as u8);
                 }
             }
         }
     }
 
-    // ------------------------------------------------------------------
-    // Collect all writes: (omt_x, omt_y, z, handle)
-    // ------------------------------------------------------------------
-    let mut writes: Vec<(i32, i32, i8, TerrainHandle)> = Vec::new();
+    // --- Get a z=0 grid reference -------------------------------------------
+    let ground_grid = grids_by_z
+        .get(&0)
+        .cloned()
+        .unwrap_or_else(|| vec![TerrainHandle::NULL; omap_size * omap_size]);
 
-    for x in 0..OMAP_DIM as usize {
-        for y in 0..OMAP_DIM as usize {
-            let ground = TerrainHandle(grid_ground[x][y]);
-            let flags = registry.flags_for(ground);
+    let ter_at_z = |z: i32, x: i32, y: i32| -> TerrainHandle {
+        if x >= 0 && x < OMAP_DIM && y >= 0 && y < OMAP_DIM {
+            if let Some(grid) = grids_by_z.get(&z) {
+                grid[(y as usize) * omap_size + (x as usize)]
+            } else {
+                TerrainHandle::NULL
+            }
+        } else {
+            TerrainHandle::NULL
+        }
+    };
+
+    let water_flags =
+        TerrainFlags::from_bits(TerrainFlags::LAKE | TerrainFlags::OCEAN | TerrainFlags::RIVER);
+
+    // --- Scan for BRIDGE tiles and place elevated road + columns ------------
+    // tile_writes: (z, x, y, handle)
+    let mut tile_writes: Vec<(i32, i32, i32, TerrainHandle)> = Vec::new();
+    let mut bridge_count = 0usize;
+    let mut pillar_count = 0usize;
+
+    for y in 0..OMAP_DIM {
+        for x in 0..OMAP_DIM {
+            let ground_handle = ground_grid[(y as usize) * omap_size + (x as usize)];
+            let flags = registry.flags_for(ground_handle);
 
             if !flags.contains(TerrainFlags::BRIDGE) {
                 continue;
             }
 
-            // Place bridge road surface at z=1.
-            let bridge_road = registry
-                .handle_by_id("bridge_road_ns")
-                .or_else(|| registry.handle_by_id("bridge_road"))
-                .unwrap_or(TerrainHandle::NULL);
-            writes.push((x as i32, y as i32, z, bridge_road));
-            bridge_points.push((x as i32, y as i32));
+            // Place bridge road surface at z=1
+            tile_writes.push((1, x, y, TerrainHandle(bridge_surface)));
+            bridge_count += 1;
 
-            // Place support columns downward through water.
-            // Range: 0 down to -10.
-            for sz in (-10i8..=0i8).rev() {
-                let wi = (-sz) as usize;
-                let h = TerrainHandle(water_grids[wi][x][y]);
-                let wflags = registry.flags_for(h);
-                let is_water = wflags.contains(TerrainFlags::RIVER)
-                    || wflags.contains(TerrainFlags::LAKE)
-                    || wflags.contains(TerrainFlags::OCEAN);
-                if !is_water {
+            // Scan downward for water column to place pillars
+            for z_below in (0i32..=(-10i32)).rev() {
+                let below_handle = ter_at_z(z_below, x, y);
+                if below_handle == TerrainHandle::NULL {
                     break;
                 }
-                let bridge_support = registry
-                    .handle_by_id("bridge_ns")
-                    .or_else(|| registry.handle_by_id("bridge"))
-                    .unwrap_or(TerrainHandle::NULL);
-                writes.push((x as i32, y as i32, sz, bridge_support));
+                let below_flags = registry.flags_for(below_handle);
+
+                if below_flags.intersects(water_flags) {
+                    // Place support pillar
+                    if let Some(pillar) = bridge_pillar {
+                        tile_writes.push((z_below, x, y, TerrainHandle(pillar)));
+                        pillar_count += 1;
+                    }
+                } else {
+                    // Hit non-water — stop the pillar column
+                    break;
+                }
             }
         }
     }
 
-    // ------------------------------------------------------------------
-    // Write-back: apply all collected writes via par_iter
-    // ------------------------------------------------------------------
+    info!(
+        om_x = config.om_x,
+        om_y = config.om_y,
+        bridges = bridge_count,
+        pillars = pillar_count,
+        "generate_over: elevated terrain computed"
+    );
+
+    // --- Write to chunks ----------------------------------------------------
+    flush_tile_writes(&chunks, &par_commands, &tile_writes);
+}
+
+// ---------------------------------------------------------------------------
+// Helper: flush tile writes to chunks via par_iter (multi-z aware)
+// ---------------------------------------------------------------------------
+
+fn flush_tile_writes(
+    chunks: &Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+    par_commands: &ParallelCommands,
+    tile_writes: &[(i32, i32, i32, TerrainHandle)], // (z, x, y, handle)
+) {
+    if tile_writes.is_empty() {
+        return;
+    }
     chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
-        let z_chunk = chunk_pos.z.0;
-        let (ox, oy) = chunk_pos.omt_origin();
+        let z = chunk_pos.z.0 as i32;
+
+        let local_ox = (chunk_pos.chunk_x as i32) * (CHUNK_DIM as i32);
+        let local_oy = (chunk_pos.chunk_y as i32) * (CHUNK_DIM as i32);
+
         let mut modified = false;
         let mut new_terrain = chunk.terrain.clone();
 
-        for &(wx, wy, wz, handle) in &writes {
-            if wz != z_chunk {
+        for &(wz, wx, wy, handle) in tile_writes {
+            if wz != z {
                 continue;
             }
-            let lx = wx - ox;
-            let ly = wy - oy;
+            let lx = wx - local_ox;
+            let ly = wy - local_oy;
             if lx >= 0 && lx < CHUNK_DIM as i32 && ly >= 0 && ly < CHUNK_DIM as i32 {
                 let idx = ly as usize * CHUNK_DIM + lx as usize;
                 if new_terrain[idx] != handle {
@@ -141,11 +194,4 @@ pub fn generate_over(
             });
         }
     });
-
-    info!(
-        "Elevated generated: {} bridge tiles for overmap ({}, {})",
-        bridge_points.len(),
-        config.om_x,
-        config.om_y
-    );
 }

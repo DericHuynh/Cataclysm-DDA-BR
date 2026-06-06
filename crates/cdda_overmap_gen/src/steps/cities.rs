@@ -1,4 +1,4 @@
-//! Step 3: Place city centers.
+//! Step 4: Place city centers.
 //!
 //! Verbatim port of CDDA master's:
 //! - `overmap::place_cities()` (overmap_city.cpp L65-212)
@@ -9,9 +9,9 @@ use crate::pipeline::OvermapGenConfig;
 use crate::region_settings::OvermapRegionSettings;
 use bevy_ecs::prelude::*;
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, OMAP_DIM};
-use cdda_overmap::registry::{TerrainHandle, TerrainRegistry};
+use cdda_overmap::direction::Rng;
+use cdda_overmap::registry::{CoreTerrains, TerrainHandle, TerrainRegistry};
 use cdda_overmap::rng::XorShiftRng;
-use cdda_overmap::Rng;
 use std::collections::HashSet;
 use tracing::info;
 
@@ -23,39 +23,40 @@ pub struct City {
     pub omt_y: i32,
 }
 
-/// Tracks which OMT tiles belong to cities.
+/// Tracks which OMT tiles belong to cities and where buildings are placed.
 #[derive(Resource, Debug, Clone, Default)]
 pub struct CityTiles {
     pub tiles: HashSet<(i32, i32)>,
+    pub buildings: HashSet<(i32, i32)>,
 }
 
 // ===========================================================================
 // calculate_forestosity — port of overmap.cpp L2331-2369
 // ===========================================================================
-//
-// Computes the directional forest density adjustment based on how far
-// the overmap is from the origin in each cardinal direction.
-//
-// `forest_increase` is indexed by om_direction order: [North, East, South, West].
-// Positive values increase forest density in that direction.
-//
-// Returns the **raw noise adjust** (`forest_size_adjust` in C++) clamped to
-// `[0, forest_max - forest_noise_threshold]`.
-//
-// Callers that need the C++ `forestosity` value must multiply by 25.0:
-//   forestosity = calculate_forestosity(...) * 25.0
 
+/// Computes the directional forest density adjustment based on how far
+/// the overmap is from the origin in each cardinal direction.
+///
+/// `forest_increase` is indexed by om_direction order: [North, East, South, West].
+/// Positive values increase forest density in that direction.
+///
+/// Returns the **raw noise adjust** (`forest_size_adjust` in C++), clamped to
+/// `[0, forest_max - forest_noise_threshold]`. Callers needing the C++
+/// `forestosity` value must multiply by 25.0.
 pub fn calculate_forestosity(om_x: i32, om_y: i32, settings: &OvermapRegionSettings) -> f32 {
     if !settings.overmap_forest {
         return 0.0;
     }
-    let northern = settings.forest_increase[0]; // North
-    let eastern = settings.forest_increase[1]; // East
-    let southern = settings.forest_increase[2]; // South
-    let western = settings.forest_increase[3]; // West
+
+    // C++ indices: west=3, north=0, east=1, south=2
+    let western = settings.forest.forest_increase[3];
+    let northern = settings.forest.forest_increase[0];
+    let eastern = settings.forest.forest_increase[1];
+    let southern = settings.forest.forest_increase[2];
 
     let mut forest_size_adjust: f32 = 0.0;
 
+    // C++ checks in order: west, north, east, south
     if western != 0.0 && om_x < 0 {
         forest_size_adjust -= om_x as f32 * western;
     }
@@ -69,68 +70,71 @@ pub fn calculate_forestosity(om_x: i32, om_y: i32, settings: &OvermapRegionSetti
         forest_size_adjust += om_y as f32 * southern;
     }
 
-    forest_size_adjust.min(settings.forest_max - settings.forest_noise_threshold)
+    forest_size_adjust
+        .min(settings.forest.max_forest - settings.forest.noise_threshold_forest)
+        .max(0.0)
 }
 
 // ===========================================================================
 // calculate_urbanity — port of overmap.cpp L2367-2426
 // ===========================================================================
-//
-// Compute the directional urban density adjustment.
-//
-// `urban_increase` is indexed by om_direction order: [North, East, South, West].
-// Positive values increase urban density in that direction.
 
+/// Compute the directional urban density adjustment.
+///
+/// `urban_increase` is indexed by om_direction order: [North, East, South, West].
+/// Positive values increase urban density in that direction.
 pub fn calculate_urbanity(om_x: i32, om_y: i32, settings: &OvermapRegionSettings) -> i32 {
-    let op_city_size = settings.city_size;
+    let op_city_size = settings.city.city_size;
     if op_city_size <= 0 {
         return 0;
     }
 
-    let northern = settings.urban_increase[0]; // North
-    let eastern = settings.urban_increase[1]; // East
-    let western = settings.urban_increase[2]; // West
-    let southern = settings.urban_increase[3]; // South
+    // C++ indices: north=0, east=1, south=2, west=3
+    let northern = settings.urban_increase[0];
+    let eastern = settings.urban_increase[1];
+    let southern = settings.urban_increase[2];
+    let western = settings.urban_increase[3];
 
-    if northern == 0 && eastern == 0 && western == 0 && southern == 0 {
+    if northern == 0.0 && eastern == 0.0 && western == 0.0 && southern == 0.0 {
         return 0;
     }
 
     let mut urbanity_adj: f32 = 0.0;
 
-    if northern != 0 && om_y < 0 {
-        urbanity_adj -= om_y as f32 * northern as f32 / 10.0;
-        if om_x < 0 && western == 0 {
+    // C++ L2387-2423
+    if northern != 0.0 && om_y < 0 {
+        urbanity_adj -= om_y as f32 * northern / 10.0;
+        if om_x < 0 && western == 0.0 {
             urbanity_adj /= (om_x as f32 / -2.0).max(1.0);
         }
-        if om_x > 0 && eastern == 0 {
+        if om_x > 0 && eastern == 0.0 {
             urbanity_adj /= (om_x as f32 / 2.0).max(1.0);
         }
     }
-    if eastern != 0 && om_x > 0 {
-        urbanity_adj += om_x as f32 * eastern as f32 / 10.0;
-        if om_y < 0 && northern == 0 {
+    if eastern != 0.0 && om_x > 0 {
+        urbanity_adj += om_x as f32 * eastern / 10.0;
+        if om_y < 0 && northern == 0.0 {
             urbanity_adj /= (om_y as f32 / -2.0).max(1.0);
         }
-        if om_y > 0 && southern == 0 {
+        if om_y > 0 && southern == 0.0 {
             urbanity_adj /= (om_y as f32 / 2.0).max(1.0);
         }
     }
-    if western != 0 && om_x < 0 {
-        urbanity_adj -= om_x as f32 * western as f32 / 10.0;
-        if om_y < 0 && northern == 0 {
+    if western != 0.0 && om_x < 0 {
+        urbanity_adj -= om_x as f32 * western / 10.0;
+        if om_y < 0 && northern == 0.0 {
             urbanity_adj /= (om_y as f32 / -2.0).max(1.0);
         }
-        if om_y > 0 && southern == 0 {
+        if om_y > 0 && southern == 0.0 {
             urbanity_adj /= (om_y as f32 / 2.0).max(1.0);
         }
     }
-    if southern != 0 && om_y > 0 {
-        urbanity_adj += om_y as f32 * southern as f32 / 10.0;
-        if om_x < 0 && western == 0 {
+    if southern != 0.0 && om_y > 0 {
+        urbanity_adj += om_y as f32 * southern / 10.0;
+        if om_x < 0 && western == 0.0 {
             urbanity_adj /= (om_x as f32 / -2.0).max(1.0);
         }
-        if om_x > 0 && eastern == 0 {
+        if om_x > 0 && eastern == 0.0 {
             urbanity_adj /= (om_x as f32 / 2.0).max(1.0);
         }
     }
@@ -139,8 +143,7 @@ pub fn calculate_urbanity(om_x: i32, om_y: i32, settings: &OvermapRegionSettings
 }
 
 // ===========================================================================
-// place_cities — verbatim port of overmap::place_cities() (overmap_city.cpp
-//                L65-212)
+// place_cities — verbatim port of overmap::place_cities() (L65-212)
 // ===========================================================================
 
 pub fn place_cities(
@@ -148,32 +151,34 @@ pub fn place_cities(
     chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
     par_commands: ParallelCommands,
     config: Res<OvermapGenConfig>,
-    registry: Res<TerrainRegistry>,
+    _registry: Res<TerrainRegistry>,
+    core_terrains: Res<CoreTerrains>,
     settings: Res<OvermapRegionSettings>,
 ) {
-    // ---- L66-69: read settings ----
-    let op_city_spacing = settings.city_spacing;
-    let op_city_size = settings.city_size;
+    // L66-69: read settings
+    let op_city_spacing = settings.city.city_spacing;
+    let op_city_size = settings.city.city_size;
     let max_urbanity = settings.max_urban;
 
-    // ---- L70-72: early return if city size <= 0 ----
+    // L70-72: early return
     if op_city_size <= 0 {
         commands.insert_resource(CityTiles::default());
         return;
     }
 
-    // ---- calculate biome stats ----
+    // L74: calculate biome stats
     let forest_adjust = calculate_forestosity(config.om_x, config.om_y, &settings);
     let forestosity = forest_adjust * 25.0;
     let urbanity = calculate_urbanity(config.om_x, config.om_y, &settings);
 
-    // ---- L74-83: city size / spacing adjustment ----
+    // L75-83: city size / spacing adjustment
     let city_size_adjust = (urbanity - (forestosity / 2.0) as i32).min(-op_city_size + 2);
     let mut city_space_adjust = urbanity / 2;
     let mut max_city_size = (op_city_size + city_size_adjust).min(op_city_size * max_urbanity);
     if max_city_size < op_city_size {
         max_city_size = op_city_size;
     }
+
     let mut op_city_spacing = op_city_spacing;
     if op_city_spacing > 0 {
         city_space_adjust = city_space_adjust.min(op_city_spacing - 2);
@@ -181,29 +186,21 @@ pub fn place_cities(
     }
     op_city_spacing = op_city_spacing.min(10);
 
-    // ---- L85-87: coverage ratio ----
+    // L85-102: coverage ratio + number of cities
     let omts_per_overmap = (OMAP_DIM * OMAP_DIM) as f64;
     let city_map_coverage_ratio = 1.0 / (2.0_f64).powi(op_city_spacing);
     let omts_per_city = (op_city_size * 2 + 1) as f64 * (max_city_size * 2 + 1) as f64 * 3.0 / 4.0;
-
-    // ---- L89-102: number of cities ----
-    // city::get_all() is always empty in our system => use_random_cities = true
-    let _use_random_cities = true;
 
     let mut rng = XorShiftRng::new(config.noise_seed as u64 + 1);
     let num_cities_on_this_overmap =
         rng.roll_remainder(omts_per_overmap * city_map_coverage_ratio / omts_per_city);
 
-    let road_nesw = registry
-        .handle_by_id("road_nesw")
-        .expect("road_nesw must be registered");
-    let field_handle = TerrainHandle::new(registry.field_index, 0);
+    let road_nesw = core_terrains.road_nesw;
+    let field_handle = core_terrains.field;
 
-    // ---- Build dense 180x180 grid from chunks at z=0 ----
-    // (replaces C++ ter() / ter_set() on the overmap's internal grid)
+    // Build dense grid from chunks at z=0
     let omap_size = OMAP_DIM as usize;
-    let mut grid: Vec<TerrainHandle> = vec![TerrainHandle::NULL; omap_size * omap_size];
-
+    let mut grid = vec![TerrainHandle::NULL; omap_size * omap_size];
     for (_entity, chunk_pos, chunk) in &chunks {
         if chunk_pos.z.0 != 0 {
             continue;
@@ -221,7 +218,7 @@ pub fn place_cities(
         }
     }
 
-    // Inline terrain access -- mirrors C++ ter(p) / ter_set(p, id)
+    // Inline terrain access
     let ter = |x: i32, y: i32| -> TerrainHandle {
         if x >= 0 && x < OMAP_DIM && y >= 0 && y < OMAP_DIM {
             grid[(y as usize) * omap_size + (x as usize)]
@@ -230,14 +227,11 @@ pub fn place_cities(
         }
     };
 
-    // Track writes for later flush to chunk entities
     let mut tile_writes: Vec<(i32, i32, TerrainHandle)> = Vec::new();
 
-    // ---- L104-105: build city candidate list ----
-    // points_in_radius_where(center=(90,90,0), radius=90-max_city_size,
-    //                        predicate: ter(p) == default_oter)
-    let center = OMAP_DIM / 2; // 90
-    let radius = OMAP_DIM / 2 - max_city_size; // 90 - max_city_size
+    // L104-105: build city candidate list
+    let center = OMAP_DIM / 2;
+    let radius = OMAP_DIM / 2 - max_city_size;
 
     let mut city_candidates: Vec<(i32, i32)> = Vec::new();
     for y in (center - radius)..=(center + radius) {
@@ -249,14 +243,11 @@ pub fn place_cities(
         }
     }
 
-    // ---- L106: shadow const copy for the loop condition ----
-    let num_cities_on_this_overmap_count = num_cities_on_this_overmap as usize;
-
-    // ---- L108-167: megacity mode ----
-    if settings.is_megacity {
-        let quarter_x = OMAP_DIM / 4; // 45
-        let quarter_y = OMAP_DIM / 4; // 45
-        let megacity_points: [(i32, i32); 5] = [
+    // L108-167: megacity mode
+    if settings.city.is_megacity {
+        let quarter_x = OMAP_DIM / 4;
+        let quarter_y = OMAP_DIM / 4;
+        let megacity_points = [
             (quarter_x, quarter_y),
             (quarter_x, quarter_y * 3),
             (quarter_x * 2, quarter_y * 2),
@@ -269,7 +260,6 @@ pub fn place_cities(
         for &(x, y) in &megacity_points {
             tile_writes.push((x, y, road_nesw));
             city_tiles.tiles.insert((x, y));
-
             commands.spawn(City {
                 size: 40,
                 omt_x: x,
@@ -279,7 +269,6 @@ pub fn place_cities(
 
         flush_tile_writes(&chunks, &par_commands, &tile_writes);
         commands.insert_resource(city_tiles);
-
         info!(
             "Megacity placed: 5 cities for overmap ({}, {})",
             config.om_x, config.om_y
@@ -287,15 +276,13 @@ pub fn place_cities(
         return;
     }
 
-    // ---- L169-211: non-megacity: random city placement ----
+    // L169-211: random city placement
+    let num_cities_count = num_cities_on_this_overmap as usize;
     let mut cities_placed: Vec<(i32, i32, i32)> = Vec::new();
     let mut city_tiles = CityTiles::default();
 
-    while cities_placed.len() < num_cities_on_this_overmap_count && !city_candidates.is_empty() {
-        // ---- L171: city name (SNIPPET.expand(city_settings.name_snippet) -> empty) ----
-        let _tmp_name = String::new();
-
-        // ---- L172-183: random size distribution ----
+    while cities_placed.len() < num_cities_count && !city_candidates.is_empty() {
+        // L172-183: random size distribution
         let base_size = rng.range_i32(op_city_size - 1, max_city_size);
         let size = if rng.one_in(3) {
             base_size * 1 / 3
@@ -308,20 +295,17 @@ pub fn place_cities(
         };
         let size = size.max(2).min(55);
 
-        // ---- L184-198: random_entry_removed + remove radius-2 neighbours ----
+        // L184-198: random_entry_removed + remove radius-2 neighbours
         let idx = rng.random_usize(city_candidates.len());
-        let selected = city_candidates.swap_remove(idx);
-        let (sx, sy) = selected;
-
+        let (sx, sy) = city_candidates.swap_remove(idx);
         city_candidates.retain(|&(cx, cy)| (cx - sx).abs() > 2 || (cy - sy).abs() > 2);
 
-        // ---- L199-208: place city ----
+        // L199-208: place city
         tile_writes.push((sx, sy, road_nesw));
         city_tiles.tiles.insert((sx, sy));
         cities_placed.push((sx, sy, size));
     }
 
-    // ---- Spawn City components ----
     for &(x, y, size) in &cities_placed {
         commands.spawn(City {
             size: size as u8,
@@ -341,9 +325,9 @@ pub fn place_cities(
     );
 }
 
-// ===========================================================================
-// Helper: flush recorded tile writes back to chunk entities via par_iter
-// ===========================================================================
+// ---------------------------------------------------------------------------
+// Helper: flush recorded tile writes back to chunk entities
+// ---------------------------------------------------------------------------
 
 fn flush_tile_writes(
     chunks: &Query<(Entity, &ChunkPosition, &OvermapChunk)>,

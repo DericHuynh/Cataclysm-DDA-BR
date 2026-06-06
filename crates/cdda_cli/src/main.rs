@@ -9,8 +9,17 @@
 //! - `check <dir>`    — Full load check: load + resolve + validate all definitions
 //! - `ablation <baseline> <dirs>...` — Test removing mods to isolate load errors
 
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::time::Instant;
+
+use bevy_app::App;
+use bevy_state::app::StatesPlugin;
+
+use cdda_core_types::core::raw_defs::cdda_types::{RawValue, StringOrArray};
+use cdda_data::loader::Loader;
+use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM};
+use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};
 
 use clap::{Parser, Subcommand};
 
@@ -49,6 +58,17 @@ enum Command {
     Check {
         /// Path to directory containing CDDA JSON data
         path: PathBuf,
+    },
+    /// Generate a 15x15 city view with a large city in the center (ASCII output)
+    CityView {
+        /// Path to CDDA JSON data directory (e.g. data/core)
+        data_dir: PathBuf,
+        /// City size (default 12)
+        #[arg(long, default_value = "12")]
+        city_size: i32,
+        /// Noise seed for deterministic generation
+        #[arg(long, default_value = "42")]
+        seed: u64,
     },
     /// Load a baseline directory, then test adding/removing mods to find conflicts
     Ablation {
@@ -100,6 +120,13 @@ fn main() {
         Command::Stats { path } => cmd_stats(&path),
         Command::Check { path } => cmd_check(&path),
         Command::Ablation { baseline, mods } => cmd_ablation(&baseline, &mods),
+        Command::CityView {
+            data_dir,
+            city_size,
+            seed,
+        } => {
+            cmd_city_view(&data_dir, city_size, seed);
+        }
     }
 
     eprintln!("Elapsed: {:.2}s", start.elapsed().as_secs_f64());
@@ -379,4 +406,309 @@ fn cmd_ablation(baseline: &PathBuf, mod_dirs: &[PathBuf]) {
         }
         std::process::exit(1);
     }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// city-view - 15x15 city generation preview
+// ═════════════════════════════════════════════════════════════════════
+
+fn cmd_city_view(data_dir: &PathBuf, city_size: i32, seed: u64) {
+    if !data_dir.exists() {
+        eprintln!("Error: {:?} not found", data_dir);
+        std::process::exit(1);
+    }
+    let mut loader = Loader::new(vec![data_dir.clone()]);
+    loader.ingest_all();
+    let registry = match loader.load() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Load errors: {}", e.len());
+            std::process::exit(1);
+        }
+    };
+
+    // Build TerrainRegistry
+    let mut treg = TerrainRegistry::empty();
+    for (def_id, terrain) in &registry.overmap_terrains {
+        let key: &str = def_id.as_str();
+        let mut flags = TerrainFlags::empty();
+        for f in match &terrain.flags {
+            StringOrArray::Single(s) => vec![s.clone()],
+            StringOrArray::Multi(v) => v.clone(),
+        } {
+            match f.to_uppercase().as_str() {
+                "RIVER" => flags.set(TerrainFlags::RIVER),
+                "LAKE" | "LAKE_SHORE" => flags.set(TerrainFlags::LAKE),
+                "OCEAN" | "OCEAN_SHORE" => flags.set(TerrainFlags::OCEAN),
+                "ROAD" => flags.set(TerrainFlags::ROAD),
+                "HIGHWAY" => flags.set(TerrainFlags::HIGHWAY),
+                "LINE_DRAWING" | "LINEAR" => flags.set(TerrainFlags::LINE_DRAWING),
+                "IMPASSABLE" => flags.set(TerrainFlags::IMPASSABLE),
+                "UNDERGROUND" => flags.set(TerrainFlags::UNDERGROUND),
+                "BRIDGE" => flags.set(TerrainFlags::BRIDGE),
+                "SEWER" => flags.set(TerrainFlags::SEWER),
+                "SUBWAY" => flags.set(TerrainFlags::SUBWAY),
+                "RAILROAD" => flags.set(TerrainFlags::RAILROAD),
+                "MANHOLE" => flags.set(TerrainFlags::MANHOLE),
+                "FOREST" | "FOREST_TRAIL" => flags.set(TerrainFlags::FOREST),
+                "SWAMP" => {
+                    flags.set(TerrainFlags::FOREST);
+                    flags.set(TerrainFlags::LAKE);
+                }
+                _ => {}
+            }
+        }
+        let lo = key.to_lowercase();
+        for (pat, land) in [
+            ("forest", "FOREST"),
+            ("road_", "ROAD+LINE"),
+            ("highway_", "HIGHWAY+LINE"),
+            ("railroad_", "RAILROAD+LINE"),
+            ("river_", "RIVER+LINE"),
+            ("lake_", "LAKE"),
+            ("ocean_", "OCEAN"),
+            ("sewer_", "SEWER+LINE"),
+            ("subway_", "SUBWAY+LINE"),
+            ("_bridge", "BRIDGE+LINE"),
+            ("manhole", "MANHOLE"),
+            ("forest_trail", "FOREST+ROAD"),
+            ("trail_", "FOREST+ROAD"),
+        ] {
+            if lo.contains(pat) {
+                match land {
+                    "FOREST" => flags.set(TerrainFlags::FOREST),
+                    "ROAD+LINE" => {
+                        flags.set(TerrainFlags::ROAD);
+                        flags.set(TerrainFlags::LINE_DRAWING);
+                    }
+                    "HIGHWAY+LINE" => {
+                        flags.set(TerrainFlags::HIGHWAY);
+                        flags.set(TerrainFlags::LINE_DRAWING);
+                    }
+                    "RAILROAD+LINE" => {
+                        flags.set(TerrainFlags::RAILROAD);
+                        flags.set(TerrainFlags::LINE_DRAWING);
+                    }
+                    "RIVER+LINE" => {
+                        flags.set(TerrainFlags::RIVER);
+                        flags.set(TerrainFlags::LINE_DRAWING);
+                    }
+                    "LAKE" => flags.set(TerrainFlags::LAKE),
+                    "OCEAN" => flags.set(TerrainFlags::OCEAN),
+                    "SEWER+LINE" => {
+                        flags.set(TerrainFlags::SEWER);
+                        flags.set(TerrainFlags::LINE_DRAWING);
+                    }
+                    "SUBWAY+LINE" => {
+                        flags.set(TerrainFlags::SUBWAY);
+                        flags.set(TerrainFlags::LINE_DRAWING);
+                    }
+                    "BRIDGE+LINE" => {
+                        flags.set(TerrainFlags::BRIDGE);
+                        flags.set(TerrainFlags::LINE_DRAWING);
+                    }
+                    "MANHOLE" => flags.set(TerrainFlags::MANHOLE),
+                    "FOREST+ROAD" => {
+                        flags.set(TerrainFlags::FOREST);
+                        flags.set(TerrainFlags::ROAD);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let tc: u8 = match &terrain.travel_cost_type {
+            Some(RawValue::String(s)) => match s.as_str() {
+                "impassable" => 99,
+                "road" => 1,
+                "field" => 2,
+                "forest" => 5,
+                "water" => 99,
+                _ => 2,
+            },
+            Some(RawValue::Number(n)) => (*n as u8).max(1),
+            _ => 2,
+        };
+        let mg = terrain
+            .mapgen
+            .as_ref()
+            .and_then(|mg| mg.first())
+            .and_then(|raw| match raw {
+                RawValue::String(s) => Some(s.clone()),
+                RawValue::Object(obj) => {
+                    obj.get("builtin")
+                        .or_else(|| obj.get("method"))
+                        .and_then(|v| match v {
+                            RawValue::String(s) => Some(s.clone()),
+                            _ => None,
+                        })
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| key.to_string());
+        treg.register_no_entity(key, flags, tc, mg, 0);
+    }
+    // Directional variants for LINE_DRAWING
+    for idx in 1..treg.len() as u32 {
+        let h = TerrainHandle::new(idx, 0);
+        let f = treg.flags_for(h);
+        if !f.contains(TerrainFlags::LINE_DRAWING) {
+            continue;
+        }
+        let base = treg.string_id_for(h).unwrap_or("").to_string();
+        let tcc = treg.travel_cost(h);
+        let mgg = treg.mapgen_id(h).to_string();
+        for s in &["_ns", "_ew", "_nesw"] {
+            let vid = format!("{}{}", base, s);
+            if treg.index_by_id(&vid).is_some() {
+                continue;
+            }
+            let vi = treg.register_no_entity(&vid, f, tcc, mgg.clone(), 0);
+            match *s {
+                "_ns" => {
+                    treg.register_rotation(idx, 0, vi);
+                    treg.register_rotation(idx, 2, vi);
+                }
+                "_ew" => {
+                    treg.register_rotation(idx, 1, vi);
+                    treg.register_rotation(idx, 3, vi);
+                }
+                _ => {}
+            }
+        }
+    }
+    let core_terrains = cdda_overmap::registry::CoreTerrains::from_registry(&treg);
+
+    eprintln!("TerrainRegistry: {} types", treg.len());
+
+    // Bevy App with real OvermapGenPlugin
+    let mut app = App::new();
+    app.add_plugins((StatesPlugin, cdda_overmap_gen::pipeline::OvermapGenPlugin));
+
+    // All chunks are spawned by init_base_terrain during the pipeline
+    app.insert_resource(cdda_overmap::index::ChunkIndex::default());
+    app.insert_resource(treg.clone());
+    app.insert_resource(core_terrains.clone());
+    app.insert_resource(cdda_overmap_gen::region_settings::OvermapRegionSettings {
+        city_spec: true,
+        city: cdda_overmap_gen::region_settings::RegionSettingsCity {
+            city_size,
+            ..Default::default()
+        },
+        place_roads: false,
+        place_railroads: false,
+        place_specials: false,
+        ..Default::default()
+    });
+    app.insert_resource(cdda_overmap_gen::pipeline::OvermapGenConfig {
+        noise_seed: seed as u32,
+        om_x: 0,
+        om_y: 0,
+    });
+    app.insert_resource(cdda_overmap_gen::special_catalog::SpecialCatalog::default());
+
+    // Run pipeline
+    app.world_mut()
+        .resource_mut::<bevy_state::prelude::NextState<cdda_overmap_gen::pipeline::OvermapGenPhase>>()
+        .set(cdda_overmap_gen::pipeline::OvermapGenPhase::Generating);
+    for _ in 0..10 {
+        app.update();
+        use cdda_overmap_gen::pipeline::OvermapGenPhase;
+        if *app
+            .world()
+            .resource::<bevy_state::prelude::State<OvermapGenPhase>>()
+            .get()
+            == OvermapGenPhase::Complete
+        {
+            break;
+        }
+    }
+
+    // Read results - find the city closest to center of our chunk
+    let size = 15i32;
+    let (cx, cy) = {
+        let w_mut = app.world_mut();
+        let mut q = w_mut.query::<&cdda_overmap_gen::steps::cities::City>();
+        let mut best = (7i32, 7i32);
+        let mut best_dist = i32::MAX;
+        for city in q.iter(w_mut) {
+            let d = (city.omt_x - 7).abs() + (city.omt_y - 7).abs();
+            if d < best_dist {
+                best_dist = d;
+                best = (city.omt_x, city.omt_y);
+            }
+        }
+        best
+    };
+    let mut grid: [[TerrainHandle; 180]; 180] = [[TerrainHandle::NULL; 180]; 180];
+    let w_mut = app.world_mut();
+    let mut q = w_mut.query::<(&ChunkPosition, &OvermapChunk)>();
+    for (cpos, chunk) in q.iter(w_mut) {
+        if cpos.z.0 != 0 {
+            continue;
+        }
+        let (ox, oy) = cpos.omt_origin();
+        for ly in 0u8..CHUNK_DIM as u8 {
+            for lx in 0u8..CHUNK_DIM as u8 {
+                let gx = ox + lx as i32;
+                let gy = oy + ly as i32;
+                if gx >= 0 && gx < 180 && gy >= 0 && gy < 180 {
+                    grid[gy as usize][gx as usize] = chunk.get(lx, ly);
+                }
+            }
+        }
+    }
+    // Read building positions from CityTiles resource (set by build_cities)
+    let buildings: HashSet<(i32, i32)> = app
+        .world()
+        .get_resource::<cdda_overmap_gen::steps::cities::CityTiles>()
+        .map(|ct| ct.buildings.clone())
+        .unwrap_or_default();
+
+    // Compute road tiles: everything with ROAD flag that isn't a building
+    let mut roads: HashSet<(i32, i32)> = HashSet::new();
+    for y in (cy - size / 2)..(cy + size / 2) {
+        for x in (cx - size / 2)..(cx + size / 2) {
+            if x < 0 || x >= 180 || y < 0 || y >= 180 {
+                continue;
+            }
+            let h = grid[y as usize][x as usize];
+            if h == TerrainHandle::NULL || h.type_index() == core_terrains.field.type_index() {
+                continue;
+            }
+            let f = treg.flags_for(h);
+            if f.contains(TerrainFlags::ROAD)
+                && !f.contains(TerrainFlags::HIGHWAY)
+                && !buildings.contains(&(x, y))
+            {
+                roads.insert((x, y));
+            }
+        }
+    }
+
+    println!(
+        "\n═══ CITY VIEW ({}x{}, city_size={}) ═══",
+        size, size, city_size
+    );
+    println!("Legend: @=center  R=road  #=building  \u{00b7}=field");
+    for y in (cy - size / 2)..(cy + size / 2) {
+        let mut row = String::with_capacity(size as usize);
+        for x in (cx - size / 2)..(cx + size / 2) {
+            if x == cx && y == cy {
+                row.push('@');
+            } else if buildings.contains(&(x, y)) {
+                row.push('#');
+            } else if roads.contains(&(x, y)) {
+                row.push('R');
+            } else {
+                row.push('\u{00b7}');
+            }
+        }
+        println!("{}", row);
+    }
+    println!("═══════════════════════════════════\n");
+    eprintln!(
+        "Road tiles: {}  Building tiles: {}",
+        roads.len(),
+        buildings.len()
+    );
 }

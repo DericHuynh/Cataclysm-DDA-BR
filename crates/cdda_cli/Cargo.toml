@@ -9,9 +9,15 @@ name = "cdda-cli"
 path = "src/main.rs"
 
 [dependencies]
+bevy_app.workspace = true
+bevy_ecs.workspace = true
+bevy_state.workspace = true
+cdda_core_types = { path = "../cdda_core_types" }
 cdda_data.workspace = true
+cdda_overmap = { path = "../cdda_overmap" }
+cdda_overmap_gen = { path = "../cdda_overmap_gen" }
+clap.workspace = true
 serde_json.workspace = true
 schemars.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-clap.workspace = true

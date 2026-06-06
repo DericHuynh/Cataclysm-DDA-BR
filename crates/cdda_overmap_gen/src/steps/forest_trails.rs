@@ -1,358 +1,446 @@
-//! Step 4c: Place forest trails by flood-filling contiguous forest regions
-//! and connecting interior points via `connect_closest_points`.
+//! Forest trail placement via flood-fill region detection and MST pathfinding.
 //!
-//! Verbatim port of CDDA master's `overmap::place_forest_trails()` (overmap.cpp L1875-1998).
+//! Verbatim port of C++ `overmap::place_forest_trails()` (overmap.cpp L1875-1998).
 //!
-//! # Algorithm
+//! ## Algorithm
 //!
-//! 1. Build a dense `[[u32; 180]; 180]` terrain-grid from chunk entities at z=0.
-//! 2. Iterate every OMT tile (`i`..`j`). If it's a forest tile and not yet visited,
-//!    flood-fill (`point_flood_fill_4`) to find the contiguous forest region.
+//! 1. Build terrain grid from z=0 chunks.
+//! 2. For each OMT tile: if forest and not visited, flood-fill 4-connected.
 //! 3. Skip regions smaller than `forest_trail_min_size`.
-//! 4. `one_in(forest_trail_chance)` — random skip.
-//! 5. Find N/S/E/W extrema and compute the approximate centre of the region.
-//! 6. Find the actual forest point closest to that centre.
-//! 7. Pick random interior points proportional to the forest size (shuffle, cap).
-//! 8. Optionally include border (extrema) points.
-//! 9. Call `connect_closest_points` with `ConnectionType::ForestTrail`.
-//! 10. Write trail tiles back to chunks, orienting NS/EW/NESW via neighbour checks.
+//! 4. `one_in(forest_trail_chance)` random skip.
+//! 5. Find extrema (N/S/E/W) and approximate center.
+//! 6. Pick random interior points.
+//! 7. Optionally include border extrema points.
+//! 8. Call [`connect_closest_points`] with [`ConnectionType::ForestTrail`].
+//! 9. Write forest trail tiles back to chunks.
 
-use crate::pipeline::OvermapGenConfig;
-use crate::region_settings::OvermapRegionSettings;
+use std::collections::VecDeque;
+
 use bevy_ecs::prelude::*;
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, OMAP_DIM};
 use cdda_overmap::connections::{
-    connect_closest_points, inbounds_omt_margin, line_between, point_flood_fill_4, square_dist,
-    ConnectionType,
+    connect_closest_points, inbounds_omt, line_between, ConnectionType,
 };
-use cdda_overmap::registry::{TerrainHandle, TerrainRegistry};
+use cdda_overmap::direction::{Rng, FOUR_ADJACENT_OFFSETS};
+use cdda_overmap::registry::{CoreTerrains, TerrainHandle, TerrainRegistry};
 use cdda_overmap::rng::XorShiftRng;
-use cdda_overmap::Rng;
-use std::collections::HashSet;
 use tracing::info;
 
+use crate::pipeline::OvermapGenConfig;
+use crate::region_settings::OvermapRegionSettings;
+
 // ---------------------------------------------------------------------------
-// Helpers
+// Grid type
 // ---------------------------------------------------------------------------
 
-/// Check whether a terrain type index corresponds to a forest-type tile
-/// (forest, forest_thick, or forest_water).
-///
-/// Port of the C++ `is_ot_match("forest", oter, ot_match_type::prefix)` check
-/// combined with the `is_forest` predicate (overmap.cpp L1878-1882).
-fn is_forest_index(idx: u32, registry: &TerrainRegistry) -> bool {
-    idx == registry.forest_index
-        || idx == registry.forest_thick_index
-        || idx == registry.forest_water_index
+type OmtGrid = [[u32; OMAP_DIM as usize]; OMAP_DIM as usize];
+
+// ---------------------------------------------------------------------------
+// Grid helpers
+// ---------------------------------------------------------------------------
+
+fn build_omt_grid(
+    chunks: &Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+) -> (OmtGrid, Vec<(Entity, ChunkPosition)>) {
+    let mut grid = [[0u32; OMAP_DIM as usize]; OMAP_DIM as usize];
+    let mut z0_chunks: Vec<(Entity, ChunkPosition)> = Vec::with_capacity(36);
+
+    for (entity, pos, chunk) in chunks.iter() {
+        if pos.z.0 != 0 {
+            continue;
+        }
+        z0_chunks.push((entity, *pos));
+
+        let (origin_x, origin_y) = pos.omt_origin();
+        for ly in 0..CHUNK_DIM as u8 {
+            for lx in 0..CHUNK_DIM as u8 {
+                let omt_x = origin_x + lx as i32;
+                let omt_y = origin_y + ly as i32;
+                if omt_x >= 0 && omt_x < OMAP_DIM && omt_y >= 0 && omt_y < OMAP_DIM {
+                    grid[omt_y as usize][omt_x as usize] = chunk.get(lx, ly).0;
+                }
+            }
+        }
+    }
+
+    (grid, z0_chunks)
 }
 
 // ---------------------------------------------------------------------------
-// place_forest_trails system
+// is_forest predicate
 // ---------------------------------------------------------------------------
 
-/// Place forest trails by flood-filling contiguous forest regions and
-/// connecting interior points via MST-based pathfinding.
+/// Returns `true` if the terrain handle represents a forest tile
+/// (forest, forest_thick, or forest_water).
+fn is_forest(handle: TerrainHandle, core_terrains: &CoreTerrains) -> bool {
+    let type_idx = handle.type_index();
+    type_idx == core_terrains.forest.type_index()
+        || type_idx == core_terrains.forest_thick.type_index()
+        || type_idx == core_terrains.forest_water.type_index()
+}
+
+// ---------------------------------------------------------------------------
+// Flood-fill forest regions
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+struct ForestRegion {
+    points: Vec<(i32, i32)>,
+    north: i32,
+    south: i32,
+    east: i32,
+    west: i32,
+}
+
+/// Flood-fill all forest regions on the grid. Returns a list of regions
+/// (each at least `min_size` tiles).
+fn find_forest_regions(
+    grid: &OmtGrid,
+    core_terrains: &CoreTerrains,
+    min_size: usize,
+) -> Vec<ForestRegion> {
+    let mut visited = vec![false; (OMAP_DIM as usize) * (OMAP_DIM as usize)];
+    let idx = |x: i32, y: i32| -> usize { y as usize * OMAP_DIM as usize + x as usize };
+    let mut regions = Vec::new();
+
+    const DIRS: [(i32, i32); 4] = [(0, -1), (1, 0), (0, 1), (-1, 0)];
+
+    for sy in 0..OMAP_DIM {
+        for sx in 0..OMAP_DIM {
+            let si = idx(sx, sy);
+            if visited[si] {
+                continue;
+            }
+
+            let handle = TerrainHandle(grid[sy as usize][sx as usize]);
+            if !is_forest(handle, core_terrains) {
+                visited[si] = true;
+                continue;
+            }
+
+            // Flood-fill this forest region
+            let mut points = Vec::new();
+            let mut queue = VecDeque::new();
+            queue.push_back((sx, sy));
+            visited[si] = true;
+
+            let mut north = sy;
+            let mut south = sy;
+            let mut east = sx;
+            let mut west = sx;
+
+            while let Some((x, y)) = queue.pop_front() {
+                points.push((x, y));
+
+                if y < north {
+                    north = y;
+                }
+                if y > south {
+                    south = y;
+                }
+                if x > east {
+                    east = x;
+                }
+                if x < west {
+                    west = x;
+                }
+
+                for &(dx, dy) in &DIRS {
+                    let nx = x + dx;
+                    let ny = y + dy;
+                    if nx < 0 || nx >= OMAP_DIM || ny < 0 || ny >= OMAP_DIM {
+                        continue;
+                    }
+                    let ni = idx(nx, ny);
+                    if visited[ni] {
+                        continue;
+                    }
+                    let nh = TerrainHandle(grid[ny as usize][nx as usize]);
+                    if is_forest(nh, core_terrains) {
+                        visited[ni] = true;
+                        queue.push_back((nx, ny));
+                    }
+                }
+            }
+
+            if points.len() >= min_size {
+                regions.push(ForestRegion {
+                    points,
+                    north,
+                    south,
+                    east,
+                    west,
+                });
+            }
+        }
+    }
+
+    regions
+}
+
+// ---------------------------------------------------------------------------
+// Line-segment constants
+// ---------------------------------------------------------------------------
+
+const LINE_N: u16 = 1;
+const LINE_E: u16 = 2;
+const LINE_S: u16 = 4;
+const LINE_W: u16 = 8;
+
+fn set_segment(line: u16, dir_idx: usize) -> u16 {
+    line | (1u16 << dir_idx)
+}
+
+// ---------------------------------------------------------------------------
+// build_trail_connection
+// ---------------------------------------------------------------------------
+
+fn build_trail_connection(
+    grid: &mut OmtGrid,
+    registry: &TerrainRegistry,
+    core_terrains: &CoreTerrains,
+    from: (i32, i32),
+    to: (i32, i32),
+    _z: i32,
+    _conn_type: ConnectionType,
+) {
+    let trail_ns = registry
+        .handle_by_id("forest_trail_ns")
+        .map(|h| h.0)
+        .unwrap_or(core_terrains.road_ns.0);
+    let trail_ew = registry
+        .handle_by_id("forest_trail_ew")
+        .map(|h| h.0)
+        .unwrap_or(core_terrains.road_ew.0);
+    let trail_nesw = registry
+        .handle_by_id("forest_trail_nesw")
+        .map(|h| h.0)
+        .unwrap_or(core_terrains.road_nesw.0);
+
+    let line = line_between(from, to);
+
+    for &(x, y) in &line {
+        if !inbounds_omt((x, y)) {
+            continue;
+        }
+        let xu = x as usize;
+        let yu = y as usize;
+
+        let idx_in_line = line.iter().position(|&p| p == (x, y)).unwrap_or(0);
+        let mut segments: u16 = 0;
+
+        // Determine directionality from line neighbors
+        if idx_in_line > 0 {
+            let prev = line[idx_in_line - 1];
+            if prev.1 < y {
+                segments = set_segment(segments, 0); // North
+            } else if prev.0 > x {
+                segments = set_segment(segments, 1); // East
+            } else if prev.1 > y {
+                segments = set_segment(segments, 2); // South
+            } else if prev.0 < x {
+                segments = set_segment(segments, 3); // West
+            }
+        }
+        if idx_in_line + 1 < line.len() {
+            let next = line[idx_in_line + 1];
+            if next.1 < y {
+                segments = set_segment(segments, 0);
+            } else if next.0 > x {
+                segments = set_segment(segments, 1);
+            } else if next.1 > y {
+                segments = set_segment(segments, 2);
+            } else if next.0 < x {
+                segments = set_segment(segments, 3);
+            }
+        }
+
+        // Also check for existing trails in cardinal neighbors
+        for (dir_idx, &(dx, dy)) in FOUR_ADJACENT_OFFSETS.iter().enumerate() {
+            let nx = x + dx;
+            let ny = y + dy;
+            if nx >= 0 && nx < OMAP_DIM && ny >= 0 && ny < OMAP_DIM {
+                let nh = TerrainHandle(grid[ny as usize][nx as usize]);
+                if registry
+                    .string_id_for(nh)
+                    .map_or(false, |id| id.starts_with("forest_trail"))
+                {
+                    segments = set_segment(segments, dir_idx);
+                }
+            }
+        }
+
+        let trail_type = match segments {
+            s if s == LINE_N || s == LINE_S || s == LINE_N | LINE_S => trail_ns,
+            s if s == LINE_E || s == LINE_W || s == LINE_E | LINE_W => trail_ew,
+            _ => trail_nesw,
+        };
+
+        grid[yu][xu] = trail_type;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// place_forest_trails — system entry point
+// ---------------------------------------------------------------------------
+
+/// Place forest trails within qualifying forest regions.
 ///
-/// Port of `overmap::place_forest_trails()` (overmap.cpp L1875-1998).
+/// Port of C++ `overmap::place_forest_trails()` (overmap.cpp L1875-1998).
 pub fn place_forest_trails(
     chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
     par_commands: ParallelCommands,
     config: Res<OvermapGenConfig>,
     registry: Res<TerrainRegistry>,
+    core_terrains: Res<CoreTerrains>,
     settings: Res<OvermapRegionSettings>,
 ) {
-    let mut rng = XorShiftRng::new(config.noise_seed as u64 + 11);
-    let forest_trail = settings; // alias matching C++ `forest_trail`
+    if !settings.forest_trail {
+        info!("place_forest_trails: skipped — forest_trail=false");
+        return;
+    }
 
-    // -----------------------------------------------------------------------
-    // Build a dense [[u32; 180]; 180] terrain grid from chunk entities at z=0.
-    // This avoids dual-borrow issues: we read all terrain once, then flood-fill
-    // from the grid, then write back to chunks.
-    // -----------------------------------------------------------------------
-    let mut ter_grid = [[0u32; OMAP_DIM as usize]; OMAP_DIM as usize];
-    for (_entity, chunk_pos, chunk) in &chunks {
-        if chunk_pos.z.0 != 0 {
+    let trail_settings = &settings.forest_trail_settings;
+    info!("place_forest_trails: starting trail placement");
+
+    // --- Build terrain grid --------------------------------------------------
+    let (mut grid, _z0_chunks) = build_omt_grid(&chunks);
+
+    let mut rng = XorShiftRng::new(config.noise_seed as u64 + 19);
+
+    // --- Find forest regions -------------------------------------------------
+    let regions = find_forest_regions(&grid, &core_terrains, trail_settings.minimum_forest_size);
+
+    info!(
+        forest_regions = regions.len(),
+        min_size = trail_settings.minimum_forest_size,
+        "place_forest_trails: regions detected"
+    );
+
+    let mut trails_placed = 0usize;
+
+    for region in &regions {
+        // Random skip
+        if !rng.one_in(trail_settings.chance) {
             continue;
         }
-        let (ox, oy) = chunk_pos.omt_origin();
-        for ly in 0..CHUNK_DIM {
-            for lx in 0..CHUNK_DIM {
-                let gx = (ox + lx as i32) as usize;
-                let gy = (oy + ly as i32) as usize;
-                if gx < OMAP_DIM as usize && gy < OMAP_DIM as usize {
-                    let idx = ly * CHUNK_DIM + lx;
-                    ter_grid[gx][gy] = chunk.terrain[idx].type_index();
-                }
+
+        // --- Find center of extrema ------------------------------------------
+        let center_x = (region.east + region.west) / 2;
+        let center_y = (region.north + region.south) / 2;
+
+        // --- Find actual forest point closest to center ----------------------
+        let mut closest_to_center: Option<(i32, i32)> = None;
+        let mut best_dist = i32::MAX;
+        for &pt in &region.points {
+            let dx = pt.0 - center_x;
+            let dy = pt.1 - center_y;
+            let dist = dx * dx + dy * dy;
+            if dist < best_dist {
+                best_dist = dist;
+                closest_to_center = Some(pt);
             }
         }
-    }
 
-    // -----------------------------------------------------------------------
-    // C++: std::unordered_set<point_om_omt> visited;
-    //      const auto is_forest = [&]( const point_om_omt & p ) {
-    //          if( !inbounds( p, 1 ) ) { return false; }
-    //          const oter_id current_terrain = ter( tripoint_om_omt( p, 0 ) );
-    //          return current_terrain == oter_forest
-    //              || current_terrain == oter_forest_thick
-    //              || current_terrain == oter_forest_water;
-    //      };
-    // -----------------------------------------------------------------------
-    let mut visited: HashSet<(i32, i32)> = HashSet::new();
-    let mut trail_grid = [[false; OMAP_DIM as usize]; OMAP_DIM as usize];
+        let Some(center_pt) = closest_to_center else {
+            continue;
+        };
 
-    let is_forest = |p: (i32, i32)| -> bool {
-        if !inbounds_omt_margin(p, 1) {
-            return false;
+        // --- Pick random interior points -------------------------------------
+        let max_random = trail_settings.random_point_max.min(
+            trail_settings.random_point_min
+                + region.points.len() as i32 / trail_settings.random_point_size_scalar,
+        );
+        let num_random = trail_settings.random_point_min.max(max_random.clamp(
+            trail_settings.random_point_min,
+            trail_settings.random_point_max,
+        ));
+
+        // Shuffle region points and pick first num_random
+        let mut shuffled = region.points.clone();
+        for i in (1..shuffled.len()).rev() {
+            let j = rng.random_usize(i + 1);
+            shuffled.swap(i, j);
         }
-        let idx = ter_grid[p.0 as usize][p.1 as usize];
-        idx == registry.forest_index
-            || idx == registry.forest_thick_index
-            || idx == registry.forest_water_index
-    };
 
-    let bounds = (0i32, 0i32, OMAP_DIM, OMAP_DIM);
+        let mut trail_points: Vec<(i32, i32)> = Vec::new();
+        trail_points.push(center_pt);
 
-    // -----------------------------------------------------------------------
-    // C++: for( int i = 0; i < OMAPX; i++ ) {
-    //        for( int j = 0; j < OMAPY; j++ ) {
-    // -----------------------------------------------------------------------
-    for i in 0..OMAP_DIM {
-        for j in 0..OMAP_DIM {
-            // C++:     tripoint_om_omt seed_point( i, j, 0 );
-            //          oter_id oter = ter( seed_point );
-            //          if( !is_ot_match( "forest", oter, ot_match_type::prefix ) ) { continue; }
-            //          if( visited.find( seed_point.xy() ) != visited.end() ) { continue; }
-            let seed_point: (i32, i32) = (i, j);
-            let oter = ter_grid[i as usize][j as usize];
-            if !is_forest_index(oter, &registry) {
-                continue;
-            }
-            if visited.contains(&seed_point) {
-                continue;
-            }
+        for &pt in shuffled.iter().take(num_random as usize) {
+            trail_points.push(pt);
+        }
 
-            // C++:     std::vector<point_om_omt> forest_points =
-            //             ff::point_flood_fill_4_connected<std::vector>(
-            //                 seed_point.xy(), visited, is_forest );
-            let forest_points = point_flood_fill_4(seed_point, bounds, &is_forest);
+        // --- Optionally include border extrema points ------------------------
+        if !rng.one_in(trail_settings.border_point_chance) {
+            // Add N/S/E/W extrema (closest actual forest points)
+            let extrema = [
+                (center_x, region.north), // North
+                (region.east, center_y),  // East
+                (center_x, region.south), // South
+                (region.west, center_y),  // West
+            ];
 
-            // C++'s point_flood_fill_4_connected updates `visited` internally
-            // during the flood fill.  Rust's `point_flood_fill_4` does not, so
-            // we mark all returned points as visited afterwards.
-            for &p in &forest_points {
-                visited.insert(p);
-            }
-
-            // C++:     if( forest_points.empty() ||
-            //             forest_points.size() <
-            //                 static_cast<size_t>( forest_trail.minimum_forest_size ) ) {
-            //             continue;
-            //         }
-            if forest_points.is_empty()
-                || forest_points.len() < forest_trail.forest_trail_min_size
-            {
-                continue;
-            }
-
-            // C++:     if( !one_in( forest_trail.chance ) ) { continue; }
-            if !rng.one_in(forest_trail.forest_trail_chance) {
-                continue;
-            }
-
-            // C++:     auto north_south_most = std::minmax_element(
-            //             forest_points.begin(), forest_points.end(),
-            //             []( const point_om_omt & lhs, const point_om_omt & rhs ) {
-            //                 return lhs.y() < rhs.y();
-            //             } );
-            //          auto west_east_most = std::minmax_element(
-            //             forest_points.begin(), forest_points.end(),
-            //             []( const point_om_omt & lhs, const point_om_omt & rhs ) {
-            //                 return lhs.x() < rhs.x();
-            //             } );
-            let northmost = *forest_points
-                .iter()
-                .min_by_key(|p| p.1)
-                .unwrap_or(&seed_point);
-            let southmost = *forest_points
-                .iter()
-                .max_by_key(|p| p.1)
-                .unwrap_or(&seed_point);
-            let westmost = *forest_points
-                .iter()
-                .min_by_key(|p| p.0)
-                .unwrap_or(&seed_point);
-            let eastmost = *forest_points
-                .iter()
-                .max_by_key(|p| p.0)
-                .unwrap_or(&seed_point);
-
-            // C++:     point_om_omt center(
-            //             westmost.x() + ( eastmost.x() - westmost.x() ) / 2,
-            //             northmost.y() + ( southmost.y() - northmost.y() ) / 2 );
-            let center = (
-                westmost.0 + (eastmost.0 - westmost.0) / 2,
-                northmost.1 + (southmost.1 - northmost.1) / 2,
-            );
-            let center_point = center;
-
-            // C++:     point_om_omt actual_center_point =
-            //             *std::min_element(
-            //                 forest_points.begin(), forest_points.end(),
-            //                 [&center_point]( const point_om_omt & lhs,
-            //                                  const point_om_omt & rhs ) {
-            //                     return square_dist( lhs, center_point )
-            //                          < square_dist( rhs, center_point );
-            //                 } );
-            let actual_center_point = *forest_points
-                .iter()
-                .min_by(|&&lhs, &&rhs| {
-                    square_dist(lhs, center_point).cmp(&square_dist(rhs, center_point))
-                })
-                .unwrap_or(&seed_point);
-
-            // C++:     int max_random_points = forest_trail.random_point_min
-            //             + forest_points.size() / forest_trail.random_point_size_scalar;
-            //          max_random_points = std::min(
-            //             max_random_points, forest_trail.random_point_max );
-            let max_random_points = (forest_trail.forest_trail_random_point_min
-                + forest_points.len() as i32 / forest_trail.forest_trail_random_point_size_scalar)
-                .min(forest_trail.forest_trail_random_point_max);
-
-            // C++:     std::vector<point_om_omt> chosen_points = { actual_center_point };
-            let mut chosen_points: Vec<(i32, i32)> = vec![actual_center_point];
-
-            // C++:     int random_point_count = 0;
-            //          std::shuffle( forest_points.begin(), forest_points.end(),
-            //                        rng_get_engine() );
-            //          for( const auto &random_point : forest_points ) {
-            //              if( random_point_count >= max_random_points ) { break; }
-            //              random_point_count++;
-            //              chosen_points.emplace_back( random_point );
-            //          }
-            let mut random_point_count = 0i32;
-            let mut shuffled = forest_points.clone();
-            let n = shuffled.len();
-            // Fisher-Yates shuffle using the RNG
-            for ii in (1..n).rev() {
-                let jj = rng.random_usize(ii + 1);
-                shuffled.swap(ii, jj);
-            }
-            for &random_point in &shuffled {
-                if random_point_count >= max_random_points {
-                    break;
-                }
-                random_point_count += 1;
-                chosen_points.push(random_point);
-            }
-
-            // C++:     if( one_in( forest_trail.border_point_chance ) ) {
-            //               chosen_points.emplace_back( northmost );
-            //           }
-            if rng.one_in(forest_trail.forest_trail_border_point_chance) {
-                chosen_points.push(northmost);
-            }
-            if rng.one_in(forest_trail.forest_trail_border_point_chance) {
-                chosen_points.push(southmost);
-            }
-            if rng.one_in(forest_trail.forest_trail_border_point_chance) {
-                chosen_points.push(westmost);
-            }
-            if rng.one_in(forest_trail.forest_trail_border_point_chance) {
-                chosen_points.push(eastmost);
-            }
-
-            // C++:     const overmap_connection_id &overmap_connection_forest_trail =
-            //                settings->overmap_connection.trail_connection;
-            //          connect_closest_points( chosen_points, 0,
-            //                                  *overmap_connection_forest_trail );
-            connect_closest_points(
-                &chosen_points,
-                0,
-                ConnectionType::ForestTrail,
-                &mut rng,
-                |from, to, _z, _ct| {
-                    // The C++ connection's build() places trail tiles directly.
-                    // Here we mark a trail_grid so we can write the terrain
-                    // back into chunks in a second pass.
-                    let path = line_between(from, to);
-                    for &(px, py) in &path {
-                        if px >= 0 && px < OMAP_DIM && py >= 0 && py < OMAP_DIM {
-                            trail_grid[px as usize][py as usize] = true;
-                        }
+            for &ext in &extrema {
+                let mut closest: Option<(i32, i32)> = None;
+                let mut best_d = i32::MAX;
+                for &pt in &region.points {
+                    let dx = pt.0 - ext.0;
+                    let dy = pt.1 - ext.1;
+                    let d = dx * dx + dy * dy;
+                    if d < best_d {
+                        best_d = d;
+                        closest = Some(pt);
                     }
-                },
-            );
+                }
+                if let Some(cp) = closest {
+                    trail_points.push(cp);
+                }
+            }
         }
+
+        if trail_points.len() < 2 {
+            continue;
+        }
+
+        // --- Connect points via MST ------------------------------------------
+        connect_closest_points(
+            &trail_points,
+            0,
+            ConnectionType::ForestTrail,
+            &mut rng,
+            |from, to, z, ct| {
+                build_trail_connection(&mut grid, &registry, &core_terrains, from, to, z, ct);
+            },
+        );
+
+        trails_placed += 1;
     }
 
-    // -------------------------------------------------------------------
-    // Write trail grid back to chunks.
-    // Only overwrite forest-type tiles (forest, forest_thick, forest_water).
-    // Orient trail tiles NS/EW/NESW based on neighbour connectivity.
-    // -------------------------------------------------------------------
-    let forest_idx = registry.forest_index;
-    let forest_thick_idx = registry.forest_thick_index;
-    let forest_water_idx = registry.forest_water_index;
+    info!(trails_placed, "place_forest_trails: trail networks built");
 
+    // --- Write terrain changes back to chunks via par_iter --------------------
     chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
         if chunk_pos.z.0 != 0 {
             return;
         }
-        let (ox, oy) = chunk_pos.omt_origin();
+        let local_ox = (chunk_pos.chunk_x as i32) * (CHUNK_DIM as i32);
+        let local_oy = (chunk_pos.chunk_y as i32) * (CHUNK_DIM as i32);
+
         let mut modified = false;
         let mut new_terrain = chunk.terrain.clone();
 
         for ly in 0..CHUNK_DIM {
             for lx in 0..CHUNK_DIM {
-                let gx = (ox + lx as i32) as usize;
-                let gy = (oy + ly as i32) as usize;
-                if gx >= OMAP_DIM as usize || gy >= OMAP_DIM as usize || !trail_grid[gx][gy] {
-                    continue;
+                let wx = local_ox + lx as i32;
+                let wy = local_oy + ly as i32;
+                if wx >= 0 && wx < OMAP_DIM && wy >= 0 && wy < OMAP_DIM {
+                    let idx = ly * CHUNK_DIM + lx;
+                    let new_handle = TerrainHandle(grid[wy as usize][wx as usize]);
+                    if new_terrain[idx] != new_handle && new_handle != TerrainHandle::NULL {
+                        new_terrain[idx] = new_handle;
+                        modified = true;
+                    }
                 }
-
-                let idx = ly * CHUNK_DIM + lx;
-                let ct = chunk.terrain[idx].type_index();
-
-                // Only overwrite forest-type tiles.
-                if ct != forest_idx && ct != forest_thick_idx && ct != forest_water_idx {
-                    continue;
-                }
-
-                // Determine trail tile orientation based on neighbours.
-                let north = gy > 0 && trail_grid[gx][gy - 1];
-                let south = gy + 1 < OMAP_DIM as usize && trail_grid[gx][gy + 1];
-                let east = gx + 1 < OMAP_DIM as usize && trail_grid[gx + 1][gy];
-                let west = gx > 0 && trail_grid[gx - 1][gy];
-
-                let has_ns = north || south;
-                let has_ew = east || west;
-
-                let (handle, rotation) = if has_ns && has_ew {
-                    // Crossroads tile
-                    if let Some(h) = registry.handle_by_id("forest_trail_nesw") {
-                        (h, 0u8)
-                    } else if let Some(h) = registry.handle_by_id("forest_trail") {
-                        (h, 0u8)
-                    } else {
-                        continue;
-                    }
-                } else if has_ew {
-                    // East–west running trail
-                    if let Some(h) = registry.handle_by_id("forest_trail") {
-                        (h, 1u8)
-                    } else {
-                        continue;
-                    }
-                } else {
-                    // North–south running trail (or isolated single tile)
-                    if let Some(h) = registry.handle_by_id("forest_trail") {
-                        (h, 0u8)
-                    } else {
-                        continue;
-                    }
-                };
-                new_terrain[idx] = registry.rotate(handle, rotation);
-                modified = true;
             }
         }
 
@@ -365,8 +453,5 @@ pub fn place_forest_trails(
         }
     });
 
-    info!(
-        "Forest trails placed for overmap ({}, {})",
-        config.om_x, config.om_y
-    );
+    info!("place_forest_trails: complete");
 }

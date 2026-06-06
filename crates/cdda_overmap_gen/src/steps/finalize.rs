@@ -1,56 +1,98 @@
-//! Step 10: Finalize overmap generation.
+//! Finalization system — log generation statistics and mark chunks as finalized.
 //!
-//! Marks all chunks as immutable (via component insertion) and
-//! logs generation statistics.
+//! This is the last step in the overmap generation pipeline. It:
+//! 1. Iterates all z=0 chunks, counting terrain type frequencies.
+//! 2. Logs the top 10 most common terrain types.
+//! 3. Inserts a [`Finalized`] component on every chunk to signal completion.
+
+use std::collections::HashMap;
 
 use bevy_ecs::prelude::*;
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM};
 use cdda_overmap::registry::{TerrainHandle, TerrainRegistry};
-use crate::pipeline::OvermapGenConfig;
 use tracing::info;
 
-/// Marker component indicating a chunk has been finalized.
-/// After finalization, terrain should not be modified.
+use crate::pipeline::OvermapGenConfig;
+
+// ---------------------------------------------------------------------------
+// Finalized marker component
+// ---------------------------------------------------------------------------
+
+/// Marker component indicating a chunk has been through the full generation
+/// pipeline and is ready for gameplay.
 #[derive(Component)]
 pub struct Finalized;
 
-/// Mark all chunks as finalized and log statistics.
+// ---------------------------------------------------------------------------
+// finalize_overmap — system entry point
+// ---------------------------------------------------------------------------
+
+/// Log terrain statistics and mark all chunks as finalized.
 pub fn finalize_overmap(
     mut commands: Commands,
     chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
     config: Res<OvermapGenConfig>,
     registry: Res<TerrainRegistry>,
 ) {
-    let mut terrain_counts: std::collections::HashMap<u32, usize> = std::collections::HashMap::new();
+    info!(
+        om_x = config.om_x,
+        om_y = config.om_y,
+        "finalize_overmap: generation complete, computing statistics"
+    );
+
+    // --- Count terrain types across all z=0 chunks ---------------------------
+    let mut type_counts: HashMap<u32, usize> = HashMap::new();
     let mut total_tiles = 0usize;
 
-    for (entity, _chunk_pos, chunk) in &chunks {
-        // Mark as finalized
-        commands.entity(entity).insert(Finalized);
+    for (_entity, chunk_pos, chunk) in &chunks {
+        // Insert Finalized marker on every chunk (all z-levels)
+        commands.entity(_entity).insert(Finalized);
 
-        // Count terrain types
-        for ly in 0u8..CHUNK_DIM as u8 {
-            for lx in 0u8..CHUNK_DIM as u8 {
-                let h = chunk.get(lx, ly);
-                *terrain_counts.entry(h.type_index()).or_default() += 1;
-                total_tiles += 1;
+        if chunk_pos.z.0 != 0 {
+            continue;
+        }
+
+        for ly in 0..CHUNK_DIM {
+            for lx in 0..CHUNK_DIM {
+                let handle = chunk.get(lx as u8, ly as u8);
+                if handle != TerrainHandle::NULL {
+                    let type_idx = handle.type_index();
+                    *type_counts.entry(type_idx).or_insert(0) += 1;
+                    total_tiles += 1;
+                }
             }
         }
     }
 
-    // Log top terrain types
-    let mut counts: Vec<(u32, usize)> = terrain_counts.into_iter().collect();
-    counts.sort_by_key(|&(_, c)| std::cmp::Reverse(c));
+    // --- Log top 10 terrain types --------------------------------------------
+    let mut sorted: Vec<(u32, usize)> = type_counts.into_iter().collect();
+    sorted.sort_by(|a, b| b.1.cmp(&a.1));
 
+    let top_n = 10usize.min(sorted.len());
     info!(
-        "Overmap ({}, {}) finalized: {} tiles across {} chunks",
-        config.om_x, config.om_y, total_tiles,
-        chunks.iter().count()
+        total_tiles,
+        unique_types = sorted.len(),
+        "finalize_overmap: terrain statistics for overmap ({}, {})",
+        config.om_x,
+        config.om_y
     );
 
-    for (type_idx, count) in counts.iter().take(10) {
-        let pct = *count as f32 / total_tiles as f32 * 100.0;
-        let name = registry.mapgen_id(TerrainHandle::new(*type_idx, 0));
-        info!("  {}: {} tiles ({:.1}%)", name, count, pct);
+    for (i, (type_idx, count)) in sorted.iter().take(top_n).enumerate() {
+        let handle = TerrainHandle::new(*type_idx, 0);
+        let name = registry.string_id_for(handle).unwrap_or("<unknown>");
+        let pct = if total_tiles > 0 {
+            (*count as f64 / total_tiles as f64) * 100.0
+        } else {
+            0.0
+        };
+        info!(
+            rank = i + 1,
+            terrain = name,
+            count,
+            pct = format!("{:.1}%", pct),
+            "finalize_overmap: top terrain"
+        );
     }
+
+    info!("finalize_overmap: done");
 }

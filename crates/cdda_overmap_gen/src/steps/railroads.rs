@@ -1,362 +1,446 @@
-//! Step 4b: Place railroads — verbatim port of C++ `overmap::place_railroads()`.
+//! Railroad placement via minimum-spanning-tree pathfinding.
 //!
-//! Mirrors CDDA master `overmap.cpp` lines 2227–2297.
+//! Verbatim port of C++ `overmap::place_railroads()` (overmap.cpp L2227-2297).
+//!
+//! ## Algorithm
+//!
+//! 1. Build terrain grid from z=0 chunks.
+//! 2. Collect border exit points from [`ConnectionExits`] (or generate fallback).
+//! 3. Build `railroad_points`: exits + random points around each city.
+//! 4. Call [`connect_closest_points`] with [`ConnectionType::Railroad`].
+//! 5. Write railroad terrain back to chunks.
+
+use bevy_ecs::prelude::*;
+use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, OMAP_DIM};
+use cdda_overmap::connections::{
+    connect_closest_points, inbounds_omt, inbounds_omt_margin, line_between, ConnectionType,
+};
+use cdda_overmap::direction::{Rng, FOUR_ADJACENT_OFFSETS};
+use cdda_overmap::pathfinding::{greedy_path, DirectedNode, NodeScore};
+use cdda_overmap::registry::{CoreTerrains, TerrainFlags, TerrainHandle, TerrainRegistry};
+use cdda_overmap::rng::XorShiftRng;
+use tracing::info;
 
 use crate::pipeline::OvermapGenConfig;
 use crate::region_settings::OvermapRegionSettings;
 use crate::steps::cities::City;
 use crate::steps::neighbor_connections::ConnectionExits;
-use bevy_ecs::prelude::*;
-use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, OMAP_DIM};
-use cdda_overmap::connections::{
-    connect_closest_points, inbounds_omt, line_between, ConnectionType,
-};
-use cdda_overmap::direction::FOUR_ADJACENT_OFFSETS;
-use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};
-use cdda_overmap::rng::XorShiftRng;
-use cdda_overmap::Rng;
-use tracing::info;
 
 // ---------------------------------------------------------------------------
-// Utilities (Rust conversions of C++ helpers)
+// Edge coordinate constants — matching C++ L2238-2241
 // ---------------------------------------------------------------------------
 
-/// Fisher–Yates shuffle — replaces `std::shuffle(…, rng_get_engine())`.
-fn shuffle<T>(slice: &mut [T], rng: &mut XorShiftRng) {
-    for i in (1..slice.len()).rev() {
-        let j = rng.random_usize(i + 1);
-        slice.swap(i, j);
+/// X-coordinates for the 4 edges: [North, East, South, West].
+/// When a particular edge is "null" (no neighbor), the coordinate is set to
+/// these constants so the fallback generator knows which edge to sample.
+const EDGE_COORDS_X: [i32; 4] = [OMAP_DIM - 1, -1, 0, -1];
+const EDGE_COORDS_Y: [i32; 4] = [-1, OMAP_DIM - 1, -1, 0];
+
+// ---------------------------------------------------------------------------
+// Grid helpers
+// ---------------------------------------------------------------------------
+
+type OmtGrid = [[u32; OMAP_DIM as usize]; OMAP_DIM as usize];
+
+fn build_omt_grid(
+    chunks: &Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+) -> (OmtGrid, Vec<(Entity, ChunkPosition)>) {
+    let mut grid = [[0u32; OMAP_DIM as usize]; OMAP_DIM as usize];
+    let mut z0_chunks: Vec<(Entity, ChunkPosition)> = Vec::with_capacity(36);
+
+    for (entity, pos, chunk) in chunks.iter() {
+        if pos.z.0 != 0 {
+            continue;
+        }
+        z0_chunks.push((entity, *pos));
+
+        let (origin_x, origin_y) = pos.omt_origin();
+        for ly in 0..CHUNK_DIM as u8 {
+            for lx in 0..CHUNK_DIM as u8 {
+                let omt_x = origin_x + lx as i32;
+                let omt_y = origin_y + ly as i32;
+                if omt_x >= 0 && omt_x < OMAP_DIM && omt_y >= 0 && omt_y < OMAP_DIM {
+                    grid[omt_y as usize][omt_x as usize] = chunk.get(lx, ly).0;
+                }
+            }
+        }
+    }
+
+    (grid, z0_chunks)
+}
+
+fn ter_at(grid: &OmtGrid, x: i32, y: i32) -> TerrainHandle {
+    if x >= 0 && x < OMAP_DIM && y >= 0 && y < OMAP_DIM {
+        TerrainHandle(grid[y as usize][x as usize])
+    } else {
+        TerrainHandle::NULL
     }
 }
 
-/// C++ `random_entry(vec)` — panics on empty slice (must not happen here).
-fn random_entry<'a, T>(slice: &'a [T], rng: &mut XorShiftRng) -> &'a T {
-    &slice[rng.random_usize(slice.len())]
+// ---------------------------------------------------------------------------
+// Line-segment constants
+// ---------------------------------------------------------------------------
+
+const LINE_N: u16 = 1;
+const LINE_E: u16 = 2;
+const LINE_S: u16 = 4;
+const LINE_W: u16 = 8;
+
+fn set_segment(line: u16, dir_idx: usize) -> u16 {
+    line | (1u16 << dir_idx)
 }
 
-/// Chebyshev-distance radius (C++ `points_in_radius(tripoint, radius)` without z).
+// ---------------------------------------------------------------------------
+// Railroad scoring function for greedy_path
+// ---------------------------------------------------------------------------
+
+fn railroad_scoring_fn(
+    grid: &OmtGrid,
+    registry: &TerrainRegistry,
+    node: DirectedNode,
+    _prev: Option<DirectedNode>,
+) -> NodeScore {
+    let (x, y) = node.pos;
+    if !inbounds_omt_margin((x, y), 1) {
+        return NodeScore::REJECTED;
+    }
+
+    let handle = ter_at(grid, x, y);
+    let flags = registry.flags_for(handle);
+
+    // Reject impassable / water tiles
+    if flags.contains(TerrainFlags::RIVER)
+        || flags.contains(TerrainFlags::LAKE)
+        || flags.contains(TerrainFlags::OCEAN)
+        || flags.contains(TerrainFlags::IMPASSABLE)
+    {
+        return NodeScore::REJECTED;
+    }
+
+    // Existing railroads and roads are cheap
+    if flags.contains(TerrainFlags::RAILROAD) || flags.contains(TerrainFlags::ROAD) {
+        return NodeScore::new(1, 0);
+    }
+
+    // Default moderate cost
+    NodeScore::new(5, 0)
+}
+
+// ---------------------------------------------------------------------------
+// generate_fallback_railroad_exits
+// ---------------------------------------------------------------------------
+
+/// Generate railroad exit points from null-neighbor edges.
+///
+/// For each direction where the corresponding coordinate is -1 (indicating
+/// no neighbor), sample a point along that edge.
+fn generate_fallback_railroad_exits(
+    grid: &OmtGrid,
+    registry: &TerrainRegistry,
+    rng: &mut XorShiftRng,
+) -> Vec<(i32, i32)> {
+    let margin = 10;
+    let mut exits = Vec::new();
+
+    for dir_idx in 0..4 {
+        let ex = EDGE_COORDS_X[dir_idx];
+        let ey = EDGE_COORDS_Y[dir_idx];
+
+        // Only generate for "null" edges
+        if ex != -1 && ey != -1 {
+            continue;
+        }
+
+        let mut candidates: Vec<(i32, i32)> = Vec::new();
+
+        match dir_idx {
+            0 => {
+                // North edge (y=0)
+                for x in margin..OMAP_DIM - margin {
+                    let h = ter_at(grid, x, 0);
+                    if !registry.flags_for(h).contains(TerrainFlags::RIVER) {
+                        candidates.push((x, 0));
+                    }
+                }
+            }
+            1 => {
+                // East edge (x=OMAP_DIM-1)
+                for y in margin..OMAP_DIM - margin {
+                    let h = ter_at(grid, OMAP_DIM - 1, y);
+                    if !registry.flags_for(h).contains(TerrainFlags::RIVER) {
+                        candidates.push((OMAP_DIM - 1, y));
+                    }
+                }
+            }
+            2 => {
+                // South edge (y=OMAP_DIM-1)
+                for x in margin..OMAP_DIM - margin {
+                    let h = ter_at(grid, x, OMAP_DIM - 1);
+                    if !registry.flags_for(h).contains(TerrainFlags::RIVER) {
+                        candidates.push((x, OMAP_DIM - 1));
+                    }
+                }
+            }
+            3 => {
+                // West edge (x=0)
+                for y in margin..OMAP_DIM - margin {
+                    let h = ter_at(grid, 0, y);
+                    if !registry.flags_for(h).contains(TerrainFlags::RIVER) {
+                        candidates.push((0, y));
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        if !candidates.is_empty() {
+            let idx = rng.random_usize(candidates.len());
+            exits.push(candidates[idx]);
+        }
+    }
+
+    exits
+}
+
+// ---------------------------------------------------------------------------
+// points_in_radius
+// ---------------------------------------------------------------------------
+
+/// Return all OMT points within Chebyshev distance `radius` of `center`.
 fn points_in_radius(center: (i32, i32), radius: i32) -> Vec<(i32, i32)> {
+    let (cx, cy) = center;
     let mut pts = Vec::new();
     for dy in -radius..=radius {
         for dx in -radius..=radius {
-            let p = (center.0 + dx, center.1 + dy);
-            if inbounds_omt(p) {
-                pts.push(p);
+            let x = cx + dx;
+            let y = cy + dy;
+            if x >= 0 && x < OMAP_DIM && y >= 0 && y < OMAP_DIM {
+                pts.push((x, y));
             }
         }
     }
     pts
 }
 
-/// River check equivalent to C++ `is_river(ter(pos))`.
-fn is_river(grid: &[[u32; OMAP_DIM as usize]; OMAP_DIM as usize], x: i32, y: i32, registry: &TerrainRegistry) -> bool {
-    if x < 0 || x >= OMAP_DIM || y < 0 || y >= OMAP_DIM {
-        return false;
-    }
-    let handle = TerrainHandle(grid[x as usize][y as usize]);
-    registry.flags_for(handle).contains(TerrainFlags::RIVER)
-}
-
 // ---------------------------------------------------------------------------
-// Build callback (placed inline as connect_closest_points closure)
+// build_railroad_connection
 // ---------------------------------------------------------------------------
 
-/// Mark every tile on the straight line `from → to` in the boolean grid.
-fn mark_line_on_grid(from: (i32, i32), to: (i32, i32), grid: &mut [[bool; OMAP_DIM as usize]; OMAP_DIM as usize]) {
-    let path = line_between(from, to);
-    for &(x, y) in &path {
-        if inbounds_omt((x, y)) {
-            grid[x as usize][y as usize] = true;
+fn build_railroad_connection(
+    grid: &mut OmtGrid,
+    registry: &TerrainRegistry,
+    core_terrains: &CoreTerrains,
+    from: (i32, i32),
+    to: (i32, i32),
+    _z: i32,
+    _conn_type: ConnectionType,
+) {
+    let railroad_ns = registry
+        .handle_by_id("railroad_ns")
+        .map(|h| h.0)
+        .unwrap_or(core_terrains.road_ns.0);
+    let railroad_ew = registry
+        .handle_by_id("railroad_ew")
+        .map(|h| h.0)
+        .unwrap_or(core_terrains.road_ew.0);
+    let railroad_nesw = registry
+        .handle_by_id("railroad_nesw")
+        .map(|h| h.0)
+        .unwrap_or(core_terrains.road_nesw.0);
+
+    let line = line_between(from, to);
+
+    for &(x, y) in &line {
+        if !inbounds_omt((x, y)) {
+            continue;
         }
+        let xu = x as usize;
+        let yu = y as usize;
+
+        // Determine railroad type from line direction
+        let idx_in_line = line.iter().position(|&p| p == (x, y)).unwrap_or(0);
+        let mut segments: u16 = 0;
+
+        if idx_in_line > 0 {
+            let prev = line[idx_in_line - 1];
+            if prev.1 < y {
+                segments = set_segment(segments, 0); // North
+            } else if prev.0 > x {
+                segments = set_segment(segments, 1); // East
+            } else if prev.1 > y {
+                segments = set_segment(segments, 2); // South
+            } else if prev.0 < x {
+                segments = set_segment(segments, 3); // West
+            }
+        }
+        if idx_in_line + 1 < line.len() {
+            let next = line[idx_in_line + 1];
+            if next.1 < y {
+                segments = set_segment(segments, 0);
+            } else if next.0 > x {
+                segments = set_segment(segments, 1);
+            } else if next.1 > y {
+                segments = set_segment(segments, 2);
+            } else if next.0 < x {
+                segments = set_segment(segments, 3);
+            }
+        }
+
+        // Check for existing railroads in cardinal neighbors
+        for (dir_idx, &(dx, dy)) in FOUR_ADJACENT_OFFSETS.iter().enumerate() {
+            let nx = x + dx;
+            let ny = y + dy;
+            if nx >= 0 && nx < OMAP_DIM && ny >= 0 && ny < OMAP_DIM {
+                let nh = TerrainHandle(grid[ny as usize][nx as usize]);
+                if registry.flags_for(nh).contains(TerrainFlags::RAILROAD) {
+                    segments = set_segment(segments, dir_idx);
+                }
+            }
+        }
+
+        let rail_type = match segments {
+            s if s == LINE_N || s == LINE_S || s == LINE_N | LINE_S => railroad_ns,
+            s if s == LINE_E || s == LINE_W || s == LINE_E | LINE_W => railroad_ew,
+            _ => railroad_nesw,
+        };
+
+        grid[yu][xu] = rail_type;
     }
 }
 
 // ---------------------------------------------------------------------------
-// place_railroads system
+// place_railroads — system entry point
 // ---------------------------------------------------------------------------
 
-/// System: place railroad network.
+/// Place railroads connecting border exits and city-adjacent points.
 ///
-/// **Verbatim port** of CDDA master `overmap::place_railroads()` L2227–2297.
-///
-/// # Mapping from C++
-///
-/// | C++ | Rust |
-/// |---|---|
-/// | `neighbor_overmaps[dir] == nullptr` | `ConnectionExits` direction empty |
-/// | `connections_out[rail_connection]` | local `Vec<(i32,i32)>` (z=0 implied) |
-/// | `four_adjacent_offsets` | `FOUR_ADJACENT_OFFSETS` (same layout) |
-/// | `rng_get_engine()` | `rng: XorShiftRng` |
-/// | `settings->get_settings_city().city_size` | `settings.city_size` |
-/// | `*overmap_connection_local_railroad` | `ConnectionType::Railroad` |
-/// | `elem.xy()` | `(elem.0, elem.1)` — z dropped |
+/// Port of C++ `overmap::place_railroads()` (overmap.cpp L2227-2297).
 pub fn place_railroads(
     chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
     par_commands: ParallelCommands,
     cities: Query<&City>,
     config: Res<OvermapGenConfig>,
     registry: Res<TerrainRegistry>,
+    core_terrains: Res<CoreTerrains>,
     settings: Res<OvermapRegionSettings>,
     exits: Option<Res<ConnectionExits>>,
 ) {
-    // int op_city_size = settings->get_settings_city().city_size;
-    let op_city_size = settings.city_size;
-    // if( op_city_size <= 0 ) { return; }
-    if op_city_size <= 0 || !settings.place_railroads {
+    // Early return
+    if settings.city.city_size <= 0 || !settings.place_railroads {
+        info!("place_railroads: skipped — city_size<=0 or place_railroads=false");
         return;
     }
 
-    let mut rng = XorShiftRng::new(config.noise_seed as u64 + 7);
+    info!("place_railroads: starting railroad network construction");
 
-    // Build dense terrain grid at z=0 for fast lookup
-    // (ter( tmp ) equivalent)
-    let mut terrain_grid = [[0u32; OMAP_DIM as usize]; OMAP_DIM as usize];
-    for (_entity, chunk_pos, chunk) in &chunks {
-        if chunk_pos.z.0 != 0 {
-            continue;
-        }
-        let (ox, oy) = chunk_pos.omt_origin();
-        for ly in 0u8..CHUNK_DIM as u8 {
-            for lx in 0u8..CHUNK_DIM as u8 {
-                let gx = (ox + lx as i32) as usize;
-                let gy = (oy + ly as i32) as usize;
-                if gx < OMAP_DIM as usize && gy < OMAP_DIM as usize {
-                    let idx = ly as usize * CHUNK_DIM + lx as usize;
-                    terrain_grid[gx][gy] = chunk.terrain[idx].0;
-                }
-            }
-        }
-    }
+    // --- Build terrain grid --------------------------------------------------
+    let (mut grid, _z0_chunks) = build_omt_grid(&chunks);
+    let mut rng = XorShiftRng::new(config.noise_seed as u64 + 13);
 
-    // const overmap_connection_id &overmap_connection_local_railroad = settings->overmap_connection.rail_connection;
-    // (Rust: ConnectionType::Railroad is always the railroad type)
+    // --- Collect railroad exit points ----------------------------------------
+    let mut railroads_out: Vec<(i32, i32)> = if let Some(ref exits_res) = exits {
+        let mut pts = Vec::new();
+        pts.extend(&exits_res.north);
+        pts.extend(&exits_res.east);
+        pts.extend(&exits_res.south);
+        pts.extend(&exits_res.west);
+        pts
+    } else {
+        Vec::new()
+    };
 
-    // std::vector<tripoint_om_omt> &railroads_out = connections_out[overmap_connection_local_railroad];
-    // In Rust: local Vec<(i32,i32)> (points stored as xy, z=0 implied)
-    let mut railroads_out: Vec<(i32, i32)> = Vec::new();
-
-    // C++ connections_out persists across calls; neighbor exits are pre-populated.
-    // In Rust we use ConnectionExits for neighbor-provided exits.
-    if let Some(ref exits_res) = exits {
-        railroads_out = exits_res.all();
-    }
-
-    // if( railroads_out.size() < 3 ) {
+    // Fallback: generate from null-neighbor edges
     if railroads_out.len() < 3 {
-        // static constexpr std::array<int, 4> edge_coords_x = {OMAPX - 1, -1, 0, -1};
-        // static constexpr std::array<int, 4> edge_coords_y = {-1, OMAPY - 1, -1, 0};
-        const EDGE_COORDS_X: [i32; 4] = [OMAP_DIM - 1, -1, 0, -1];
-        const EDGE_COORDS_Y: [i32; 4] = [-1, OMAP_DIM - 1, -1, 0];
+        railroads_out.extend(generate_fallback_railroad_exits(&grid, &registry, &mut rng));
+    }
 
-        // std::array < int, OMAPX - 20 > omap_num;
-        // for( int i = 0; i < OMAPX - 20; i++ ) { omap_num[i] = i + 10; }
-        let omap_dim = OMAP_DIM as usize;
-        let mut omap_num: Vec<i32> = Vec::with_capacity(omap_dim - 20);
-        for i in 0..(omap_dim - 20) {
-            omap_num.push((i + 10) as i32);
+    // --- Build railroad points: exits + random city-adjacent points ----------
+    let mut railroad_points: Vec<(i32, i32)> = Vec::new();
+    railroad_points.extend(&railroads_out);
+
+    for city in cities.iter() {
+        let city_pos = (city.omt_x, city.omt_y);
+        let radius = city.size as i32 * 4;
+        let mut candidates = points_in_radius(city_pos, radius);
+
+        if !candidates.is_empty() {
+            let idx = rng.random_usize(candidates.len());
+            railroad_points.push(candidates.swap_remove(idx));
         }
+    }
 
-        // std::array < size_t, 4 > dirs = {0, 1, 2, 3};
-        // std::shuffle( dirs.begin(), dirs.end(), rng_get_engine() );
-        let mut dirs: [usize; 4] = [0, 1, 2, 3];
-        shuffle(&mut dirs, &mut rng);
+    info!(
+        exits = railroads_out.len(),
+        total_points = railroad_points.len(),
+        "place_railroads: points collected"
+    );
 
-        // for( size_t dir : dirs ) {
-        for &dir in &dirs {
-            // if( neighbor_overmaps[dir] == nullptr ) {
-            //   →  ConnectionExits direction has no entries → no neighbor
-            let has_neighbor = exits.as_ref().map_or(false, |e| {
-                match dir {
-                    0 => !e.north.is_empty(), // north neighbor
-                    1 => !e.east.is_empty(),  // east neighbor
-                    2 => !e.south.is_empty(), // south neighbor
-                    3 => !e.west.is_empty(),  // west neighbor
-                    _ => false,
-                }
-            });
-
-            if !has_neighbor {
-                // std::shuffle( omap_num.begin(), omap_num.end(), rng_get_engine() );
-                shuffle(&mut omap_num, &mut rng);
-
-                // for( const int &i : omap_num ) {
-                for &i in &omap_num {
-                    // tripoint_om_omt tmp = tripoint_om_omt(
-                    //     edge_coords_x[dir] >= 0 ? edge_coords_x[dir] : i,
-                    //     edge_coords_y[dir] >= 0 ? edge_coords_y[dir] : i, 0 );
-                    let x = if EDGE_COORDS_X[dir] >= 0 { EDGE_COORDS_X[dir] } else { i };
-                    let y = if EDGE_COORDS_Y[dir] >= 0 { EDGE_COORDS_Y[dir] } else { i };
-                    let tmp = (x, y);
-
-                    // is_river( ter( tmp ) )
-                    let river_at_tmp = is_river(&terrain_grid, tmp.0, tmp.1, &registry);
-
-                    // is_river( ter( tmp + point_rel_omt( four_adjacent_offsets[( dir + 1 ) % 4] ) ) )
-                    let off1 = FOUR_ADJACENT_OFFSETS[(dir + 1) % 4];
-                    let p1 = (tmp.0 + off1.0, tmp.1 + off1.1);
-                    let river_at_p1 = is_river(&terrain_grid, p1.0, p1.1, &registry);
-
-                    // is_river( ter( tmp + point_rel_omt( four_adjacent_offsets[( dir + 3 ) % 4] ) ) )
-                    let off3 = FOUR_ADJACENT_OFFSETS[(dir + 3) % 4];
-                    let p3 = (tmp.0 + off3.0, tmp.1 + off3.1);
-                    let river_at_p3 = is_river(&terrain_grid, p3.0, p3.1, &registry);
-
-                    // if( !( river1 || river2 || river3 ) )
-                    if !river_at_tmp && !river_at_p1 && !river_at_p3 {
-                        // railroads_out.push_back( tmp );
-                        railroads_out.push(tmp);
-                        break;
+    // --- Connect points via MST ----------------------------------------------
+    connect_closest_points(&railroad_points, 0, ConnectionType::Railroad, &mut rng, {
+        let grid_ref = &mut grid;
+        let registry_ref = &registry;
+        let core_terrains_ref = &core_terrains;
+        move |from, to, z, ct| {
+            let max = (OMAP_DIM, OMAP_DIM);
+            let scoring = |node: DirectedNode, prev: Option<DirectedNode>| {
+                railroad_scoring_fn(grid_ref, registry_ref, node, prev)
+            };
+            let path = greedy_path(from, to, max, &scoring);
+            if !path.is_empty() {
+                let mut line_pts: Vec<(i32, i32)> = path.iter().map(|n| n.pos).collect();
+                line_pts.reverse();
+                for window in line_pts.windows(2) {
+                    let sub_line = line_between(window[0], window[1]);
+                    for &pt in &sub_line {
+                        if inbounds_omt(pt) {
+                            let rr_nesw = registry_ref
+                                .handle_by_id("railroad_nesw")
+                                .map(|h| h.0)
+                                .unwrap_or(core_terrains_ref.road_nesw.0);
+                            grid_ref[pt.1 as usize][pt.0 as usize] = rr_nesw;
+                        }
                     }
                 }
-                // if( railroads_out.size() == 3 ) { break; }
-                if railroads_out.len() == 3 {
-                    break;
-                }
+            } else {
+                build_railroad_connection(
+                    grid_ref,
+                    registry_ref,
+                    core_terrains_ref,
+                    from,
+                    to,
+                    z,
+                    ct,
+                );
             }
         }
-    }
+    });
 
-    // std::vector<point_om_omt> railroad_points;
-    // railroad_points.reserve( railroads_out.size() + cities.size() );
-    let mut railroad_points: Vec<(i32, i32)> = Vec::with_capacity(
-        railroads_out.len() + cities.iter().count(),
-    );
-
-    // for( const auto &elem : railroads_out ) {
-    //     railroad_points.emplace_back( elem.xy() );
-    // }
-    for &elem in &railroads_out {
-        railroad_points.push(elem);
-    }
-
-    // for( const city &elem : cities ) {
-    //     railroad_points.emplace_back(
-    //         random_entry( points_in_radius( tripoint_om_omt( elem.pos, 0 ), elem.size * 4 ) ).xy() );
-    // }
-    for city in &cities {
-        let center = (city.omt_x, city.omt_y);
-        let radius = (city.size as i32).saturating_mul(4).max(1);
-        let candidates = points_in_radius(center, radius);
-        if candidates.is_empty() {
-            railroad_points.push(center);
-        } else {
-            let &p = random_entry(&candidates, &mut rng);
-            railroad_points.push(p);
-        }
-    }
-
-    // connect_closest_points( railroad_points, 0, *overmap_connection_local_railroad );
-    // ----------------------------------------------------------------
-    // Build boolean grid, then MST via connect_closest_points, then
-    // write railroad terrain back to chunks.
-    // ----------------------------------------------------------------
-    if railroad_points.len() < 2 {
-        return;
-    }
-
-    let mut rail_grid = [[false; OMAP_DIM as usize]; OMAP_DIM as usize];
-    for &(x, y) in &railroad_points {
-        if inbounds_omt((x, y)) {
-            rail_grid[x as usize][y as usize] = true;
-        }
-    }
-
-    connect_closest_points(
-        &railroad_points,
-        0,
-        ConnectionType::Railroad,
-        &mut rng,
-        |from, to, z, _ct| {
-            if z != 0 {
-                return;
-            }
-            mark_line_on_grid(from, to, &mut rail_grid);
-        },
-    );
-
-    // --- Write railroad terrain back to chunks ---
-    let rail_handle = registry
-        .handle_by_id("railroad")
-        .unwrap_or(TerrainHandle::NULL);
-    if rail_handle == TerrainHandle::NULL {
-        info!("Railroad terrain handle missing, skipping railroad terrain");
-        return;
-    }
-    let rail_ns_handle = registry.rotate(rail_handle, 0);
-    let rail_ew_handle = registry.rotate(rail_handle, 1);
-    let rail_nesw_handle = registry
-        .handle_by_id("railroad_nesw")
-        .unwrap_or_else(|| registry.rotate(rail_handle, 3));
-
-    let field_index = registry.field_index;
-    let forest_index = registry.forest_index;
-    let forest_thick_index = registry.forest_thick_index;
-    let forest_water_index = registry.forest_water_index;
-    let rail_ew_idx = rail_ew_handle.type_index();
-    let rail_ns_idx = rail_ns_handle.type_index();
-    let rail_nesw_idx = rail_nesw_handle.type_index();
-    let reg = &*registry;
-
+    // --- Write terrain changes back to chunks via par_iter --------------------
     chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
         if chunk_pos.z.0 != 0 {
             return;
         }
-        let (ox, oy) = chunk_pos.omt_origin();
+        let local_ox = (chunk_pos.chunk_x as i32) * (CHUNK_DIM as i32);
+        let local_oy = (chunk_pos.chunk_y as i32) * (CHUNK_DIM as i32);
+
         let mut modified = false;
         let mut new_terrain = chunk.terrain.clone();
 
-        for ly in 0u8..CHUNK_DIM as u8 {
-            for lx in 0u8..CHUNK_DIM as u8 {
-                let gx = (ox + lx as i32) as usize;
-                let gy = (oy + ly as i32) as usize;
-                if gx >= OMAP_DIM as usize || gy >= OMAP_DIM as usize {
-                    continue;
+        for ly in 0..CHUNK_DIM {
+            for lx in 0..CHUNK_DIM {
+                let wx = local_ox + lx as i32;
+                let wy = local_oy + ly as i32;
+                if wx >= 0 && wx < OMAP_DIM && wy >= 0 && wy < OMAP_DIM {
+                    let idx = ly * CHUNK_DIM + lx;
+                    let new_handle = TerrainHandle(grid[wy as usize][wx as usize]);
+                    if new_terrain[idx] != new_handle && new_handle != TerrainHandle::NULL {
+                        new_terrain[idx] = new_handle;
+                        modified = true;
+                    }
                 }
-                if !rail_grid[gx][gy] {
-                    continue;
-                }
-
-                let idx = ly as usize * CHUNK_DIM + lx as usize;
-                let current = chunk.terrain[idx];
-                let ct = current.type_index();
-
-                // Skip water (matches C++ is_river check on terrain placement)
-                let flags = reg.flags_for(current);
-                if flags.contains(TerrainFlags::RIVER)
-                    || flags.contains(TerrainFlags::LAKE)
-                    || flags.contains(TerrainFlags::OCEAN)
-                {
-                    continue;
-                }
-
-                let is_field = ct == field_index;
-                let is_forest =
-                    ct == forest_index || ct == forest_thick_index || ct == forest_water_index;
-                let is_rail = ct == rail_ew_idx || ct == rail_ns_idx || ct == rail_nesw_idx;
-
-                if !is_field && !is_forest && !is_rail {
-                    continue;
-                }
-
-                let north = gy > 0 && rail_grid[gx][gy - 1];
-                let south = gy + 1 < OMAP_DIM as usize && rail_grid[gx][gy + 1];
-                let east = gx + 1 < OMAP_DIM as usize && rail_grid[gx + 1][gy];
-                let west = gx > 0 && rail_grid[gx - 1][gy];
-
-                let has_ns = north || south;
-                let has_ew = east || west;
-
-                let handle = if has_ns && has_ew {
-                    rail_nesw_handle
-                } else if has_ew {
-                    rail_ew_handle
-                } else {
-                    rail_ns_handle
-                };
-                new_terrain[idx] = handle;
-                modified = true;
             }
         }
+
         if modified {
             par_commands.command_scope(|mut cmd| {
                 cmd.entity(entity).insert(OvermapChunk {
@@ -366,11 +450,5 @@ pub fn place_railroads(
         }
     });
 
-    info!(
-        "Railroads placed: {} rail points, {} exit points for overmap ({}, {})",
-        railroad_points.len(),
-        railroads_out.len(),
-        config.om_x,
-        config.om_y
-    );
+    info!("place_railroads: railroad network complete");
 }

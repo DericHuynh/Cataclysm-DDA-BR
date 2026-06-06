@@ -11,7 +11,7 @@ use cdda_core_types::core::id::DefId;
 use cdda_core_types::core::raw_defs::city_building::CityBuildingDef;
 use cdda_sim::state::{AppState, GameTime, LoadingStatus, StartupConfig};
 
-use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};
+use cdda_overmap::registry::{CoreTerrains, TerrainFlags, TerrainHandle, TerrainRegistry};
 use cdda_overmap_gen::pipeline::{OvermapGenConfig, OvermapGenPhase, DEFAULT_NOISE_SEED};
 
 use std::sync::Arc;
@@ -91,21 +91,6 @@ pub fn load_data_system(world: &mut World) {
 
             world.insert_resource(CityBuildings(registry.city_buildings.clone()));
 
-            // --- Build SpecialCatalog ---
-            let special_catalog =
-                cdda_overmap_gen::special_catalog::SpecialCatalog::from_registry(&registry);
-            world.insert_resource(special_catalog);
-
-            // --- Build ConnectionCatalog ---
-            let connection_catalog =
-                cdda_overmap_gen::connection_catalog::ConnectionCatalog::from_registry(&registry);
-            world.insert_resource(connection_catalog);
-
-            // --- Build MongroupCatalog ---
-            let mongroup_catalog =
-                cdda_overmap_gen::mongroup_catalog::MongroupCatalog::from_registry(&registry);
-            world.insert_resource(mongroup_catalog);
-
             // --- Build OvermapRegionSettings from RegionSettingsDef ---
             let region_settings = build_region_settings(&registry);
             world.insert_resource(region_settings);
@@ -118,7 +103,6 @@ pub fn load_data_system(world: &mut World) {
                 noise_seed: DEFAULT_NOISE_SEED,
                 om_x: 0,
                 om_y: 0,
-                region_id: "default".into(),
             };
             world.insert_resource(gen_config);
 
@@ -273,23 +257,7 @@ fn build_terrain_registry(
             })
             .unwrap_or_else(|| def_id.as_str().to_string());
 
-        let idx = treg.register_no_entity(def_id.as_str(), flags, travel_cost, mapgen_id);
-
-        // Tag well-known terrain types.
-        match def_id.as_str() {
-            "field" => treg.field_index = idx,
-            "forest" => treg.forest_index = idx,
-            "forest_thick" => treg.forest_thick_index = idx,
-            "forest_water" => treg.forest_water_index = idx,
-            "road_ns" => treg.road_ns_index = idx,
-            "road_ew" => treg.road_ew_index = idx,
-            "road_nesw" => treg.road_nesw_index = idx,
-            "lake_surface" => treg.lake_surface_index = idx,
-            "lake_shore" => treg.lake_shore_index = idx,
-            "ocean" => treg.ocean_index = idx,
-            "river_center" => treg.river_center_index = idx,
-            _ => {}
-        }
+        treg.register_no_entity(def_id.as_str(), flags, travel_cost, mapgen_id, 0);
     }
 
     // -- Generate directional variants for line-drawing terrains --
@@ -312,7 +280,7 @@ fn build_terrain_registry(
             if treg.index_by_id(&variant_id).is_some() {
                 continue; // already exists
             }
-            treg.register_no_entity(&variant_id, flags, travel_cost, mapgen_id.clone());
+            treg.register_no_entity(&variant_id, flags, travel_cost, mapgen_id.clone(), 0);
             variants_to_create.push((idx, variant_id));
         }
     }
@@ -339,44 +307,13 @@ fn build_terrain_registry(
     }
 
     // Tag well-known directional variants if they were generated.
-    if let Some(idx) = treg.index_by_id("road_ns") {
-        treg.road_ns_index = idx;
-    }
-    if let Some(idx) = treg.index_by_id("road_ew") {
-        treg.road_ew_index = idx;
-    }
-    if let Some(idx) = treg.index_by_id("road_nesw") {
-        treg.road_nesw_index = idx;
-    }
-
-    // Ensure field_index is set
-    if treg.field_index == 0 {
-        if let Some(idx) = treg.index_by_id("field") {
-            treg.field_index = idx;
-        } else {
-            // Find the first terrain with no special flags as default field
-            for idx in 1..treg.len() as u32 {
-                let flags = treg.flags_for(TerrainHandle::new(idx, 0));
-                // A basic field terrain has no line-drawing or biome flags
-                if !flags.contains(TerrainFlags::ROAD)
-                    && !flags.contains(TerrainFlags::RIVER)
-                    && !flags.contains(TerrainFlags::LAKE)
-                    && !flags.contains(TerrainFlags::OCEAN)
-                    && !flags.contains(TerrainFlags::FOREST)
-                    && !flags.contains(TerrainFlags::IMPASSABLE)
-                    && !flags.contains(TerrainFlags::UNDERGROUND)
-                {
-                    treg.field_index = idx;
-                    break;
-                }
-            }
-        }
-    }
 
     info!(
         "TerrainRegistry built: {} terrain types registered",
         treg.len()
     );
+    let core_terrains = CoreTerrains::from_registry(&treg);
+    world.insert_resource(core_terrains);
     world.insert_resource(treg);
 }
 
@@ -408,12 +345,11 @@ fn build_region_settings(
         // Ocean off by default unless region explicitly enables it.
         // The ocean_start values come from a separate ocean_settings JSON
         // type which we don't resolve yet, so keep them disabled.
-        settings.ocean_start = [None, None, None, None];
 
         // Sensible forest thresholds for temperate regions.
         // These produce ~25-35% forest coverage.
-        settings.forest_noise_threshold = 0.25;
-        settings.forest_noise_threshold_thick = 0.30;
+        settings.forest.noise_threshold_forest = 0.25;
+        settings.forest.noise_threshold_forest_thick = 0.30;
 
         // Enable standard features.
         settings.place_roads = true;

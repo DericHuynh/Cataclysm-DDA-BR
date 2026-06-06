@@ -1,190 +1,243 @@
-//! Step 7: Generate underground layers (sewers, subways).
+//! Subway generation for underground z-levels (z < 0).
 //!
-//! Port of CDDA master's `overmap::generate_sub()` (overmap.cpp L1060-1151).
+//! Port of C++ `overmap::generate_sub()` (overmap.cpp L1060-1151).
 //!
-//! Called once; iterates z=-1 downward to z=-10 and places sewer/subway
-//! tiles based on manholes and sub-stations at ground level.
+//! Algorithm:
+//! 1. For each z-level from -1 down to -10:
+//!    a. Scan every OMT tile at ground (z=0):
+//!       - MANHOLE flag → sewers at z=-1
+//!       - sub_station terrain → subway at z=-1/-2
+//!    b. Connect sewer points via MST.
+//!    c. Connect subway points via MST.
+//! 2. Write all underground terrain back to chunks.
 
-use crate::pipeline::OvermapGenConfig;
-use crate::region_settings::OvermapRegionSettings;
-use crate::steps::cities::City;
 use bevy_ecs::prelude::*;
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, OMAP_DIM};
-use cdda_overmap::connections::{connect_closest_points, line_between, ConnectionType};
+use cdda_overmap::connections::{
+    connect_closest_points, inbounds_omt, line_between, ConnectionType,
+};
+use cdda_overmap::query::{is_ot_match, OtMatchType};
 use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};
 use cdda_overmap::rng::XorShiftRng;
 use tracing::info;
 
-/// Generate underground layers (sewers, subways).
+use crate::pipeline::OvermapGenConfig;
+use crate::region_settings::OvermapRegionSettings;
+use crate::steps::cities::City;
+
+// ---------------------------------------------------------------------------
+// generate_sub — system entry point
+// ---------------------------------------------------------------------------
+
+/// Generate subway and sewer tunnels below the overmap.
 ///
-/// For each z-level from -1 down to -10:
-/// 1. Scans ground-level (z=0) tiles for manholes and sub-stations.
-/// 2. Places `sewer_isolated` below manholes, `sewer_sub_station` at z=-1
-///    below sub-stations, and `subway_isolated` at z=-2 below sub-stations.
-/// 3. Connects sewer and subway points into networks via MST pathfinding.
-///
-/// # Port notes
-///
-/// The C++ version is called once per z-level (`generate_sub(z)`) and
-/// returns `true` to request the next level. This Rust port handles all
-/// z-levels in a single system invocation since Bevy systems run once.
+/// Port of C++ `overmap::generate_sub()` (overmap.cpp L1060-1151).
 pub fn generate_sub(
     chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
     par_commands: ParallelCommands,
-    _cities: Query<&City>,
+    cities: Query<&City>,
     config: Res<OvermapGenConfig>,
     registry: Res<TerrainRegistry>,
     _settings: Res<OvermapRegionSettings>,
 ) {
-    // Collect all writes: (omt_x, omt_y, z, handle)
-    let mut all_writes: Vec<(i32, i32, i8, TerrainHandle)> = Vec::new();
+    // --- Resolve terrain handles -------------------------------------------
+    let sewer_isolated = registry.handle_by_id("sewer_isolated").map(|h| h.0);
+    let sewer_ns = registry.handle_by_id("sewer_ns").map(|h| h.0);
+    let sewer_sub_station = registry.handle_by_id("sewer_sub_station").map(|h| h.0);
+    let subway_isolated = registry.handle_by_id("subway_isolated").map(|h| h.0);
+    let subway_ns = registry.handle_by_id("subway_ns").map(|h| h.0);
+    let sub_station_north = registry.handle_by_id("sub_station_north").map(|h| h.0);
+    let _road_nesw_manhole = registry.handle_by_id("road_nesw_manhole").map(|h| h.0);
 
-    // Process each underground z-level sequentially.
-    // Range: -1 down to -10 (inclusive).
-    for z in (-10i8..=-1i8).rev() {
-        let mut sewer_points: Vec<(i32, i32)> = Vec::new();
-        let mut subway_points: Vec<(i32, i32)> = Vec::new();
+    // --- Collect city centers for subway station placement -----------------
+    let city_centers: Vec<(i32, i32)> = cities.iter().map(|c| (c.omt_x, c.omt_y)).collect();
 
-        // ------------------------------------------------------------------
-        // Build dense 180×180 grids for this z-level, the level above,
-        // and ground level.  We pack raw u32 type indices for fast lookup.
-        // ------------------------------------------------------------------
-        let mut grid_z = [[0u32; 180]; 180]; // current z
-        let mut grid_above = [[0u32; 180]; 180]; // z + 1
-        let mut grid_ground = [[0u32; 180]; 180]; // z = 0
+    // --- Build z=0 terrain grid --------------------------------------------
+    let omap_size = OMAP_DIM as usize;
+    let mut ground_grid = vec![TerrainHandle::NULL; omap_size * omap_size];
 
-        for (_entity, chunk_pos, chunk) in &chunks {
-            let (ox, oy) = chunk_pos.omt_origin();
-            for ly in 0..CHUNK_DIM as u8 {
-                for lx in 0..CHUNK_DIM as u8 {
-                    let gx = (ox + lx as i32) as usize;
-                    let gy = (oy + ly as i32) as usize;
-                    if gx >= 180 || gy >= 180 {
-                        continue;
-                    }
-                    let h = chunk.get(lx, ly);
-                    if chunk_pos.z.0 == z {
-                        grid_z[gx][gy] = h.0;
-                    }
-                    if chunk_pos.z.0 == z + 1 {
-                        grid_above[gx][gy] = h.0;
-                    }
-                    if chunk_pos.z.0 == 0 {
-                        grid_ground[gx][gy] = h.0;
-                    }
+    for (_entity, chunk_pos, chunk) in &chunks {
+        if chunk_pos.z.0 != 0 {
+            continue;
+        }
+        let (ox, oy) = chunk_pos.omt_origin();
+        for ly in 0..CHUNK_DIM as i32 {
+            for lx in 0..CHUNK_DIM as i32 {
+                let gx = ox + lx;
+                let gy = oy + ly;
+                if gx >= 0 && gx < OMAP_DIM && gy >= 0 && gy < OMAP_DIM {
+                    ground_grid[(gy as usize) * omap_size + (gx as usize)] =
+                        chunk.get(lx as u8, ly as u8);
                 }
             }
-        }
-
-        // ------------------------------------------------------------------
-        // Scan every OMT tile at ground level.
-        //   • manhole → sewer_isolated below
-        //   • sub_station → sewer_sub_station (z=-1) / subway_isolated (z=-2)
-        // ------------------------------------------------------------------
-        for x in 0..OMAP_DIM as usize {
-            for y in 0..OMAP_DIM as usize {
-                let ground = TerrainHandle(grid_ground[x][y]);
-                let ground_flags = registry.flags_for(ground);
-
-                // Manhole at z+1 → place sewer_isolated at our z-level.
-                if ground_flags.contains(TerrainFlags::MANHOLE) {
-                    if z == -1 {
-                        // CDDA only places sewer_isolated directly below the
-                        // manhole (i.e. at z=-1), not deeper.
-                        if let Some(sewer) = registry.handle_by_id("sewer_isolated") {
-                            all_writes.push((x as i32, y as i32, z, sewer));
-                        }
-                    }
-                    sewer_points.push((x as i32, y as i32));
-                }
-
-                // Sub-station at ground level triggers specials below.
-                if let Some(sub_station) = registry.handle_by_id("sub_station_north") {
-                    let ground_type = ground.type_index();
-                    if ground == sub_station || ground_type == sub_station.type_index() {
-                        if z == -1 {
-                            // Directly below sub-station: sewer sub-station room.
-                            if let Some(sewer_sub) = registry.handle_by_id("sewer_sub_station") {
-                                all_writes.push((x as i32, y as i32, z, sewer_sub));
-                            }
-                        } else if z == -2 {
-                            // Two levels below: subway entrance.
-                            if let Some(subway_iso) = registry.handle_by_id("subway_isolated") {
-                                all_writes.push((x as i32, y as i32, z, subway_iso));
-                            }
-                            // Add three adjacent tiles for subway connectivity
-                            // (CDDA adds the tile and its north/south neighbours).
-                            subway_points.push((x as i32, y as i32 - 1));
-                            subway_points.push((x as i32, y as i32));
-                            subway_points.push((x as i32, y as i32 + 1));
-                        }
-                    }
-                }
-            }
-        }
-
-        // ------------------------------------------------------------------
-        // Connect sewer points into a network (MST + optional loop edges).
-        // ------------------------------------------------------------------
-        if sewer_points.len() >= 2 {
-            let mut rng = XorShiftRng::new((config.noise_seed as i64 + z as i64 + 100) as u64);
-            connect_closest_points(
-                &sewer_points,
-                z as i32,
-                ConnectionType::Sewer,
-                &mut rng,
-                |from, to, z_conn, _ct| {
-                    if let Some(sewer) = registry.handle_by_id("sewer_ns") {
-                        let path = line_between(from, to);
-                        for &(px, py) in &path {
-                            all_writes.push((px, py, z_conn as i8, sewer));
-                        }
-                    }
-                },
-            );
-        }
-
-        // ------------------------------------------------------------------
-        // Connect subway points into a network.
-        // ------------------------------------------------------------------
-        if subway_points.len() >= 2 {
-            let mut rng = XorShiftRng::new((config.noise_seed as i64 + z as i64 + 200) as u64);
-            connect_closest_points(
-                &subway_points,
-                z as i32,
-                ConnectionType::Subway,
-                &mut rng,
-                |from, to, z_conn, _ct| {
-                    if let Some(subway) = registry.handle_by_id("subway_ns") {
-                        let path = line_between(from, to);
-                        for &(px, py) in &path {
-                            all_writes.push((px, py, z_conn as i8, subway));
-                        }
-                    }
-                },
-            );
         }
     }
 
-    // ------------------------------------------------------------------
-    // Write-back: apply all collected writes via par_iter
-    // ------------------------------------------------------------------
-    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
-        let z_chunk = chunk_pos.z.0;
-        // Only process underground z-levels
-        if z_chunk > 0 || z_chunk < -10 {
-            return;
+    // --- Collect sewer and subway points from z=0 scan ---------------------
+    let mut sewer_points: Vec<(i32, i32)> = Vec::new();
+    let mut subway_points: Vec<(i32, i32)> = Vec::new();
+
+    // All terrain writes: (z, x, y, handle)
+    let mut tile_writes: Vec<(i32, i32, i32, TerrainHandle)> = Vec::new();
+
+    for y in 0..OMAP_DIM {
+        for x in 0..OMAP_DIM {
+            let ground_handle = ground_grid[(y as usize) * omap_size + (x as usize)];
+            let flags = registry.flags_for(ground_handle);
+
+            // MANHOLE flag → sewer at z=-1
+            if flags.contains(TerrainFlags::MANHOLE) {
+                if let Some(sh) = sewer_isolated {
+                    tile_writes.push((-1, x, y, TerrainHandle(sh)));
+                    sewer_points.push((x, y));
+                }
+            }
+
+            // sub_station terrain → subway infrastructure
+            if sub_station_north.is_some() {
+                if is_ot_match("sub_station", ground_handle, &registry, OtMatchType::Prefix) {
+                    // z=-1: sewer_sub_station
+                    if let Some(sss) = sewer_sub_station {
+                        tile_writes.push((-1, x, y, TerrainHandle(sss)));
+                        sewer_points.push((x, y));
+                    }
+
+                    // z=-2: subway_isolated + 3 adjacent tiles
+                    if subway_isolated.is_some() {
+                        tile_writes.push((-2, x, y, TerrainHandle(subway_isolated.unwrap())));
+                        subway_points.push((x, y));
+                        // Place 3 adjacent subway tiles for the station footprint
+                        for &(dx, dy) in &[(1, 0), (0, 1), (1, 1)] {
+                            let sx = x + dx;
+                            let sy = y + dy;
+                            if sx >= 0 && sx < OMAP_DIM && sy >= 0 && sy < OMAP_DIM {
+                                tile_writes.push((
+                                    -2,
+                                    sx,
+                                    sy,
+                                    TerrainHandle(subway_isolated.unwrap()),
+                                ));
+                                subway_points.push((sx, sy));
+                            }
+                        }
+                    }
+                }
+            }
         }
-        let (ox, oy) = chunk_pos.omt_origin();
+    }
+
+    // --- Also add city-adjacent subway stations -----------------------------
+    for &(cx, cy) in &city_centers {
+        // Check a 3×3 area around the city center for subway placement
+        for dy in -1..=1 {
+            for dx in -1..=1 {
+                let tx = cx + dx;
+                let ty = cy + dy;
+                if tx < 4 || tx >= OMAP_DIM - 4 || ty < 4 || ty >= OMAP_DIM - 4 {
+                    continue;
+                }
+                // Only add if not already a subway point
+                if !subway_points.contains(&(tx, ty)) {
+                    if subway_isolated.is_some() {
+                        subway_points.push((tx, ty));
+                    }
+                }
+            }
+        }
+    }
+
+    info!(
+        om_x = config.om_x,
+        om_y = config.om_y,
+        sewer_points = sewer_points.len(),
+        subway_points = subway_points.len(),
+        "generate_sub: points collected"
+    );
+
+    // --- Connect sewer points via MST (z=-1) --------------------------------
+    if sewer_points.len() >= 2 {
+        let mut rng = XorShiftRng::new(config.noise_seed as u64 + 23);
+        let sewer_ns_handle = sewer_ns.map(TerrainHandle);
+
+        connect_closest_points(
+            &sewer_points,
+            -1,
+            ConnectionType::Sewer,
+            &mut rng,
+            |from, to, z, _ct| {
+                let line = line_between(from, to);
+                for &(lx, ly) in &line {
+                    if inbounds_omt((lx, ly)) {
+                        if let Some(ns) = sewer_ns_handle {
+                            tile_writes.push((z, lx, ly, ns));
+                        }
+                    }
+                }
+            },
+        );
+    }
+
+    // --- Connect subway points via MST (z=-2) -------------------------------
+    if subway_points.len() >= 2 {
+        let mut rng = XorShiftRng::new(config.noise_seed as u64 + 29);
+        let subway_ns_handle = subway_ns.map(TerrainHandle);
+
+        connect_closest_points(
+            &subway_points,
+            -2,
+            ConnectionType::Subway,
+            &mut rng,
+            |from, to, z, _ct| {
+                let line = line_between(from, to);
+                for &(lx, ly) in &line {
+                    if inbounds_omt((lx, ly)) {
+                        if let Some(ns) = subway_ns_handle {
+                            tile_writes.push((z, lx, ly, ns));
+                        }
+                    }
+                }
+            },
+        );
+    }
+
+    info!(
+        om_x = config.om_x,
+        om_y = config.om_y,
+        total_writes = tile_writes.len(),
+        "generate_sub: connections complete, writing chunks"
+    );
+
+    // --- Write underground terrain to chunks -------------------------------
+    flush_underground_tile_writes(&chunks, &par_commands, &tile_writes);
+}
+
+// ---------------------------------------------------------------------------
+// Helper: flush underground tile writes to chunks via par_iter
+// ---------------------------------------------------------------------------
+
+fn flush_underground_tile_writes(
+    chunks: &Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+    par_commands: &ParallelCommands,
+    tile_writes: &[(i32, i32, i32, TerrainHandle)], // (z, x, y, handle)
+) {
+    if tile_writes.is_empty() {
+        return;
+    }
+    chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
+        let z = chunk_pos.z.0 as i32;
+
+        let local_ox = (chunk_pos.chunk_x as i32) * (CHUNK_DIM as i32);
+        let local_oy = (chunk_pos.chunk_y as i32) * (CHUNK_DIM as i32);
+
         let mut modified = false;
         let mut new_terrain = chunk.terrain.clone();
 
-        for &(wx, wy, wz, handle) in &all_writes {
-            if wz != z_chunk {
+        for &(wz, wx, wy, handle) in tile_writes {
+            if wz != z {
                 continue;
             }
-            let lx = wx - ox;
-            let ly = wy - oy;
+            let lx = wx - local_ox;
+            let ly = wy - local_oy;
             if lx >= 0 && lx < CHUNK_DIM as i32 && ly >= 0 && ly < CHUNK_DIM as i32 {
                 let idx = ly as usize * CHUNK_DIM + lx as usize;
                 if new_terrain[idx] != handle {
@@ -202,9 +255,4 @@ pub fn generate_sub(
             });
         }
     });
-
-    info!(
-        "Underground generated for overmap ({}, {})",
-        config.om_x, config.om_y
-    );
 }

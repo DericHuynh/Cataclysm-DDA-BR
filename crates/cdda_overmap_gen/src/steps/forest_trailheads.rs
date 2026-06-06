@@ -1,35 +1,67 @@
-//! Step 7b: Forest trailhead placement.
+//! Forest trailhead placement — marks trail endpoints near roads.
 //!
-//! Verbatim port of CDDA master's `overmap::place_forest_trailheads()`
-//! (overmap.cpp L2000–2049).
+//! Verbatim port of C++ `overmap::place_forest_trailheads()` (overmap.cpp L2000-2049).
 //!
-//! # Algorithm
+//! ## Algorithm
 //!
-//! 1. Build a dense 180×180 tile grid for z=0.
-//! 2. If `city_size ≤ 0`, return early.
-//! 3. Scan each tile from row/col 2 to `OMAP_DIM - 2`.
-//! 4. If the terrain's string ID starts with `"forest_trail_end"`:
-//!    a. With `1-in-trailhead_chance` probability, check whether any
-//!       tile within `trailhead_road_distance` (Chebyshev radius)
-//!       contains `"road"` in its string ID.
-//!    b. If both conditions are met, place `forest_trailhead` terrain
-//!       at the trail end, preserving the tile's rotation.
-//! 5. Write all changes back to chunks.
+//! 1. Early exit if `city_size <= 0`.
+//! 2. Build terrain grid from z=0 chunks.
+//! 3. For each tile where `is_ot_match("forest_trail_end", oter, prefix)`:
+//!    a. `one_in(trailhead_chance)` check.
+//!    b. Check if within `trailhead_road_distance` of a road (using closest_points_first).
+//!    c. If both true: place `forest_trailhead` terrain at that position, preserved rotation.
 
-use crate::pipeline::OvermapGenConfig;
-use crate::region_settings::OvermapRegionSettings;
 use bevy_ecs::prelude::*;
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, OMAP_DIM};
 use cdda_overmap::connections::closest_points_first;
 use cdda_overmap::query::{is_ot_match, OtMatchType};
-use cdda_overmap::registry::{TerrainHandle, TerrainRegistry};
+use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};
 use cdda_overmap::rng::XorShiftRng;
 use tracing::info;
 
-/// Place forest trailheads at forest trail endpoints.
+use crate::pipeline::OvermapGenConfig;
+use crate::region_settings::OvermapRegionSettings;
+
+// ---------------------------------------------------------------------------
+// Grid helpers
+// ---------------------------------------------------------------------------
+
+type OmtGrid = [[u32; OMAP_DIM as usize]; OMAP_DIM as usize];
+
+fn build_omt_grid(
+    chunks: &Query<(Entity, &ChunkPosition, &OvermapChunk)>,
+) -> (OmtGrid, Vec<(Entity, ChunkPosition)>) {
+    let mut grid = [[0u32; OMAP_DIM as usize]; OMAP_DIM as usize];
+    let mut z0_chunks: Vec<(Entity, ChunkPosition)> = Vec::with_capacity(36);
+
+    for (entity, pos, chunk) in chunks.iter() {
+        if pos.z.0 != 0 {
+            continue;
+        }
+        z0_chunks.push((entity, *pos));
+
+        let (origin_x, origin_y) = pos.omt_origin();
+        for ly in 0..CHUNK_DIM as u8 {
+            for lx in 0..CHUNK_DIM as u8 {
+                let omt_x = origin_x + lx as i32;
+                let omt_y = origin_y + ly as i32;
+                if omt_x >= 0 && omt_x < OMAP_DIM && omt_y >= 0 && omt_y < OMAP_DIM {
+                    grid[omt_y as usize][omt_x as usize] = chunk.get(lx, ly).0;
+                }
+            }
+        }
+    }
+
+    (grid, z0_chunks)
+}
+
+// ---------------------------------------------------------------------------
+// place_forest_trailheads — system entry point
+// ---------------------------------------------------------------------------
+
+/// Place forest trailheads at trail endpoints that are near roads.
 ///
-/// Verbatim port of `overmap::place_forest_trailheads()` from CDDA master
-/// (overmap.cpp L2000–2049).
+/// Port of C++ `overmap::place_forest_trailheads()` (overmap.cpp L2000-2049).
 pub fn place_forest_trailheads(
     chunks: Query<(Entity, &ChunkPosition, &OvermapChunk)>,
     par_commands: ParallelCommands,
@@ -37,121 +69,111 @@ pub fn place_forest_trailheads(
     registry: Res<TerrainRegistry>,
     settings: Res<OvermapRegionSettings>,
 ) {
-    // --- Early exit: no cities → no trailheads (C++ L2001–2002) ---
-    let city_size = settings.city_size;
-    if city_size <= 0 {
+    // Early exit — trailheads only make sense near cities
+    if settings.city.city_size <= 0 {
+        info!("place_forest_trailheads: skipped — city_size <= 0");
         return;
     }
 
-    let trailhead_road_distance = settings.trailhead_road_distance;
-    let trailhead_chance = settings.trailhead_chance;
-
-    // Deterministic RNG, off-by-one seed to avoid colliding with other steps.
-    let mut rng = XorShiftRng::new(config.noise_seed as u64 + 17);
-
-    // Resolve the trailhead base handle (rotation 0).
-    let trailhead_base = match registry.handle_by_id("forest_trailhead") {
-        Some(h) => h,
-        None => {
-            info!("forest_trailhead not in registry — skipping trailhead placement");
-            return;
-        }
-    };
-
-    // --- Build a dense 180×180 grid of TerrainHandles for z=0 ---
-    // This lets us read/write without fighting ECS borrow rules.
-    let mut grid = [[TerrainHandle::NULL; 180]; 180];
-    for (_entity, chunk_pos, chunk) in &chunks {
-        if chunk_pos.z.0 != 0 {
-            continue;
-        }
-        let (ox, oy) = chunk_pos.omt_origin();
-        for ly in 0u8..CHUNK_DIM as u8 {
-            for lx in 0u8..CHUNK_DIM as u8 {
-                let gx = (ox + lx as i32) as usize;
-                let gy = (oy + ly as i32) as usize;
-                if gx < 180 && gy < 180 {
-                    let idx = ly as usize * CHUNK_DIM as usize + lx as usize;
-                    grid[gx][gy] = chunk.terrain[idx];
-                }
-            }
-        }
+    if !settings.forest_trail {
+        info!("place_forest_trailheads: skipped — forest_trail=false");
+        return;
     }
 
-    // --- Scan for forest trail endpoints (C++ L2038–2048) ---
-    let mut writes: Vec<(usize, usize, TerrainHandle)> = Vec::new();
+    let trail_settings = &settings.forest_trail_settings;
+    info!("place_forest_trailheads: starting trailhead placement");
 
-    for x in 2..OMAP_DIM as usize - 2 {
-        for y in 2..OMAP_DIM as usize - 2 {
-            let handle = grid[x][y];
-            if handle == TerrainHandle::NULL {
+    // --- Build terrain grid --------------------------------------------------
+    let (mut grid, _z0_chunks) = build_omt_grid(&chunks);
+    let mut rng = XorShiftRng::new(config.noise_seed as u64 + 23);
+
+    let trailhead_handle = registry.handle_by_id("forest_trailhead").map(|h| h.0);
+
+    let Some(trailhead_raw) = trailhead_handle else {
+        info!("place_forest_trailheads: no forest_trailhead terrain registered, skipping");
+        return;
+    };
+
+    let mut placed = 0usize;
+
+    // --- Scan all tiles for forest_trail_end ---------------------------------
+    for y in 0..OMAP_DIM {
+        for x in 0..OMAP_DIM {
+            let handle = TerrainHandle(grid[y as usize][x as usize]);
+
+            // Check if this is a forest_trail_end (prefix match)
+            if !is_ot_match("forest_trail_end", handle, &registry, OtMatchType::Prefix) {
                 continue;
             }
 
-            // Check C++ `is_ot_match("forest_trail_end", oter, ot_match_type::prefix)`.
-            let Some(id) = registry.string_id_for(handle) else {
-                continue;
-            };
-            let matches_prefix = id == "forest_trail_end"
-                || (id.starts_with("forest_trail_end")
-                    && id.as_bytes().get("forest_trail_end".len()) == Some(&b'_'));
-
-            if !matches_prefix {
+            // Random chance check
+            if !rng.one_in(trail_settings.trailhead_chance) {
                 continue;
             }
 
-            // --- try_place_trailhead_special (C++ L2012–2020, inlined) ---
+            // --- Check for nearby road ---------------------------------------
+            let road_distance = trail_settings.trailhead_road_distance;
+            let nearby_points = closest_points_first((x, y), road_distance);
 
-            // 1-in-trailhead_chance (C++ L2016)
-            if !rng.one_in(trailhead_chance) {
-                continue;
-            }
-
-            // trailhead_close_to_road (C++ L2004–2009)
-            let pos = (x as i32, y as i32);
-            let mut close = false;
-            for &(px, py) in &closest_points_first(pos, trailhead_road_distance) {
-                if px < 0 || px >= 180 || py < 0 || py >= 180 {
+            let mut near_road = false;
+            for &pt in &nearby_points {
+                if pt.0 < 0 || pt.0 >= OMAP_DIM || pt.1 < 0 || pt.1 >= OMAP_DIM {
                     continue;
                 }
-                if is_ot_match("road", grid[px as usize][py as usize], &registry, OtMatchType::Contains) {
-                    close = true;
+                let nh = TerrainHandle(grid[pt.1 as usize][pt.0 as usize]);
+                if registry.flags_for(nh).contains(TerrainFlags::ROAD)
+                    || registry.flags_for(nh).contains(TerrainFlags::HIGHWAY)
+                {
+                    near_road = true;
                     break;
                 }
             }
-            if !close {
+
+            if !near_road {
                 continue;
             }
 
-            // Place trailhead with the same rotation as the trail-end tile.
-            let dir = handle.rotation();
-            let trailhead_handle = TerrainHandle::new(trailhead_base.type_index(), dir);
-            writes.push((x, y, trailhead_handle));
+            // --- Place forest_trailhead, preserving rotation -----------------
+            let rotation = handle.rotation();
+            let rotated_trailhead = if rotation != 0 {
+                // Apply rotation to the trailhead terrain
+                registry.rotate(TerrainHandle(trailhead_raw), rotation).0
+            } else {
+                trailhead_raw
+            };
+
+            grid[y as usize][x as usize] = rotated_trailhead;
+            placed += 1;
         }
     }
 
-    if writes.is_empty() {
-        return;
-    }
+    info!(
+        trailheads_placed = placed,
+        "place_forest_trailheads: complete"
+    );
 
-    // --- Write trailhead terrain back to chunks (C++: place_special writes) ---
-    let write_count = writes.len();
+    // --- Write terrain changes back to chunks via par_iter --------------------
     chunks.par_iter().for_each(|(entity, chunk_pos, chunk)| {
         if chunk_pos.z.0 != 0 {
             return;
         }
-        let (ox, oy) = chunk_pos.omt_origin();
+        let local_ox = (chunk_pos.chunk_x as i32) * (CHUNK_DIM as i32);
+        let local_oy = (chunk_pos.chunk_y as i32) * (CHUNK_DIM as i32);
+
         let mut modified = false;
         let mut new_terrain = chunk.terrain.clone();
 
-        for &(wx, wy, h) in &writes {
-            let lx = wx as i32 - ox;
-            let ly = wy as i32 - oy;
-            if lx >= 0 && lx < CHUNK_DIM as i32 && ly >= 0 && ly < CHUNK_DIM as i32 {
-                let idx = ly as usize * CHUNK_DIM as usize + lx as usize;
-                if new_terrain[idx] != h {
-                    new_terrain[idx] = h;
-                    modified = true;
+        for ly in 0..CHUNK_DIM {
+            for lx in 0..CHUNK_DIM {
+                let wx = local_ox + lx as i32;
+                let wy = local_oy + ly as i32;
+                if wx >= 0 && wx < OMAP_DIM && wy >= 0 && wy < OMAP_DIM {
+                    let idx = ly * CHUNK_DIM + lx;
+                    let new_handle = TerrainHandle(grid[wy as usize][wx as usize]);
+                    if new_terrain[idx] != new_handle && new_handle != TerrainHandle::NULL {
+                        new_terrain[idx] = new_handle;
+                        modified = true;
+                    }
                 }
             }
         }
@@ -164,6 +186,4 @@ pub fn place_forest_trailheads(
             });
         }
     });
-
-    info!("Forest trailheads placed: {}", write_count);
 }
