@@ -14,7 +14,6 @@ use cdda_sim::state::{AppState, GameTime, LoadingStatus, StartupConfig};
 use cdda_overmap::registry::{CoreTerrains, TerrainFlags, TerrainHandle, TerrainRegistry};
 use cdda_overmap_gen::pipeline::{OvermapGenConfig, OvermapGenPhase, DEFAULT_NOISE_SEED};
 
-use std::sync::Arc;
 
 // ===========================================================================
 // CityBuildings — resource wrapper for worldgen access
@@ -134,7 +133,7 @@ pub fn load_data_system(world: &mut World) {
 fn build_terrain_registry(
     world: &mut World,
     registry: &cdda_data::DefRegistry,
-    def_world: &DefinitionWorld,
+    _def_world: &DefinitionWorld,
 ) {
     use tracing::info;
     let mut treg = TerrainRegistry::empty();
@@ -420,7 +419,7 @@ const FLOOR_CAP_ML: u32 = 4_000_000;
 
 use cdda_components::actor::{ActionPoints, HandCount};
 use cdda_components::def::ItemVolume;
-use cdda_components::dev::{DevCamera, DevGroundItemName, DevPlayer};
+use cdda_components::dev::{DevCamera, DevPlayer};
 use cdda_components::input::{GameAction, InputAction};
 use cdda_components::item::{InsideContainer, Invlet, MountedPockets, WieldedBy, WieldedItems};
 use cdda_components::sim::WorldPosition;
