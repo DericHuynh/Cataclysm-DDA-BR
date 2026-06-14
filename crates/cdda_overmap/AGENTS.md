@@ -10,7 +10,8 @@ Layer 4 crate. Owns overmap chunk storage, the terrain registry, the entity spat
 - `OmDirection` / `CubeDirection` mirror CDDA `om_direction::type` / `cube_direction`; `XorShiftRng` mirrors CDDA `rng()`. The `Rng` trait (minimal `random_usize`) lives in `direction.rs`.
 
 ## Local Contracts
-- **Bevy deps** (from `Cargo.toml`): `bevy_ecs`, `bevy_app`, `serde`, `bytemuck`, `cdda_core_types`, `cdda_noise`. **No `postcard`, `bincode`, or any external codec** — `serial.rs` is hand-rolled little-endian binary over `std::io::{Read, Write}` using `to_le_bytes`/`from_le_bytes`. `serde` and `bytemuck` are declared but not yet exercised in source.
+- **Bevy deps** (from `Cargo.toml`): `bevy_ecs`, `bevy_app`, `serde`, `bytemuck`, `cdda_core_types`, `cdda_sim`. **No `postcard`, `bincode`, or any external codec** — `serial.rs` is hand-rolled little-endian binary over `std::io::{Read, Write}` using `to_le_bytes`/`from_le_bytes`. `serde` and `bytemuck` are declared but not yet exercised in source.
+- **Current layering debt**: `cdda_overmap` depends on `cdda_sim`. This violates the intended bottom-up Layer 4 rule and should be cleaned up by extracting shared types or moving the dependency.
 - **Coordinate model** (`chunk.rs` constants): `SUBMAP_DIM=12`, `SUBMAP_SIZE=144`, `SUBMAPS_PER_OMT_AXIS=2`, `SUBMAPS_PER_OMT=4`, `OMT_DIM_TILES=24`, `CHUNK_DIM=30`, `CHUNK_SIZE=900`, `CHUNKS_PER_LAYER=36`, `CHUNKS_PER_OVERMAP=756`, `OMAP_DIM=180`, `OMAP_DIM_SUBMAPS=360`. 180/6/30 divides exactly — no edge waste.
 - **`TerrainHandle`**: `u32` packed `[type_index:24 | rotation:8]`; index 0 is `NULL`. `TerrainRegistry` is a `Resource` with parallel SoA `Vec`s keyed by `type_index()` for O(1) `flags_for` / `travel_cost` / `family_id` / `rotate`.
 - **`CoreTerrains`**: separate `Resource` with pre-resolved handles — `field`, `forest`, `forest_thick`, `forest_water`, `road_ns`, `road_ew`, `road_nesw`, `lake_surface`, `lake_shore`, `ocean`, `river_center`. Populated post-load via `from_registry`; missing IDs log to `eprintln!` and fall back to `NULL`.
@@ -31,7 +32,7 @@ Layer 4 crate. Owns overmap chunk storage, the terrain registry, the entity spat
 
 ## Verification
 - `cargo check -p cdda_overmap` for compile sanity.
-- `cargo nextest run -p cdda_overmap` (or `cargo test -p cdda_overmap`) runs the per-module `#[cfg(test)]` suites in `chunk`, `serial`, `direction`, `rng`, `pathfinding`, `connections`, and the integration tests in `tests/overmap_tests.rs`.
+- `cargo nextest run -p cdda_overmap` for the per-module `#[cfg(test)]` suites in `chunk`, `serial`, `direction`, `rng`, `pathfinding`, `connections`, and the integration tests in `tests/overmap_tests.rs` (fall back to `cargo test -p cdda_overmap` if `nextest` is unavailable).
 
 ## Child DOX Index
 - *(none — flat single-crate module tree; no nested `AGENTS.md` boundaries)*

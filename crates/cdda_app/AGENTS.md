@@ -12,7 +12,7 @@ wiring, `AppState` machine, and runtime startup. Layer 5 leaf crate (see
 - `assets/` — runtime asset root. Contains `core.pack`, `fonts/Inter-VariableFont.ttf`, `fonts/ShareTechMono-Regular.ttf`, and `gfx` (symlink → `../../../gfx`, the repo's shared tileset tree).
 
 ## Local Contracts
-- **Bevy deps** (`Cargo.toml`): full `bevy` (with `3d`), `bevy_ecs`, `bevy_state` 0.18, `bevy_egui` 0.39, `bevy-inspector-egui`, `bevy_mod_debugdump` 0.15, plus every workspace crate (`cdda_components`, `cdda_sim`, `cdda_context`, `cdda_data`, `cdda_input`, `cdda_events`, `cdda_overmap`, `cdda_overmap_gen`, `cdda_render`, `cdda_replay`, `cdda_core_types`). `default = ["dynamic"]` and `dynamic = ["bevy/dynamic_linking"]` — the binary always dynamically links Bevy in dev.
+- **Bevy deps** (`Cargo.toml`): full `bevy` (with `3d`), `bevy_ecs`, `bevy_state` 0.18, `bevy_egui` 0.39, `bevy-inspector-egui`, `bevy_mod_debugdump` 0.15, plus `cdda_components`, `cdda_context`, `cdda_core_types`, `cdda_data`, `cdda_defs_raw`, `cdda_events`, `cdda_input`, `cdda_overmap`, `cdda_overmap_gen`, `cdda_render`, `cdda_replay`, and `cdda_sim`. `default = ["dynamic"]` and `dynamic = ["bevy/dynamic_linking"]` — the binary always dynamically links Bevy in dev.
 - **Where `App::new()` lives.** `lib.rs::run()` for the live game; `main.rs` for the three dump subcommands. `CddaPlugin::build` is the subsystem registration site — *not* `startup.rs`. `startup.rs` is data-loading + dev-spawn only.
 - **`CddaStartupConfig`** (`lib.rs`): `world_seed: u64`, `replay_file: Option<String>`, `record_session: bool`. Three modes wired in `CddaPlugin::build`:
   - `replay_file = Some(path)` → `SessionLog::load_compressed` + `CddaReplayModePlugin`.
@@ -29,7 +29,6 @@ wiring, `AppState` machine, and runtime startup. Layer 5 leaf crate (see
 - When adding a state, update both the `OnEnter(AppState::X) → Screen::Y` block in `CddaPlugin::build` and the screen's own entry in `cdda_context` / `cdda_render`.
 - Replay-related work goes through `CddaStartupConfig`; do not read CLI args from subsystem crates.
 - The `assets/gfx` symlink resolves to `../../../gfx`. Do not copy tilesets into this crate — the symlink is the contract.
-- Current `startup.rs` state reflects the most recent edit: `build_terrain_registry` now takes `_def_world: &DefinitionWorld` (unused, prefixed to silence warnings) and the unused `use std::sync::Arc;` was removed.
 
 ## Verification
 - `cargo check -p cdda_app` for compile sanity.

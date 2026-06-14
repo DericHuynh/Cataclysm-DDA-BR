@@ -27,4 +27,4 @@ Tools for working with CDDA data definitions and Rust structs.
 1. **Discover types**: `extract_json_types.sh` shows what `"type"` values exist.
 2. **Check coverage**: `verify_def_coverage.py` compares JSON fields to Rust structs.
 3. **View samples**: `sample_json.py` shows real entries to verify struct design.
-4. **Fix gaps**: Add missing fields to the corresponding `defs/*.rs` file.
+4. **Fix gaps**: Add missing fields to the corresponding `crates/cdda_core_types/src/core/raw_defs/*.rs` file.

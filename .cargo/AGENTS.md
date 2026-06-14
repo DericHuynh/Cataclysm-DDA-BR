@@ -17,7 +17,8 @@ Owns Cargo configuration that affects the workspace build environment.
 - Profile-level flags live in the root `Cargo.toml`, not here.
 
 ## Verification
-- `cargo build` on each supported target confirms the linker is wired correctly. No automated CI matrix is configured for this folder yet.
+- `cargo build --workspace` for linker wiring.
+- `cargo nextest run --workspace` for test verification; fall back to `cargo test --workspace` only when `nextest` is unavailable.
 
 ## Child DOX Index
 No durable sub-boundaries.

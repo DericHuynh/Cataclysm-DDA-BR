@@ -19,8 +19,8 @@ The single workspace crate that owns every game-logic subsystem plus the runtime
 
 ## Verification
 - `cargo check -p cdda_sim` for compile sanity.
-- `cargo test -p cdda_sim` runs the consolidated test suite. The pre-consolidation tests under `crates/cdda_actor/tests/`, `crates/cdda_combat/tests/`, and `crates/cdda_inventory/tests/` are now under `crates/cdda_sim/tests/{actor,combat,inventory}/`. Other tests live alongside the code they test in the relevant submodule.
-- `cargo test --workspace` runs everything: this crate, the data plane, the renderer, and the integration tests.
+- `cargo nextest run -p cdda_sim` runs the consolidated test suite (fall back to `cargo test -p cdda_sim` if `nextest` is unavailable). The pre-consolidation tests under `crates/cdda_actor/tests/`, `crates/cdda_combat/tests/`, and `crates/cdda_inventory/tests/` are now under `crates/cdda_sim/tests/{actor,combat,inventory}/`. Other tests live alongside the code they test in the relevant submodule.
+- `cargo nextest run --workspace` runs everything: this crate, the data plane, the renderer, and the integration tests (fall back to `cargo test --workspace` if `nextest` is unavailable).
 - Cross-crate impact: changes to `TestBed` (in `runtime/test_utils.rs`) ripple to every crate that uses it. The harness API is the most volatile surface in this crate.
 
 ## Child DOX Index

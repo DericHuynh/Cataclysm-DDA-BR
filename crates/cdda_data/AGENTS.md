@@ -30,7 +30,7 @@ JSON loading, definition registry, `copy-from` inheritance resolution, Bevy enti
 
 ## Verification
 - `cargo check -p cdda_data` for compile sanity.
-- `cargo nextest run -p cdda_data` (fallback `cargo test -p cdda_data`) covers the per-module test suites: loader ingest/canonicalize, `resolve` copy-from operations (extend/delete/relative/proportional/cycle), `patch` semantics, `flags` `FlagMap`, `populate_flags` no-panic, `def_world` per-builder empty-registry tests, and `schema` / `schema_gen` enum-injection and `$schema` tolerance.
+- `cargo nextest run -p cdda_data` (fall back to `cargo test -p cdda_data` if `nextest` is unavailable) covers the per-module test suites: loader ingest/canonicalize, `resolve` copy-from operations (extend/delete/relative/proportional/cycle), `patch` semantics, `flags` `FlagMap`, `populate_flags` no-panic, `def_world` per-builder empty-registry tests, and `schema` / `schema_gen` enum-injection and `$schema` tolerance.
 - `cargo run -p cdda_data --bin generate_schemas` to regenerate static schemas into `data/schemas/`.
 - `cargo run -p cdda-cli -- check data/core` for end-to-end data validation against the live CDDA JSON set.
 

@@ -22,7 +22,7 @@ The workspace's canonical string-typed intent vocabulary — the input/output la
 - **Do not** put Bevy types in this crate. It is intentionally a leaf that the rest of the workspace depends on.
 
 ## Verification
-- `cargo test -p cdda_intent` runs the 10 integration tests in `tests/basic.rs` covering construction, `parse_intent!` success/failure modes, and `IntentRegistry` dispatch.
+- `cargo nextest run -p cdda_intent` for the 10 integration tests in `tests/basic.rs` covering construction, `parse_intent!` success/failure modes, and `IntentRegistry` dispatch (fall back to `cargo test -p cdda_intent` if `nextest` is unavailable).
 - Cross-crate impact: any consumer of the `GameAction` enum (`cdda_components::input`) is a candidate for migration. New code that emits or consumes intents should use `cdda_intent` directly. The 167-variant `GameAction` stays for now; conversion happens opportunistically at each call site.
 
 ## Child DOX Index

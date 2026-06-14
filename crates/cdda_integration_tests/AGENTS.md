@@ -22,7 +22,7 @@ Test-only workspace member that hosts integration tests spanning multiple crates
 - The crate's `Cargo.toml` is the canonical list of workspace deps any test can `use`. Add a dep there before referencing it from a test file.
 
 ## Verification
-- `cargo test -p cdda_integration_tests` runs all three suites. The `TestBed`-based simulation tests in here require the same setup as the per-crate suites.
+- `cargo nextest run -p cdda_integration_tests` runs all three suites (fall back to `cargo test -p cdda_integration_tests` if `nextest` is unavailable). The `TestBed`-based simulation tests in here require the same setup as the per-crate suites.
 - The three test files compile against the dev-deps declared in `Cargo.toml`; no transitive adds expected.
 - The pre-existing warning about `OverlayBlockScreen` being unused is intentional scaffolding and not a defect.
 

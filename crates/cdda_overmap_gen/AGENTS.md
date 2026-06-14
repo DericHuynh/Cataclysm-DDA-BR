@@ -11,7 +11,7 @@ Layer 4 crate. Owns the overmap generation pipeline: a 1:1 Rust port of CDDA mas
 - `src/steps/` is a 24-file flat module tree (one file per pipeline step + `mod.rs` re-exports). `stubs::generate_shore_variants` is a registry-prep helper exported from `steps/mod.rs` but **not registered in `OvermapGenPlugin`**.
 
 ## Local Contracts
-- **Bevy deps** (from `Cargo.toml`): `bevy_ecs`, `bevy_app`, `bevy_state`; workspace-deps `serde`, `tracing`, `tracing-subscriber`. Path deps: `cdda_core_types`, `cdda_components`, `cdda_data`, `cdda_noise`, `cdda_overmap`, `cdda_sim`.
+- **Bevy deps** (from `Cargo.toml`): `bevy_ecs`, `bevy_app`, `bevy_state`; workspace-deps `serde`, `tracing`, `tracing-subscriber`. Path deps: `cdda_core_types`, `cdda_components`, `cdda_data`, `cdda_overmap`, `cdda_sim`.
 - **Determinism contract**: identical `(OvermapGenConfig, OvermapRegionSettings, terrain defs)` produces byte-identical overmap output. No wall clock: a crate-wide search for `Instant::now`, `Utc::now`, `SystemTime` returns no matches. All randomness flows from `XorShiftRng` (`cdda_overmap::rng`) seeded by `OvermapGenConfig::noise_seed` plus per-step constants.
 - **Pipeline order** (`OvermapGenSet`, chained in `OvermapGenPlugin::build`, gated by `in_state(OvermapGenPhase::Generating)`):
   1. `InitBase` — `init_base_terrain` (spawns overmap + 756 chunk entities, z = -10..=10).
@@ -38,7 +38,7 @@ Layer 4 crate. Owns the overmap generation pipeline: a 1:1 Rust port of CDDA mas
 
 ## Verification
 - `cargo check -p cdda_overmap_gen` for compile sanity.
-- `cargo nextest run -p cdda_overmap_gen` (or `cargo test -p cdda_overmap_gen`) — currently exercises only the inline `#[cfg(test)]` suites in `steps/init_base.rs` and `region_settings.rs`; the `tests/` directory is **empty** (no integration tests yet).
+- `cargo nextest run -p cdda_overmap_gen` — currently exercises only the inline `#[cfg(test)]` suites in `steps/init_base.rs` and `region_settings.rs`; the `tests/` directory is **empty** (no integration tests yet). Fall back to `cargo test -p cdda_overmap_gen` if `nextest` is unavailable.
 - Determinism smoke: run the pipeline twice with identical `OvermapGenConfig` + `OvermapRegionSettings` and compare z=0 chunk `TerrainHandle` bytes.
 - For full-stack runs, use `cdda-cli` (see `crates/cdda_cli/AGENTS.md`); `cdda_overmap_gen` is a library crate with no binary.
 

@@ -28,7 +28,7 @@ Raw JSON def structs — the typed AST layer of the data pipeline. Each file und
 
 ## Verification
 - `cargo check -p cdda_defs_raw` for compile sanity.
-- `cargo test --workspace` exercises the full data pipeline (this crate is consumed by `cdda_data` and the 138 raw defs are used in `tests/def_world_load.rs` and `tests/hot_reload_*.rs`).
+- `cargo nextest run --workspace` exercises the full data pipeline (this crate is consumed by `cdda_data` and the 138 raw defs are used in `tests/def_world_load.rs` and `tests/hot_reload_*.rs`).
 - Cross-crate impact: any change to a raw def's shape must be accompanied by a corresponding change in the registry, def world builder, and the JSON schema in `data/schemas/`.
 
 ## Child DOX Index

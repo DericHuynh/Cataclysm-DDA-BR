@@ -67,9 +67,7 @@ context-keyed `InputMap`s, and supports runtime rebinding.
 
 ## Verification
 - `cargo check -p cdda_input` for compile sanity.
-- `cargo nextest run -p cdda_input` (or `cargo test -p cdda_input`) — the four
-  unit tests in `src/bindings.rs::tests` cover gameplay bindings, global hotkeys,
-  context presence, and `merged_for` including globals.
+- `cargo nextest run -p cdda_input` — the four unit tests in `src/bindings.rs::tests` cover gameplay bindings, global hotkeys, context presence, and `merged_for` including globals (fall back to `cargo test -p cdda_input` if `nextest` is unavailable).
 
 ## Child DOX Index
 

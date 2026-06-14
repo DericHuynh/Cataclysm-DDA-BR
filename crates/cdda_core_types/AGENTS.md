@@ -23,7 +23,7 @@ Pure value types for CDDA: coords, units, IDs, damage, flags, RNG, and the simul
 - Do not introduce a Bevy runtime dep (no `App`, `Schedule`, etc.) in this crate. The only Bevy items allowed are derive macros on plain types.
 
 ## Verification
-- `cargo test -p cdda_core_types` for the unit, coordinate, RNG, and stats suites.
+- `cargo nextest run -p cdda_core_types` for the unit, coordinate, RNG, and stats suites (fall back to `cargo test -p cdda_core_types` if `nextest` is unavailable).
 - Changes to coordinate math must keep `tests/coordinate_test.rs` green and the existing `cdda_overmap` chunk tests must still pass (spatial consistency is the cross-crate contract).
 - Changes to `DefId<T>` are reflected in `cdda_components` and `cdda_data` — run `cargo check --workspace` after edits.
 

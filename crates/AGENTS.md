@@ -1,7 +1,7 @@
 # Crates DOX
 
 ## Purpose
-Owns the Cargo workspace — 16 member crates (14 source + 1 test-only + 1 raw-def AST leaf). Crate boundaries are aligned with dependency-layer separation and incremental-compile cost.
+Owns the Cargo workspace — 15 member crates (13 source + 1 test-only + 1 raw-def AST leaf). Crate boundaries are aligned with dependency-layer separation and incremental-compile cost.
 
 ## Ownership
 - The workspace manifest is at the repository root: `Cargo.toml` and `Cargo.lock`.
@@ -52,14 +52,14 @@ Layer 3 — game logic (Bevy ECS only):
 Layer 4 — world and data:
 
 - `crates/cdda_data/AGENTS.md` — JSON ingest → resolve → `DefRegistry` → `build_def_world`; `copy-from` resolver; schema generation.
-- `crates/cdda_overmap/AGENTS.md` — Overmap chunk storage, terrain registry, spatial index, serialization.
+- `crates/cdda_overmap/AGENTS.md` — Overmap chunk storage, terrain registry, spatial index, serialization. Current layering debt: depends on `cdda_sim`.
 - `crates/cdda_overmap_gen/AGENTS.md` — Overmap generation pipeline (Bevy ECS systems).
 
 Layer 5 — app shell (full Bevy, binaries):
 
-- `crates/cdda_context/AGENTS.md` — Headless Ctx state machine, navigation, focus, overlays, menu.
+- `crates/cdda_context/AGENTS.md` — Headless Ctx state machine, navigation, focus, overlays, menu. Current layering debt: depends on `cdda_sim::runtime::state::AppState` for state transitions.
 - `crates/cdda_input/AGENTS.md` — Input plugin, action bridging, keybinding maps.
-- `crates/cdda_render/AGENTS.md` — UI rendering, ASCII viewport, tile rendering, theming.
+- `crates/cdda_render/AGENTS.md` — UI rendering, ASCII viewport, tile rendering, theming. May read `cdda_overmap_gen` resources for overmap preview/config UI.
 - `crates/cdda_replay/AGENTS.md` — Deterministic session recording and replay.
 - `crates/cdda_app/AGENTS.md` — Binary entry point (`cdda`); wires all subsystems and Bevy `DefaultPlugins`.
 - `crates/cdda_cli/AGENTS.md` — `cdda-cli` binary: `schema`, `gen-schemas`, `validate`, `stats`, `check`, `ablation`, `city-view`. Mod developer tools.

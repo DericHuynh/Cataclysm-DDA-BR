@@ -74,10 +74,7 @@ simulation drift between runs.
 ## Verification
 - `cargo check -p cdda_replay` for compile sanity, including with
   `--features devtools` and `--no-default-features`.
-- `cargo nextest run -p cdda_replay` (or `cargo test -p cdda_replay`) covers
-  the `SessionLog` round-trip / corruption / file I/O tests in
-  `tests/session_log_test.rs` and the `ReplayState` / `ReplaySpeed` defaults
-  and `is_complete` tests in `tests/replay_state_test.rs`.
+- `cargo nextest run -p cdda_replay` covers the `SessionLog` round-trip / corruption / file I/O tests in `tests/session_log_test.rs` and the `ReplayState` / `ReplaySpeed` defaults and `is_complete` tests in `tests/replay_state_test.rs` (fall back to `cargo test -p cdda_replay` if `nextest` is unavailable).
 
 ## Child DOX Index
 - *(none — `src/` and `tests/` are flat, no durable sub-boundaries yet)*

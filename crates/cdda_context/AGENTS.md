@@ -11,11 +11,11 @@ components, and the `CddaScreen` registration trait. Has no dependency on
 ## Ownership
 - Bevy deps: `bevy_ecs`, `bevy_app`, `bevy_state` (plus workspace `tracing`).
   No full `bevy` — kept headless so the suite runs without a renderer.
-- Crate deps: `cdda_core_types`, `cdda_components`, `cdda_activity`,
-  `cdda_events`, `cdda_sim`. `Ctx`, `ContextStack`, `FocusedCommandIndex`,
-  `push_ctx`, `pop_ctx` are defined in `cdda_components::context` and
-  re-exported from this crate's `ctx.rs` / `nav.rs` — there is exactly one
-  canonical definition shared with `cdda_inventory` etc.
+- Crate deps: `cdda_core_types`, `cdda_components`, `cdda_events`,
+  `cdda_sim`. `Ctx`, `ContextStack`, `FocusedCommandIndex`, `push_ctx`,
+  `pop_ctx` are defined in `cdda_components::context` and re-exported from
+  this crate's `ctx.rs` / `nav.rs`.
+- Current layering note: `cdda_context` depends on `cdda_sim::runtime::state::AppState` for state transitions. This is a layering debt; future work should move the shared app-state enum into a lower-level crate or `cdda_components`.
 - Modules: `actions.rs`, `config.rs`, `ctx.rs`, `cursor.rs`, `focus.rs`,
   `menu.rs`, `nav.rs`, `overlay.rs`, `screen.rs`, `systems.rs`. All are flat,
   no durable sub-folders.
@@ -46,13 +46,13 @@ components, and the `CddaScreen` registration trait. Has no dependency on
   `Update → update_screen.run_if(in_state(CTX))`. Screens that spawn entities
   must use `DespawnOnExit` on the root (or call `despawn_recursive()`) — the
   trait does not auto-clean.
-- **`OverlayStack::input_blocked` short-circuit** — `push()` sets the flag
+- `OverlayStack::input_blocked` short-circuit — `push()` sets the flag
   true, `pop()` sets it to `!stack.is_empty()`. `handle_navigation_input`
   checks this flag first and only forwards `GameAction::Cancel`; the exclusive
   system `handle_overlay_cancel` drains the cancel message and calls
   `pop_overlay`. `Overlay::ActivityProgress` is also auto-managed by
   `sync_activity_overlay` / `cleanup_activity_overlay` reacting to
-  `PlayerActivity` from `cdda_activity`.
+  `PlayerActivity` from `cdda_sim::activity`.
 - **`ContextPlugin`** (`lib.rs`) is the single Bevy `Plugin` for this crate.
   In `build` it: `init_state::<Ctx>()`; inserts resources
   (`ContextActions`, `OverlayStack`, `ContextStack`, `FocusedCommandIndex`,

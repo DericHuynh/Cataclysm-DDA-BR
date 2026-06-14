@@ -51,9 +51,7 @@ Distinct from buffered `Message` types in `crates/cdda_components/src/events.rs`
 
 ## Verification
 - `cargo check -p cdda_events` for compile sanity.
-- `cargo nextest run -p cdda_events` (or `cargo test -p cdda_events`).
-  No tests exist yet under `crates/cdda_events/tests/` or in `src/lib.rs`
-  — add unit tests when introducing new event types.
+- `cargo nextest run -p cdda_events` — no tests exist yet under `crates/cdda_events/tests/` or in `src/lib.rs`; add unit tests when introducing new event types. Fall back to `cargo test -p cdda_events` if `nextest` is unavailable.
 - `cargo check --workspace` to validate downstream re-exports
   (`cdda_components`, `cdda_context`) still compile.
 

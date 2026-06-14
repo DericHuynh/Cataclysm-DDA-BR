@@ -72,7 +72,7 @@ component/resource state into pixels. Layer 5 per `crates/AGENTS.md`.
 
 ## Verification
 - `cargo check -p cdda_render` for compile sanity.
-- `cargo nextest run -p cdda_render` (or `cargo test -p cdda_render`).
+- `cargo nextest run -p cdda_render` (fall back to `cargo test -p cdda_render` if `nextest` is unavailable).
 - `cargo run -p cdda_app` for visual smoke validation after render changes.
 - `cargo run -p cdda_cli -- schedule-graph` to confirm screen systems land in
   the expected `GameSet` (`Input`, `Sim`, `Render`).

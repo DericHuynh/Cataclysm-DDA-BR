@@ -1,7 +1,7 @@
 # cdda_cli DOX
 
 ## Purpose
-- `cdda-cli` binary (Layer 5 app shell) — schema generation, JSON validation, definition statistics, full load check, ablation testing, and a 15×15 ASCII city preview, for CDDA mod developers. Single source file: `src/main.rs` (~714 lines).
+- `cdda-cli` binary (Layer 5 app shell) — schema generation, JSON validation, definition statistics, full load check, ablation testing, and a 15×15 ASCII city preview, for CDDA mod developers. Single source file: `src/main.rs`.
 
 ## Ownership
 - CLI parsing (`clap`, `Command` enum at `src/main.rs:34-80`) and per-command dispatch live here.

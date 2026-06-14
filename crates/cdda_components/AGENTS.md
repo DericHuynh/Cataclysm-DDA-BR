@@ -6,7 +6,6 @@ Layer 2 crate. Owns the shared Bevy ECS contract: component archetypes for actor
 ## Ownership
 - Crate manifest: `Cargo.toml`. Bevy deps: `bevy_ecs`, `bevy_state`, `bevy_reflect`; serde: `serde`, `schemars`; input: `leafwing-input-manager`; misc: `fixedbitset`. Internal: `cdda_core_types`, `cdda_events`.
 - `lib.rs` re-exports `cdda_core_types::{core, rng, sim_id, wyrand}` and the value types `DefId`, `WorldPos`, `Damage`, `DefCategory`, `Energy`, `Length`, `Time`, `Volume`, `Weight`, plus interned token IDs (`SkillId`, `BodyPartId`, `ItemTypeId`, `ComestibleId`, `AmmoTypeId`).
-- A stale `src/mod.rs` still exists from a pre-extraction layout; it is dead (entry is `lib.rs`) and is a candidate for deletion.
 
 ## Local Contracts
 - **Tag components over bools.** Boolean properties are zero-sized components: `Visible` (mutation apparent), `Active` (bionic powered), `IsAlive`, `Stunned`, `Bleeding`, `OnFire`, `BodyPartBroken`/`BodyPartSevered` (actor.rs, `SparseSet` storage); `Sealed`, `Rigid`, `Watertight`, `PreservesTemp`, `Fireproof`, `GasTight` (item.rs, container caps); `IsDef`, `IsRecipeDef` (def.rs, world separation); `IsPocket` (item.rs); body-part caps `IsVital`, `CanGrasp`, `CanWalk`, `CanSee`, `CanBite`, `CanFly` (def.rs); `InFlight`, `Solid`, `DevPlayer`. Filter with `With<...>` / `Without<IsDef>`. Data components that already imply identity (e.g. `PlayerData`) do not get a parallel marker.
@@ -32,12 +31,12 @@ Layer 2 crate. Owns the shared Bevy ECS contract: component archetypes for actor
 
 ## Verification
 - `cargo check -p cdda_components`.
-- `cargo test -p cdda_components` (and `cargo nextest run -p cdda_components` if `nextest` is available — see root `AGENTS.md`).
+- `cargo nextest run -p cdda_components` for crate tests (fall back to `cargo test -p cdda_components` if `nextest` is unavailable).
 - Run after changing `schedule.rs` sets, any relationship pair, or `StackCount` / `ActionPoints` invariants.
 
 ## Child DOX Index
 
-All modules under `src/` are listed in `lib.rs` as `pub mod` (the entry file is `lib.rs`; `src/mod.rs` is dead).
+All modules under `src/` are listed in `lib.rs` as `pub mod` (the entry file is `lib.rs`).
 
 - `actor` — Creature/Player/NPC identity, `Stats` (re-export), `Health`, `Faction`, `BodyTemperature`, `Wetness`, `DamageReduction`, `CombatStats`, `Vision`; skill/mutation/proficiency/bionic/morale/effect/body-part relationship pairs and their data entries; `Visible`/`Active`/`IsAlive`/`Stunned`/`Bleeding`/`OnFire`/`BodyPartBroken`/`BodyPartSevered` tag components; `ActionPoints` (AP pool + spend/tick), `HandCount`.
 - `item` — `DefOrigin`, `StackCount` (non-panicking on zero), `CurrentCharges`, `LoadedAmmo`, `Spoilable`, `ItemDamage`; container capability tags `Sealed`/`Rigid`/`Watertight`/`PreservesTemp`/`Fireproof`/`GasTight`; inventory/equipment relationships (`InsideContainer`, `WieldedBy`, `WornOn`, `MountedOn`) and the `IsPocket` marker; `Pocket`/`PocketType`/`PocketRestriction`/`AttachmentSlot`/`AttachmentType`/`Container`; `ItemType`, `QualityId`/`ItemQualities`; `Invlet`, `InventoryFocus` resource, `InProgressCraft`.
