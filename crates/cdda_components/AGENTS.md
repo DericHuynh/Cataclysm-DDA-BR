@@ -1,23 +1,55 @@
 # cdda_components DOX
 
 ## Purpose
-Owns shared ECS components, schedule sets, and input/action contracts.
+Layer 2 crate. Owns the shared Bevy ECS contract: component archetypes for actors, items, definitions, and spatial data; the canonical `SystemSet` ordering; the `Ctx` state machine; the `Direction`/`GameAction`/`BindableAction` input vocabulary; the event/message split; and interned token + def-marker types. Systems that act on these components live in Layer 3+ crates (`cdda_actor`, `cdda_item`, `cdda_sim`, …).
 
 ## Ownership
-- Shared components, messages, events, context state, schedule sets, and input/action enums live in this crate.
-- Type-specific systems belong in their owning subsystem crates.
+- Crate manifest: `Cargo.toml`. Bevy deps: `bevy_ecs`, `bevy_state`, `bevy_reflect`; serde: `serde`, `schemars`; input: `leafwing-input-manager`; misc: `fixedbitset`. Internal: `cdda_core_types`, `cdda_events`.
+- `lib.rs` re-exports `cdda_core_types::{core, rng, sim_id, wyrand}` and the value types `DefId`, `WorldPos`, `Damage`, `DefCategory`, `Energy`, `Length`, `Time`, `Volume`, `Weight`, plus interned token IDs (`SkillId`, `BodyPartId`, `ItemTypeId`, `ComestibleId`, `AmmoTypeId`).
+- A stale `src/mod.rs` still exists from a pre-extraction layout; it is dead (entry is `lib.rs`) and is a candidate for deletion.
 
 ## Local Contracts
-- `GameSet` and `SimSet` define the shared schedule contract for simulation and rendering.
-- `GameAction`, `BindableAction`, and `InputAction` define the semantic input contract.
-- Systems should consume semantic input messages instead of reading raw `ButtonInput<KeyCode>` directly.
+- **Tag components over bools.** Boolean properties are zero-sized components: `Visible` (mutation apparent), `Active` (bionic powered), `IsAlive`, `Stunned`, `Bleeding`, `OnFire`, `BodyPartBroken`/`BodyPartSevered` (actor.rs, `SparseSet` storage); `Sealed`, `Rigid`, `Watertight`, `PreservesTemp`, `Fireproof`, `GasTight` (item.rs, container caps); `IsDef`, `IsRecipeDef` (def.rs, world separation); `IsPocket` (item.rs); body-part caps `IsVital`, `CanGrasp`, `CanWalk`, `CanSee`, `CanBite`, `CanFly` (def.rs); `InFlight`, `Solid`, `DevPlayer`. Filter with `With<...>` / `Without<IsDef>`. Data components that already imply identity (e.g. `PlayerData`) do not get a parallel marker.
+- **Relationships over components.** Entity-to-entity links use Bevy `#[relationship]` / `#[relationship_target]` with `#[component(immutable)]` and `linked_spawn`; mutate only via `commands.insert()`, never `&mut`. Pairs: `SkillOf`↔`CreatureSkills`, `MutationOf`↔`CreatureMutations`, `ProficiencyOf`↔`CreatureProficiencies`, `BionicOf`↔`InstalledBionics`, `MoraleBonusOf`↔`MoraleBonuses`, `EffectOn`↔`ActiveEffects`, `BodyPartOf`↔`CreatureBodyParts` (actor.rs); `InsideContainer`↔`ContainerContents`, `WieldedBy`↔`WieldedItems`, `WornOn`↔`WornBy` (with named `#[relationship]` field `wearer`), `MountedOn`↔`MountedPockets` (item.rs); `ParentPart`↔`SubParts` (def.rs).
+- **No `Vec<T>` of independently-lifecycled data in components.** Skills, mutations, effects, bionics, morale bonuses, body parts, pocket contents are each their own entity.
+- **Schedule ordering** (schedule.rs): chain `GameSet::Input → GameSet::Sim → GameSet::Render` in `Update`; place sim systems into `SimSet` variants in order: `TurnTick`, `Activity`, `Ai`, `Movement`, `Combat`, `Effects`, `Healing`, `Bionics`, `Morale`, `Temperature`, `Vision`, `Spawning`, `Inventory`, `SpatialUpdate`.
+- **Events vs messages.** Observer-based events are re-exported from `cdda_events` (`DamageEvent`, `DeathEvent`, `EquipEvent`, `UnequipEvent`, `UseItemEvent`, plus `DeathCause`, `GameEvent`, `MoveLocation`); use `commands.trigger()`. Buffered batched messages live in `events.rs` (`ItemMoveEvent`, `SoundEvent`, `SightEvent`, `SpawnEvent`, `DefChangedEvent`) and `messages.rs` (`TurnAdvanced`); consume with `MessageReader`.
+- **Def world isolation.** `IsDef` marks every definition entity living in the separate `DefinitionWorld`. Gameplay queries must add `Without<IsDef>` to stay in the runtime world. `DefStrId(String)` is the universal ID; `IsDef` is the world separator.
+- **Input contract.** Raw `ButtonInput<KeyCode>` is never read downstream — `cdda_input` produces `InputAction { action: GameAction, source: ActionSource }` messages and `BindableAction` (a `leafwing-input-manager` `Actionlike`) maps to a `GameAction` via `to_game_action()`. `InputContextId` + `InputContextStack` scope the active context.
+- **Invariants.**
+  - `StackCount::new(0)` returns `Err` — the inner field is private; zero-count entities must be despawned (`item.rs`).
+  - `WorldPosition` exposes `new` / `get` / `set`; direct `.0` access is supported but slated for privatisation.
+  - `ActionPoints::current` may go negative (AP debt); `tick()` clamps to `-(speed * 2).max(50)`. Default `speed = 100`. `MAX_SKILL = 10`.
+  - `Stats::new` clamps to `[STAT_MIN, STAT_MAX] = [1, 20]`, `STAT_DEFAULT = 8`; `Stats::effective(bonuses)` may drop to 0.
+  - `Ctx` is a Bevy `States` enum with `MainMenu` as `#[default]`; always go through `push_ctx` / `pop_ctx` helpers to keep `ContextStack` and `FocusedCommandIndex` in sync.
+  - Inventory floor cap: `FLOOR_CAP_ML = 400_000`; invlet pool: `INVLET_CHARS: [char; 62]` (a–z, A–Z, 0–9).
 
 ## Work Guidance
-- Add components here only when they are shared across multiple crates or define durable ECS contracts.
-- Keep input/action contracts aligned with `cdda_input`.
+- Add a component here only when it is shared across crates or defines a durable ECS contract; per-system state belongs in the owning Layer 3+ crate.
+- Keep input vocabulary aligned with `cdda_input` (the source of truth for bindings). Do not branch on a removed `bool` field — use the replacement tag component.
+- Do not add `Vec<T>` of independently-lifecycled data; spawn sub-entities and link with `#[relationship]`.
+- Reuse interned tokens (`QualityId`, `ItemTypeId`, `SkillId`, `BodyPartId`, `AmmoTypeId`, `ComestibleId`) for string-keyed lookups; resolve to strings via the registry in `cdda_data` (`QualityRegistry::resolve`, `ItemTypeRegistry`).
 
 ## Verification
-- Run `cargo check -p cdda_components`.
-- Run `cargo test -p cdda_components` when shared contracts change.
+- `cargo check -p cdda_components`.
+- `cargo test -p cdda_components` (and `cargo nextest run -p cdda_components` if `nextest` is available — see root `AGENTS.md`).
+- Run after changing `schedule.rs` sets, any relationship pair, or `StackCount` / `ActionPoints` invariants.
 
 ## Child DOX Index
+
+All modules under `src/` are listed in `lib.rs` as `pub mod` (the entry file is `lib.rs`; `src/mod.rs` is dead).
+
+- `actor` — Creature/Player/NPC identity, `Stats` (re-export), `Health`, `Faction`, `BodyTemperature`, `Wetness`, `DamageReduction`, `CombatStats`, `Vision`; skill/mutation/proficiency/bionic/morale/effect/body-part relationship pairs and their data entries; `Visible`/`Active`/`IsAlive`/`Stunned`/`Bleeding`/`OnFire`/`BodyPartBroken`/`BodyPartSevered` tag components; `ActionPoints` (AP pool + spend/tick), `HandCount`.
+- `item` — `DefOrigin`, `StackCount` (non-panicking on zero), `CurrentCharges`, `LoadedAmmo`, `Spoilable`, `ItemDamage`; container capability tags `Sealed`/`Rigid`/`Watertight`/`PreservesTemp`/`Fireproof`/`GasTight`; inventory/equipment relationships (`InsideContainer`, `WieldedBy`, `WornOn`, `MountedOn`) and the `IsPocket` marker; `Pocket`/`PocketType`/`PocketRestriction`/`AttachmentSlot`/`AttachmentType`/`Container`; `ItemType`, `QualityId`/`ItemQualities`; `Invlet`, `InventoryFocus` resource, `InProgressCraft`.
+- `def` — Composable definition-entity components. `IsDef` + `DefStrId` + `ItemName` are universal on item defs; data sub-shapes per type (`WeaponData`, `GunData`, `AmmoData`, `MagazineData`, `ArmourData`/`ArmourPart`, `FoodData`, `ToolData`, `BookData`, `GunModData`, `PocketTemplate`, `ContainerData`, `DrugData`, `ItemStackSize`, `ItemLongestSide`, `ItemInsulation`, `ItemCoversHead`); monster defs (`MonsterName`/`Stats`/`Melee`/`Vision`/`Armour`/`Upgrade`/`Harvest`/`DeathFunction`/`DeathDrops`/`SpecialAttacks`/`Species`/`DefaultFaction`/`BodyType`); terrain defs (`TerrainName`/`Symbol`/`Color`/`MoveCost`/`Opacity`/`LightEmitted`/`Roof`/`HasCeiling`/`ConnectsTo`/`ExamineAction`/`Trap`); furniture defs (`FurnitureName`/`Symbol`/`Color`/`MoveCostMod`/`Coverage`/`RequiredStr`/`MaxVolume`/`Comfort`/`LightEmitted`/`ExamineAction`/`Mass`); body part defs (`BodyPartDefId`/`Name`/`HitSize`/`HitDifficulty`/`BaseHp`/`DrenchCapacity`/`Side`/`LegacyId` + caps `IsVital`/`CanGrasp`/`CanWalk`/`CanSee`/`CanBite`/`CanFly` + `ParentPart`↔`SubParts`); recipe defs (`IsRecipeDef` + `RecipeSkillUsed`/`Difficulty`/`RequiredLevel`/`Time`/`Autolearn`/`Reversible`/`Result`/`ResultCount`/`ResultCharges`/`Components`/`Tools`/`Qualities`/`Category`/`Subcategory`/`Flags`/`Byproducts`/`Container`/`BatchTime`).
+- `def_markers` — Phantom marker types for `DefId<T>` (generated via `def_marker!` macro: `ItemDef`, `MonsterDef`, `TerrainDef`, `FurnitureDef`, `RecipeDef`, `SkillDef`, `SpeciesDef`, `ProfessionDef`, `ScenarioDef`, `FactionDef`, `MutationDef`, `ProficiencyDef`, `BionicDef`, `EffectDef`; hand-rolled: `BodyPartDefM`, `DamageTypeDefM`, `MaterialDefM`, `AmmoTypeDefM`, `QualityDefM`) and backward-compatible aliases (`ItemId`, `SpeciesId`, `ProfessionId`, `ScenarioId`, `FactionId`, `MutationId`, `ProficiencyId`, `BionicId`, `EffectId`).
+- `recipe` — `RecipeIndex` `Resource` (`Vec<Entity>`) of all recipe def entities, built by `build_def_world`.
+- `context` — `Ctx` Bevy `States` (≈25 screens incl. `MainMenu` default, `Gameplay`, `Inventory`, `CraftingMenu`, etc.); `ContextStack` resource; `FocusedCommandIndex` per-screen focus history; `push_ctx` / `pop_ctx` helpers.
+- `input` — `Direction` (8 compass + Up/Down/Here); `GameAction` (movement/world-interact/navigation/text/pause/save-load/menu/hotkey-26/custom); `ActionSource` (Keyboard/Gamepad/Mouse/Script); `InputAction` Message wrapping `GameAction` + `ActionSource`; `BindableAction` `Actionlike` enum with `to_game_action()`, `label()`, `all()`; `InputContextId` (≈15 contexts); `InputContextStack` resource (`new()` starts with `MainMenu`, `Gameplay` is never popped).
+- `events` — Re-exports of `cdda_events` observer events and `MoveLocation`; defines buffered `Message`s `ItemMoveEvent` (item/ground/container moves), `SoundEvent`, `SightEvent`, `SpawnEvent`, `DefChangedEvent`; phantom types `MonsterDef` and `FactionDef` for the `DefId<…>` parameters of `SpawnEvent`.
+- `messages` — `TurnAdvanced` Message (current turn number).
+- `schedule` — `GameSet` (`Input`, `Sim`, `Render`) and `SimSet` (14 ordered phases) for cross-crate `Update` ordering.
+- `sim` — `WorldPosition` (new/get/set wrapper around `WorldPos`), `Solid`, `Velocity`, `InFlight`; `GameTime` resource (`turn: u64`, `advance()`, `hours_elapsed()`, `TURNS_PER_DAY = 14400`); re-exports `TurnAdvanced`.
+- `stats` — `Stats` (strength/dexterity/intelligence/perception, `Component + Serialize + Deserialize`), `StatBonuses` (+ `speed`), `STAT_MIN/MAX/DEFAULT` constants.
+- `tokens` — Interned numeric string tokens generated by the `intern_token!` macro: `ItemTypeId(u32)`, `SkillId(u16)`, `AmmoTypeId(u16)`, `BodyPartId(u16)`, `ComestibleId(u16)`.
+- `dev` — Dev-world markers and resources: `DevPlayer`, `DevGroundItemName`, `DevCamera` (OMT x/y/z).

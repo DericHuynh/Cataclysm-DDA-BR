@@ -66,4 +66,4 @@ Layer 5 — app shell (full Bevy, binaries):
 - `crates/cdda_render/AGENTS.md` — UI rendering, ASCII viewport, tile rendering, theming.
 - `crates/cdda_replay/AGENTS.md` — Deterministic session recording and replay.
 - `crates/cdda_app/AGENTS.md` — Binary entry point (`cdda`); wires all subsystems and Bevy `DefaultPlugins`.
-- `crates/cdda_cli/AGENTS.md` — `cdda-cli` binary: `run`, `schedule-graph`, `render-graph`, `dump`, and mod developer tools.
+- `crates/cdda_cli/AGENTS.md` — `cdda-cli` binary: `schema`, `gen-schemas`, `validate`, `stats`, `check`, `ablation`, `city-view`. Mod developer tools.
