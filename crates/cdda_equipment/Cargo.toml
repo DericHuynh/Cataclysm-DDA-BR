@@ -1,9 +1,0 @@
-[package]
-name = "cdda_equipment"
-version = "0.1.0"
-edition = "2021"
-description = "Equipment module — wielding, wearing, managing items on a creature"
-
-[dependencies]
-bevy_ecs.workspace = true
-bevy_app.workspace = true

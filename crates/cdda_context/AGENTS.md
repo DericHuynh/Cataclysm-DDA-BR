@@ -71,7 +71,7 @@ components, and the `CddaScreen` registration trait. Has no dependency on
 ## Work Guidance
 - `TransitionTarget::Quit` calls `std::process::exit(0)` in `dispatch` — do
   not add new quit paths without an integration test in
-  `tests/screen_integration_test.rs`.
+  `tests/screen_integration_test.rs` (the workspace-level wiring test).
 - `MenuItem::enabled: bool` carries a TODO to convert to `Enabled` / `Disabled`
   tag components for archetype query parity. New bool flags on UI components
   are not accepted.
@@ -87,17 +87,25 @@ components, and the `CddaScreen` registration trait. Has no dependency on
 
 ## Verification
 - `cargo check -p cdda_context` for compile sanity.
-- `cargo nextest run -p cdda_context` for the unit/integration tests of this
-  crate.
-- Workspace `tests/` covers the navigation contracts that depend on more
-  than one crate: `tests/nav_test.rs` (stack push/pop + focus restore),
-  `tests/ctx_def_test.rs` (per-screen `ScreenDefinition` contents), and
-  `tests/screen_integration_test.rs` (`CddaScreen` plugin wiring, overlay
-  blocking, `ContextActions` lifecycle). Run with
-  `cargo nextest run --test nav_test --test ctx_def_test --test screen_integration_test`.
+- `cargo nextest run -p cdda_context` for this crate's unit/integration
+  tests. The four integration tests under `crates/cdda_context/tests/` are
+  pure-`cdda_context` (no Bevy `App`, no `TestBed`) and cover:
+  - `nav_test.rs` — `ContextStack` push/pop and focus restore.
+  - `ctx_def_test.rs` — per-screen `ScreenDefinition` contents and
+    `TransitionTarget` shapes.
+  - `focused_index_test.rs` — `FocusedCommandIndex` save/load semantics.
+  - `config_test.rs` — `GameSettings`, `CharacterCreationState`,
+    `WorldCreationSettings` defaults and mutation.
+  Run with `cargo nextest run -p cdda_context`.
+- Cross-crate wiring still lives at the workspace level:
+  `tests/screen_integration_test.rs` exercises `CddaScreen` plugin wiring,
+  overlay blocking, and `ContextActions` lifecycle. Run with
+  `cargo nextest run --test screen_integration_test`.
 - `tests/AGENTS.md` is the workspace test conventions doc; tests must stay
   headless — no `cdda_render` or platform plugin imports here.
 
 ## Child DOX Index
 No durable sub-folders; this crate's source is a single `src/` directory of
-ten flat modules. No child `AGENTS.md` files exist or are planned.
+ten flat modules, and `crates/cdda_context/tests/` holds four flat
+integration-test files co-located with the crate they exercise. No child
+`AGENTS.md` files exist or are planned.

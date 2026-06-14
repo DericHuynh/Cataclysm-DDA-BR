@@ -115,7 +115,7 @@ pub fn validate_all<T: schemars::JsonSchema + serde::de::DeserializeOwned>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cdda_core_types::core::raw_defs::ItemDef;
+    use cdda_defs_raw::raw_defs::ItemDef;
     use serde_json::json;
 
     // -----------------------------------------------------------------------

@@ -15,7 +15,7 @@
 //! 4. Place `forest_water` if either condition is true.
 
 use bevy_ecs::prelude::*;
-use cdda_noise::floodplain_noise_at;
+use cdda_sim::noise::floodplain_noise_at;
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, CHUNK_SIZE, OMAP_DIM};
 use cdda_overmap::connections::{closest_points_first, inbounds_omt};
 use cdda_overmap::registry::{CoreTerrains, TerrainFlags, TerrainHandle, TerrainRegistry};

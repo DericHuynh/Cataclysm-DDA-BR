@@ -88,13 +88,15 @@ Top-level workspaces and durable boundaries (each owns its own child index):
 - `docs/AGENTS.md` — Project documentation, architecture notes, and durable design records.
 - `gfx/AGENTS.md` — Render assets, tilesets, and graphics resources.
 - `scripts/AGENTS.md` — Development, validation, and data-extraction scripts.
-- `tests/AGENTS.md` — Integration and regression test conventions.
+- `crates/cdda_integration_tests/AGENTS.md` — Cross-crate integration tests (crafting, equipment, screen integration). Crate-local tests live under `crates/<crate>/tests/`.
+- `crates/cdda_intent/AGENTS.md` — String-typed intent vocabulary — the canonical input/output language between systems, UI, AI, and replay.
+- `crates/cdda_defs_raw/AGENTS.md` — Raw JSON def structs (138 files, one per CDDA `"type"`). The typed AST layer of the data pipeline; no Bevy, no logic.
 - `.cargo/AGENTS.md` — Cargo configuration and build environment settings.
 - `.qlty/AGENTS.md` — Qlty configuration, results, and cached artifacts.
 
 Root-level files (not folders, no child DOX, but referenced from here):
 
-- `Cargo.toml` — Workspace manifest. 22 member crates; pinned Bevy 0.18 ecosystem. Profile flags in `[profile.dev]` / `[profile.release]`.
+- `Cargo.toml` — **Virtual workspace manifest** (no root package, just `[workspace]` + `[workspace.dependencies]`). 16 member crates (14 source + 1 test-only + 1 raw-def AST leaf); pinned Bevy 0.18 ecosystem. Profile flags in `[profile.dev]` / `[profile.release]`.
 - `Cargo.lock` — Resolved dependency lockfile. Committed.
 - `README.md` — Project overview, quick start, and crate table.
 - `CURRENT_ARCHITECTURE.md` — What is implemented now (crate layers, data loading pipeline, tick phases, design decisions, known debt).

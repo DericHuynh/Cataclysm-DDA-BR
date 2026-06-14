@@ -16,7 +16,7 @@ use std::time::Instant;
 use bevy_app::App;
 use bevy_state::app::StatesPlugin;
 
-use cdda_core_types::core::raw_defs::cdda_types::{RawValue, StringOrArray};
+use cdda_defs_raw::raw_defs::cdda_types::{RawValue, StringOrArray};
 use cdda_data::loader::Loader;
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM};
 use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};

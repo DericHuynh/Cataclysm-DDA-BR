@@ -24,18 +24,18 @@ use cdda_context::ContextStack;
 
 use crate::startup::load_data_system;
 use crate::startup::{examine_item_input, spawn_dev_world};
-use cdda_activity::plugin::ActivityPlugin;
-use cdda_actor::bionics::tick_bionics;
-use cdda_actor::effects::effects_phase;
-use cdda_actor::healing::healing_phase;
-use cdda_actor::morale::tick_morale_decay;
-use cdda_actor::movement::movement_phase;
-use cdda_actor::plugin::ActorPlugin;
-use cdda_actor::temperature::temperature_phase;
-use cdda_actor::turn::{debug_turn_queue, tick_move_points, TurnQueue};
-use cdda_actor::vision::update_vision;
-use cdda_ai::systems::ai_phase;
-use cdda_combat::systems::combat_phase;
+use cdda_sim::activity::plugin::ActivityPlugin;
+use cdda_sim::actor::bionics::tick_bionics;
+use cdda_sim::actor::effects::effects_phase;
+use cdda_sim::actor::healing::healing_phase;
+use cdda_sim::actor::morale::tick_morale_decay;
+use cdda_sim::actor::movement::movement_phase;
+use cdda_sim::actor::plugin::ActorPlugin;
+use cdda_sim::actor::temperature::temperature_phase;
+use cdda_sim::actor::turn::{debug_turn_queue, tick_move_points, TurnQueue};
+use cdda_sim::actor::vision::update_vision;
+use cdda_sim::ai::systems::ai_phase;
+use cdda_sim::combat::systems::combat_phase;
 use cdda_components::dev::{DevCamera, DevPlayer};
 use cdda_components::events::ItemMoveEvent;
 use cdda_components::item::InventoryFocus;
@@ -45,18 +45,18 @@ use cdda_context::overlay::{
     cleanup_activity_overlay, handle_overlay_cancel, sync_activity_overlay,
 };
 use cdda_core_types::core::coords::TILES_PER_OMT;
-use cdda_crafting::plugin::CraftingPlugin;
-use cdda_crafting::systems::on_examine_item_changed;
+use cdda_sim::crafting::plugin::CraftingPlugin;
+use cdda_sim::crafting::systems::on_examine_item_changed;
 use cdda_data::assets::CddaAssetsPlugin;
-use cdda_inventory::systems::{
+use cdda_sim::inventory::systems::{
     assign_invlets_system, build_inventory_bins, dev_pickup_drop_system, inventory_screen_input,
     process_item_move_events, InventoryBin,
 };
-use cdda_item::plugin::ItemPlugin;
+use cdda_sim::item::plugin::ItemPlugin;
 use cdda_overmap::spatial::EntitySpatialIndex;
 use cdda_overmap::OvermapCamera;
 use cdda_overmap_gen::pipeline::OvermapGenPlugin;
-use cdda_sim::state::{AppState, StartupConfig};
+use cdda_sim::runtime::state::{AppState, StartupConfig};
 
 // ---------------------------------------------------------------------------
 // Startup config
@@ -155,11 +155,11 @@ impl Plugin for CddaPlugin {
         app.init_resource::<StartupConfig>();
         app.init_resource::<TurnQueue>();
         app.init_resource::<InventoryBin>();
-        app.init_resource::<cdda_inventory::examine_resource::ExaminedItem>();
+        app.init_resource::<cdda_sim::inventory::examine_resource::ExaminedItem>();
         app.init_resource::<InventoryFocus>();
         app.init_resource::<DevCamera>();
-        app.init_resource::<cdda_sim::state::LoadingStatus>();
-        app.init_resource::<cdda_sim::state::GameTime>();
+        app.init_resource::<cdda_sim::runtime::state::LoadingStatus>();
+        app.init_resource::<cdda_sim::runtime::state::GameTime>();
 
         // ── Screen transitions ─────────────────────────────────────────
         app.add_systems(

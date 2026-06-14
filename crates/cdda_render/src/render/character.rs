@@ -13,7 +13,7 @@ use bevy_state::state_scoped::DespawnOnExit;
 use super::FooterHint;
 use cdda_context::ctx::Ctx;
 use cdda_context::screen::CddaScreen;
-use cdda_context::ContextActions;
+use cdda_components::context::ContextActions;
 use cdda_input::ActiveKeybindings;
 use cdda_input::{BindableAction, GameAction, InputAction};
 use crate::render::theme::{self, UiTheme};

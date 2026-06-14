@@ -6,12 +6,12 @@
 
 use cdda_context::ctx::Ctx;
 use cdda_context::screen::CddaScreen;
-use cdda_context::ContextActions;
+use cdda_components::context::ContextActions;
 use cdda_data::def_world::DefinitionWorld;
 use cdda_data::interner::ItemTypeRegistry;
 use cdda_data::interner::QualityRegistry;
 use cdda_input::{ActiveKeybindings, BindableAction};
-use cdda_inventory::examine_resource::ExaminedItem;
+use cdda_sim::inventory::examine_resource::ExaminedItem;
 use crate::render::item_detail::ItemDetailSnapshot;
 use crate::render::theme::{self, UiTheme};
 use bevy::prelude::*;

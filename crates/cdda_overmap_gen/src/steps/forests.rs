@@ -12,7 +12,7 @@
 //! 4. Write modified tiles back to chunks via `ParallelCommands`.
 
 use bevy_ecs::prelude::*;
-use cdda_noise::forest_noise_at;
+use cdda_sim::noise::forest_noise_at;
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, CHUNK_SIZE, OMAP_DIM};
 use cdda_overmap::registry::{CoreTerrains, TerrainHandle};
 use tracing::info;

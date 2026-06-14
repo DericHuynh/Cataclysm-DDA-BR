@@ -10,8 +10,8 @@ use bevy_state::condition::in_state;
 use bevy_state::state::OnEnter;
 use std::marker::PhantomData;
 
-use crate::actions::ContextActions;
 use crate::ctx::Ctx;
+use cdda_components::context::ContextActions;
 use cdda_components::input::BindableAction;
 
 // ---------------------------------------------------------------------------

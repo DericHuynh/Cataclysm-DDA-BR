@@ -1,0 +1,29 @@
+[package]
+name = "cdda_integration_tests"
+version = "0.1.0"
+edition = "2021"
+description = "Workspace-wide integration tests that span multiple crates."
+publish = false
+
+# This crate has no library; it exists only to host cross-crate integration
+# tests in `tests/`. It is excluded from runtime builds (it has no bins and
+# no lib) and is only compiled by `cargo test --workspace`.
+
+[dependencies]
+# Intentionally empty: integration tests in `tests/` depend on the workspace
+# crates via the [dev-dependencies] section below.
+
+[dev-dependencies]
+bevy_ecs.workspace = true
+bevy_app.workspace = true
+bevy_state.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+
+cdda_sim.workspace = true
+cdda_components.workspace = true
+cdda_core_types.workspace = true
+cdda_replay.workspace = true
+cdda_context.workspace = true
+cdda_data.workspace = true
+cdda_input.workspace = true

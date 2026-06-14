@@ -6,7 +6,7 @@ JSON loading, definition registry, `copy-from` inheritance resolution, Bevy enti
 ## Ownership
 - Source lives under `crates/cdda_data/src/`. Modules: `loader`, `resolve`, `registry`, `def_world`, `def_registry_resource`, `def_kinds`, `patch`, `populate_flags`, `interner`, `mod_info`, `mod_layer`, `raw_values`, `assets`, `schema`, `schema_gen`, `flags`.
 - Bin target: `src/bin/generate_schemas.rs` (invokes `schema::write_all_schemas`).
-- Bevy deps (pinned at workspace): `bevy_ecs`, `bevy_app`, `bevy_asset`, `bevy_state`, `bevy_reflect`. Workspace crate deps: `cdda_core_types`, `cdda_components`, `cdda_events`, `cdda_sim`. Other: `serde`, `serde_json`, `tracing`, `thiserror`, `schemars`, `indexmap`, `fixedbitset`, `bidimap`. Dev-dep: `tempfile`.
+- Bevy deps (pinned at workspace): `bevy_ecs`, `bevy_app`, `bevy_asset`, `bevy_state`, `bevy_reflect`. Workspace crate deps: `cdda_core_types`, `cdda_components`, `cdda_events`, `cdda_sim`. Other: `serde`, `serde_json`, `tracing`, `thiserror`, `schemars`, `indexmap`, `fixedbitset`, `bidimap`. Dev-deps: `tempfile`, `bevy_ecs`, `cdda_components`, `cdda_core_types`.
 - Raw data under `data/` is owned by `data/AGENTS.md`; this crate consumes it.
 
 ## Local Contracts

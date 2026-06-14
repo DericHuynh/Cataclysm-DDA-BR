@@ -21,7 +21,7 @@ Owns the game-data files loaded by `cdda_data` (JSON definitions, mods, generate
 
 ## Verification
 - `cargo test --workspace` exercises the full data-loading pipeline against the bundled JSON.
-- `tests/def_world_load.rs` and `tests/hot_reload_test.rs` are the canonical regression suites for this subtree.
+- `crates/cdda_data/tests/def_world_load.rs` and `crates/cdda_data/tests/hot_reload_test.rs` are the canonical regression suites for this subtree.
 - `scripts/verify_def_coverage.py ITEM` (and other type names) reports JSON fields with no Rust struct counterpart.
 
 ## Child DOX Index

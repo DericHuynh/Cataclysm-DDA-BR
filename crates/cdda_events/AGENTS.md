@@ -13,7 +13,7 @@ Distinct from buffered `Message` types in `crates/cdda_components/src/events.rs`
   `DamageEvent, DeathEvent, EquipEvent, UnequipEvent, UseItemEvent,
   DeathCause, GameEvent, MoveLocation`.
 - Imported directly by `crates/cdda_context/src/nav.rs`: `GameEvent`,
-  `GameEventDispatch`. `cdda_combat::systems` is the planned emitter
+  `GameEventDispatch`. `cdda_sim::combat::systems` is the planned emitter
   of `DamageEvent` / `DeathEvent` (see `check_and_handle_death`).
 
 ## Local Contracts

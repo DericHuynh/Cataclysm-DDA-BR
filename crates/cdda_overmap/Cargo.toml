@@ -10,4 +10,4 @@ bevy_app.workspace = true
 serde.workspace = true
 bytemuck = "1"
 cdda_core_types = { path = "../cdda_core_types" }
-cdda_noise = { path = "../cdda_noise" }
+cdda_sim = { path = "../cdda_sim" }

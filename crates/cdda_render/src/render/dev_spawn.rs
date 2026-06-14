@@ -15,7 +15,7 @@ use crate::render::item_detail::{spawn_item_detail, ItemDetailQueries};
 use crate::render::theme::{self, UiTheme};
 use cdda_context::ctx::Ctx;
 use cdda_context::screen::CddaScreen;
-use cdda_context::ContextActions;
+use cdda_components::context::ContextActions;
 use cdda_data::interner::{
     AmmoTypeRegistry, BodyPartRegistry, ComestibleRegistry, ItemTypeRegistry, QualityRegistry,
     SkillRegistry,

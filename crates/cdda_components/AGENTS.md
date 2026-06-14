@@ -1,7 +1,7 @@
 # cdda_components DOX
 
 ## Purpose
-Layer 2 crate. Owns the shared Bevy ECS contract: component archetypes for actors, items, definitions, and spatial data; the canonical `SystemSet` ordering; the `Ctx` state machine; the `Direction`/`GameAction`/`BindableAction` input vocabulary; the event/message split; and interned token + def-marker types. Systems that act on these components live in Layer 3+ crates (`cdda_actor`, `cdda_item`, `cdda_sim`, …).
+Layer 2 crate. Owns the shared Bevy ECS contract: component archetypes for actors, items, definitions, and spatial data; the canonical `SystemSet` ordering; the `Ctx` state machine; the `Direction`/`GameAction`/`BindableAction` input vocabulary; the event/message split; and interned token + def-marker types. Systems that act on these components live in Layer 3+ crates (`cdda_sim::*`, `cdda_overmap`, …).
 
 ## Ownership
 - Crate manifest: `Cargo.toml`. Bevy deps: `bevy_ecs`, `bevy_state`, `bevy_reflect`; serde: `serde`, `schemars`; input: `leafwing-input-manager`; misc: `fixedbitset`. Internal: `cdda_core_types`, `cdda_events`.

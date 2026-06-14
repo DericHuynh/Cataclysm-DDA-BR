@@ -1,4 +1,4 @@
-use cdda_core_types::core::raw_defs::*;
+use cdda_defs_raw::raw_defs::*;
 use cdda_core_types::core::id::DefId;
 use std::collections::HashMap;
 use std::sync::Arc;

@@ -114,8 +114,8 @@ fn parse_weight_string_to_grams(s: &str) -> Option<u32> {
 
 /// Extract numeric ammo damage from a RawValue.
 /// Handles: bare number, {"amount": 25}, [{"amount": 25}]
-fn extract_ammo_damage(raw: &cdda_core_types::core::raw_defs::RawValue) -> Option<i32> {
-    use cdda_core_types::core::raw_defs::RawValue;
+fn extract_ammo_damage(raw: &cdda_defs_raw::raw_defs::RawValue) -> Option<i32> {
+    use cdda_defs_raw::raw_defs::RawValue;
     match raw {
         RawValue::Number(n) => Some(*n as i32),
         RawValue::String(s) => s.parse::<i32>().ok(),
@@ -137,10 +137,10 @@ fn extract_ammo_damage(raw: &cdda_core_types::core::raw_defs::RawValue) -> Optio
     }
 }
 
-fn extract_price(p: &cdda_core_types::core::raw_defs::CddaPrice) -> u64 {
+fn extract_price(p: &cdda_defs_raw::raw_defs::CddaPrice) -> u64 {
     match p {
-        cdda_core_types::core::raw_defs::CddaPrice::Numeric(c) => *c as u64,
-        cdda_core_types::core::raw_defs::CddaPrice::Text(s) => s
+        cdda_defs_raw::raw_defs::CddaPrice::Numeric(c) => *c as u64,
+        cdda_defs_raw::raw_defs::CddaPrice::Text(s) => s
             .split_whitespace()
             .next()
             .and_then(|w| w.parse::<f64>().ok())
@@ -149,17 +149,17 @@ fn extract_price(p: &cdda_core_types::core::raw_defs::CddaPrice) -> u64 {
     }
 }
 
-fn color_to_string(c: &cdda_core_types::core::raw_defs::CddaColor) -> String {
+fn color_to_string(c: &cdda_defs_raw::raw_defs::CddaColor) -> String {
     match c {
-        cdda_core_types::core::raw_defs::CddaColor::Named(s) => s.clone(),
-        cdda_core_types::core::raw_defs::CddaColor::Multi(v) => v.join(","),
-        cdda_core_types::core::raw_defs::CddaColor::Structured(s) => {
+        cdda_defs_raw::raw_defs::CddaColor::Named(s) => s.clone(),
+        cdda_defs_raw::raw_defs::CddaColor::Multi(v) => v.join(","),
+        cdda_defs_raw::raw_defs::CddaColor::Structured(s) => {
             s.fg.clone().unwrap_or_default()
         }
     }
 }
 
-pub fn flags_to_vec(f: &cdda_core_types::core::raw_defs::StringOrArray) -> Vec<String> {
+pub fn flags_to_vec(f: &cdda_defs_raw::raw_defs::StringOrArray) -> Vec<String> {
     f.all_strings()
         .into_iter()
         .filter(|s| !s.is_empty())
@@ -167,25 +167,25 @@ pub fn flags_to_vec(f: &cdda_core_types::core::raw_defs::StringOrArray) -> Vec<S
         .collect()
 }
 
-fn materials_to_vec(m: &cdda_core_types::core::raw_defs::MaterialList) -> Vec<String> {
+fn materials_to_vec(m: &cdda_defs_raw::raw_defs::MaterialList) -> Vec<String> {
     match m {
-        cdda_core_types::core::raw_defs::MaterialList::Array(arr) => arr
+        cdda_defs_raw::raw_defs::MaterialList::Array(arr) => arr
             .iter()
             .map(|r| match r {
-                cdda_core_types::core::raw_defs::MaterialRef::Single(id) => id.clone(),
-                cdda_core_types::core::raw_defs::MaterialRef::Composite(c) => c.r#type.clone(),
-                cdda_core_types::core::raw_defs::MaterialRef::Map(m) => {
+                cdda_defs_raw::raw_defs::MaterialRef::Single(id) => id.clone(),
+                cdda_defs_raw::raw_defs::MaterialRef::Composite(c) => c.r#type.clone(),
+                cdda_defs_raw::raw_defs::MaterialRef::Map(m) => {
                     m.keys().cloned().next().unwrap_or_default()
                 }
             })
             .collect(),
-        cdda_core_types::core::raw_defs::MaterialList::Map(map) => map.keys().cloned().collect(),
+        cdda_defs_raw::raw_defs::MaterialList::Map(map) => map.keys().cloned().collect(),
     }
 }
 
 /// Convert a slice of raw `ComponentOption` lists into `RecipeComponentEntry` slots.
 fn parse_component_slots(
-    slots: &[Vec<cdda_core_types::core::raw_defs::recipe::ComponentOption>],
+    slots: &[Vec<cdda_defs_raw::raw_defs::recipe::ComponentOption>],
     reg: &mut ItemTypeRegistry,
 ) -> Vec<Vec<RecipeComponentEntry>> {
     slots
@@ -194,18 +194,18 @@ fn parse_component_slots(
             slot.iter()
                 .map(|opt| {
                     let (item_id, count) = match opt {
-                        cdda_core_types::core::raw_defs::recipe::ComponentOption::SimpleId(id) => {
+                        cdda_defs_raw::raw_defs::recipe::ComponentOption::SimpleId(id) => {
                             (id.clone(), 1u32)
                         }
-                        cdda_core_types::core::raw_defs::recipe::ComponentOption::Simple(id, c) => {
+                        cdda_defs_raw::raw_defs::recipe::ComponentOption::Simple(id, c) => {
                             (id.clone(), *c)
                         }
-                        cdda_core_types::core::raw_defs::recipe::ComponentOption::WithFlag(
+                        cdda_defs_raw::raw_defs::recipe::ComponentOption::WithFlag(
                             id,
                             c,
                             _,
                         ) => (id.clone(), *c),
-                        cdda_core_types::core::raw_defs::recipe::ComponentOption::Object(o) => {
+                        cdda_defs_raw::raw_defs::recipe::ComponentOption::Object(o) => {
                             (o.item.clone(), o.count.unwrap_or(1))
                         }
                     };
@@ -221,9 +221,9 @@ fn parse_component_slots(
 }
 
 /// Extract a specific damage type amount from a `Vec<DamageByType>`.
-/// DamageByType lives in cdda_core_types::core::raw_defs::monster.
+/// DamageByType lives in cdda_defs_raw::raw_defs::monster.
 fn extract_monster_melee_damage(
-    damage_vec: &[cdda_core_types::core::raw_defs::monster::DamageByType],
+    damage_vec: &[cdda_defs_raw::raw_defs::monster::DamageByType],
     damage_type: &str,
 ) -> i32 {
     damage_vec
@@ -310,16 +310,16 @@ fn build_item_defs(
                     price_postapoc: item.price_postapoc.as_ref().map(extract_price).unwrap_or(0),
                 },
                 ItemPhase(match item.phase {
-                    cdda_core_types::core::raw_defs::item::Phase::Solid => {
+                    cdda_defs_raw::raw_defs::item::Phase::Solid => {
                         cdda_components::def::Phase::Solid
                     }
-                    cdda_core_types::core::raw_defs::item::Phase::Liquid => {
+                    cdda_defs_raw::raw_defs::item::Phase::Liquid => {
                         cdda_components::def::Phase::Liquid
                     }
-                    cdda_core_types::core::raw_defs::item::Phase::Gas => {
+                    cdda_defs_raw::raw_defs::item::Phase::Gas => {
                         cdda_components::def::Phase::Gas
                     }
-                    cdda_core_types::core::raw_defs::item::Phase::Plasma => {
+                    cdda_defs_raw::raw_defs::item::Phase::Plasma => {
                         cdda_components::def::Phase::Plasma
                     }
                 }),
@@ -412,10 +412,10 @@ fn build_item_defs(
                                 .encumbrance
                                 .as_ref()
                                 .map(|e| match e {
-                                    cdda_core_types::core::raw_defs::EncumbranceOrRange::Single(
+                                    cdda_defs_raw::raw_defs::EncumbranceOrRange::Single(
                                         v,
                                     ) => *v as i32,
-                                    cdda_core_types::core::raw_defs::EncumbranceOrRange::Range(
+                                    cdda_defs_raw::raw_defs::EncumbranceOrRange::Range(
                                         v,
                                     ) => v.first().copied().unwrap_or(0) as i32,
                                 })
@@ -424,10 +424,10 @@ fn build_item_defs(
                                 .covers
                                 .as_ref()
                                 .map(|c| match c {
-                                    cdda_core_types::core::raw_defs::StringOrArray::Single(s) => {
+                                    cdda_defs_raw::raw_defs::StringOrArray::Single(s) => {
                                         s.clone()
                                     }
-                                    cdda_core_types::core::raw_defs::StringOrArray::Multi(v) => {
+                                    cdda_defs_raw::raw_defs::StringOrArray::Multi(v) => {
                                         v.join(", ")
                                     }
                                 })
@@ -492,8 +492,8 @@ fn build_item_defs(
                     .spoils_in
                     .as_ref()
                     .map(|d| match d {
-                        cdda_core_types::core::raw_defs::CddaDuration::Number(n) => *n,
-                        cdda_core_types::core::raw_defs::CddaDuration::Text(s) => s
+                        cdda_defs_raw::raw_defs::CddaDuration::Number(n) => *n,
+                        cdda_defs_raw::raw_defs::CddaDuration::Text(s) => s
                             .split_whitespace()
                             .next()
                             .and_then(|w| w.parse::<u32>().ok())
@@ -572,12 +572,12 @@ fn build_item_defs(
         // ── Melee weapon (any item with melee_damage) ───────────────
         if item.melee_damage.is_some() {
             let (dmg_bash, dmg_cut) = match &item.melee_damage {
-                Some(cdda_core_types::core::raw_defs::MeleeDamage::BashOnly(b)) => (*b, 0),
-                Some(cdda_core_types::core::raw_defs::MeleeDamage::ByType(map)) => (
+                Some(cdda_defs_raw::raw_defs::MeleeDamage::BashOnly(b)) => (*b, 0),
+                Some(cdda_defs_raw::raw_defs::MeleeDamage::ByType(map)) => (
                     map.get("bash").copied().unwrap_or(0),
                     map.get("cut").copied().unwrap_or(0),
                 ),
-                Some(cdda_core_types::core::raw_defs::MeleeDamage::TypedArray(arr)) => {
+                Some(cdda_defs_raw::raw_defs::MeleeDamage::TypedArray(arr)) => {
                     let mut b = 0;
                     let mut c = 0;
                     for td in arr {
@@ -595,8 +595,8 @@ fn build_item_defs(
                 .to_hit
                 .as_ref()
                 .map(|t| match t {
-                    cdda_core_types::core::raw_defs::ToHit::Number(n) => *n,
-                    cdda_core_types::core::raw_defs::ToHit::Struct {
+                    cdda_defs_raw::raw_defs::ToHit::Number(n) => *n,
+                    cdda_defs_raw::raw_defs::ToHit::Struct {
                         grip,
                         length,
                         surface,
@@ -886,7 +886,7 @@ fn build_recipe_defs(
     // Build a quick lookup: requirement ID → RequirementDef.
     let req_lookup: std::collections::HashMap<
         &str,
-        &cdda_core_types::core::raw_defs::requirement::RequirementDef,
+        &cdda_defs_raw::raw_defs::requirement::RequirementDef,
     > = def_registry
         .requirements
         .iter()
@@ -951,8 +951,8 @@ fn build_recipe_defs(
         }
 
         let autolearn = match &recipe.autolearn {
-            Some(cdda_core_types::core::raw_defs::recipe::Autolearn::Bool(b)) => *b,
-            Some(cdda_core_types::core::raw_defs::recipe::Autolearn::Skills(v)) => !v.is_empty(),
+            Some(cdda_defs_raw::raw_defs::recipe::Autolearn::Bool(b)) => *b,
+            Some(cdda_defs_raw::raw_defs::recipe::Autolearn::Skills(v)) => !v.is_empty(),
             None => false,
         };
         world.entity_mut(entity).insert(RecipeAutolearn(autolearn));
@@ -962,11 +962,11 @@ fn build_recipe_defs(
             let flat: Vec<(QualityId, u32)> = quals
                 .iter()
                 .filter_map(|q| match q {
-                    cdda_core_types::core::raw_defs::recipe::QualityEntry::Single(qr) => {
+                    cdda_defs_raw::raw_defs::recipe::QualityEntry::Single(qr) => {
                         let id = world.resource_mut::<QualityRegistry>().intern(&qr.id);
                         Some((id, qr.level))
                     }
-                    cdda_core_types::core::raw_defs::recipe::QualityEntry::Alternative(alts) => {
+                    cdda_defs_raw::raw_defs::recipe::QualityEntry::Alternative(alts) => {
                         alts.first().map(|qr| {
                             let id = world.resource_mut::<QualityRegistry>().intern(&qr.id);
                             (id, qr.level)
@@ -998,7 +998,7 @@ fn build_recipe_defs(
                     if let Some(req) = req_lookup.get(req_id.as_str()) {
                         if let Some(comp_val) = &req.components {
                             if let Ok(slots) = serde_json::from_value::<
-                                Vec<Vec<cdda_core_types::core::raw_defs::recipe::ComponentOption>>,
+                                Vec<Vec<cdda_defs_raw::raw_defs::recipe::ComponentOption>>,
                             >(comp_val.clone())
                             {
                                 let scaled = parse_component_slots(

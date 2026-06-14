@@ -2,7 +2,7 @@
 //! (overmap_water.cpp L402-545) and `calculate_ocean_gradient()` (L372-400).
 
 use bevy_ecs::prelude::*;
-use cdda_noise::ocean_noise_at;
+use cdda_sim::noise::ocean_noise_at;
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, CHUNK_SIZE, OMAP_DIM};
 use cdda_overmap::connections::{inbounds_omt, line_between, square_dist};
 use cdda_overmap::registry::{CoreTerrains, TerrainFlags, TerrainHandle, TerrainRegistry};

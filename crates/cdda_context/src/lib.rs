@@ -18,8 +18,6 @@ pub mod overlay;
 pub mod screen;
 pub mod systems;
 
-// ----- Re-exports ---------------------------------------------------------
-
 pub use actions::{ContextAction, ContextActions};
 pub use config::{CharacterCreationState, GameSettings, WorldCreationSettings};
 pub use ctx::{ContextStack, Ctx};
@@ -72,10 +70,7 @@ impl Plugin for ContextPlugin {
         // Core navigation — processes InputAction messages and dispatches transitions.
         // Ordering relative to bridge_actionstate is handled by GameSet labels
         // in the parent app's schedule configuration.
-        app.add_systems(
-            Update,
-            (handle_navigation_input, handle_panel_openers),
-        );
+        app.add_systems(Update, (handle_navigation_input, handle_panel_openers));
 
         // Sync input context with current context
         app.add_systems(Update, crate::nav::sync_input_context);

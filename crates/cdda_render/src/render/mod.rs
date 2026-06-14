@@ -43,7 +43,7 @@ pub struct FooterHint;
 /// `ActiveKeybindings`.  Registered once in `CddaRenderPlugin` — no
 /// per-screen footer update systems needed.
 pub fn refresh_all_footer_hints(
-    ctx_actions: Res<cdda_context::ContextActions>,
+    ctx_actions: Res<cdda_components::context::ContextActions>,
     active_keys: Res<cdda_input::ActiveKeybindings>,
     mut footer_q: Query<&mut Text, With<FooterHint>>,
 ) {

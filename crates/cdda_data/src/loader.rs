@@ -1,7 +1,7 @@
 use crate::registry::DefRegistry;
 use crate::resolve;
 use cdda_core_types::core::id::DefId;
-use cdda_core_types::core::raw_defs::*;
+use cdda_defs_raw::raw_defs::*;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

@@ -14,7 +14,7 @@
 //! 7. Write `lake_surface` / `lake_shore` back to z=0 chunks.
 
 use bevy_ecs::prelude::*;
-use cdda_noise::lake_noise_at;
+use cdda_sim::noise::lake_noise_at;
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, CHUNK_SIZE, OMAP_DIM};
 use cdda_overmap::connections::{closest_points_first, inbounds_omt, line_between};
 use cdda_overmap::registry::{CoreTerrains, TerrainFlags, TerrainHandle, TerrainRegistry};

@@ -208,7 +208,7 @@ fn dispatch(
     next: &mut NextState<Ctx>,
     focused: &mut FocusedCommandIndex,
     commands: &mut Commands,
-    app_next: &mut NextState<cdda_sim::state::AppState>,
+    app_next: &mut NextState<cdda_sim::runtime::state::AppState>,
 ) {
     match target {
         TransitionTarget::Push(s) => push_ctx(current, *s, stack, next, focused),
@@ -218,10 +218,10 @@ fn dispatch(
         TransitionTarget::Event(e) => match e {
             GameEvent::StartNewGame => {
                 tracing::info!("dispatching StartNewGame → DataLoading");
-                app_next.set(cdda_sim::state::AppState::DataLoading);
+                app_next.set(cdda_sim::runtime::state::AppState::DataLoading);
             }
             GameEvent::SaveAndQuit => {
-                app_next.set(cdda_sim::state::AppState::MainMenu);
+                app_next.set(cdda_sim::runtime::state::AppState::MainMenu);
             }
         },
     }
@@ -242,7 +242,7 @@ pub fn handle_navigation_input(
     mut stack: ResMut<ContextStack>,
     mut next: ResMut<NextState<Ctx>>,
     mut focused: ResMut<FocusedCommandIndex>,
-    mut app_next: ResMut<NextState<cdda_sim::state::AppState>>,
+    mut app_next: ResMut<NextState<cdda_sim::runtime::state::AppState>>,
     state: Res<State<Ctx>>,
     overlays: Res<OverlayStack>,
     list_items: Query<(), (With<ScreenListItem>,)>,

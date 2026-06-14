@@ -13,7 +13,7 @@
 //!    GROUP_OCEAN_DEEP or GROUP_OCEAN_SHORE.
 
 use bevy_ecs::prelude::*;
-use cdda_noise::ocean_noise_at;
+use cdda_sim::noise::ocean_noise_at;
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM, OMAP_DIM};
 use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};
 use cdda_overmap::rng::XorShiftRng;

@@ -1,0 +1,13 @@
+[package]
+name = "cdda_defs_raw"
+version = "0.1.0"
+edition = "2021"
+description = "Raw JSON def structs — the typed AST layer of the data pipeline. No Bevy, no logic."
+
+[dependencies]
+cdda_core_types = { path = "../cdda_core_types" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+schemars = { workspace = true }
+thiserror = { workspace = true }
+indexmap = { workspace = true }

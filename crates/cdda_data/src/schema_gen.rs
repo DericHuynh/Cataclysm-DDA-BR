@@ -392,7 +392,7 @@ mod tests {
     /// The real `ItemDef` struct must also tolerate `$schema`.
     #[test]
     fn dollar_schema_on_real_item_def() {
-        use cdda_core_types::core::raw_defs::item::ItemDef;
+        use cdda_defs_raw::raw_defs::item::ItemDef;
 
         let json = json!({
             "$schema": "../../schemas/item_mod.schema.json",

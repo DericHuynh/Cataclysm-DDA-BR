@@ -19,7 +19,7 @@ use bevy_state::state_scoped::DespawnOnExit;
 use super::FooterHint;
 use cdda_context::ctx::Ctx;
 use cdda_context::screen::CddaScreen;
-use cdda_crafting::systems::{CategoryIndex, CraftEntry, CraftState};
+use cdda_sim::crafting::systems::{CategoryIndex, CraftEntry, CraftState};
 use cdda_data::def_world::DefinitionWorld;
 use cdda_data::interner::{
     AmmoTypeRegistry, BodyPartRegistry, ComestibleRegistry, ItemTypeRegistry, QualityRegistry,

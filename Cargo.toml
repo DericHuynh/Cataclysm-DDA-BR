@@ -1,8 +1,3 @@
-[package]
-name = "cataclysm_dda_br"
-version = "0.1.0"
-edition = "2021"
-
 [workspace]
 resolver = "2"
 members = [
@@ -11,23 +6,17 @@ members = [
     "crates/cdda_render",
     "crates/cdda_core_types",
     "crates/cdda_components",
-    "crates/cdda_ai",
-    "crates/cdda_equipment",
-    "crates/cdda_combat",
-    "crates/cdda_actor",
-    "crates/cdda_noise",
     "crates/cdda_overmap",
     "crates/cdda_overmap_gen",
     "crates/cdda_sim",
     "crates/cdda_replay",
-    "crates/cdda_item",
-    "crates/cdda_activity",
     "crates/cdda_context",
     "crates/cdda_events",
-    "crates/cdda_inventory",
     "crates/cdda_data",
+    "crates/cdda_defs_raw",
     "crates/cdda_input",
-    "crates/cdda_crafting",
+    "crates/cdda_integration_tests",
+    "crates/cdda_intent",
 ]
 
 [workspace.dependencies]
@@ -51,6 +40,7 @@ rstar           = "0.12"
 clap            = { version = "4", features = ["derive"] }
 pathfinding     = "4"
 postcard        = { version = "1", features = ["alloc"] }
+tempfile        = "3.27.0"
 
 # Bevy ecosystem
 bevy                = { version = "0.18", default-features = false, features = ["bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_render", "bevy_sprite", "bevy_text", "bevy_ui", "bevy_winit", "x11", "bevy_gilrs"] }
@@ -65,44 +55,17 @@ cdda_app     = { path = "crates/cdda_app" }
 cdda_render  = { path = "crates/cdda_render" }
 cdda_components = { path = "crates/cdda_components" }
 cdda_core_types = { path = "crates/cdda_core_types" }
-cdda_ai = { path = "crates/cdda_ai" }
-cdda_equipment = { path = "crates/cdda_equipment" }
-cdda_combat = { path = "crates/cdda_combat" }
-cdda_actor = { path = "crates/cdda_actor" }
-cdda_noise = { path = "crates/cdda_noise" }
 cdda_overmap = { path = "crates/cdda_overmap" }
 cdda_overmap_gen = { path = "crates/cdda_overmap_gen" }
 cdda_sim = { path = "crates/cdda_sim" }
 cdda_replay = { path = "crates/cdda_replay" }
-cdda_item = { path = "crates/cdda_item" }
-cdda_activity = { path = "crates/cdda_activity" }
 cdda_context = { path = "crates/cdda_context" }
 cdda_events = { path = "crates/cdda_events" }
 cdda_data = { path = "crates/cdda_data" }
 cdda_input = { path = "crates/cdda_input" }
-cdda_crafting = { path = "crates/cdda_crafting" }
-cdda_inventory = { path = "crates/cdda_inventory" }
-
-[dev-dependencies]
-cdda_sim = { path = "crates/cdda_sim" }
-cdda_components = { path = "crates/cdda_components" }
-cdda_core_types = { path = "crates/cdda_core_types" }
-cdda_actor = { path = "crates/cdda_actor" }
-cdda_combat = { path = "crates/cdda_combat" }
-cdda_equipment = { path = "crates/cdda_equipment" }
-cdda_item = { path = "crates/cdda_item" }
-cdda_replay = { path = "crates/cdda_replay" }
-cdda_activity = { path = "crates/cdda_activity" }
-bevy_ecs.workspace = true
-bevy_app.workspace = true
-bevy_state.workspace = true
-serde_json.workspace = true
-cdda_context.workspace = true
-cdda_data.workspace = true
-cdda_input.workspace = true
-cdda_crafting.workspace = true
-cdda_inventory.workspace = true
-tempfile = "3.27.0"
+cdda_integration_tests = { path = "crates/cdda_integration_tests" }
+cdda_intent = { path = "crates/cdda_intent" }
+cdda_defs_raw = { path = "crates/cdda_defs_raw" }
 
 [profile.dev]
 opt-level = 0

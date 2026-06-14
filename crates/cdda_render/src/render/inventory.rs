@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use super::FooterHint;
 use cdda_context::ctx::Ctx;
 use cdda_context::screen::CddaScreen;
-use cdda_context::ContextActions;
+use cdda_components::context::ContextActions;
 use cdda_data::interner::ItemTypeRegistry;
 use cdda_input::ActiveKeybindings;
 use cdda_input::BindableAction;

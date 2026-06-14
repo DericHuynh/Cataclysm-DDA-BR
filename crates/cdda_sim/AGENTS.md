@@ -1,38 +1,37 @@
-# cdda_sim DOX
+# cdda_sim
 
 ## Purpose
-Owns the simulation-layer state machine, in-game clock, and the canonical headless test harness used by every other crate's tests.
+The single workspace crate that owns every game-logic subsystem plus the runtime harness (`AppState`, `GameTime`, `TestBed`). Formed by consolidating 9 thin game-logic crates (`cdda_actor`, `cdda_ai`, `cdda_activity`, `cdda_combat`, `cdda_crafting`, `cdda_equipment`, `cdda_inventory`, `cdda_item`, `cdda_noise`) with the original `cdda_sim` runtime.
 
 ## Ownership
-- `src/state.rs` — `AppState` (`States`), `TurnState` (`Resource`), `GameTime` (re-export), `LoadingStatus`, `StartupConfig`.
-- `src/test_utils.rs` — `TestBed` plus the `register_all_def_components` / `register_gameplay_components` batch registrars.
-- Shared `GameSet` / `SimSet` schedule labels and all ECS components live in `cdda_components`, not here. The `sim` submodule of `cdda_components` owns `WorldPosition`, `Solid`, `Velocity`, `InFlight`, and the source-of-truth definition of `GameTime`; `cdda_sim` re-exports `GameTime` only.
+- Bevy deps: `bevy_ecs`, `bevy_reflect`, `bevy_app`, `bevy_state`, `bevy_input` (with `keyboard`), plus `serde`, `cdda_core_types`, `cdda_components`, `cdda_events`, `cdda_context`, `cdda_data`, `tracing`.
+- Public surface is organised as submodules. Consumers reach into `cdda_sim::<area>::…` directly.
 
 ## Local Contracts
-- **Headless dependency boundary.** This crate uses `bevy_ecs` + `bevy_state` only — no full `bevy`, no renderer, no platform plugins. The same is true for `TestBed`; tests under `crates/*/tests/` and `tests/` must not need anything `TestBed` does not provide.
-- **`AppState` (`src/state.rs`)** is the top-level lifecycle `States` enum. Variants: `MainMenu` (default), `DataLoading`, `WorldGen`, `InGame`, `Paused`, `GameOver`. Drivers: `cdda_app::CddaPlugin` calls `init_state::<AppState>()`; `cdda_context::nav` sets transitions (`StartNewGame → DataLoading`, `SaveAndQuit → MainMenu`).
-- **`TurnState` (`src/state.rs`)** is a `Resource` (not a `States` enum) with `WaitingForInput | PlayerActed | Simulating | Animating`. The main tick system checks it to pick sub-systems.
-- **`GameTime` is re-exported, not defined here.** Canonical import path is `cdda_sim::state::GameTime` (used by `cdda_actor` tests, `cdda_app`, and `tests/calendar_test.rs`). Do not import it from `cdda_components::sim` directly in consumer code.
-- **`LoadingStatus` / `StartupConfig`** are `Resource`s. `StartupConfig` is built by the pre-game UI flow and consumed by `cdda_app::startup::load_data_system`; defaults: `data/core`, scenario `evacuee`, profession `unemployed`, world name `New World`, seed `0`.
-- **`TestBed` (`src/test_utils.rs`)** is the workspace-wide test harness. Contract:
-  - `TestBed::new()` / `TestBed::default()` build a fresh `bevy_ecs::world::World` (no plugins, no schedules).
-  - Surface: `world()`, `world_mut()`, `spawn(bundle)`, `get::<C>(e)`, `resource::<R>()`, `resource_mut::<R>()`, `insert_resource(r)`, `register::<C>()`, `add_message::<M>()`, `run_system(sys)`.
-  - `run_system` calls `initialize` → `run` → `apply_deferred`, so `Commands` queues flush inside one call. For multi-system tests, call `run_system` per system in order.
-  - Two static batch registrars take `&mut World`: `TestBed::register_all_def_components` (every component in `cdda_components::def`) and `TestBed::register_gameplay_components` (world/actor/item/relationship components). Call them once per test before spawning components from those groups.
-  - Consumer crates: `cdda_actor/tests/`, `cdda_combat/tests/`, `tests/`. Adding a new component to `cdda_components` that tests need usually means adding it to one of the two batch registrars.
+- **One crate, nine game-logic submodules, one runtime harness.** `cdda_sim::runtime` is the `AppState` + `TestBed` harness. The other nine submodules own one gameplay concern each.
+- **Flat re-exports at the lib root** keep two old call sites alive: `cdda_sim::state` → `cdda_sim::runtime::state`, and `cdda_sim::test_utils` → `cdda_sim::runtime::test_utils`. Both are `#[deprecated]` and will be removed in a follow-up.
+- All callers reach this crate through the consolidated public surface at `cdda_sim::<area>::…`. There are no deprecation shim crates anymore — the migration is complete.
 
 ## Work Guidance
-- Keep the `cdda_sim` dep set minimal: `bevy_ecs`, `bevy_state`, `cdda_core_types`, `cdda_components`, `cdda_actor`. If you stop using one (currently `cdda_core_types` and `cdda_actor` are declared but have no `use` in `src/`), either remove it from `Cargo.toml` or document the forward-looking reason here.
-- New top-level states belong on `AppState`. New per-tick phases belong in `cdda_components::schedule::SimSet`, not here. Do not add a new state enum for a sub-flow that fits `TurnState`.
-- `TestBed` API is a stable contract. Treat method names, signatures, and the `register_all_def_components` / `register_gameplay_components` component lists as public — changing them breaks every crate's integration tests.
-- Use `cdda_sim::state::GameTime` (the re-export) in test code and app code. Only `state.rs` should ever need `use cdda_components::sim::GameTime`.
-- Write tests that exercise state transitions with `NextState::<AppState>` in `TestBed`-style apps; do not pull in `bevy::app::App` from a unit test in this crate.
+- New code in a game-logic area goes into the matching submodule under `crates/cdda_sim/src/<area>/`. If the area is genuinely new, add a new submodule and declare it in `src/lib.rs`.
+- `runtime/` is the only submodule that other crates typically import directly. Everything else goes through the consolidated public surface at `cdda_sim::<area>::…`.
+- The two `#[deprecated]` re-exports (`cdda_sim::state` and `cdda_sim::test_utils`) should disappear in a future commit. The compiler will point the author at the right path on each call.
 
 ## Verification
-- `cargo check -p cdda_sim` — compile sanity for the state and harness changes.
-- `cargo test -p cdda_sim` — runs the three in-crate `TestBed` smoke tests (`test_bed_spawns_entity`, `test_bed_runs_system`, `test_world_can_query`).
-- `cargo nextest run --workspace` (or `cargo test --workspace` if `nextest` is unavailable) to confirm every downstream crate's `TestBed`-based tests still pass after any harness change. `tests/AGENTS.md` states the same preference.
+- `cargo check -p cdda_sim` for compile sanity.
+- `cargo test -p cdda_sim` runs the consolidated test suite. The pre-consolidation tests under `crates/cdda_actor/tests/`, `crates/cdda_combat/tests/`, and `crates/cdda_inventory/tests/` are now under `crates/cdda_sim/tests/{actor,combat,inventory}/`. Other tests live alongside the code they test in the relevant submodule.
+- `cargo test --workspace` runs everything: this crate, the data plane, the renderer, and the integration tests.
+- Cross-crate impact: changes to `TestBed` (in `runtime/test_utils.rs`) ripple to every crate that uses it. The harness API is the most volatile surface in this crate.
 
 ## Child DOX Index
-- `crates/cdda_sim/src/state.rs` — `AppState`, `TurnState`, `GameTime` (re-export), `LoadingStatus`, `StartupConfig`.
-- `crates/cdda_sim/src/test_utils.rs` — `TestBed` and the two `register_*_components` batch registrars.
+- `src/runtime/` — `AppState`, `TurnState`, `GameTime`, `StartupConfig`, `LoadingStatus`, and the `TestBed` test harness. The most-consumed submodule; treat its public API as the workspace's test contract.
+- `src/actor/` — Creature turn scheduling, movement, bionics, effects, healing, temperature, morale, vision.
+- `src/ai/` — Monster/NPC decision making and the `AiGoal` enum.
+- `src/activity/` — Multi-turn player activities (`PlayerActivity`, `ActivityPhase`, `ActivityActor`, `ActivityTracker`) and the `CRAFT_COMPLETE_HOOK` seam.
+- `src/combat/` — Damage, hit/miss, melee, ranged.
+- `src/crafting/` — Recipe lookup, component consumption, progress.
+- `src/equipment/` — Wielding, wearing, encumbrance.
+- `src/inventory/` — Stacks, invlets, binned lookups, item movement, the `ExaminedItem` resource, the `InventoryBin` cache.
+- `src/item/` — `ItemPlugin` for type registration.
+- `src/noise.rs` — 3D simplex noise matching CDDA master.
+- `tests/actor/`, `tests/combat/`, `tests/inventory/` — per-submodule test directories (moved from the corresponding old crate's `tests/`). Plus flat test files at the top of `tests/` for the cross-submodule suites (ammo, armor, body part, calendar, food, item damage, monster, recipe, tool, wield/wear).

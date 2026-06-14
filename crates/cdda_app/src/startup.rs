@@ -8,12 +8,11 @@ use cdda_data::loader::Loader;
 
 use cdda_core_types::core::coords::{WorldPos, ZLevel, TILES_PER_OMT};
 use cdda_core_types::core::id::DefId;
-use cdda_core_types::core::raw_defs::city_building::CityBuildingDef;
-use cdda_sim::state::{AppState, GameTime, LoadingStatus, StartupConfig};
+use cdda_defs_raw::raw_defs::city_building::CityBuildingDef;
+use cdda_sim::runtime::state::{AppState, GameTime, LoadingStatus, StartupConfig};
 
 use cdda_overmap::registry::{CoreTerrains, TerrainFlags, TerrainHandle, TerrainRegistry};
 use cdda_overmap_gen::pipeline::{OvermapGenConfig, OvermapGenPhase, DEFAULT_NOISE_SEED};
-
 
 // ===========================================================================
 // CityBuildings — resource wrapper for worldgen access
@@ -142,10 +141,10 @@ fn build_terrain_registry(
         // Determine flags from JSON flag strings.
         let mut flags = TerrainFlags::empty();
         let flag_strs: Vec<String> = match &terrain.flags {
-            cdda_core_types::core::raw_defs::cdda_types::StringOrArray::Single(s) => {
+            cdda_defs_raw::raw_defs::cdda_types::StringOrArray::Single(s) => {
                 vec![s.clone()]
             }
-            cdda_core_types::core::raw_defs::cdda_types::StringOrArray::Multi(v) => v.clone(),
+            cdda_defs_raw::raw_defs::cdda_types::StringOrArray::Multi(v) => v.clone(),
         };
         for f in &flag_strs {
             let upper = f.to_uppercase();
@@ -222,7 +221,7 @@ fn build_terrain_registry(
 
         // Determine travel cost.
         let travel_cost: u8 = match &terrain.travel_cost_type {
-            Some(cdda_core_types::core::raw_defs::cdda_types::RawValue::String(s)) => {
+            Some(cdda_defs_raw::raw_defs::cdda_types::RawValue::String(s)) => {
                 match s.to_lowercase().as_str() {
                     "fast" => 1,
                     "slow" => 5,
@@ -230,9 +229,7 @@ fn build_terrain_registry(
                     _ => 2,
                 }
             }
-            Some(cdda_core_types::core::raw_defs::cdda_types::RawValue::Number(n)) => {
-                (*n as u8).max(1)
-            }
+            Some(cdda_defs_raw::raw_defs::cdda_types::RawValue::Number(n)) => (*n as u8).max(1),
             _ => 2,
         };
 
@@ -242,14 +239,12 @@ fn build_terrain_registry(
             .as_ref()
             .and_then(|mg| mg.first())
             .and_then(|raw| match raw {
-                cdda_core_types::core::raw_defs::cdda_types::RawValue::String(s) => Some(s.clone()),
-                cdda_core_types::core::raw_defs::cdda_types::RawValue::Object(obj) => obj
+                cdda_defs_raw::raw_defs::cdda_types::RawValue::String(s) => Some(s.clone()),
+                cdda_defs_raw::raw_defs::cdda_types::RawValue::Object(obj) => obj
                     .get("builtin")
                     .or_else(|| obj.get("method"))
                     .and_then(|v| match v {
-                        cdda_core_types::core::raw_defs::cdda_types::RawValue::String(s) => {
-                            Some(s.clone())
-                        }
+                        cdda_defs_raw::raw_defs::cdda_types::RawValue::String(s) => Some(s.clone()),
                         _ => None,
                     }),
                 _ => None,
@@ -425,9 +420,9 @@ use cdda_components::item::{InsideContainer, Invlet, MountedPockets, WieldedBy, 
 use cdda_components::sim::WorldPosition;
 use cdda_context::ctx::Ctx;
 use cdda_context::{ContextStack, FocusedCommandIndex};
-use cdda_inventory::examine_resource::ExaminedItem;
+use cdda_sim::inventory::examine_resource::ExaminedItem;
 
-use cdda_actor::turn::AP_COST_WIELD;
+use cdda_sim::actor::turn::AP_COST_WIELD;
 
 pub fn examine_item_input(world: &mut World) {
     let actions: Vec<GameAction> = {
@@ -546,7 +541,7 @@ pub fn examine_item_input(world: &mut World) {
                 }
             }
             GameAction::HotkeyPress('r') => {
-                match cdda_crafting::systems::resume_craft(world, player_entity, item_entity) {
+                match cdda_sim::crafting::systems::resume_craft(world, player_entity, item_entity) {
                     Ok(()) => {}
                     Err(_e) => {}
                 }
@@ -604,7 +599,7 @@ pub fn spawn_dev_world(world: &mut World) {
         ))
         .id();
 
-    cdda_inventory::pocket::spawn_body_pocket(world, player);
+    cdda_sim::inventory::pocket::spawn_body_pocket(world, player);
 
     let camera = DevCamera {
         x: pos.x.div_euclid(TILES_PER_OMT),
