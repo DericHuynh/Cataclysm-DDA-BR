@@ -88,6 +88,17 @@ enum Command {
         #[arg(long)]
         strict: bool,
     },
+    /// Part-B bridge: verify the export adapter (copy-from override diffing)
+    /// is lossless. For every child def that `copy-from`s a parent, compute the
+    /// minimal override delta, rebuild the def from that delta, re-resolve, and
+    /// assert it reproduces the child's resolved JSON (import→export decoupled).
+    Bridge {
+        /// Path to CDDA JSON data directory (e.g. data/core)
+        path: PathBuf,
+        /// Exit 1 if any category reports bridge round-trip failures.
+        #[arg(long)]
+        strict: bool,
+    },
 }
 
 /// A mod entry parsed from NAME=PATH CLI arguments.
@@ -132,6 +143,7 @@ fn main() {
         Command::Check { path } => cmd_check(&path),
         Command::Ablation { baseline, mods } => cmd_ablation(&baseline, &mods),
         Command::Roundtrip { path, strict } => cmd_roundtrip(&path, strict),
+        Command::Bridge { path, strict } => cmd_bridge(&path, strict),
         Command::CityView {
             data_dir,
             city_size,
@@ -468,6 +480,63 @@ fn cmd_roundtrip(path: &PathBuf, strict: bool) {
     if fails > 0 {
         eprintln!(
             "\n{}-category(ies) report parse failures or unresolved defs. Re-run with --strict to fail on them.",
+            fails
+        );
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// bridge - Part-B export-adapter (copy-from override diff) lossless check
+// ═════════════════════════════════════════════════════════════════════
+
+fn cmd_bridge(path: &PathBuf, strict: bool) {
+    use cdda_data::bridge::bridge_all_types;
+    if !path.exists() {
+        eprintln!("Error: directory not found: {:?}", path);
+        std::process::exit(1);
+    }
+
+    eprintln!(
+        "Resolving copy-from + export-adapter round-trip (Part-B bridge) from {:?} ...",
+        path
+    );
+    let mut loader = cdda_data::loader::Loader::new(vec![path.clone()]);
+    loader.ingest_all();
+
+    let summaries = bridge_all_types(&loader);
+
+    let mut fails = 0usize;
+    eprintln!();
+    eprintln!("=== Bridge (export) round-trip report ===");
+    eprintln!(
+        "{:>28} {:<16} {:>6} {:>8} {:>10}",
+        "category", "json_type", "ok", "skipped", "mismatch"
+    );
+    for s in &summaries {
+        eprintln!(
+            "{:>28} {:<16} {:>7} {:>8} {:>10}",
+            s.category, s.json_type, s.ok, s.skipped, s.mismatches,
+        );
+        if !s.all_ok() {
+            fails += 1;
+        }
+    }
+
+    let total_ok: usize = summaries.iter().map(|s| s.ok).sum();
+    let total_skipped: usize = summaries.iter().map(|s| s.skipped).sum();
+    eprintln!("\nTotal clean (delta re-applied == child): {total_ok}");
+    eprintln!("Total skipped (no in-category copy-from parent): {total_skipped}");
+
+    if fails > 0 && strict {
+        eprintln!(
+            "\nBridge FAILED ({} category(ies) with export mismatches).",
+            fails
+        );
+        std::process::exit(1);
+    }
+    if fails > 0 {
+        eprintln!(
+            "\n{}-category(ies) report export mismatches. Re-run with --strict to fail on them.",
             fails
         );
     }

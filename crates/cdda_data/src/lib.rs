@@ -12,6 +12,7 @@
 //!   `copy-from` inheritance chains topologically.
 
 pub mod assets;
+pub mod bridge;
 pub mod def_kinds;
 pub mod def_registry_resource;
 pub mod def_world;

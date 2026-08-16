@@ -1,7 +1,9 @@
-use cdda_defs_raw::raw_defs::*;
 use cdda_core_types::core::id::DefId;
+use cdda_defs_raw::raw_defs::*;
 use std::collections::HashMap;
 use std::sync::Arc;
+
+use crate::for_each_raw_def_kind;
 
 /// The single authoritative read-only store of all game definitions.
 ///
@@ -242,449 +244,65 @@ impl DefRegistry {
             end_screens: HashMap::new(),
         }
     }
+}
 
+impl DefRegistry {
     pub fn total_count(&self) -> usize {
-        self.items.len()
-            + self.monsters.len()
-            + self.terrain.len()
-            + self.furniture.len()
-            + self.recipes.len()
-            + self.item_groups.len()
-            + self.mapgen.values().map(|v| v.len()).sum::<usize>()
-            + self.nested_mapgen.len()
-            + self.palettes.len()
-            + self.overmap_terrains.len()
-            + self.overmap_specials.len()
-            + self.overmap_connections.len()
-            + self.overmap_locations.len()
-            + self.overmap_land_use_codes.len()
-            + self.fields.len()
-            + self.vehicle_parts.len()
-            + self.vehicle_part_locations.len()
-            + self.vehicle_part_categories.len()
-            + self.mutations.len()
-            + self.mutation_categories.len()
-            + self.trait_groups.len()
-            + self.bionics.len()
-            + self.effects.len()
-            + self.factions.len()
-            + self.scenarios.len()
-            + self.materials.len()
-            + self.skills.len()
-            + self.traps.len()
-            + self.start_locations.len()
-            + self.json_flags.len()
-            + self.ascii_art.len()
-            + self.construction_groups.len()
-            + self.item_actions.len()
-            + self.techniques.len()
-            + self.ammunition_types.len()
-            + self.morale_types.len()
-            + self.scent_types.len()
-            + self.movement_modes.len()
-            + self.mood_faces.len()
-            + self.achievements.len()
-            + self.body_parts.len()
-            + self.dreams.len()
-            + self.emits.len()
-            + self.event_statistics.len()
-            + self.harvests.len()
-            + self.item_migrations.len()
-            + self.monster_groups.len()
-            + self.mutation_types.len()
-            + self.nested_categories.len()
-            + self.practices.len()
-            + self.professions.len()
-            + self.proficiencies.len()
-            + self.scores.len()
-            + self.species.len()
-            + self.sub_body_parts.len()
-            + self.uncrafts.len()
-            + self.vitamins.len()
-            + self.talk_topics.len()
-            + self.widgets.len()
-            + self.effects_on_condition.len()
-            + self.constructions.len()
-            + self.snippets.len()
-            + self.npcs.len()
-            + self.npc_classes.len()
-            + self.requirements.len()
-            + self.spells.len()
-            + self.vehicles.len()
-            + self.city_buildings.len()
-            + self.mission_definitions.len()
-            + self.event_transformations.len()
-            + self.martial_arts.len()
-            + self.monster_attacks.len()
-            + self.weakpoint_sets.len()
-            + self.recipe_groups.len()
-            + self.monster_flags.len()
-            + self.activity_types.len()
-            + self.ammo_effects.len()
-            + self.tool_qualities.len()
-            + self.faults.len()
-            + self.map_extras.len()
-            + self.fault_fixes.len()
-            + self.ter_furn_transforms.len()
-            + self.connect_groups.len()
-            + self.attack_vectors.len()
-            + self.region_terrain_furnitures.len()
-            + self.item_categories.len()
-            + self.oter_visions.len()
-            + self.profession_item_substitutions.len()
-            + self.character_mods.len()
-            + self.weapon_categories.len()
-            + self.rotatable_symbols.len()
-            + self.oter_id_migrations.len()
-            + self.climbing_aids.len()
-            + self.conducts.len()
-            + self.weather_types.len()
-            + self.proficiency_categories.len()
-            + self.faction_missions.len()
-            + self.fault_groups.len()
-            + self.jmath_functions.len()
-            + self.body_graphs.len()
-            + self.limb_scores.len()
-            + self.construction_categories.len()
-            + self.recipe_categories.len()
-            + self.addiction_types.len()
-            + self.region_settings.len()
-            + self.gates.len()
-            + self.damage_types.len()
-            + self.anatomies.len()
-            + self.end_screens.len()
+        let mut total = 0usize;
+        macro_rules! count_len {
+            ($name:ident, $def_ty:ty, $json:expr, $field:ident, $strategy:ident) => {
+                total += self.$field.len();
+            };
+        }
+        for_each_raw_def_kind!(call count_len);
+        // `mapgen` / `nested_mapgen` are special: `String`-keyed, not `DefId<T>`
+        // maps, so they are not in the `for_each_raw_def_kind!` table.
+        total += self.mapgen.values().map(Vec::len).sum::<usize>();
+        total += self.nested_mapgen.len();
+        total
     }
 
     pub fn category_count(&self) -> usize {
-        let mut count = 0;
-        if !self.items.is_empty() {
-            count += 1;
-        }
-        if !self.monsters.is_empty() {
-            count += 1;
-        }
-        if !self.terrain.is_empty() {
-            count += 1;
-        }
-        if !self.furniture.is_empty() {
-            count += 1;
-        }
-        if !self.recipes.is_empty() {
-            count += 1;
-        }
-        if !self.item_groups.is_empty() {
-            count += 1;
-        }
-        if !self.mapgen.is_empty() {
-            count += 1;
-        }
-        if !self.palettes.is_empty() {
-            count += 1;
-        }
-        if !self.overmap_terrains.is_empty() {
-            count += 1;
-        }
-        if !self.overmap_specials.is_empty() {
-            count += 1;
-        }
-        if !self.overmap_connections.is_empty() {
-            count += 1;
-        }
-        if !self.overmap_locations.is_empty() {
-            count += 1;
-        }
-        if !self.overmap_land_use_codes.is_empty() {
-            count += 1;
-        }
-        if !self.fields.is_empty() {
-            count += 1;
-        }
-        if !self.vehicle_parts.is_empty() {
-            count += 1;
-        }
-        if !self.vehicle_part_locations.is_empty() {
-            count += 1;
-        }
-        if !self.vehicle_part_categories.is_empty() {
-            count += 1;
-        }
-        if !self.mutations.is_empty() {
-            count += 1;
-        }
-        if !self.mutation_categories.is_empty() {
-            count += 1;
-        }
-        if !self.trait_groups.is_empty() {
-            count += 1;
-        }
-        if !self.bionics.is_empty() {
-            count += 1;
-        }
-        if !self.effects.is_empty() {
-            count += 1;
-        }
-        if !self.factions.is_empty() {
-            count += 1;
-        }
-        if !self.scenarios.is_empty() {
-            count += 1;
-        }
-        if !self.materials.is_empty() {
-            count += 1;
-        }
-        if !self.skills.is_empty() {
-            count += 1;
-        }
-        if !self.traps.is_empty() {
-            count += 1;
-        }
-        if !self.start_locations.is_empty() {
-            count += 1;
-        }
-        if !self.json_flags.is_empty() {
-            count += 1;
-        }
-        if !self.ascii_art.is_empty() {
-            count += 1;
-        }
-        if !self.construction_groups.is_empty() {
-            count += 1;
-        }
-        if !self.item_actions.is_empty() {
-            count += 1;
-        }
-        if !self.techniques.is_empty() {
-            count += 1;
-        }
-        if !self.ammunition_types.is_empty() {
-            count += 1;
-        }
-        if !self.morale_types.is_empty() {
-            count += 1;
-        }
-        if !self.scent_types.is_empty() {
-            count += 1;
-        }
-        if !self.movement_modes.is_empty() {
-            count += 1;
-        }
-        if !self.mood_faces.is_empty() {
-            count += 1;
-        }
-        if !self.achievements.is_empty() {
-            count += 1;
-        }
-        if !self.body_parts.is_empty() {
-            count += 1;
-        }
-        if !self.dreams.is_empty() {
-            count += 1;
-        }
-        if !self.emits.is_empty() {
-            count += 1;
-        }
-        if !self.event_statistics.is_empty() {
-            count += 1;
-        }
-        if !self.harvests.is_empty() {
-            count += 1;
-        }
-        if !self.item_migrations.is_empty() {
-            count += 1;
-        }
-        if !self.monster_groups.is_empty() {
-            count += 1;
-        }
-        if !self.mutation_types.is_empty() {
-            count += 1;
-        }
-        if !self.nested_categories.is_empty() {
-            count += 1;
-        }
-        if !self.practices.is_empty() {
-            count += 1;
-        }
-        if !self.professions.is_empty() {
-            count += 1;
-        }
-        if !self.proficiencies.is_empty() {
-            count += 1;
-        }
-        if !self.scores.is_empty() {
-            count += 1;
-        }
-        if !self.species.is_empty() {
-            count += 1;
-        }
-        if !self.sub_body_parts.is_empty() {
-            count += 1;
-        }
-        if !self.uncrafts.is_empty() {
-            count += 1;
-        }
-        if !self.vitamins.is_empty() {
-            count += 1;
-        }
-        if !self.talk_topics.is_empty() {
-            count += 1;
-        }
-        if !self.widgets.is_empty() {
-            count += 1;
-        }
-        if !self.effects_on_condition.is_empty() {
-            count += 1;
-        }
-        if !self.constructions.is_empty() {
-            count += 1;
-        }
-        if !self.snippets.is_empty() {
-            count += 1;
-        }
-        if !self.npcs.is_empty() {
-            count += 1;
-        }
-        if !self.npc_classes.is_empty() {
-            count += 1;
-        }
-        if !self.requirements.is_empty() {
-            count += 1;
-        }
-        if !self.spells.is_empty() {
-            count += 1;
-        }
-        if !self.vehicles.is_empty() {
-            count += 1;
-        }
-        if !self.city_buildings.is_empty() {
-            count += 1;
-        }
-        if !self.mission_definitions.is_empty() {
-            count += 1;
-        }
-        if !self.event_transformations.is_empty() {
-            count += 1;
-        }
-        if !self.martial_arts.is_empty() {
-            count += 1;
-        }
-        if !self.monster_attacks.is_empty() {
-            count += 1;
-        }
-        if !self.weakpoint_sets.is_empty() {
-            count += 1;
-        }
-        if !self.recipe_groups.is_empty() {
-            count += 1;
-        }
-        if !self.monster_flags.is_empty() {
-            count += 1;
-        }
-        if !self.activity_types.is_empty() {
-            count += 1;
-        }
-        if !self.ammo_effects.is_empty() {
-            count += 1;
-        }
-        if !self.tool_qualities.is_empty() {
-            count += 1;
-        }
-        if !self.faults.is_empty() {
-            count += 1;
-        }
-        if !self.map_extras.is_empty() {
-            count += 1;
-        }
-        if !self.fault_fixes.is_empty() {
-            count += 1;
-        }
-        if !self.ter_furn_transforms.is_empty() {
-            count += 1;
-        }
-        if !self.connect_groups.is_empty() {
-            count += 1;
-        }
-        if !self.attack_vectors.is_empty() {
-            count += 1;
-        }
-        if !self.region_terrain_furnitures.is_empty() {
-            count += 1;
-        }
-        if !self.item_categories.is_empty() {
-            count += 1;
-        }
-        if !self.oter_visions.is_empty() {
-            count += 1;
-        }
-        if !self.profession_item_substitutions.is_empty() {
-            count += 1;
-        }
-        if !self.character_mods.is_empty() {
-            count += 1;
-        }
-        if !self.weapon_categories.is_empty() {
-            count += 1;
-        }
-        if !self.rotatable_symbols.is_empty() {
-            count += 1;
-        }
-        if !self.oter_id_migrations.is_empty() {
-            count += 1;
-        }
-        if !self.climbing_aids.is_empty() {
-            count += 1;
-        }
-        if !self.conducts.is_empty() {
-            count += 1;
-        }
-        if !self.weather_types.is_empty() {
-            count += 1;
-        }
-        if !self.proficiency_categories.is_empty() {
-            count += 1;
-        }
-        if !self.faction_missions.is_empty() {
-            count += 1;
-        }
-        if !self.fault_groups.is_empty() {
-            count += 1;
-        }
-        if !self.jmath_functions.is_empty() {
-            count += 1;
-        }
-        if !self.body_graphs.is_empty() {
-            count += 1;
-        }
-        if !self.limb_scores.is_empty() {
-            count += 1;
-        }
-        if !self.construction_categories.is_empty() {
-            count += 1;
-        }
-        if !self.recipe_categories.is_empty() {
-            count += 1;
-        }
-        if !self.addiction_types.is_empty() {
-            count += 1;
-        }
-        if !self.region_settings.is_empty() {
-            count += 1;
-        }
-        if !self.gates.is_empty() {
-            count += 1;
-        }
-        if !self.damage_types.is_empty() {
-            count += 1;
-        }
-        if !self.anatomies.is_empty() {
-            count += 1;
-        }
-        if !self.end_screens.is_empty() {
-            count += 1;
-        }
+        let mut count = 0usize;
+        macro_rules! count_present {
+            ($name:ident, $def_ty:ty, $json:expr, $field:ident, $strategy:ident) => {
+                count += usize::from(!self.$field.is_empty());
+            };
+        }
+        for_each_raw_def_kind!(call count_present);
+        count += usize::from(!self.mapgen.is_empty());
+        count += usize::from(!self.nested_mapgen.is_empty());
         count
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    /// The macro-driven `total_count` / `category_count` must reflect the
+    /// per-category maps. Populate several distinct categories and assert the
+    /// aggregates add them in (guards against a table/field desync). The entries
+    /// are built via serde (minimal JSON) rather than field-by-field literals,
+    /// so the test does not break when a def struct gains a field.
+    #[test]
+    fn counts_reflect_populated_fields() {
+        let mut reg = DefRegistry::empty();
+        assert_eq!(reg.total_count(), 0);
+        assert_eq!(reg.category_count(), 0);
+
+        let item: ItemDef = serde_json::from_str(r#"{ "id": "a", "volume": "1 ml" }"#).unwrap();
+        reg.items.insert(DefId::from("a"), Arc::new(item));
+
+        // 1 item in `items` → 1 total, 1 category.
+        assert_eq!(reg.total_count(), 1);
+        assert_eq!(reg.category_count(), 1);
+
+        // Populate a second category: mapgen (special-cased, not table-driven).
+        let mg: MapgenDef = serde_json::from_str(r#"{ "om_terrain": "omt_a" }"#).unwrap();
+        reg.mapgen.insert("omt_a".to_string(), vec![Arc::new(mg)]);
+        assert_eq!(reg.total_count(), 2);
+        assert_eq!(reg.category_count(), 2);
+    }
 }

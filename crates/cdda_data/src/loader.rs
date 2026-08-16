@@ -1,3 +1,4 @@
+use crate::for_each_raw_def_kind;
 use crate::registry::DefRegistry;
 use crate::resolve;
 use cdda_core_types::core::id::DefId;
@@ -617,460 +618,56 @@ impl Loader {
         (resolved, failures)
     }
 
+    /// Resolve every def in a category and return `(id, resolved_value,
+    /// copy_from_parent)` triples. Unlike [`resolve_type_raw`](Self::resolve_type_raw)
+    /// the returned tuples keep the *raw* `copy-from` linkage so callers (like
+    /// the Part-B export bridge) can reconstruct parent→child override chains
+    /// even though resolution strips the `copy-from` key from the resolved value.
+    ///
+    /// The `copy_from_parent` is `Some(name)` only for defs whose *raw* def
+    /// references an in-category parent; parentless defs (and abstract templates
+    /// which never reach the registry) yield `None`.
+    pub fn resolve_type_raw_with_parent(
+        &self,
+        type_name: &str,
+    ) -> (Vec<(String, Value, Option<String>)>, Vec<String>) {
+        let (items, failures) = self.resolve_type_raw(type_name);
+        let raw_map = self.build_raw_map(type_name);
+        let linked = items
+            .into_iter()
+            .map(|(id, value)| {
+                let parent = raw_map
+                    .get(&id)
+                    .and_then(|raw| {
+                        raw.get("copy-from")
+                            .or_else(|| raw.get("copy_from"))
+                            .and_then(serde_json::Value::as_str)
+                    })
+                    .map(str::to_string)
+                    // Only surface the link when the parent actually resolves
+                    // (i.e. exists in the raw map / build_raw_map handles it).
+                    .filter(|p| raw_map.contains_key(p));
+                (id, value, parent)
+            })
+            .collect();
+        (linked, failures)
+    }
+
     /// Pass 2: resolve all raw definitions into typed structs.
     fn resolve_all(&self, errors: &mut Vec<LoaderError>) -> DefRegistry {
         let mut registry = DefRegistry::empty();
 
-        // ---- Items ----
-        self.resolve_type_with_pipeline::<ItemDef>("ITEM", &mut registry.items, errors);
+        // Drive every standard category from the single `for_each_raw_def_kind!`
+        // table. Each row expands to one `resolve_type_with_pipeline` call:
+        //   resolve_type_with_pipeline::<DefType>(json_type, &mut registry.field, errors)
+        macro_rules! resolve_one {
+            ($name:ident, $def_ty:ty, $json:expr, $field:ident, $strategy:ident) => {
+                self.resolve_type_with_pipeline::<$def_ty>($json, &mut registry.$field, errors);
+            };
+        }
+        for_each_raw_def_kind!(call resolve_one);
 
-        // ---- Monsters ----
-        self.resolve_type_with_pipeline::<MonsterDef>("MONSTER", &mut registry.monsters, errors);
-
-        // ---- Terrain / Furniture ----
-        self.resolve_type_with_pipeline::<TerrainDef>("terrain", &mut registry.terrain, errors);
-        self.resolve_type_with_pipeline::<FurnitureDef>(
-            "furniture",
-            &mut registry.furniture,
-            errors,
-        );
-
-        // ---- Recipes ----
-        self.resolve_type_with_pipeline::<RecipeDef>("recipe", &mut registry.recipes, errors);
-
-        // ---- Item groups / Palettes ----
-        self.resolve_type_with_pipeline::<ItemGroupDef>(
-            "item_group",
-            &mut registry.item_groups,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<MapgenPaletteDef>(
-            "palette",
-            &mut registry.palettes,
-            errors,
-        );
-
-        // ---- Overmap ----
-        self.resolve_type_with_pipeline::<OvermapTerrainDef>(
-            "overmap_terrain",
-            &mut registry.overmap_terrains,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<OvermapSpecialDef>(
-            "overmap_special",
-            &mut registry.overmap_specials,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<OvermapConnectionDef>(
-            "overmap_connection",
-            &mut registry.overmap_connections,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<OvermapLocationDef>(
-            "overmap_location",
-            &mut registry.overmap_locations,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<OvermapLandUseCodeDef>(
-            "overmap_land_use_code",
-            &mut registry.overmap_land_use_codes,
-            errors,
-        );
-
-        // ---- Fields ----
-        self.resolve_type_with_pipeline::<FieldDef>("field_type", &mut registry.fields, errors);
-
-        // ---- Vehicle parts ----
-        self.resolve_type_with_pipeline::<VehiclePartDef>(
-            "vehicle_part",
-            &mut registry.vehicle_parts,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<VehiclePartLocationDef>(
-            "vehicle_part_location",
-            &mut registry.vehicle_part_locations,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<VehiclePartCategoryDef>(
-            "vehicle_part_category",
-            &mut registry.vehicle_part_categories,
-            errors,
-        );
-
-        // ---- Mutations ----
-        self.resolve_type_with_pipeline::<MutationDef>("mutation", &mut registry.mutations, errors);
-        self.resolve_type_with_pipeline::<MutationCategoryDef>(
-            "mutation_category",
-            &mut registry.mutation_categories,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<TraitGroupDef>(
-            "trait_group",
-            &mut registry.trait_groups,
-            errors,
-        );
-
-        // ---- Bionics ----
-        self.resolve_type_with_pipeline::<BionicDef>("bionic", &mut registry.bionics, errors);
-
-        // ---- Effects ----
-        self.resolve_type_with_pipeline::<EffectDef>("effect_type", &mut registry.effects, errors);
-
-        // ---- Factions / Scenarios ----
-        self.resolve_type_with_pipeline::<FactionDef>("faction", &mut registry.factions, errors);
-        self.resolve_type_with_pipeline::<ScenarioDef>("scenario", &mut registry.scenarios, errors);
-
-        // ---- Materials / Skills ----
-        self.resolve_type_with_pipeline::<MaterialDef>("material", &mut registry.materials, errors);
-        self.resolve_type_with_pipeline::<SkillDef>("skill", &mut registry.skills, errors);
-
-        // ---- Traps / Start Locations ----
-        self.resolve_type_with_pipeline::<TrapDef>("trap", &mut registry.traps, errors);
-        self.resolve_type_with_pipeline::<StartLocationDef>(
-            "start_location",
-            &mut registry.start_locations,
-            errors,
-        );
-
-        // ---- New type categories ----
-        self.resolve_type_with_pipeline::<JsonFlagDef>(
-            "json_flag",
-            &mut registry.json_flags,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<AsciiArtDef>(
-            "ascii_art",
-            &mut registry.ascii_art,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<ConstructionGroupDef>(
-            "construction_group",
-            &mut registry.construction_groups,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<ItemActionDef>(
-            "item_action",
-            &mut registry.item_actions,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<TechniqueDef>(
-            "technique",
-            &mut registry.techniques,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<AmmunitionTypeDef>(
-            "ammunition_type",
-            &mut registry.ammunition_types,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<MoraleTypeDef>(
-            "morale_type",
-            &mut registry.morale_types,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<ScentTypeDef>(
-            "scent_type",
-            &mut registry.scent_types,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<MovementModeDef>(
-            "movement_mode",
-            &mut registry.movement_modes,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<MoodFaceDef>(
-            "mood_face",
-            &mut registry.mood_faces,
-            errors,
-        );
-
-        // ---- New batch B types ----
-        self.resolve_type_with_pipeline::<AchievementDef>(
-            "achievement",
-            &mut registry.achievements,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<BodyPartDef>(
-            "body_part",
-            &mut registry.body_parts,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<DreamDef>("dream", &mut registry.dreams, errors);
-        self.resolve_type_with_pipeline::<EmitDef>("emit", &mut registry.emits, errors);
-        self.resolve_type_with_pipeline::<EventStatisticDef>(
-            "event_statistic",
-            &mut registry.event_statistics,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<HarvestDef>("harvest", &mut registry.harvests, errors);
-        self.resolve_type_with_pipeline::<ItemMigrationDef>(
-            "MIGRATION",
-            &mut registry.item_migrations,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<MonsterGroupDef>(
-            "monstergroup",
-            &mut registry.monster_groups,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<MutationTypeDef>(
-            "mutation_type",
-            &mut registry.mutation_types,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<NestedCategoryDef>(
-            "nested_category",
-            &mut registry.nested_categories,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<PracticeDef>("practice", &mut registry.practices, errors);
-        self.resolve_type_with_pipeline::<ProfessionDef>(
-            "profession",
-            &mut registry.professions,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<ProficiencyDef>(
-            "proficiency",
-            &mut registry.proficiencies,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<ScoreDef>("score", &mut registry.scores, errors);
-        self.resolve_type_with_pipeline::<SpeciesDef>("SPECIES", &mut registry.species, errors);
-        self.resolve_type_with_pipeline::<SubBodyPartDef>(
-            "sub_body_part",
-            &mut registry.sub_body_parts,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<UncraftDef>("uncraft", &mut registry.uncrafts, errors);
-        self.resolve_type_with_pipeline::<VitaminDef>("vitamin", &mut registry.vitamins, errors);
-
-        // ---- Batch C types (52 new definition types) ----
-        self.resolve_type_with_pipeline::<TalkTopicDef>(
-            "talk_topic",
-            &mut registry.talk_topics,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<WidgetDef>("widget", &mut registry.widgets, errors);
-        self.resolve_type_with_pipeline::<EffectOnConditionDef>(
-            "effect_on_condition",
-            &mut registry.effects_on_condition,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<ConstructionDef>(
-            "construction",
-            &mut registry.constructions,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<SnippetDef>("snippet", &mut registry.snippets, errors);
-        self.resolve_type_with_pipeline::<NpcDef>("npc", &mut registry.npcs, errors);
-        self.resolve_type_with_pipeline::<NpcClassDef>(
-            "npc_class",
-            &mut registry.npc_classes,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<RequirementDef>(
-            "requirement",
-            &mut registry.requirements,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<SpellDef>("SPELL", &mut registry.spells, errors);
-        self.resolve_type_with_pipeline::<VehicleDef>("vehicle", &mut registry.vehicles, errors);
-        self.resolve_type_with_pipeline::<CityBuildingDef>(
-            "city_building",
-            &mut registry.city_buildings,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<MissionDefinitionDef>(
-            "mission_definition",
-            &mut registry.mission_definitions,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<EventTransformationDef>(
-            "event_transformation",
-            &mut registry.event_transformations,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<MartialArtDef>(
-            "martial_art",
-            &mut registry.martial_arts,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<MonsterAttackDef>(
-            "monster_attack",
-            &mut registry.monster_attacks,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<WeakpointSetDef>(
-            "weakpoint_set",
-            &mut registry.weakpoint_sets,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<RecipeGroupDef>(
-            "recipe_group",
-            &mut registry.recipe_groups,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<MonsterFlagDef>(
-            "monster_flag",
-            &mut registry.monster_flags,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<ActivityTypeDef>(
-            "activity_type",
-            &mut registry.activity_types,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<AmmoEffectDef>(
-            "ammo_effect",
-            &mut registry.ammo_effects,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<ToolQualityDef>(
-            "tool_quality",
-            &mut registry.tool_qualities,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<FaultDef>("fault", &mut registry.faults, errors);
-        self.resolve_type_with_pipeline::<MapExtraDef>(
-            "map_extra",
-            &mut registry.map_extras,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<FaultFixDef>(
-            "fault_fix",
-            &mut registry.fault_fixes,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<TerFurnTransformDef>(
-            "ter_furn_transform",
-            &mut registry.ter_furn_transforms,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<ConnectGroupDef>(
-            "connect_group",
-            &mut registry.connect_groups,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<AttackVectorDef>(
-            "attack_vector",
-            &mut registry.attack_vectors,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<RegionTerrainFurnitureDef>(
-            "region_terrain_furniture",
-            &mut registry.region_terrain_furnitures,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<ItemCategoryDef>(
-            "ITEM_CATEGORY",
-            &mut registry.item_categories,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<OterVisionDef>(
-            "oter_vision",
-            &mut registry.oter_visions,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<ProfessionItemSubstitutionsDef>(
-            "profession_item_substitutions",
-            &mut registry.profession_item_substitutions,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<CharacterModDef>(
-            "character_mod",
-            &mut registry.character_mods,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<WeaponCategoryDef>(
-            "weapon_category",
-            &mut registry.weapon_categories,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<RotatableSymbolDef>(
-            "rotatable_symbol",
-            &mut registry.rotatable_symbols,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<OterIdMigrationDef>(
-            "oter_id_migration",
-            &mut registry.oter_id_migrations,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<ClimbingAidDef>(
-            "climbing_aid",
-            &mut registry.climbing_aids,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<ConductDef>("conduct", &mut registry.conducts, errors);
-        self.resolve_type_with_pipeline::<WeatherTypeDef>(
-            "weather_type",
-            &mut registry.weather_types,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<ProficiencyCategoryDef>(
-            "proficiency_category",
-            &mut registry.proficiency_categories,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<FactionMissionDef>(
-            "faction_mission",
-            &mut registry.faction_missions,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<FaultGroupDef>(
-            "fault_group",
-            &mut registry.fault_groups,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<JmathFunctionDef>(
-            "jmath_function",
-            &mut registry.jmath_functions,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<BodyGraphDef>(
-            "body_graph",
-            &mut registry.body_graphs,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<LimbScoreDef>(
-            "limb_score",
-            &mut registry.limb_scores,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<ConstructionCategoryDef>(
-            "construction_category",
-            &mut registry.construction_categories,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<RecipeCategoryDef>(
-            "recipe_category",
-            &mut registry.recipe_categories,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<AddictionTypeDef>(
-            "addiction_type",
-            &mut registry.addiction_types,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<RegionSettingsDef>(
-            "region_settings",
-            &mut registry.region_settings,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<GateDef>("gate", &mut registry.gates, errors);
-        self.resolve_type_with_pipeline::<DamageTypeDef>(
-            "damage_type",
-            &mut registry.damage_types,
-            errors,
-        );
-        self.resolve_type_with_pipeline::<AnatomyDef>("anatomy", &mut registry.anatomies, errors);
-        self.resolve_type_with_pipeline::<EndScreenDef>(
-            "end_screen",
-            &mut registry.end_screens,
-            errors,
-        );
-
-        // ---- Mapgen (deferred for Stage 2) ----
+        // ---- Mapgen (deferred: String-keyed, special-cased, not in the table) ----
         self.resolve_mapgen(&mut registry, errors);
 
         // ---- Log skipped types ----
@@ -1086,119 +683,20 @@ impl Loader {
     }
 
     /// Log types that exist in the raw data but don't have a registered handler.
+    ///
+    /// The handled-type set is derived from the `for_each_raw_def_kind!` table
+    /// (one `json_type` string per category) rather than re-listed by hand, so
+    /// adding a category can never silently desync the skip log.
     fn log_skipped_types(&self) {
-        let handled_types: std::collections::HashSet<&str> = [
-            "ITEM",
-            "MONSTER",
-            "terrain",
-            "furniture",
-            "recipe",
-            "item_group",
-            "palette",
-            "overmap_terrain",
-            "overmap_special",
-            "overmap_connection",
-            "overmap_location",
-            "overmap_land_use_code",
-            "field_type",
-            "vehicle_part",
-            "vehicle_part_location",
-            "vehicle_part_category",
-            "mutation",
-            "mutation_category",
-            "trait_group",
-            "bionic",
-            "effect_type",
-            "faction",
-            "scenario",
-            "material",
-            "skill",
-            "trap",
-            "start_location",
-            "json_flag",
-            "ascii_art",
-            "construction_group",
-            "item_action",
-            "technique",
-            "ammunition_type",
-            "morale_type",
-            "scent_type",
-            "movement_mode",
-            "mood_face",
-            "achievement",
-            "body_part",
-            "dream",
-            "emit",
-            "event_statistic",
-            "harvest",
-            "MIGRATION",
-            "monstergroup",
-            "mutation_type",
-            "nested_category",
-            "practice",
-            "profession",
-            "proficiency",
-            "score",
-            "SPECIES",
-            "sub_body_part",
-            "uncraft",
-            "vitamin",
-            "talk_topic",
-            "widget",
-            "effect_on_condition",
-            "construction",
-            "snippet",
-            "npc",
-            "npc_class",
-            "requirement",
-            "SPELL",
-            "vehicle",
-            "city_building",
-            "mission_definition",
-            "event_transformation",
-            "martial_art",
-            "monster_attack",
-            "weakpoint_set",
-            "recipe_group",
-            "monster_flag",
-            "activity_type",
-            "ammo_effect",
-            "tool_quality",
-            "fault",
-            "map_extra",
-            "fault_fix",
-            "ter_furn_transform",
-            "connect_group",
-            "attack_vector",
-            "region_terrain_furniture",
-            "ITEM_CATEGORY",
-            "oter_vision",
-            "profession_item_substitutions",
-            "character_mod",
-            "weapon_category",
-            "rotatable_symbol",
-            "oter_id_migration",
-            "climbing_aid",
-            "conduct",
-            "weather_type",
-            "proficiency_category",
-            "faction_mission",
-            "fault_group",
-            "jmath_function",
-            "body_graph",
-            "limb_score",
-            "construction_category",
-            "recipe_category",
-            "addiction_type",
-            "region_settings",
-            "gate",
-            "damage_type",
-            "anatomy",
-            "end_screen",
-        ]
-        .iter()
-        .copied()
-        .collect();
+        let mut handled_types: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        macro_rules! collect_type {
+            ($name:ident, $def_ty:ty, $json:expr, $field:ident, $strategy:ident) => {
+                handled_types.insert($json);
+            };
+        }
+        for_each_raw_def_kind!(call collect_type);
+        // `mapgen` is intentionally handled (its own resolver) though abstract.
+        handled_types.insert("mapgen");
 
         for type_name in self.raw_by_type.keys() {
             if !handled_types.contains(type_name.as_str()) {

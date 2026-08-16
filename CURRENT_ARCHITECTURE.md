@@ -81,6 +81,25 @@ The data loading follows a two-pass approach:
 After loading, the `DefinitionWorld` resource maps string IDs to entity IDs for
 runtime lookup.
 
+### Part-B bridge (import/export adapters)
+
+The **fully-resolved raw JSON** (the output of `Loader::resolve_type_raw`) is the
+lossless source of truth for every def. Typed structs and Bevy components are
+*projections*, not independent stores. A decoupled import/export `bridge`
+(`crates/cdda_data/src/bridge.rs`) is the seam a GUI JSON editor / format
+migration builds on:
+
+- **Import:** resolved JSON → `DefRecord<T>` (a Bevy `Component` carrying both
+  the raw `Value` and the typed parse), so unmodeled keys are never dropped.
+- **Export:** `compute_overrides` + `apply_delta` + `export_override_def`
+  rebuild the *minimal* `copy-from` override delta against a def's parent —
+  inherited (unchanged) fields are omitted, new fields added, removed inherited
+  fields become `delete`. Re-applying the delta to the parent reproduces the
+  child (verified across `data/core` by the `bridge` CLI / `bridge_all_types`).
+
+Import and export are fully independent (no shared state), so a new wire format
+(v2, a mod-pack delta, a different storage layout) needs only a new adapter.
+
 ## Simulation Tick
 
 The simulation runs in `GameSet::Sim` with phases ordered via `SimSet`:
@@ -131,6 +150,9 @@ See the root `AGENTS.md` and the priority list below. Key issues:
 - **build_def_world** is a ~900-line function mixing parsing, registry building,
   and entity spawning
 - **DefRegistry** has ~100+ fields as a single global registry struct
+  (the per-field `total_count` / `category_count` / `resolve_all` / skipped-type
+  list are now macro-generated from the `for_each_raw_def_kind!` table, but the
+  struct fields themselves and `DefRegistry::empty` are still hand-maintained)
 - **Some bool fields** in Bionic and MutationEntry still exist (partially migrated
   to tag components)
 - **Hardcoded magic constants** (world seed, tile sizes, stat bounds)
