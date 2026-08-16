@@ -1,173 +1,316 @@
-//! ECS systems for the activity system.
+//! Activity systems — one regular system per activity type.
 //!
-//! Drives the multi-turn activity lifecycle each simulation tick.
-//! The actor methods receive individual mutable fields extracted from
-//! `PlayerActivity` so callers never hold a borrow of the component while
-//! also needing `&mut World`.
+//! Each system drives a specific activity's lifecycle (start → tick → finish)
+//! and uses typed queries instead of `&mut World`.  This lets Bevy parallelize
+//! activity processing across different characters and alongside other simulation
+//! work.
+//!
+//! ## Per-system flow
+//!
+//! 1. **Pending** — set up `moves_total`/`moves_left`, transition to `Active`.
+//! 2. **Active** — decrement progress, deduct resources, check completion.
+//! 3. **Done** — emit completion events, remove the activity components.
+//!
+//! Pending → Active transition and the first tick run in the same frame
+//! (single-pass iteration checks both phases sequentially).
 
+use bevy_ecs::message::MessageWriter;
 use bevy_ecs::prelude::*;
+use cdda_components::actor::ActionPoints;
+use cdda_components::item::InProgressCraft;
+use cdda_components::messages::CraftCompleted;
 
-use super::components::{ActivityPhase, PlayerActivity};
-use super::tracker::ActivityTracker;
+use super::components::{
+    ActivityPhase, ActivityProgress, Aiming, Crafting, Interacting, Reading, Reloading, Waiting,
+};
+use super::tracker::{
+    ActivityTracker, BRISK_EXERCISE, LIGHT_EXERCISE, MODERATE_EXERCISE, NO_EXERCISE,
+};
+use crate::actor::turn::AP_COST_CRAFT_TICK;
 
-// ---------------------------------------------------------------------------
-// start_pending_activities
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Crafting
+// ===========================================================================
 
-/// Call `actor.start()` on every character whose `PlayerActivity` is `Pending`.
-/// Must run before `tick_activities` each turn.
-pub fn start_pending_activities(world: &mut World) {
-    let pending: Vec<Entity> = world
-        .query_filtered::<Entity, With<PlayerActivity>>()
-        .iter(world)
-        .filter(|&e| {
-            world
-                .get::<PlayerActivity>(e)
-                .map(|a| a.phase == ActivityPhase::Pending)
-                .unwrap_or(false)
-        })
-        .collect();
+/// Tick all crafting activities: start, progress, finish.
+pub fn tick_crafting(
+    mut commands: Commands,
+    mut query: Query<(
+        Entity,
+        &mut ActivityProgress,
+        &Crafting,
+        Option<&mut ActionPoints>,
+        Option<&mut ActivityTracker>,
+    )>,
+    mut craft_query: Query<&mut InProgressCraft>,
+    mut craft_done: MessageWriter<CraftCompleted>,
+) {
+    for (entity, mut progress, crafting, ap, tracker) in &mut query {
+        // ── Pending → Active transition ────────────────────────────
+        if progress.phase == ActivityPhase::Pending {
+            let ap_total = craft_query
+                .get(crafting.craft_entity)
+                .map(|c| c.ap_total)
+                .unwrap_or(100);
+            progress.moves_total = ap_total;
+            progress.moves_left = ap_total;
+            progress.phase = ActivityPhase::Active;
+        }
 
-    for entity in pending {
-        let mut actor = {
-            let mut act = world.get_mut::<PlayerActivity>(entity).unwrap();
-            act.phase = ActivityPhase::Active;
-            act.actor.take()
-        };
+        // ── Active: tick ───────────────────────────────────────────
+        if progress.phase == ActivityPhase::Active {
+            // Guard: craft entity may have been despawned externally.
+            if craft_query.get(crafting.craft_entity).is_err() {
+                progress.phase = ActivityPhase::Done;
+                progress.moves_left = 0;
+                continue;
+            }
 
-        if let Some(ref mut a) = actor {
-            let (mut moves_total, mut moves_left) = (0i32, 0i32);
-            a.start(&mut moves_total, &mut moves_left, entity, world);
-            if let Some(mut act) = world.get_mut::<PlayerActivity>(entity) {
-                act.moves_total = moves_total;
-                act.moves_left = moves_left;
+            // Spend AP and advance craft progress.
+            if let Some(mut ap) = ap {
+                ap.spend(AP_COST_CRAFT_TICK);
+            }
+            if let Some(mut tracker) = tracker {
+                tracker.log_activity(BRISK_EXERCISE);
+            }
+
+            if let Ok(mut craft) = craft_query.get_mut(crafting.craft_entity) {
+                craft.ap_spent += AP_COST_CRAFT_TICK;
+            }
+            progress.moves_left -= AP_COST_CRAFT_TICK;
+            if progress.moves_left <= 0 {
+                progress.phase = ActivityPhase::Done;
             }
         }
 
-        if let Some(mut act) = world.get_mut::<PlayerActivity>(entity) {
-            act.actor = actor;
+        // ── Done: emit completion message, remove components ───────
+        if progress.phase == ActivityPhase::Done {
+            craft_done.write(CraftCompleted {
+                crafter: entity,
+                craft_entity: crafting.craft_entity,
+            });
+            commands.entity(entity).remove::<Crafting>();
+            commands.entity(entity).remove::<ActivityProgress>();
         }
     }
 }
 
-// ---------------------------------------------------------------------------
-// tick_activities
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Aiming
+// ===========================================================================
 
-/// Advance every active `PlayerActivity` by one turn.
-pub fn tick_activities(world: &mut World) {
-    let active: Vec<Entity> = world
-        .query_filtered::<Entity, With<PlayerActivity>>()
-        .iter(world)
-        .filter(|&e| {
-            world
-                .get::<PlayerActivity>(e)
-                .map(|a| a.phase == ActivityPhase::Active)
-                .unwrap_or(false)
-        })
-        .collect();
+/// Tick all aiming activities: start, progress, finish.
+pub fn tick_aiming(
+    mut commands: Commands,
+    mut query: Query<(
+        Entity,
+        &mut ActivityProgress,
+        &mut Aiming,
+        Option<&mut ActivityTracker>,
+    )>,
+) {
+    for (entity, mut progress, mut aiming, tracker) in &mut query {
+        if progress.phase == ActivityPhase::Pending {
+            // Aim is NEITHER-based; tick drives it.
+            progress.moves_total = -1;
+            progress.moves_left = 1;
+            progress.phase = ActivityPhase::Active;
+        }
 
-    for entity in active {
-        tick_one(world, entity);
+        if progress.phase == ActivityPhase::Active {
+            if let Some(mut t) = tracker {
+                t.log_activity(LIGHT_EXERCISE);
+            }
+            aiming.cur_aim = (aiming.cur_aim + 5).min(aiming.target_aim_percent);
+            if aiming.cur_aim >= aiming.target_aim_percent {
+                progress.phase = ActivityPhase::Done;
+            }
+        }
 
-        if let Some(mut tracker) = world.get_mut::<ActivityTracker>(entity) {
-            tracker.new_turn(false);
+        if progress.phase == ActivityPhase::Done {
+            commands
+                .entity(entity)
+                .remove::<(Aiming, ActivityProgress)>();
         }
     }
 }
 
-/// Tick a single entity's activity: do_turn, then finish if complete.
-pub fn tick_one(world: &mut World, entity: Entity) {
-    // Take actor out so we can call do_turn with a free &mut World.
-    let mut actor = {
-        let Some(mut act) = world.get_mut::<PlayerActivity>(entity) else {
-            return;
-        };
-        act.actor.take()
-    };
+// ===========================================================================
+// Reading
+// ===========================================================================
 
-    // do_turn — extract moves_left, pass it by &mut, write back.
-    let mut moves_left = world
-        .get::<PlayerActivity>(entity)
-        .map(|a| a.moves_left)
-        .unwrap_or(0);
+/// Tick all reading activities: start, progress, finish.
+pub fn tick_reading(
+    mut commands: Commands,
+    mut query: Query<(
+        Entity,
+        &mut ActivityProgress,
+        &mut Reading,
+        Option<&mut ActivityTracker>,
+    )>,
+) {
+    for (entity, mut progress, mut reading, tracker) in &mut query {
+        if progress.phase == ActivityPhase::Pending {
+            progress.moves_total = reading.turns_total * 100;
+            progress.moves_left = reading.turns_total * 100;
+            progress.phase = ActivityPhase::Active;
+        }
 
-    if let Some(ref mut a) = actor {
-        a.do_turn(&mut moves_left, entity, world);
-    }
+        if progress.phase == ActivityPhase::Active {
+            if let Some(mut t) = tracker {
+                t.log_activity(NO_EXERCISE);
+            }
+            reading.turns_read += 1;
+            progress.moves_left -= 100;
+            if progress.moves_left <= 0 {
+                progress.phase = ActivityPhase::Done;
+            }
+        }
 
-    if let Some(mut act) = world.get_mut::<PlayerActivity>(entity) {
-        act.moves_left = moves_left;
-        act.actor = actor.take();
-    }
-
-    // Finish if complete.
-    let is_complete = world
-        .get::<PlayerActivity>(entity)
-        .map(|a| a.is_complete())
-        .unwrap_or(false);
-
-    if is_complete {
-        finish_activity(world, entity);
+        if progress.phase == ActivityPhase::Done {
+            commands
+                .entity(entity)
+                .remove::<(Reading, ActivityProgress)>();
+        }
     }
 }
 
-/// Run `actor.finish()` and mark the activity as Done.
-pub fn finish_activity(world: &mut World, entity: Entity) {
-    let mut actor = {
-        let Some(mut act) = world.get_mut::<PlayerActivity>(entity) else {
-            return;
-        };
-        act.phase = ActivityPhase::Done;
-        act.actor.take()
-    };
+// ===========================================================================
+// Waiting
+// ===========================================================================
 
-    if let Some(ref mut a) = actor {
-        a.finish(entity, world);
+/// Tick all waiting activities: start, progress, finish.
+pub fn tick_waiting(
+    mut commands: Commands,
+    mut query: Query<(
+        Entity,
+        &mut ActivityProgress,
+        &Waiting,
+        Option<&mut ActivityTracker>,
+    )>,
+) {
+    for (entity, mut progress, waiting, tracker) in &mut query {
+        if progress.phase == ActivityPhase::Pending {
+            progress.moves_total = waiting.turns * 100;
+            progress.moves_left = waiting.turns * 100;
+            progress.phase = ActivityPhase::Active;
+        }
+
+        if progress.phase == ActivityPhase::Active {
+            if let Some(mut t) = tracker {
+                t.log_activity(NO_EXERCISE);
+            }
+            progress.moves_left -= 100;
+            if progress.moves_left <= 0 {
+                progress.phase = ActivityPhase::Done;
+            }
+        }
+
+        if progress.phase == ActivityPhase::Done {
+            commands
+                .entity(entity)
+                .remove::<(Waiting, ActivityProgress)>();
+        }
     }
-
-    // Remove the component; Done activities are cleaned up immediately.
-    world.entity_mut(entity).remove::<PlayerActivity>();
 }
 
-// ---------------------------------------------------------------------------
-// cleanup_done_activities
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Reloading
+// ===========================================================================
 
-/// Remove any `PlayerActivity` components stuck in phase `Done` (safety net).
+/// Tick all reloading activities: start, progress, finish.
+pub fn tick_reloading(
+    mut commands: Commands,
+    mut query: Query<(
+        Entity,
+        &mut ActivityProgress,
+        &Reloading,
+        Option<&mut ActivityTracker>,
+    )>,
+) {
+    for (entity, mut progress, reloading, tracker) in &mut query {
+        if progress.phase == ActivityPhase::Pending {
+            let base =
+                (reloading.quantity as f32 * 100.0 / reloading.speed_factor.max(0.01)) as i32;
+            progress.moves_total = base;
+            progress.moves_left = base;
+            progress.phase = ActivityPhase::Active;
+        }
+
+        if progress.phase == ActivityPhase::Active {
+            if let Some(mut t) = tracker {
+                t.log_activity(LIGHT_EXERCISE);
+            }
+            progress.moves_left -= 100;
+            if progress.moves_left <= 0 {
+                progress.phase = ActivityPhase::Done;
+            }
+        }
+
+        if progress.phase == ActivityPhase::Done {
+            commands
+                .entity(entity)
+                .remove::<(Reloading, ActivityProgress)>();
+        }
+    }
+}
+
+// ===========================================================================
+// Interacting
+// ===========================================================================
+
+/// Tick all generic interaction activities: start, progress, finish.
+pub fn tick_interacting(
+    mut commands: Commands,
+    mut query: Query<(
+        Entity,
+        &mut ActivityProgress,
+        &Interacting,
+        Option<&mut ActivityTracker>,
+    )>,
+) {
+    for (entity, mut progress, interacting, tracker) in &mut query {
+        if progress.phase == ActivityPhase::Pending {
+            progress.moves_total = interacting.duration * 100;
+            progress.moves_left = interacting.duration * 100;
+            progress.phase = ActivityPhase::Active;
+        }
+
+        if progress.phase == ActivityPhase::Active {
+            if let Some(mut t) = tracker {
+                t.log_activity(MODERATE_EXERCISE);
+            }
+            progress.moves_left -= 100;
+            if progress.moves_left <= 0 {
+                progress.phase = ActivityPhase::Done;
+            }
+        }
+
+        if progress.phase == ActivityPhase::Done {
+            commands
+                .entity(entity)
+                .remove::<(Interacting, ActivityProgress)>();
+        }
+    }
+}
+
+// ===========================================================================
+// cleanup_done_activities — safety net for stale Done-phase activities
+// ===========================================================================
+
+/// Remove any activity in `Done` phase that wasn't cleaned up by its tick system.
+///
+/// This catches edge cases like deserialized activities, externally despawned
+/// craft entities, or activities that missed their finish step.
 pub fn cleanup_done_activities(
     mut commands: Commands,
-    query: Query<Entity, With<PlayerActivity>>,
-    world: &World,
+    q_progress: Query<(Entity, &ActivityProgress)>,
 ) {
-    for entity in &query {
-        if let Some(act) = world.get::<PlayerActivity>(entity) {
-            if act.phase == ActivityPhase::Done {
-                commands.entity(entity).remove::<PlayerActivity>();
-            }
+    for (entity, progress) in &q_progress {
+        if progress.phase == ActivityPhase::Done {
+            // Remove the progress component; the type component stays
+            // and will be cleaned up by the next tick cycle or this one.
+            commands.entity(entity).remove::<ActivityProgress>();
         }
     }
-}
-
-// ---------------------------------------------------------------------------
-// cancel_activity
-// ---------------------------------------------------------------------------
-
-/// Cancel the active activity on `entity`, calling `actor.canceled()` first.
-pub fn cancel_activity(entity: Entity, world: &mut World) {
-    if world.get::<PlayerActivity>(entity).is_none() {
-        return;
-    }
-
-    let mut actor = {
-        let mut act = world.get_mut::<PlayerActivity>(entity).unwrap();
-        act.phase = ActivityPhase::Done;
-        act.actor.take()
-    };
-
-    if let Some(ref mut a) = actor {
-        a.canceled(entity, world);
-    }
-
-    world.entity_mut(entity).remove::<PlayerActivity>();
 }

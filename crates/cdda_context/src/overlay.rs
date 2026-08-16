@@ -69,14 +69,14 @@ impl OverlayStack {
 // Systems
 // ---------------------------------------------------------------------------
 
-/// Push an `ActivityProgress` overlay when a `PlayerActivity` becomes active.
-/// Runs after `start_pending_activities`.
+/// Push an `ActivityProgress` overlay when any activity becomes active.
+/// Runs after activity tick systems.
 pub fn sync_activity_overlay(world: &mut World) {
-    use cdda_sim::activity::components::{ActivityPhase, PlayerActivity};
+    use cdda_sim::activity::components::{ActivityPhase, ActivityProgress};
 
     let mut to_push: Vec<(Entity, String, u32)> = Vec::new();
     {
-        let mut q = world.query::<(Entity, &PlayerActivity)>();
+        let mut q = world.query::<(Entity, &ActivityProgress)>();
         for (entity, act) in q.iter(world) {
             if act.phase == ActivityPhase::Active {
                 let pct = if act.moves_total > 0 {
@@ -84,7 +84,7 @@ pub fn sync_activity_overlay(world: &mut World) {
                 } else {
                     0
                 };
-                to_push.push((entity, act.activity_type.0.clone(), pct));
+                to_push.push((entity, "activity".into(), pct));
             }
         }
     }
@@ -105,12 +105,12 @@ pub fn sync_activity_overlay(world: &mut World) {
     }
 }
 
-/// Remove `ActivityProgress` overlays when no active `PlayerActivity` exists.
+/// Remove `ActivityProgress` overlays when no active progress exists.
 pub fn cleanup_activity_overlay(world: &mut World) {
-    use cdda_sim::activity::components::{ActivityPhase, PlayerActivity};
+    use cdda_sim::activity::components::{ActivityPhase, ActivityProgress};
 
     let has_active = {
-        let mut q = world.query::<&PlayerActivity>();
+        let mut q = world.query::<&ActivityProgress>();
         q.iter(world).any(|a| a.phase == ActivityPhase::Active)
     };
 

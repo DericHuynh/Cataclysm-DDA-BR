@@ -1,17 +1,24 @@
 //! ECS components for the activity system.
+//!
+//! Each activity type gets its own component (e.g. `Crafting`, `Aiming`).
+//! `ActivityProgress` tracks common progress fields for any activity.
+//!
+//! ## Multi-activity architecture
+//!
+//! Each activity component carries its own progress tracking so that a
+//! character can hold multiple activities simultaneously in the future
+//! (e.g. dual-wield crafting with a trait).  Currently the simulation only
+//! creates one activity at a time, but the component design does not
+//! prevent multiple.
 
 use bevy_ecs::prelude::*;
-use bevy_reflect::Reflect;
-use cdda_core_types::core::coords::WorldPos;
-
-use super::actor::ActivityActor;
 
 // ---------------------------------------------------------------------------
 // ActivityTypeId — string ID of an activity_type def
 // ---------------------------------------------------------------------------
 
 /// The string identifier of an `activity_type` definition (e.g. `"ACT_READ"`).
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Reflect)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ActivityTypeId(pub String);
 
 impl ActivityTypeId {
@@ -27,13 +34,13 @@ impl ActivityTypeId {
 // ActivityPhase
 // ---------------------------------------------------------------------------
 
-/// Lifecycle phase of a `PlayerActivity`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Reflect)]
+/// Lifecycle phase of an activity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ActivityPhase {
     /// `start()` has not yet been called.
     #[default]
     Pending,
-    /// Activity is in progress (`do_turn()` called each tick).
+    /// Activity is in progress (ticked each frame).
     Active,
     /// Activity has been suspended (can be resumed later).
     Suspended,
@@ -42,76 +49,94 @@ pub enum ActivityPhase {
 }
 
 // ---------------------------------------------------------------------------
-// PlayerActivity — the active multi-turn task on a character
+// ActivityProgress — shared progress tracking for any activity
 // ---------------------------------------------------------------------------
 
-/// The current multi-turn activity assigned to a character.
+/// Common move-count progress for any multi-turn activity.
 ///
-/// This component mirrors the C++ `player_activity` class.
-/// Attach to a character entity to begin an activity; remove it when done.
-///
-/// # Lifecycle
-/// 1. Spawn entity with `PlayerActivity { phase: Pending, actor: Some(...), .. }`.
-/// 2. `start_pending_activities` calls `actor.start()`, sets `phase = Active`.
-/// 3. Each turn `tick_activities` calls `actor.do_turn()`, decrements `moves_left`.
-/// 4. When `moves_left <= 0`, `actor.finish()` is called, `phase = Done`.
-/// 5. `cleanup_done_activities` removes the component.
-///
-/// # Mutation
-/// Do not mutate `actor` directly after attaching — use ECS commands to replace.
+/// Attached alongside a type-specific activity component (e.g. `Crafting`).
+/// Systems tick both together.
 #[derive(Component, Debug)]
-pub struct PlayerActivity {
-    /// The activity type identifier.
-    pub activity_type: ActivityTypeId,
-
+pub struct ActivityProgress {
     /// Total moves required to complete the activity.
     pub moves_total: i32,
-
-    /// Remaining moves until completion; decremented each turn.
+    /// Remaining moves; decremented each turn.
     pub moves_left: i32,
-
     /// Current lifecycle phase.
     pub phase: ActivityPhase,
-
-    /// Optional world position relevant to this activity.
-    pub placement: Option<WorldPos>,
-
-    /// String targets (item IDs, location tags, etc.).
-    pub targets: Vec<String>,
-
-    /// Integer parameters used by the activity logic.
-    pub values: Vec<i32>,
-
-    /// String parameters used by the activity logic.
-    pub str_values: Vec<String>,
-
-    /// The concrete actor driving this activity's behavior.
-    /// `None` only during deserialization before the actor is restored.
-    pub actor: Option<ActivityActor>,
 }
 
-impl PlayerActivity {
-    pub fn new(activity_type: impl Into<String>, actor: ActivityActor) -> Self {
+impl Default for ActivityProgress {
+    fn default() -> Self {
         Self {
-            activity_type: ActivityTypeId::new(activity_type),
             moves_total: 0,
             moves_left: 0,
             phase: ActivityPhase::Pending,
-            placement: None,
-            targets: Vec::new(),
-            values: Vec::new(),
-            str_values: Vec::new(),
-            actor: Some(actor),
         }
     }
+}
 
-    /// Returns `true` if there are no moves remaining.
+impl ActivityProgress {
+    pub fn new(moves: i32) -> Self {
+        Self {
+            moves_total: moves,
+            moves_left: moves,
+            phase: ActivityPhase::Pending,
+        }
+    }
     pub fn is_complete(&self) -> bool {
         self.moves_left <= 0
     }
+}
 
-    /// Returns `true` if the activity is currently running.
-    pub fn is_active(&self) -> bool {
-        self.phase == ActivityPhase::Active
-    }
+// ===========================================================================
+// Per-activity data components
+// ===========================================================================
+
+/// Crafting activity — drives an `InProgressCraft` entity.
+///
+/// Each `tick_crafting` system call spends AP, advances `InProgressCraft::ap_spent`,
+/// and emits `CraftCompleted` when done.
+#[derive(Component, Debug, Clone)]
+pub struct Crafting {
+    /// The `InProgressCraft` entity in the player's inventory.
+    pub craft_entity: Entity,
+}
+
+/// Aiming activity — accumulates aim percent each tick.
+#[derive(Component, Debug, Clone)]
+pub struct Aiming {
+    pub target_aim_percent: u32,
+    pub cur_aim: u32,
+}
+
+/// Reading activity — reads a book for skill/morale gains.
+#[derive(Component, Debug, Clone)]
+pub struct Reading {
+    pub book_entity: Entity,
+    pub skill_id: String,
+    pub turns_read: i32,
+    pub turns_total: i32,
+}
+
+/// Waiting activity — burn turns doing nothing.
+#[derive(Component, Debug, Clone)]
+pub struct Waiting {
+    pub turns: i32,
+}
+
+/// Reloading activity — load ammo into a weapon.
+#[derive(Component, Debug, Clone)]
+pub struct Reloading {
+    pub item_entity: Entity,
+    pub ammo_entity: Entity,
+    pub quantity: i32,
+    pub speed_factor: f32,
+}
+
+/// Generic interaction activity (examining, using furniture, etc.).
+#[derive(Component, Debug, Clone)]
+pub struct Interacting {
+    pub description: String,
+    pub duration: i32,
 }

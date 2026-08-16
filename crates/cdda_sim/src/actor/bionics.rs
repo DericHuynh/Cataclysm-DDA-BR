@@ -43,6 +43,6 @@ pub fn total_power(world: &World, entity: Entity) -> Energy {
 /// Active bionics consume power each turn. Bionics with zero power
 /// are automatically deactivated. Passive bionics apply their effects
 /// as `StatusEffect` entities.
-pub fn tick_bionics(world: &mut World) {
-    let _ = world;
+pub fn tick_bionics() {
+    // STUB: no-op until bionics implemented
 }

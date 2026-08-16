@@ -55,7 +55,6 @@ pub fn execute_ai_action(world: &mut World, entity: Entity, goal: AiGoal) {
 /// All AI logic for one tick.
 ///
 /// For each creature: evaluate threats, choose targets, set movement intents.
-pub fn ai_phase(world: &mut World) {
+pub fn ai_phase() {
     // STUB: no-op until AI implemented
-    let _ = world;
 }

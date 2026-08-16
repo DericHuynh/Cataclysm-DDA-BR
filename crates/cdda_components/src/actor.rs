@@ -220,6 +220,7 @@ impl CreatureMutations {
 /// Use `With<Visible>` for archetype-level filtering instead of
 /// branching on a bool field.
 #[derive(Component, Debug, Default, Clone, Copy, Reflect)]
+#[component(storage = "SparseSet")]
 pub struct Visible;
 
 /// Data on a mutation entity: which mutation and whether it is visually apparent.
@@ -284,6 +285,7 @@ impl InstalledBionics {
 /// Use `With<Active>` for archetype-level filtering instead of
 /// branching on a bool field.
 #[derive(Component, Debug, Default, Clone, Copy, Reflect)]
+#[component(storage = "SparseSet")]
 pub struct Active;
 
 #[derive(Component, Debug, Clone, Reflect)]
@@ -395,12 +397,15 @@ pub struct BodyPartSevered;
 pub struct IsAlive;
 
 #[derive(Component, Debug, Default, Clone, Copy, Reflect)]
+#[component(storage = "SparseSet")]
 pub struct Stunned;
 
 #[derive(Component, Debug, Default, Clone, Copy, Reflect)]
+#[component(storage = "SparseSet")]
 pub struct Bleeding;
 
 #[derive(Component, Debug, Default, Clone, Copy, Reflect)]
+#[component(storage = "SparseSet")]
 pub struct OnFire;
 
 // ===========================================================================
@@ -412,7 +417,11 @@ pub struct OnFire;
 /// `speed` AP is granted each turn. `current` is spent on actions (move,
 /// pickup, wield, craft …) and may go negative (debt). An actor can act
 /// this turn when `current >= MP_MIN_FLOOR` (defined in `actor::turn`).
+///
+/// # Requirements
+/// Every entity with `ActionPoints` is implicitly alive.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Reflect)]
+#[require(IsAlive)]
 pub struct ActionPoints {
     /// Current pool — may be negative when in AP debt.
     pub current: i32,

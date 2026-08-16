@@ -20,6 +20,7 @@ pub mod def_markers;
 pub mod dev;
 pub mod events;
 pub mod input;
+pub mod intent;
 pub mod item;
 pub mod messages;
 pub mod recipe;

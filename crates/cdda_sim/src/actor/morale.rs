@@ -42,8 +42,8 @@ pub fn calculate_morale(world: &World, entity: Entity) -> i32 {
 /// Decrements `MoraleBonus.remaining` by one turn. Bonuses with
 /// `remaining <= 0` are despawned. Runs each turn after effects
 /// and before bionics.
-pub fn tick_morale_decay(world: &mut World) {
-    let _ = world;
+pub fn tick_morale_decay() {
+    // STUB: no-op until morale decay implemented
 }
 
 /// Apply morale modifiers to a creature's stats.

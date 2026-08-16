@@ -28,6 +28,7 @@ pub mod ai;
 pub mod combat;
 pub mod crafting;
 pub mod equipment;
+pub mod intent;
 pub mod inventory;
 pub mod item;
 pub mod noise;

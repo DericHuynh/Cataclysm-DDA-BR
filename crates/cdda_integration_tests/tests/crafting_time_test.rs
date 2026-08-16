@@ -10,7 +10,7 @@
 //!
 //! Our mapping:
 //!   `start_craft(world, player, recipe)` → spawns InProgressCraft entity
-//!   `continue_crafts(world)` → spends AP_COST_CRAFT_TICK per turn
+//!   `tick_crafting` → spends AP_COST_CRAFT_TICK per turn, emits CraftCompleted
 //!   InProgressCraft.is_complete() → true when ap_spent >= ap_total
 //!   ap_total = RecipeTime (turns) * 100
 
@@ -19,21 +19,19 @@ use cdda_components::actor::{ActionPoints, HandCount, IsAlive};
 use cdda_components::def::{ItemName, RecipeResult, RecipeResultCount, RecipeTime};
 use cdda_components::dev::DevPlayer;
 use cdda_components::item::{ContainerContents, InProgressCraft, InsideContainer};
-use cdda_sim::actor::turn::AP_COST_CRAFT_TICK;
-use cdda_sim::crafting::systems::{continue_crafts, start_craft};
-use cdda_sim::runtime::test_utils::TestBed;
+use cdda_components::messages::CraftCompleted;
 use cdda_data::interner::{ItemTypeRegistry, QualityRegistry};
+use cdda_sim::activity::components::{ActivityProgress, Crafting};
+use cdda_sim::activity::systems::tick_crafting;
+use cdda_sim::actor::turn::AP_COST_CRAFT_TICK;
+use cdda_sim::crafting::systems::{complete_craft, start_craft};
+use cdda_sim::runtime::test_utils::TestBed;
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 fn register_crafting_components(test: &mut TestBed) {
-    // Ensure the craft completion hook is set so activity finishes work.
-    cdda_sim::activity::CRAFT_COMPLETE_HOOK
-        .set(cdda_sim::crafting::systems::complete_craft)
-        .ok();
-
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
 
@@ -45,6 +43,13 @@ fn register_crafting_components(test: &mut TestBed) {
     test.register::<RecipeResult>();
     test.register::<RecipeResultCount>();
     test.register::<ItemName>();
+
+    // New activity components
+    test.register::<ActivityProgress>();
+    test.register::<Crafting>();
+
+    // CraftCompleted message replaces the old CRAFT_COMPLETE_HOOK
+    test.add_message::<CraftCompleted>();
 
     test.world_mut().init_resource::<ItemTypeRegistry>();
     test.world_mut().init_resource::<QualityRegistry>();
@@ -70,6 +75,25 @@ fn spawn_recipe(test: &mut TestBed, time_turns: u32, result_id: &str) -> Entity 
         RecipeResult(result_id.to_string()),
         RecipeResultCount(1),
     ))
+}
+
+/// Run one tick of the crafting system, then process any CraftCompleted messages.
+fn tick_craft(test: &mut TestBed) {
+    test.run_system(tick_crafting);
+
+    // Process craft completion messages from the message buffer.
+    test.world_mut()
+        .resource_mut::<bevy_ecs::message::Messages<CraftCompleted>>()
+        .update();
+    let completed: Vec<(Entity, Entity)> = test
+        .world_mut()
+        .resource_mut::<bevy_ecs::message::Messages<CraftCompleted>>()
+        .drain()
+        .map(|c| (c.crafter, c.craft_entity))
+        .collect();
+    for (player, craft_e) in &completed {
+        complete_craft(test.world_mut(), *player, *craft_e);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -171,11 +195,11 @@ fn in_progress_craft_stores_result_id() {
 }
 
 // ---------------------------------------------------------------------------
-// continue_crafts — CDDA: activity.do_turn(player) spends AP each turn
+// tick_crafting — CDDA: activity.do_turn(player) spends AP each turn
 // ---------------------------------------------------------------------------
 
 /// CDDA: each call to `do_turn` consumes move points from the player.
-/// Our: `continue_crafts` spends `AP_COST_CRAFT_TICK` from the player's AP.
+/// Our: `tick_crafting` spends `AP_COST_CRAFT_TICK` from the player's AP.
 #[test]
 fn continue_crafts_spends_player_ap() {
     let mut test = TestBed::new();
@@ -186,7 +210,7 @@ fn continue_crafts_spends_player_ap() {
     start_craft(test.world_mut(), player, recipe).unwrap();
 
     let ap_before = test.world().get::<ActionPoints>(player).unwrap().current;
-    continue_crafts(test.world_mut());
+    tick_craft(&mut test);
     let ap_after = test.world().get::<ActionPoints>(player).unwrap().current;
 
     assert_eq!(
@@ -197,7 +221,7 @@ fn continue_crafts_spends_player_ap() {
 }
 
 /// CDDA: each `do_turn` advances the craft toward completion.
-/// Our: `continue_crafts` increments `InProgressCraft.ap_spent`.
+/// Our: `tick_crafting` increments `InProgressCraft.ap_spent`.
 #[test]
 fn continue_crafts_advances_ap_spent() {
     let mut test = TestBed::new();
@@ -207,7 +231,7 @@ fn continue_crafts_advances_ap_spent() {
     let recipe = spawn_recipe(&mut test, 10, "test_gum");
     let craft_e = start_craft(test.world_mut(), player, recipe).unwrap();
 
-    continue_crafts(test.world_mut());
+    tick_craft(&mut test);
 
     let craft = test.world().get::<InProgressCraft>(craft_e).unwrap();
     assert_eq!(craft.ap_spent, AP_COST_CRAFT_TICK);
@@ -224,7 +248,7 @@ fn continue_crafts_accumulates_across_ticks() {
     let craft_e = start_craft(test.world_mut(), player, recipe).unwrap();
 
     for _ in 0..5 {
-        continue_crafts(test.world_mut());
+        tick_craft(&mut test);
     }
 
     let craft = test.world().get::<InProgressCraft>(craft_e).unwrap();
@@ -243,7 +267,7 @@ fn craft_not_complete_before_full_ap_spent() {
 
     // Run only 4 of the 5 required ticks
     for _ in 0..4 {
-        continue_crafts(test.world_mut());
+        tick_craft(&mut test);
     }
 
     let craft = test.world().get::<InProgressCraft>(craft_e).unwrap();
@@ -258,7 +282,7 @@ fn craft_not_complete_before_full_ap_spent() {
 // ---------------------------------------------------------------------------
 
 /// CDDA: when `actual_turns_taken == expected_turns_taken`, craft is done.
-/// Our: after enough `continue_crafts` calls, the InProgressCraft entity is despawned.
+/// Our: after enough `tick_crafting` ticks, the InProgressCraft entity is despawned.
 #[test]
 fn craft_despawns_after_completion() {
     let mut test = TestBed::new();
@@ -270,7 +294,7 @@ fn craft_despawns_after_completion() {
 
     // Run exactly 3 ticks (300 AP = ap_total)
     for _ in 0..3 {
-        continue_crafts(test.world_mut());
+        tick_craft(&mut test);
     }
 
     assert!(
@@ -281,7 +305,7 @@ fn craft_despawns_after_completion() {
 
 /// CDDA: `total_crafting_time_with_or_without_interruption` — the craft takes
 /// exactly `expected_turns_taken` turns.
-/// Our: the craft entity is despawned after exactly `time_turns` calls to `continue_crafts`.
+/// Our: the craft entity is despawned after exactly `time_turns` ticks.
 #[test]
 fn craft_completes_in_exactly_the_expected_number_of_turns() {
     let time_turns = 5u32;
@@ -294,7 +318,7 @@ fn craft_completes_in_exactly_the_expected_number_of_turns() {
 
     // Run one tick short: craft must still exist
     for _ in 0..(time_turns - 1) {
-        continue_crafts(test.world_mut());
+        tick_craft(&mut test);
     }
     assert!(
         test.world().get_entity(craft_e).is_ok(),
@@ -303,7 +327,7 @@ fn craft_completes_in_exactly_the_expected_number_of_turns() {
     );
 
     // Final tick: craft completes
-    continue_crafts(test.world_mut());
+    tick_craft(&mut test);
     assert!(
         test.world().get_entity(craft_e).is_err(),
         "craft should be gone after {} ticks",
@@ -328,7 +352,7 @@ fn interrupted_craft_remains_in_inventory() {
 
     // Simulate 3 turns then "interrupt" (just stop calling continue_crafts)
     for _ in 0..3 {
-        continue_crafts(test.world_mut());
+        tick_craft(&mut test);
     }
 
     // Craft still exists with partial progress
@@ -346,7 +370,7 @@ fn interrupted_craft_remains_in_inventory() {
 }
 
 /// CDDA: `resume_craft()` continues from saved progress, takes `expected - 2` more turns.
-/// Our: resuming means continuing to call `continue_crafts`; progress is preserved.
+/// Our: resuming means continuing to tick with `tick_crafting`; progress is preserved.
 #[test]
 fn resumed_craft_completes_from_saved_progress() {
     let time_turns = 7u32;
@@ -362,7 +386,7 @@ fn resumed_craft_completes_from_saved_progress() {
 
     // First phase: interrupt_at turns of work
     for _ in 0..interrupt_at {
-        continue_crafts(test.world_mut());
+        tick_craft(&mut test);
     }
     assert!(
         test.world().get_entity(craft_e).is_ok(),
@@ -371,7 +395,7 @@ fn resumed_craft_completes_from_saved_progress() {
 
     // Resume: run the remaining turns
     for _ in 0..remaining {
-        continue_crafts(test.world_mut());
+        tick_craft(&mut test);
     }
 
     // Craft should now be complete and entity despawned
@@ -403,7 +427,7 @@ fn progress_percent_increases_with_ap_spent() {
         0
     );
 
-    continue_crafts(test.world_mut()); // 100/400 = 25%
+    tick_craft(&mut test); // 100/400 = 25%
     assert_eq!(
         test.world()
             .get::<InProgressCraft>(craft_e)
@@ -412,7 +436,7 @@ fn progress_percent_increases_with_ap_spent() {
         25
     );
 
-    continue_crafts(test.world_mut()); // 200/400 = 50%
+    tick_craft(&mut test); // 200/400 = 50%
     assert_eq!(
         test.world()
             .get::<InProgressCraft>(craft_e)
@@ -434,7 +458,7 @@ fn zero_time_recipe_completes_immediately_on_first_tick() {
     let recipe = spawn_recipe(&mut test, 1, "test_gum");
     let craft_e = start_craft(test.world_mut(), player, recipe).unwrap();
 
-    continue_crafts(test.world_mut());
+    tick_craft(&mut test);
 
     assert!(
         test.world().get_entity(craft_e).is_err(),

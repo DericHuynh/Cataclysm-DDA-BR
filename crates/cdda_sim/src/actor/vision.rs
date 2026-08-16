@@ -16,8 +16,8 @@ use cdda_components::actor::*;
 ///
 /// For each creature: determine vision range, compute set of visible
 /// entities, emit `SightEvent` for newly seen entities.
-pub fn update_vision(world: &mut World) {
-    let _ = world;
+pub fn update_vision() {
+    // STUB: no-op until vision implemented
 }
 
 /// Calculate the effective vision range for a creature.

@@ -2,11 +2,10 @@
 //!
 //! STUB: Not yet implemented.
 
-use bevy_ecs::prelude::*;
+use bevy_ecs::entity::Entity;
 
-pub fn healing_phase(world: &mut World) {
+pub fn healing_phase() {
     // STUB: no-op until healing implemented
-    let _ = world;
 }
 
 pub fn calculate_healing_rate(

@@ -27,23 +27,34 @@ pub enum GameSet {
 
 /// Fine-grained ordered sets within `GameSet::Sim`.
 ///
-/// The canonical simulation phase order is expressed here as a chain so that
-/// new systems only need `in_set(SimSet::Combat)` (for example) instead of
-/// manually chaining `.after()` calls off specific function names.
+/// Reflects CDDA's turn order: grant AP → declare intents → resolve by
+/// speed priority → process multi-turn activities → tick effects/healing/etc.
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SimSet {
+    /// Grant action points to all living actors.
     TurnTick,
+    /// Player input + AI decisions → insert `ActionIntent` components.
+    IntentDeclare,
+    /// Sort intents by AP, resolve one-by-one with precondition validation.
+    IntentResolve,
+    /// Multi-turn activities (crafting, aiming, reading, etc.).
     Activity,
-    Ai,
-    Movement,
-    Combat,
+    /// Status effects tick.
     Effects,
+    /// Natural healing.
     Healing,
+    /// Bionic power drain.
     Bionics,
+    /// Morale decay.
     Morale,
+    /// Body temperature updates.
     Temperature,
+    /// Vision / line-of-sight updates.
     Vision,
+    /// Creature/item spawning.
     Spawning,
+    /// Inventory bin maintenance.
     Inventory,
+    /// Spatial index maintenance.
     SpatialUpdate,
 }

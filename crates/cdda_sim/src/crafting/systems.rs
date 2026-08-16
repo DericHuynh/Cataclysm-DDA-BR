@@ -2,8 +2,7 @@
 
 use bevy_ecs::prelude::*;
 
-use crate::activity::actor::{ActivityActor, CraftActor};
-use crate::activity::components::{ActivityPhase, PlayerActivity};
+use crate::activity::components::{ActivityPhase, ActivityProgress, Crafting};
 use cdda_components::def::{
     ItemName, RecipeCategory, RecipeComponents, RecipeQualities, RecipeResult, RecipeResultCount,
     RecipeSubcategory, RecipeTime,
@@ -361,16 +360,16 @@ pub fn start_craft(
         ))
         .id();
 
-    // Attach a PlayerActivity so the activity system drives the craft.
-    // Phase starts as Active — start() has already been accounted for via ap_total.
-    let actor = ActivityActor::Craft(CraftActor { craft_entity });
-    world.entity_mut(player).insert({
-        let mut act = PlayerActivity::new("ACT_CRAFT", actor);
-        act.moves_total = ap_total;
-        act.moves_left = ap_total;
-        act.phase = ActivityPhase::Active;
-        act
-    });
+    // Attach ActivityProgress + Crafting so the activity system drives the craft.
+    // Phase is set to Active immediately — start logic has already computed ap_total.
+    let progress = {
+        let mut p = ActivityProgress::new(ap_total);
+        p.phase = ActivityPhase::Active;
+        p
+    };
+    world
+        .entity_mut(player)
+        .insert((progress, Crafting { craft_entity }));
 
     Ok(craft_entity)
 }
@@ -429,9 +428,8 @@ pub fn complete_craft(world: &mut World, player: Entity, craft_entity: Entity) {
 // resume_craft — re-attach activity to an interrupted in-progress craft
 // ---------------------------------------------------------------------------
 
-/// Resume an interrupted `InProgressCraft` by re-attaching a `PlayerActivity`
-/// with `CraftActor` on the player.  The craft picks up where it left off
-/// (`ap_spent` is preserved).
+/// Resume an interrupted `InProgressCraft` by re-attaching activity components
+/// on the player.  The craft picks up where it left off
 ///
 /// Returns `Ok(())` if the activity was created, or `Err` if the craft entity
 /// no longer exists or the player already has an active craft.
@@ -449,29 +447,25 @@ pub fn resume_craft(world: &mut World, player: Entity, craft_entity: Entity) -> 
 
     // Don't overwrite an existing activity.
     if world
-        .get::<PlayerActivity>(player)
+        .get::<ActivityProgress>(player)
         .map(|a| a.phase != ActivityPhase::Done)
         .unwrap_or(false)
     {
         // If the existing activity is also a craft, just return — already crafting.
-        if world
-            .get::<PlayerActivity>(player)
-            .map(|a| a.activity_type.as_str() == "ACT_CRAFT")
-            .unwrap_or(false)
-        {
+        if world.get::<Crafting>(player).is_some() {
             return Ok(());
         }
         return Err("Another activity is already in progress".to_string());
     }
 
-    let actor = ActivityActor::Craft(CraftActor { craft_entity });
-    world.entity_mut(player).insert({
-        let mut act = PlayerActivity::new("ACT_CRAFT", actor);
-        act.moves_total = ap_remaining;
-        act.moves_left = ap_remaining;
-        act.phase = ActivityPhase::Active;
-        act
-    });
+    let progress = {
+        let mut p = ActivityProgress::new(ap_remaining);
+        p.phase = ActivityPhase::Active;
+        p
+    };
+    world
+        .entity_mut(player)
+        .insert((progress, Crafting { craft_entity }));
 
     Ok(())
 }
@@ -498,32 +492,6 @@ pub fn on_examine_item_changed(
 
     if has_in_progress {
         ctx_actions.push("resume craft", BindableAction::HotkeyR);
-    }
-}
-
-// ---------------------------------------------------------------------------
-// continue_crafts — tick in-progress crafts each turn
-// ---------------------------------------------------------------------------
-
-/// Advance the player's in-progress craft by one tick.
-///
-/// Delegates to the `CraftActor` via the activity system. Each call spends
-/// `AP_COST_CRAFT_TICK` from the player's `ActionPoints`, advances
-/// `InProgressCraft::ap_spent`, and spawns the result item once complete.
-///
-/// Called each game turn from `cdda_app` (and directly by tests).
-pub fn continue_crafts(world: &mut World) {
-    let Some(player) = find_dev_player(world) else {
-        return;
-    };
-
-    let has_active_craft = world
-        .get::<PlayerActivity>(player)
-        .map(|a| a.activity_type.as_str() == "ACT_CRAFT" && a.phase == ActivityPhase::Active)
-        .unwrap_or(false);
-
-    if has_active_craft {
-        crate::activity::systems::tick_one(world, player);
     }
 }
 

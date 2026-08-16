@@ -96,6 +96,6 @@ pub fn is_passable(world: &World, entity: Entity, position: WorldPos) -> bool {
 ///
 /// Entities with movement intents are moved sequentially
 /// to prevent collision conflicts.
-pub fn movement_phase(world: &mut World) {
-    let _ = world;
+pub fn movement_phase() {
+    // STUB: no-op until movement implemented
 }

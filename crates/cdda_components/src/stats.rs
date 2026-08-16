@@ -1,3 +1,4 @@
+use crate::actor::IsAlive;
 use bevy_ecs::component::Component;
 use bevy_reflect::Reflect;
 use serde::{Deserialize, Serialize};
@@ -12,7 +13,11 @@ pub const STAT_MAX: u32 = 20;
 /// Core creature statistics.
 ///
 /// These are the base attributes that every creature has.
+///
+/// # Requirements
+/// Every entity with `Stats` is implicitly alive.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Reflect)]
+#[require(IsAlive)]
 pub struct Stats {
     pub strength: u32,
     pub dexterity: u32,
@@ -64,7 +69,9 @@ impl Default for Stats {
 ///
 /// Positive values increase the stat; negative values decrease it.
 /// All fields default to 0.
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Reflect)]
+#[derive(
+    Component, Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Reflect,
+)]
 pub struct StatBonuses {
     pub strength: i32,
     pub dexterity: i32,

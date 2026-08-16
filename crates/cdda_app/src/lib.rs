@@ -17,6 +17,7 @@ use bevy_state::prelude::OnEnter;
 use bevy_state::state::{NextState, State};
 use std::time::Duration;
 
+use cdda_components::intent::ActionIntent;
 use cdda_components::schedule::{GameSet, SimSet};
 use cdda_context::ctx::Ctx as Screen;
 use cdda_context::screen::Screen as ScreenPlugin;
@@ -24,38 +25,39 @@ use cdda_context::ContextStack;
 
 use crate::startup::load_data_system;
 use crate::startup::{examine_item_input, spawn_dev_world};
-use cdda_sim::activity::plugin::ActivityPlugin;
-use cdda_sim::actor::bionics::tick_bionics;
-use cdda_sim::actor::effects::effects_phase;
-use cdda_sim::actor::healing::healing_phase;
-use cdda_sim::actor::morale::tick_morale_decay;
-use cdda_sim::actor::movement::movement_phase;
-use cdda_sim::actor::plugin::ActorPlugin;
-use cdda_sim::actor::temperature::temperature_phase;
-use cdda_sim::actor::turn::{debug_turn_queue, tick_move_points, TurnQueue};
-use cdda_sim::actor::vision::update_vision;
-use cdda_sim::ai::systems::ai_phase;
-use cdda_sim::combat::systems::combat_phase;
+use cdda_components::actor::IsAlive;
 use cdda_components::dev::{DevCamera, DevPlayer};
 use cdda_components::events::ItemMoveEvent;
+use cdda_components::intent::IntentQueue;
 use cdda_components::item::InventoryFocus;
 use cdda_components::messages;
 use cdda_components::sim::WorldPosition;
 use cdda_context::overlay::{
     cleanup_activity_overlay, handle_overlay_cancel, sync_activity_overlay,
 };
-use cdda_core_types::core::coords::TILES_PER_OMT;
+use cdda_core_types::core::coords::{WorldPos, TILES_PER_OMT};
+use cdda_data::assets::CddaAssetsPlugin;
+use cdda_overmap::spatial::EntitySpatialIndex;
+use cdda_overmap::OvermapCamera;
+use cdda_overmap_gen::pipeline::OvermapGenPlugin;
+use cdda_sim::activity::plugin::ActivityPlugin;
+use cdda_sim::actor::bionics::tick_bionics;
+use cdda_sim::actor::effects::effects_phase;
+use cdda_sim::actor::healing::healing_phase;
+use cdda_sim::actor::morale::tick_morale_decay;
+use cdda_sim::actor::plugin::ActorPlugin;
+use cdda_sim::actor::temperature::temperature_phase;
+use cdda_sim::actor::turn::{debug_turn_queue, tick_move_points, TurnQueue};
+use cdda_sim::actor::vision::update_vision;
+use cdda_sim::ai::systems::ai_phase;
 use cdda_sim::crafting::plugin::CraftingPlugin;
 use cdda_sim::crafting::systems::on_examine_item_changed;
-use cdda_data::assets::CddaAssetsPlugin;
+use cdda_sim::intent::plugin::IntentPlugin;
 use cdda_sim::inventory::systems::{
     assign_invlets_system, build_inventory_bins, dev_pickup_drop_system, inventory_screen_input,
     process_item_move_events, InventoryBin,
 };
 use cdda_sim::item::plugin::ItemPlugin;
-use cdda_overmap::spatial::EntitySpatialIndex;
-use cdda_overmap::OvermapCamera;
-use cdda_overmap_gen::pipeline::OvermapGenPlugin;
 use cdda_sim::runtime::state::{AppState, StartupConfig};
 
 // ---------------------------------------------------------------------------
@@ -86,46 +88,55 @@ impl Default for CddaStartupConfig {
 // Dev player movement
 // ---------------------------------------------------------------------------
 
-/// Move the dev player using raw keyboard input, gated on Screen::Gameplay.
+/// Read player keyboard input and generate `ActionIntent` on the dev player.
 ///
-/// Uses `ButtonInput<KeyCode>` (not `MessageReader`) to avoid ordering
-/// dependencies on `bridge_actionstate`. The y-axis follows CDDA convention:
-/// ArrowUp / K = north = -y, ArrowDown / J = south = +y.
-///
-/// Updates both `DevCamera` (ASCII viewport follows) and `OvermapCamera`
-/// (overmap viewer follows).
+/// The intent resolution system in `SimSet::IntentResolve` handles the actual
+/// movement, AP deduction, and precondition checking.
 pub fn dev_player_move(
     keys: Res<ButtonInput<KeyCode>>,
-    mut query: Query<&mut WorldPosition, With<DevPlayer>>,
-    mut dev_cam: ResMut<DevCamera>,
-    mut overmap_cam: ResMut<OvermapCamera>,
+    mut commands: Commands,
+    player_query: Query<Entity, (With<DevPlayer>, With<IsAlive>)>,
 ) {
     let dx = if keys.just_pressed(KeyCode::ArrowRight) || keys.just_pressed(KeyCode::KeyL) {
-        1 // east = +x
+        1
     } else if keys.just_pressed(KeyCode::ArrowLeft) || keys.just_pressed(KeyCode::KeyH) {
-        -1 // west = -x
+        -1
     } else {
         0
     };
     let dy = if keys.just_pressed(KeyCode::ArrowUp) || keys.just_pressed(KeyCode::KeyK) {
-        -1 // CDDA: north = -y
+        -1
     } else if keys.just_pressed(KeyCode::ArrowDown) || keys.just_pressed(KeyCode::KeyJ) {
-        1 // CDDA: south = +y
+        1
     } else {
         0
     };
 
     if dx != 0 || dy != 0 {
-        for mut pos in &mut query {
-            pos.0.x += dx * TILES_PER_OMT;
-            pos.0.y += dy * TILES_PER_OMT;
-            let omt_x = pos.0.x.div_euclid(TILES_PER_OMT);
-            let omt_y = pos.0.y.div_euclid(TILES_PER_OMT);
-            dev_cam.x = omt_x;
-            dev_cam.y = omt_y;
-            dev_cam.z = 0;
-            overmap_cam.move_to(omt_x, omt_y);
+        if let Some(player) = player_query.iter().next() {
+            commands
+                .entity(player)
+                .insert(ActionIntent::Move { dx, dy });
         }
+    }
+}
+
+/// After intent resolution, sync camera positions to the dev player's
+/// new location.  Runs in `SimSet::IntentResolve` to update the viewport
+/// in the same frame.
+pub fn dev_player_intent_generate(
+    mut dev_cam: ResMut<DevCamera>,
+    mut overmap_cam: ResMut<OvermapCamera>,
+    q: Query<&WorldPosition, (With<DevPlayer>, Changed<WorldPosition>)>,
+) {
+    for pos in &q {
+        let current = pos.get();
+        let omt_x = current.x.div_euclid(TILES_PER_OMT);
+        let omt_y = current.y.div_euclid(TILES_PER_OMT);
+        dev_cam.x = omt_x;
+        dev_cam.y = omt_y;
+        dev_cam.z = 0;
+        overmap_cam.move_to(omt_x, omt_y);
     }
 }
 
@@ -143,6 +154,7 @@ impl Plugin for CddaPlugin {
             ItemPlugin,
             CddaAssetsPlugin,
             CraftingPlugin,
+            IntentPlugin,
             cdda_data::flags::CddaDataPlugin,
         ));
 
@@ -160,6 +172,7 @@ impl Plugin for CddaPlugin {
         app.init_resource::<DevCamera>();
         app.init_resource::<cdda_sim::runtime::state::LoadingStatus>();
         app.init_resource::<cdda_sim::runtime::state::GameTime>();
+        app.init_resource::<IntentQueue>();
 
         // ── Screen transitions ─────────────────────────────────────────
         app.add_systems(
@@ -188,10 +201,9 @@ impl Plugin for CddaPlugin {
             Update,
             (
                 SimSet::TurnTick,
+                SimSet::IntentDeclare,
+                SimSet::IntentResolve,
                 SimSet::Activity,
-                SimSet::Ai,
-                SimSet::Movement,
-                SimSet::Combat,
                 SimSet::Effects,
                 SimSet::Healing,
                 SimSet::Bionics,
@@ -272,9 +284,10 @@ impl Plugin for CddaPlugin {
         app.add_systems(
             Update,
             (
-                ai_phase.in_set(SimSet::Ai),
-                movement_phase.in_set(SimSet::Movement),
-                combat_phase.in_set(SimSet::Combat),
+                // Intent generation: AI decisions + player input → ActionIntent
+                ai_phase.in_set(SimSet::IntentDeclare),
+                // Camera sync runs after IntentResolve to capture new positions.
+                dev_player_intent_generate.in_set(SimSet::Vision),
                 effects_phase.in_set(SimSet::Effects),
                 healing_phase.in_set(SimSet::Healing),
                 tick_bionics.in_set(SimSet::Bionics),
@@ -295,8 +308,8 @@ impl Plugin for CddaPlugin {
                 .run_if(in_state(AppState::InGame)),
         );
 
-        // ── Dev player movement — gated on Screen::Gameplay ────────
-        // Must run before render systems so the viewport updates immediately.
+        // ── Dev player movement — now generates ActionIntent instead of
+        // moving directly.  intent resolution handles the actual move.
         app.add_systems(
             Update,
             dev_player_move

@@ -34,17 +34,17 @@ pub fn spoilage_rate(temp_celsius: f64, is_sealed: bool, preserves_temp: bool) -
 }
 
 /// Process spoilage for all items with the Spoilable component.
-pub fn tick_spoilage(world: &mut World) {
-    let _ = world;
+pub fn tick_spoilage() {
+    // STUB: no-op until spoilage implemented
 }
 
 /// Process temperature regulation for all creatures.
-pub fn tick_temperature(world: &mut World) {
-    let _ = world;
+pub fn tick_temperature() {
+    // STUB: no-op until temperature implemented
 }
 
-/// Keep old stub for backward compatibility.
-pub fn temperature_phase(world: &mut World) {
-    tick_temperature(world);
-    tick_spoilage(world);
+/// Run one tick of temperature and spoilage systems.
+pub fn temperature_phase() {
+    tick_temperature();
+    tick_spoilage();
 }

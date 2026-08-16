@@ -152,6 +152,19 @@ pub fn tick_effects(world: &mut World) {
 // ---------------------------------------------------------------------------
 
 /// Run one tick of the effects system.
-pub fn effects_phase(world: &mut World) {
-    tick_effects(world);
+pub fn effects_phase(mut query: Query<(Entity, &mut StatusEffect)>, mut commands: Commands) {
+    // Collect expired effects to remove (two-phase: read then mutate)
+    let mut expired: Vec<Entity> = Vec::new();
+
+    for (entity, mut se) in &mut query {
+        se.remaining = se.remaining - Time::from_turns(1);
+        if se.remaining <= Time::ZERO {
+            expired.push(entity);
+        }
+    }
+
+    // Mutate phase: despawn expired (query borrow is released)
+    for e in expired {
+        commands.entity(e).despawn();
+    }
 }
