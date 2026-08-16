@@ -54,7 +54,7 @@ Bevy ECS 0.18. The project is organized into 22 workspace crates under
 |---|---|---|
 | `cdda_context` | Headless context state machine (Ctx states, pop/push navigation, overlay stack, focus management, menu state) | `bevy_ecs`, `bevy_state` |
 | `cdda_input` | Input plugin: ActionState → InputAction bridging, keybinding maps, input context stacks, bindable actions | Full `bevy` |
-| `cdda_render` | Rendering plugin: UI screens (inventory, crafting, character sheet, examine, main menu, overmap, settings), ASCII viewport, tile rendering, theming | Full `bevy` |
+| `cdda_render` | Rendering plugin: UI screens (inventory, crafting, character sheet, examine, main menu, overmap, settings), ASCII viewport, tile rendering, theming. **Also hosts the screen input adapters (`render/input.rs`) — the presenter layer that translates `InputAction` (UI vocabulary) into `cdda_sim` use-case calls, so `cdda_sim` never matches `GameAction`.** | Full `bevy` |
 | `cdda_replay` | Replay system: session logging, deterministic replay, state hashing | `bevy_ecs` |
 | `cdda_app` | Binary entry point: wires all subsystems, configures Bevy DefaultPlugins, registers system ordering (Input → Sim → Render) | Full `bevy` |
 | `cdda_cli` | CLI subcommands: `run` (default), `schedule-graph`, `render-graph`, `dump` | Full `bevy` |

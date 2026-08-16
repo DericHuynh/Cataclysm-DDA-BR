@@ -54,8 +54,7 @@ use cdda_sim::crafting::plugin::CraftingPlugin;
 use cdda_sim::crafting::systems::on_examine_item_changed;
 use cdda_sim::intent::plugin::IntentPlugin;
 use cdda_sim::inventory::systems::{
-    assign_invlets_system, build_inventory_bins, dev_pickup_drop_system, inventory_screen_input,
-    process_item_move_events, InventoryBin,
+    assign_invlets_system, build_inventory_bins, process_item_move_events, InventoryBin,
 };
 use cdda_sim::item::plugin::ItemPlugin;
 use cdda_sim::runtime::state::{AppState, StartupConfig};
@@ -294,17 +293,28 @@ impl Plugin for CddaPlugin {
                 tick_morale_decay.in_set(SimSet::Morale),
                 temperature_phase.in_set(SimSet::Temperature),
                 update_vision.in_set(SimSet::Vision),
-                dev_pickup_drop_system
-                    .in_set(SimSet::Inventory)
-                    .run_if(in_state(Screen::Gameplay)),
                 process_item_move_events.in_set(SimSet::Inventory),
                 assign_invlets_system.in_set(SimSet::Inventory),
                 build_inventory_bins.in_set(SimSet::Inventory),
-                inventory_screen_input
-                    .in_set(SimSet::Inventory)
-                    .run_if(in_state(Screen::Inventory)),
-                debug_turn_queue.in_set(SimSet::SpatialUpdate),
             )
+                .run_if(in_state(AppState::InGame)),
+        );
+
+        // ── UI input adapters (presenter layer) — screen keyboard input that
+        // translates `InputAction` into sim use-cases. Lives in cdda_render so
+        // cdda_sim never matches the display-UI `GameAction` enum.
+        app.add_systems(
+            Update,
+            cdda_render::render::input::dev_pickup_drop_system
+                .in_set(SimSet::Inventory)
+                .run_if(in_state(Screen::Gameplay))
+                .run_if(in_state(AppState::InGame)),
+        );
+        app.add_systems(
+            Update,
+            cdda_render::render::input::inventory_screen_input
+                .in_set(SimSet::Inventory)
+                .run_if(in_state(Screen::Inventory))
                 .run_if(in_state(AppState::InGame)),
         );
 

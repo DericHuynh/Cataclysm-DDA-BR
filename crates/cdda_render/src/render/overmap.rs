@@ -16,10 +16,10 @@ use bevy_ecs::message::MessageReader;
 use bevy_state::state_scoped::DespawnOnExit;
 use cdda_components::input::{GameAction, InputAction};
 use cdda_context::ctx::Ctx as Screen;
-use cdda_overmap_gen::pipeline::OvermapGenConfig;
 use cdda_overmap::camera::OvermapCamera;
 use cdda_overmap::registry::{TerrainFlags, TerrainHandle};
 use cdda_overmap::TerrainQuery;
+use cdda_overmap_gen::pipeline::OvermapGenConfig;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -216,8 +216,10 @@ pub fn update_overmap_info_panel(
     let mut hovered_omt: Option<(i32, i32)> = None;
     for (cell, interaction) in &interaction_q {
         if *interaction == Interaction::Hovered {
+            // Bevy grid rows run top-to-bottom; CDDA's north (smaller y) is at
+            // the top of the viewport, so row 0 maps to the top-left OMT.
             let hx = tl_x + cell.grid_col as i32;
-            let hy = tl_y + (GRID_ROWS as i32 - 1 - cell.grid_row as i32);
+            let hy = tl_y + cell.grid_row as i32;
             hovered_omt = Some((hx, hy));
             break;
         }
@@ -269,9 +271,11 @@ pub fn update_overmap_tiles(
     let (tl_x, tl_y) = camera.top_left();
 
     for (cell, mut bg, children) in &mut grid_tiles {
-        // Compute world OMT position from stable grid coordinates, not query order
+        // Compute world OMT position from stable grid coordinates, not query order.
+        // Bevy UI grid rows are top-to-bottom; north (small y) is at the top of
+        // the viewport, so screen row 0 corresponds to the top-left OMT row.
         let omt_x = tl_x + cell.grid_col as i32;
-        let omt_y = tl_y + (GRID_ROWS as i32 - 1 - cell.grid_row as i32);
+        let omt_y = tl_y + cell.grid_row as i32;
 
         let handle = terrain.at(omt_x, omt_y, camera.z);
         let is_center = omt_x == camera.center_x && omt_y == camera.center_y;

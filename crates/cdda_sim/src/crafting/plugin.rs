@@ -4,7 +4,7 @@ use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::IntoScheduleConfigs;
 use bevy_state::prelude::OnEnter;
 
-use super::input::{crafting_menu_input, process_pending_craft};
+use super::input::process_pending_craft;
 use super::systems::{
     build_craft_state, complete_craft, CategoryIndex, CraftState, PendingCraft, RecipeIndex,
 };
@@ -27,12 +27,6 @@ impl Plugin for CraftingPlugin {
 
         // OnEnter: build the recipe/category index when crafting menu opens.
         app.add_systems(OnEnter(Ctx::CraftingMenu), build_craft_state);
-
-        // Input: runs whenever the crafting menu is open.
-        app.add_systems(
-            Update,
-            crafting_menu_input.run_if(bevy_state::condition::in_state(Ctx::CraftingMenu)),
-        );
 
         // Simulation: execute pending craft in the Activity phase so it
         // participates in the AP-driven activity system.

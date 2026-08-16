@@ -20,6 +20,7 @@ pub mod crafting;
 pub mod dev_spawn;
 pub mod dev_worldgen;
 pub mod examine;
+pub mod input;
 pub mod inventory;
 pub mod item_detail;
 pub mod main_menu;
@@ -134,6 +135,10 @@ impl Plugin for CddaRenderPlugin {
         app.add_systems(
             Update,
             crafting::update_crafting_ui.run_if(in_state(Screen::CraftingMenu)),
+        );
+        app.add_systems(
+            Update,
+            input::crafting_menu_input.run_if(in_state(Screen::CraftingMenu)),
         );
 
         // ── Debug spawn panel ─────────────────────────────────────────────

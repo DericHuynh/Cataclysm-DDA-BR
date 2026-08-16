@@ -473,7 +473,7 @@ fn build_city_street(
         }
         if !rng.one_in(BUILDINGCHANCE) {
             let building = pick_random_building_to_place(rng, settings, croad);
-            place_building(node.pos, dir.turn_left(), &building, buildings);
+            place_building(node.pos, dir.turn_right(), &building, buildings);
         }
     }
 
@@ -685,39 +685,23 @@ pub fn build_cities(
     core_terrains: Res<CoreTerrains>,
     settings: Res<OvermapRegionSettings>,
 ) {
-    eprintln!("BUILD_CITIES called! city_spec={}", settings.city_spec);
     if !settings.city_spec {
         info!("build_cities: skipped — city_spec is false");
         return;
     }
 
     let city_count = cities.iter().count();
-    eprintln!(
-        "build_cities: city_count={} road_ns_idx={} road_ew_idx={} road_nesw_idx={}",
-        city_count,
-        core_terrains.road_ns.type_index(),
-        core_terrains.road_ew.type_index(),
-        core_terrains.road_nesw.type_index()
-    );
     if city_count == 0 {
         info!("build_cities: no cities to build");
         return;
     }
 
-    eprintln!(
-        "build_cities: starting street grid construction, {} cities",
-        city_count
-    );
-
     // --- Build terrain grid --------------------------------------------------
-    eprintln!("build_cities: about to build grid");
     let (mut grid, z0_chunks) = build_omt_grid(&chunks);
     let existing_ct = city_tiles.map(|ct| ct.clone()).unwrap_or_default();
     let mut tiles = existing_ct.tiles;
     let mut buildings = existing_ct.buildings;
 
-    eprintln!("build_cities: grid built, {} chunks", z0_chunks.len());
-    eprintln!("build_cities: grid[90][90]={}", grid[90][90]);
     let road_nesw_raw = core_terrains.road_nesw.0;
 
     // --- For each city, build streets in 4 directions ------------------------
@@ -742,10 +726,6 @@ pub fn build_cities(
         // Place road_nesw at city centre
         if cx >= 0 && cx < OMAP_DIM && cy >= 0 && cy < OMAP_DIM {
             grid[cy as usize][cx as usize] = road_nesw_raw;
-            eprintln!(
-                "build_cities: SET grid[{}][{}] = {} (road_nesw_raw={})",
-                cx, cy, grid[cy as usize][cx as usize], road_nesw_raw
-            );
             tiles.insert((cx, cy));
             info!(
                 "build_cities: placed road_nesw at city center ({}, {})",

@@ -6,6 +6,10 @@ viewer, the Text2d ASCII dev-worldgen viewport, tileset loading, font loading,
 and the shared `UiTheme`. Read-only with respect to simulation — renders
 component/resource state into pixels. Layer 5 per `crates/AGENTS.md`.
 
+It also hosts the **screen input adapters** (`render/input.rs`) — the
+"presenter" systems that translate `InputAction` (UI vocabulary) into
+`cdda_sim` use-case calls. This is why `cdda_sim` stays free of `GameAction`.
+
 ## Ownership
 - `CddaRenderPlugin` (in `render/mod.rs`) is the single Bevy entry point. It
   registers resources (`UiFontHandle`, `UiTheme`, `SettingsState`,
@@ -26,6 +30,10 @@ component/resource state into pixels. Layer 5 per `crates/AGENTS.md`.
 - All UI uses Bevy `Node` / `Button` / `Text` — no `bevy_fast_tilemap`, no
   custom shader pipeline. Tile sprites are `bevy_sprite` with
   `Sprite::custom_size` sized from `TileInfo::sprite_size()`.
+- **Screen input adapters live here, not in `cdda_sim`.**
+  `render/input.rs` holds `crafting_menu_input`, `inventory_screen_input`, and
+  `dev_pickup_drop_system`. These read `InputAction` and call `cdda_sim`
+  use-case functions. `cdda_sim` never matches `GameAction`.
 - Screen lifecycle follows `cdda_context::screen::CddaScreen`: each screen is
   a unit struct that implements the trait (`InventoryScreen`, `CraftingScreen`,
   `CharacterScreen`, `ExamineScreen`, `DevSpawnScreen`, `RegistryScreen`).
@@ -112,6 +120,10 @@ Per-screen files in `src/render/`:
 - `dev_worldgen.rs` — `Ctx::DevWorldgen` menu + `Ctx::Gameplay` ASCII
   `Text2d` viewport. Loads `ShareTechMono-Regular.ttf`, drives
   `DevCamera`/`DevPlayer`/`HandCount` for the dev showcase.
+- `input.rs` — **Screen input adapters (presenter layer):**
+  `crafting_menu_input`, `inventory_screen_input`, `dev_pickup_drop_system`.
+  Translate `InputAction` → `cdda_sim` use-calls + nav transitions. Keep new
+  screen-keyboard input here, not in `cdda_sim`.
 - `overmap.rs` — `Ctx::Overmap` viewer; `Node { display: Grid }` of
   tile-button cells, `OvermapCamera` pan/zoom, hover info sidebar, z-level
   switching; reads `OvermapGenConfig` + `TerrainQuery` from `cdda_overmap`.

@@ -14,6 +14,7 @@ Owns the Cargo workspace — 15 member crates (13 source + 1 test-only + 1 raw-d
 - **Layer 3 — game logic** (Bevy ECS only, no full Bevy): all of the consolidated `cdda_sim::{actor, ai, activity, combat, crafting, equipment, inventory, item, noise}` submodules.
 - **Layer 4 — world and data crates**: `cdda_data`, `cdda_overmap`, `cdda_overmap_gen`.
 - **Layer 5 — app shell** (full Bevy, binaries): `cdda_context`, `cdda_input`, `cdda_render`, `cdda_replay`, `cdda_app`, `cdda_cli`.
+- **UI input adapters live in `cdda_render` (`render/input.rs`), never `cdda_sim`.** `cdda_sim` is the pure use-case layer and must not match the display-UI `GameAction` enum. This is the workspace's "presenter-above-sim" contract: new screen-keyboard handlers go in `cdda_render`, and `cdda_sim` exposes use-case functions for them to call.
 - **Test-only**: `cdda_integration_tests` (no library, no `cargo build`; only `cargo test --workspace` compiles it).
 - No crate may depend on `cdda_app` or `cdda_cli`. Those are leaf entry points.
 - A crate that would need a reverse-layer dep must extract the shared types into a new crate (see `TARGET_ARCHITECTURE.md` § No Circular Dependencies).
