@@ -144,6 +144,41 @@ impl Loader {
             return Err(errors);
         }
 
+        self.resolve()
+    }
+
+    /// Ingest already-parsed JSON values (one entry per file) instead of
+    /// reading `.json` from disk. This is the hot-reload seam: callers that
+    /// source bytes through Bevy's asset reader (see `CddaDataPackLoader`)
+    /// still go through exactly the same [`serde_json::Value`] ingestion and
+    /// `copy-from` resolution pipeline as a disk-backed load.
+    ///
+    /// `files` is `(stable_source_path, top_level_json_values)` where the path
+    /// is used only for diagnostics/error attribution.
+    pub fn ingest_values(&mut self, files: Vec<(std::path::PathBuf, Vec<Value>)>) {
+        let mut errors: Vec<LoaderError> = Vec::new();
+        for (path, values) in files {
+            for item in values {
+                if let Some(obj) = item.as_object() {
+                    self.process_raw_def(obj, &path, &mut errors);
+                }
+            }
+        }
+        self.canonicalize_types();
+        if !errors.is_empty() {
+            warn!(
+                "Ingest via Bevy asset reader reported {} errors",
+                errors.len()
+            );
+        }
+    }
+
+    /// Pass 2 only: resolve the already-ingested [`Self::raw_by_type`] into a
+    /// [`DefRegistry`], without touching disk. Call after [`Loader::ingest_all`]
+    /// or [`Loader::ingest_values`].
+    pub fn resolve(&mut self) -> Result<DefRegistry, Vec<LoaderError>> {
+        let mut errors: Vec<LoaderError> = Vec::new();
+
         let total_raw = self.raw_by_type.values().map(|v| v.len()).sum::<usize>();
         info!(
             "Pass 1 complete: {} raw definitions ingested across {} types",

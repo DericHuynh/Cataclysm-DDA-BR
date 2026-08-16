@@ -6,10 +6,11 @@
 //! 3. CDDA patch idempotency (in-memory)
 //! 4. Filesystem-based reload: write JSON → load → add file → reload → verify
 
+use cdda_core_types::core::id::DefId;
+use cdda_data::flags::{ItemFlagRegistry, MonsterFlagRegistry};
 use cdda_data::interner::StringInterner;
 use cdda_data::loader::Loader;
 use cdda_data::patch::apply_cdda_patch;
-use cdda_data::flags::{ItemFlagRegistry, MonsterFlagRegistry};
 use serde_json::json;
 use std::io::Write;
 use std::path::PathBuf;
@@ -531,3 +532,71 @@ fn filesystem_reload_item_removed_by_mod() {
         0
     );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 5. Bevy AssetLoader seam — ingest_values + resolve
+//
+// The CddaJsonFile asset path parses files into raw `serde_json::Value`s and
+// hands them to `Loader::ingest_values` + `Loader::resolve`. These tests pin
+// that seam (copy-from resolution, type canonicalisation, mod layering) so the
+// asset pipeline and the legacy disk pipeline produce identical registries.
+// ═══════════════════════════════════════════════════════════════════════════
+
+use serde_json::Value as JsonValue;
+
+/// Parse the `items_json` helper output into the `(path, Values)` pairs that
+/// `Loader::ingest_values` expects.
+/// Parse the `items_json` helper output into the `(path, Values)` pairs that
+/// `Loader::ingest_values` expects.
+fn ingest_from_json(dir_path: &PathBuf, json: &str) -> Loader {
+    let value: JsonValue = serde_json::from_str(json).unwrap();
+    let values = match value {
+        JsonValue::Array(items) => items,
+        obj @ JsonValue::Object(_) => vec![obj],
+        _ => vec![],
+    };
+    let mut loader = Loader::new(Vec::new());
+    loader.ingest_values(vec![(dir_path.clone(), values)]);
+    loader
+}
+
+#[test]
+fn ingest_values_resolves_copy_from_and_item() {
+    // Base item + a copy-from child.
+    let json = r#"[
+    {"type":"ITEM","id":"rock","name":"rock","volume":"250 ml","weight":"100 g"},
+    {"type":"ITEM","id":"glowing_rock","copy-from":"rock","name":"Glowing Rock","flags":["GLOW"]}
+]"#;
+    let mut loader = ingest_from_json(&PathBuf::from("data/core/items.json"), json);
+    let registry = loader.resolve().expect("resolve registry");
+    assert!(
+        registry.items.contains_key(&DefId::new("rock")),
+        "rock should resolve"
+    );
+    assert!(
+        registry.items.contains_key(&DefId::new("glowing_rock")),
+        "glowing_rock (copy-from child) should resolve"
+    );
+}
+
+#[test]
+fn ingest_values_applies_type_aliases() {
+    // GUN and AMMO are ITEM subtypes canonicalized by ingest_values.
+    let json = r#"[
+    {"type":"GUN","id":"glock","name":"glock","volume":"250 ml"},
+    {"type":"AMMO","id":"9mm","name":"9mm","volume":"20 ml"}
+]"#;
+    let mut loader = ingest_from_json(&PathBuf::from("data/core/guns.json"), json);
+    let raw = loader.raw_by_type();
+    assert!(!raw.contains_key("GUN"), "GUN should be canonicalized");
+    assert!(!raw.contains_key("AMMO"), "AMMO should be canonicalized");
+    assert!(raw.contains_key("ITEM"), "subtypes merge into ITEM");
+}
+
+// NOTE: The real end-to-end hot-reload test lives in
+// `tests/json_asset_hot_reload.rs`. It builds a full Bevy `App` with a watched
+// asset source, loads existing JSON as a `CddaJsonFile`, changes the file's
+// content, emits `AssetSourceEvent::ModifiedAsset`, and asserts the asset is
+// automatically re-parsed and the resolved `DefRegistry` reflects the new
+// definitions — exactly the loop `cdda_app::data_assets::reload_modified_data`
+// drives at runtime.

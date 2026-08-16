@@ -3,6 +3,7 @@
 //! Wires all CDDA subsystems into a Bevy application using `GameSet`
 //! ordering (Input → Sim → Render).
 
+mod data_assets;
 mod startup;
 
 use bevy::app::{App, Plugin, PluginGroup, Update};
@@ -23,6 +24,7 @@ use cdda_context::ctx::Ctx as Screen;
 use cdda_context::screen::Screen as ScreenPlugin;
 use cdda_context::ContextStack;
 
+use crate::data_assets::{reload_modified_data, request_data_files, CddaDataFiles};
 use crate::startup::load_data_system;
 use crate::startup::{examine_item_input, spawn_dev_world};
 use cdda_components::actor::IsAlive;
@@ -186,6 +188,7 @@ impl Plugin for CddaPlugin {
         app.init_resource::<cdda_sim::runtime::state::LoadingStatus>();
         app.init_resource::<cdda_sim::runtime::state::GameTime>();
         app.init_resource::<IntentQueue>();
+        app.init_resource::<CddaDataFiles>();
 
         // ── Screen transitions ─────────────────────────────────────────
         app.add_systems(
@@ -194,7 +197,10 @@ impl Plugin for CddaPlugin {
         );
         app.add_systems(
             OnEnter(AppState::DataLoading),
-            |mut next: ResMut<NextState<Screen>>| next.set(Screen::DevWorldgen),
+            (
+                |mut next: ResMut<NextState<Screen>>| next.set(Screen::DevWorldgen),
+                request_data_files,
+            ),
         );
         app.add_systems(
             OnEnter(AppState::WorldGen),
@@ -282,6 +288,11 @@ impl Plugin for CddaPlugin {
         app.add_systems(
             Update,
             crate::startup::worldgen_system.run_if(in_state(AppState::WorldGen)),
+        );
+        // Asset-driven hot reload of CDDA data files currently in use.
+        app.add_systems(
+            Update,
+            reload_modified_data.run_if(in_state(AppState::InGame)),
         );
 
         // ── Turn tick ──────────────────────────────────────────────────
@@ -410,6 +421,9 @@ pub fn run() {
 
     let mut app = App::new();
     app.insert_resource(config);
+    // Register the custom `cdda` asset source (rooted at repo `data/`) BEFORE
+    // DefaultPlugins adds AssetPlugin, so the source is built at startup.
+    data_assets::register_cdda_asset_source(&mut app);
     app.add_plugins(
         DefaultPlugins
             .build()

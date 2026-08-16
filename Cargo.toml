@@ -23,7 +23,7 @@ members = [
 bevy_ecs        = { version = "0.18", features = ["multi_threaded"] }
 bevy_reflect    = "0.18"
 bevy_app        = "0.18"
-bevy_asset      = "0.18"
+bevy_asset      = { version = "0.18", features = ["file_watcher"] }
 bevy_input      = { version = "0.18", features = ["keyboard"] }
 bevy_state      = "0.18"
 serde           = { version = "1", features = ["derive"] }

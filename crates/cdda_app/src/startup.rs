@@ -67,48 +67,7 @@ pub fn load_data_system(world: &mut World) {
         Ok(registry) => {
             let count = registry.total_count();
             info!("Data loading complete: {} resolved definitions", count);
-
-            world.resource_mut::<LoadingStatus>().current_phase =
-                "Building definition entities...".into();
-            let def_world = build_def_world(world, &registry, true);
-            world.insert_resource(cdda_data::def_registry_resource::DefRegistryResource(
-                std::sync::Arc::new(registry.clone()),
-            ));
-            cdda_data::populate_flags::populate_def_flags(world, &registry, &def_world);
-            cdda_data::schema_gen::collect_and_generate_schemas(world);
-            info!(
-                "DefinitionWorld: {} items, {} terrain, {} furniture, {} monsters",
-                registry.items.len(),
-                registry.terrain.len(),
-                registry.furniture.len(),
-                registry.monsters.len(),
-            );
-
-            // --- Build TerrainRegistry from overmap_terrains ---
-            build_terrain_registry(world, &registry, &def_world);
-
-            world.insert_resource(CityBuildings(registry.city_buildings.clone()));
-
-            // --- Build OvermapRegionSettings from RegionSettingsDef ---
-            let region_settings = build_region_settings(&registry);
-            world.insert_resource(region_settings);
-
-            world.insert_resource(def_world);
-            world.insert_resource(GameTime::default());
-
-            // --- Configure overmap generation ---
-            let gen_config = OvermapGenConfig {
-                noise_seed: DEFAULT_NOISE_SEED,
-                om_x: 0,
-                om_y: 0,
-            };
-            world.insert_resource(gen_config);
-
-            world.resource_mut::<LoadingStatus>().current_phase = "Complete".into();
-            world.resource_mut::<LoadingStatus>().total_defs = count;
-            world
-                .resource_mut::<NextState<AppState>>()
-                .set(AppState::WorldGen);
+            apply_registry_to_world(world, &registry, count);
         }
         Err(errors) => {
             for err in &errors {
@@ -122,6 +81,81 @@ pub fn load_data_system(world: &mut World) {
                 .resource_mut::<NextState<AppState>>()
                 .set(AppState::WorldGen);
         }
+    }
+}
+
+// ===========================================================================
+// Shared "build everything from a resolved registry into the World" path
+// ===========================================================================
+
+/// Builds every runtime resource and entity that depends on a fully-resolved
+/// [`cdda_data::DefRegistry`]: the definition-world, flag registries, schemas,
+/// terrain/city/region resources, overmap-gen config and game clock.
+///
+/// This is the shared tail used by both the legacy disk-backed load
+/// ([`load_data_system`]) and the asset-driven hot-reload path (see
+/// `crate::data_assets`), so a hot-reload rebuilds exactly what an initial load
+/// built.
+///
+/// During hot reload the app is already `InGame`; in that case the state is
+/// left untouched (only transition on first load, from `DataLoading`).
+pub(crate) fn apply_registry_to_world(
+    world: &mut World,
+    registry: &cdda_data::DefRegistry,
+    count: usize,
+) {
+    use tracing::info;
+
+    world.resource_mut::<LoadingStatus>().current_phase = "Building definition entities...".into();
+    let def_world = build_def_world(world, registry, true);
+    world.insert_resource(cdda_data::def_registry_resource::DefRegistryResource(
+        std::sync::Arc::new(registry.clone()),
+    ));
+    cdda_data::populate_flags::populate_def_flags(world, registry, &def_world);
+    cdda_data::schema_gen::collect_and_generate_schemas(world);
+    info!(
+        "DefinitionWorld: {} items, {} terrain, {} furniture, {} monsters",
+        registry.items.len(),
+        registry.terrain.len(),
+        registry.furniture.len(),
+        registry.monsters.len(),
+    );
+
+    // --- Build TerrainRegistry from overmap_terrains ---
+    build_terrain_registry(world, registry, &def_world);
+
+    world.insert_resource(CityBuildings(registry.city_buildings.clone()));
+
+    // --- Build OvermapRegionSettings from RegionSettingsDef ---
+    let region_settings = build_region_settings(registry);
+    world.insert_resource(region_settings);
+
+    world.insert_resource(def_world);
+    // Seed the game clock only on first load; a hot reload must not reset it.
+    if world.get_resource::<GameTime>().is_none() {
+        world.insert_resource(GameTime::default());
+    }
+
+    // --- Configure overmap generation ---
+    let gen_config = OvermapGenConfig {
+        noise_seed: DEFAULT_NOISE_SEED,
+        om_x: 0,
+        om_y: 0,
+    };
+    world.insert_resource(gen_config);
+
+    world.resource_mut::<LoadingStatus>().current_phase = "Complete".into();
+    world.resource_mut::<LoadingStatus>().total_defs = count;
+
+    // Transition to worldgen only on the initial load; a hot reload must not
+    // yank the player out of an in-progress game.
+    let in_game = world
+        .get_resource::<State<AppState>>()
+        .map_or(false, |s| *s.get() == AppState::InGame);
+    if !in_game {
+        world
+            .resource_mut::<NextState<AppState>>()
+            .set(AppState::WorldGen);
     }
 }
 

@@ -18,6 +18,7 @@ pub mod def_registry_resource;
 pub mod def_world;
 pub mod flags;
 pub mod interner;
+pub mod json_asset;
 pub mod loader;
 pub mod mod_info;
 pub mod mod_layer;

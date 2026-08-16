@@ -153,9 +153,7 @@ fn color_to_string(c: &cdda_defs_raw::raw_defs::CddaColor) -> String {
     match c {
         cdda_defs_raw::raw_defs::CddaColor::Named(s) => s.clone(),
         cdda_defs_raw::raw_defs::CddaColor::Multi(v) => v.join(","),
-        cdda_defs_raw::raw_defs::CddaColor::Structured(s) => {
-            s.fg.clone().unwrap_or_default()
-        }
+        cdda_defs_raw::raw_defs::CddaColor::Structured(s) => s.fg.clone().unwrap_or_default(),
     }
 }
 
@@ -200,11 +198,9 @@ fn parse_component_slots(
                         cdda_defs_raw::raw_defs::recipe::ComponentOption::Simple(id, c) => {
                             (id.clone(), *c)
                         }
-                        cdda_defs_raw::raw_defs::recipe::ComponentOption::WithFlag(
-                            id,
-                            c,
-                            _,
-                        ) => (id.clone(), *c),
+                        cdda_defs_raw::raw_defs::recipe::ComponentOption::WithFlag(id, c, _) => {
+                            (id.clone(), *c)
+                        }
                         cdda_defs_raw::raw_defs::recipe::ComponentOption::Object(o) => {
                             (o.item.clone(), o.count.unwrap_or(1))
                         }
@@ -251,6 +247,17 @@ pub fn build_def_world(
     def_registry: &crate::DefRegistry,
     spawn_all: bool,
 ) -> DefinitionWorld {
+    // Cleared and rebuilt (hot reload) — drop the previous definition entities so
+    // a reload doesn't accumulate duplicates. Gameplay entities must *not* carry
+    // `IsDef`, so this only ever despawns definition entities.
+    let stale: Vec<Entity> = world
+        .query_filtered::<Entity, With<IsDef>>()
+        .iter(world)
+        .collect();
+    for e in stale {
+        world.despawn(e);
+    }
+
     let mut def_world = DefinitionWorld::empty();
 
     if spawn_all {
@@ -316,9 +323,7 @@ fn build_item_defs(
                     cdda_defs_raw::raw_defs::item::Phase::Liquid => {
                         cdda_components::def::Phase::Liquid
                     }
-                    cdda_defs_raw::raw_defs::item::Phase::Gas => {
-                        cdda_components::def::Phase::Gas
-                    }
+                    cdda_defs_raw::raw_defs::item::Phase::Gas => cdda_components::def::Phase::Gas,
                     cdda_defs_raw::raw_defs::item::Phase::Plasma => {
                         cdda_components::def::Phase::Plasma
                     }
@@ -412,21 +417,19 @@ fn build_item_defs(
                                 .encumbrance
                                 .as_ref()
                                 .map(|e| match e {
-                                    cdda_defs_raw::raw_defs::EncumbranceOrRange::Single(
-                                        v,
-                                    ) => *v as i32,
-                                    cdda_defs_raw::raw_defs::EncumbranceOrRange::Range(
-                                        v,
-                                    ) => v.first().copied().unwrap_or(0) as i32,
+                                    cdda_defs_raw::raw_defs::EncumbranceOrRange::Single(v) => {
+                                        *v as i32
+                                    }
+                                    cdda_defs_raw::raw_defs::EncumbranceOrRange::Range(v) => {
+                                        v.first().copied().unwrap_or(0) as i32
+                                    }
                                 })
                                 .unwrap_or(0);
                             let body_part_str = bp
                                 .covers
                                 .as_ref()
                                 .map(|c| match c {
-                                    cdda_defs_raw::raw_defs::StringOrArray::Single(s) => {
-                                        s.clone()
-                                    }
+                                    cdda_defs_raw::raw_defs::StringOrArray::Single(s) => s.clone(),
                                     cdda_defs_raw::raw_defs::StringOrArray::Multi(v) => {
                                         v.join(", ")
                                     }
@@ -1367,5 +1370,32 @@ mod tests {
         build_recipe_defs(&mut world, &reg, &mut dw);
         build_body_part_defs(&mut world, &reg, &mut dw);
         assert_eq!(dw.len(), 0);
+    }
+
+    /// Hot reload must replace (not accumulate) the previous definition set:
+    /// calling `build_def_world` twice with the same registry yields the same
+    /// number of `IsDef` entities (the old ones are despawned first).
+    #[test]
+    fn build_def_world_rebuild_despawns_stale_entities() {
+        let mut world = World::new();
+        setup_world(&mut world);
+        let reg = DefRegistry::empty();
+
+        // Manually seed a couple of IsDef entities to simulate an earlier build.
+        world.spawn((IsDef, DefStrId("stale_a".into())));
+        world.spawn((IsDef, DefStrId("stale_b".into())));
+        world.spawn(IsDef);
+
+        // Rebuild an empty def world over them.
+        let count_isdef = |w: &mut World| w.query_filtered::<Entity, With<IsDef>>().iter(w).count();
+        let before = count_isdef(&mut world);
+        assert_eq!(before, 3);
+
+        let _ = build_def_world(&mut world, &reg, true);
+
+        // All stale entities were despawned; body parts etc. re-added only if the
+        // registry has them — with an empty registry there should be none left.
+        let after = count_isdef(&mut world);
+        assert_eq!(after, 0, "rebuild must not accumulate definition entities");
     }
 }
