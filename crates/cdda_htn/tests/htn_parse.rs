@@ -33,3 +33,13 @@ fn parses_troll_example() {
     // BeTrunkThumper + AttackEnemy + 11 primitives.
     assert_eq!(domain.tasks.len(), 13);
 }
+
+#[test]
+fn parses_deep_outpost_example() {
+    let src = load("outpost.htn");
+    let domain = parse_htn(&src).expect("outpost.htn must parse");
+    // 8 compounds + 15 primitives = 23 tasks.
+    assert_eq!(domain.tasks.len(), 23);
+    // The root compound is the forward-planning entry point.
+    assert_eq!(domain.root_task().map(|t| t.name()), Some("SecureOutpost"));
+}
