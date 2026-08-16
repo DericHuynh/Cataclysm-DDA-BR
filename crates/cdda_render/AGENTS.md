@@ -18,10 +18,12 @@ It also hosts the **screen input adapters** (`render/input.rs`) — the
   system, and per-screen `OnEnter`/`Update` schedules keyed on `Ctx` states.
 - Bevy deps (per `Cargo.toml`): `bevy` with `bevy_asset`, `bevy_core_pipeline`,
   `bevy_pbr`, `bevy_render`, `bevy_sprite`, `bevy_text`, `bevy_ui`, `bevy_winit`,
-  `x11`; plus `bevy_ecs`, `bevy_state`, `leafwing-input-manager`, `serde`,
-  `serde_json`, `tracing`. **No** tilemap crate (`bevy_fast_tilemap` etc.) —
-  tile rendering is plain `bevy_sprite` (`Sprite` + `Image` handles) driven by
-  a hand-built `TileRegistry`.
+  `x11`, `ui_picking`; plus `bevy_ecs`, `bevy_state`, `leafwing-input-manager`,
+  `serde`, `serde_json`, `tracing`. The `ui_picking` feature enables
+  `On<Pointer<Click>>` observers on UI `Button`s, giving mouse input to menus
+  (Settings tabs, main-menu command buttons). **No** tilemap crate
+  (`bevy_fast_tilemap` etc.) — tile rendering is plain `bevy_sprite`
+  (`Sprite` + `Image` handles) driven by a hand-built `TileRegistry`.
 - Per-screen renderers depend on `cdda_context` for the `CddaScreen` trait
   (`Ctx`, `ACTIONS`, `spawn`, `update`) and `cdda_input` for `BindableAction` /
   `ActiveKeybindings`. They never write sim or navigation state directly.
@@ -31,9 +33,9 @@ It also hosts the **screen input adapters** (`render/input.rs`) — the
   custom shader pipeline. Tile sprites are `bevy_sprite` with
   `Sprite::custom_size` sized from `TileInfo::sprite_size()`.
 - **Screen input adapters live here, not in `cdda_sim`.**
-  `render/input.rs` holds `crafting_menu_input`, `inventory_screen_input`, and
-  `dev_pickup_drop_system`. These read `InputAction` and call `cdda_sim`
-  use-case functions. `cdda_sim` never matches `GameAction`.
+  `render/input.rs` holds `crafting_menu_input`, `inventory_screen_input`,
+  `dev_pickup_drop_system`, and `dev_spawn_input`. These read `InputAction` and
+  call `cdda_sim` use-case functions. `cdda_sim` never matches `GameAction`.
 - Screen lifecycle follows `cdda_context::screen::CddaScreen`: each screen is
   a unit struct that implements the trait (`InventoryScreen`, `CraftingScreen`,
   `CharacterScreen`, `ExamineScreen`, `DevSpawnScreen`, `RegistryScreen`).
@@ -61,6 +63,16 @@ It also hosts the **screen input adapters** (`render/input.rs`) — the
 - Footer key hints: every screen tags one text entity with `FooterHint`; the
   shared `refresh_all_footer_hints` system rewrites it each frame from
   `ContextActions` + `ActiveKeybindings`. No per-screen footer systems.
+- **Scroll uses Bevy's native `ScrollPosition` + `Overflow::scroll_y()`**, driven
+  by the shared `render/scroll.rs` primitives (`KeyboardScroll` marker, arrow/page
+  keys, mouse-wheel, and focused-row keep-visible), not hand-rolled virtual
+  windowing. Item-heavy panes additionally carry a `VirtualList`, which **virtualizes
+  rendering up-front**: the pane spawns only the visible row window plus top/bottom
+  spacer nodes, so Bevy layout never processes 40k rows. `update_virtual_windows`
+  (PreUpdate) syncs each `VirtualList`'s window from its `ScrollPosition`. A new
+  long-list pane should attach `KeyboardScroll` + `VirtualList` (and `FocusedRow`
+  if it has a focused-row index) to a `scroll_y()` node rather than spawning all
+  rows or re-implementing scroll offsets.
 
 ## Work Guidance
 - Add a new screen by (1) creating a unit struct in its own module,
@@ -77,6 +89,10 @@ It also hosts the **screen input adapters** (`render/input.rs`) — the
   (small → normal → large → giant, higher wins).
 - Coordinate with `cdda_input` when adding a new `BindableAction`; the footer's
   `ACTIONS` table must list it for the hint to appear.
+- Mouse interaction: menu `Button`s may attach `.observe(On<Pointer<Click>>)`
+  (enabled by the `ui_picking` feature) to react to mouse clicks. Prefer routing
+  a click into the same `InputAction`/`NextState` path keyboard uses, so there
+  is one source of truth per transition.
 
 ## Verification
 - `cargo check -p cdda_render` for compile sanity.
@@ -90,8 +106,15 @@ It also hosts the **screen input adapters** (`render/input.rs`) — the
 Per-screen files in `src/render/`:
 
 - `mod.rs` — `CddaRenderPlugin`, `UiFontHandle`, `refresh_all_footer_hints`,
-  `render_setup` (camera + Inter font), `FooterHint` marker. **Wiring file —
+  `render_setup` (camera + Inter font), `FooterHint` marker, and the shared
+  scroll systems (`scroll::scroll_with_keyboard`/`scroll_with_wheel`/
+  `scroll_to_focused_row`). **Wiring file —
   edit this first** when adding/changing screens.
+- `scroll.rs` — Shared, idiomatic scroll primitives (`KeyboardScroll` marker,
+  `FocusedRow`, `VirtualList` row virtualization with spacer nodes, systems for
+  arrow/page keys, mouse wheel, keep-focused-visible, and window sync). Wraps
+  Bevy's `ScrollPosition + Overflow::scroll_y()`; attach to any scrollable pane
+  instead of hand-rolling clip/window logic.
 - `theme.rs` — `UiTheme` resource, `ThemePreset` enum (Blue/Green/Amber),
   fixed colour constants. Single source of truth for palette.
 - `tiles.rs` — `TileRegistry`, `TileInfo`, `load_tiles` startup system,
@@ -99,36 +122,51 @@ Per-screen files in `src/render/`:
 - `registry.rs` — `RegistryScreen` (`Ctx::RegistryViewer`); debug viewer over
   the def registry: title, category panel, entry list, detail + raw-JSON +
   parsed-fields panels. **Pane-focus navigation**: `Tab`/`Shift+Tab` cycles the
-  focused pane (categories → entries → raw JSON → parsed); `←/→/↑/↓` navigate
-  within the focused pane; `PgUp`/`PgDn` page the entries or scroll the detail
-  panes. Each def shows a STATUS line reporting the round-trip/coverage check
-  result, and the active pane is tinted. Owns `RegistryViewerState`
-  (`pane`, `detail_scroll`).
+  focused pane (categories → entries → raw JSON → parsed); `←/→` switch
+  category / swap detail panes; `↑/↓`/`PgUp`/`PgDn` navigate within the focused
+  list pane. The four panes are native `KeyboardScroll` scroll nodes; the two
+  list panes (categories, entries) are index-navigated `VirtualList` panes
+  (virtualized rendering, focus keep-visible), and the raw/parsed panes are
+  free-scrolling text panes. Each def shows a STATUS line reporting the
+  round-trip/coverage check result, and the active pane is tinted. Owns
+  `RegistryViewerState` (`categories`, `entries`, `pane`).
 - `main_menu.rs` — `main_menu::spawn` / `sync_focus` for `Ctx::MainMenu`;
-  bevy_ui `Node` flex column of `CommandButton`s.
-- `settings.rs` — `SettingsScreen` (`Ctx::SettingsMenu`); tabbed settings UI
-  (General, Graphics, Sound, Interface, Keybindings) including live key-rebind
-  capture. Owns `SettingsState` resource.
+  bevy_ui `Node` flex column of `CommandButton`s. Command buttons observe
+  `On<Pointer<Click>>` (mouse) and set the focused command + emit a `Confirm`
+  `InputAction`, so mouse and keyboard share the single `handle_navigation_input`
+  dispatch path.
+- `settings.rs` — Settings screen (`Ctx::SettingsMenu`); the five tabs
+  (General, Graphics, Sound, Interface, Keybindings) are driven by the `SettingsTab`
+  Bevy `SubStates` from `cdda_context::substate`. The frame spawns on
+  `OnEnter(Ctx::SettingsMenu)`; the active tab's rows are rebuilt from
+  `State<SettingsTab>` + `SettingsState` via `rebuild_content_panel` (running on
+  `Changed`), the tab bar switches via `NextState<SettingsTab>`, and each tab
+  button observes `On<Pointer<Click>>` for mouse navigation. Owns `SettingsState`
+  (focused row, in-progress rebind, interface theme).
 - `inventory.rs` — `InventoryScreen` (`Ctx::Inventory`); three-panel pocket /
-  wielded / worn layout; reads `ItemTypeRegistry`, `TileRegistry`.
+  wielded / worn layout; reads `ItemTypeRegistry`, `TileRegistry`. All three
+  lists are native `scroll::KeyboardScroll` panes (arrow keys + wheel scroll).
 - `crafting.rs` — `CraftingScreen` (`Ctx::CraftingMenu`); recipe browser with
-  category tabs, sub-tabs, recipe list, detail panel, filter bar.
+  category tabs, sub-tabs, recipe list, detail panel, filter bar. The recipe
+  list is a native `KeyboardScroll` pane.
 - `character.rs` — `CharacterScreen` (`Ctx::CharacterSheet`); two-column sheet
   with tabbed right pane (Skills | Traits | Effects | Bionics | Proficiencies);
-  owns `CharacterSheetState`.
+  owns `CharacterSheetState`; the tabbed list is a native `KeyboardScroll` pane.
 - `examine.rs` — `ExamineScreen` (`Ctx::ItemExamine`); overlay over inventory
   using the shared `item_detail` widget.
 - `item_detail.rs` — Shared `ItemDetailQueries` `SystemParam` bundle +
   `spawn_item_detail` widget. Consumed by `dev_spawn`, `crafting`, `examine`.
 - `dev_spawn.rs` — `DevSpawnScreen` (`Ctx::DevSpawnPanel`); debug catalog with
-  filter and per-row detail; owns `DevSpawnFocus`.
+  filter and per-row detail; owns `DevSpawnFocus`; the item list is a native
+  `KeyboardScroll` + `VirtualList` pane. Input (navigate/filter/confirm) lives in
+  `render/input.rs` (`dev_spawn_input`).
 - `dev_worldgen.rs` — `Ctx::DevWorldgen` menu + `Ctx::Gameplay` ASCII
   `Text2d` viewport. Loads `ShareTechMono-Regular.ttf`, drives
   `DevCamera`/`DevPlayer`/`HandCount` for the dev showcase.
-- `input.rs` — **Screen input adapters (presenter layer):**
-  `crafting_menu_input`, `inventory_screen_input`, `dev_pickup_drop_system`.
-  Translate `InputAction` → `cdda_sim` use-calls + nav transitions. Keep new
-  screen-keyboard input here, not in `cdda_sim`.
+- `input.rs` — **Screen adapters (presenter layer):**
+  `crafting_menu_input`, `inventory_screen_input`, `dev_pickup_drop_system`,
+  `dev_spawn_input`. Translate `InputAction` → `cdda_sim` use-calls + nav
+  transitions. Keep new screen-keyboard input here, not in `cdda_sim`.
 - `overmap.rs` — `Ctx::Overmap` viewer; `Node { display: Grid }` of
   tile-button cells, `OvermapCamera` pan/zoom, hover info sidebar, z-level
   switching; reads `OvermapGenConfig` + `TerrainQuery` from `cdda_overmap`.

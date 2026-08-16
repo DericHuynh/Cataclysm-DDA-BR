@@ -1,66 +1,40 @@
 //! Settings screen — tabbed categories with keybinding editor.
 //!
-//! Uses `DespawnOnExit(Ctx::SettingsMenu)` for automatic cleanup.
-//! Tab content is rebuilt via `rebuild_content_panel`.
+//! The five Settings tabs are Bevy **`SubStates`** (`cdda_context::substate::SettingsTab`),
+//! which only exist while the `Ctx::SettingsMenu` screen is active. The frame
+//! (title + tab bar + content panel) is spawned on `OnEnter(Ctx::SettingsMenu)`.
+//! The active tab is a `State<SettingsTab>`; switching it (via keyboard
+//! `NavigateNextTab`/`NavigatePrevTab/Left/Right`, or a mouse click on a tab
+//! button observed as `On<Pointer<Click>>`) routes through
+//! `NextState<SettingsTab>`, and the active tab's rows are re-populated from it.
+//! Rows are child entities of the persistent content panel, scoped per tab so
+//! Bevy's `DespawnOnExit` is not needed for correctness here (we rebuild
+//! explicitly on change).
 
+use crate::render::scroll::{FocusedRow, KeyboardScroll};
 use crate::render::theme::{ThemePreset, UiTheme};
 use bevy::ecs::relationship::RelatedSpawnerCommands;
 use bevy::prelude::*;
-use bevy::ui::ScrollPosition;
-use bevy_state::state_scoped::DespawnOnExit;
-use cdda_context::config::GameSettings;
+use bevy_state::prelude::{in_state, DespawnOnExit, OnEnter, State as BevyState};
+use bevy_state::state::NextState;
 use cdda_context::ctx::Ctx;
-use cdda_context::nav::ctx_def;
+use cdda_context::substate::SettingsTab;
 use cdda_input::bindings::ContextInputMaps;
 use cdda_input::{
     BindableAction, GameAction, InputAction, InputContextId, RebindCapture, RebindCaptureInner,
 };
 
 // ---------------------------------------------------------------------------
-// Settings tab
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum SettingsTab {
-    General,
-    Graphics,
-    Sound,
-    Interface,
-    Keybindings,
-}
-
-impl SettingsTab {
-    pub fn all() -> &'static [SettingsTab] {
-        &[
-            SettingsTab::General,
-            SettingsTab::Graphics,
-            SettingsTab::Sound,
-            SettingsTab::Interface,
-            SettingsTab::Keybindings,
-        ]
-    }
-
-    pub fn label(&self) -> &'static str {
-        match self {
-            SettingsTab::General => "General",
-            SettingsTab::Graphics => "Graphics",
-            SettingsTab::Sound => "Sound",
-            SettingsTab::Interface => "Interface",
-            SettingsTab::Keybindings => "Keybindings",
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Settings state
 // ---------------------------------------------------------------------------
 
+/// Per-tab UI state that does not map to a screen. The active tab lives in
+/// `State<SettingsTab>` (Bevy `SubStates`), so this resource holds the focused
+/// row (current tab), an in-progress rebind, and the interface theme index.
 #[derive(Resource, Debug, Clone)]
 pub struct SettingsState {
-    pub active_tab: SettingsTab,
     pub focused_row: usize,
     pub rebinding_action: Option<(InputContextId, BindableAction)>,
-    pub tab_changed: bool,
     /// Index into `ThemePreset::ALL` for the Interface tab color scheme setting.
     pub interface_theme: usize,
 }
@@ -68,34 +42,22 @@ pub struct SettingsState {
 impl Default for SettingsState {
     fn default() -> Self {
         Self {
-            active_tab: SettingsTab::General,
             focused_row: 0,
             rebinding_action: None,
-            tab_changed: false,
             interface_theme: 0,
         }
     }
 }
 
-// ---------------------------------------------------------------------------
-// Marker components
-// ---------------------------------------------------------------------------
-
+/// Marker components.
 #[derive(Component)]
 pub struct TabButton(pub SettingsTab);
-
-/// Attached to the panel that holds per-tab content rows.
 #[derive(Component)]
 pub struct ContentPanel;
-
-/// Attached to each selectable row within a tab.
 #[derive(Component)]
 pub struct SettingsItem(usize);
 
-// ---------------------------------------------------------------------------
-// Colours
-// ---------------------------------------------------------------------------
-
+// Colours.
 const BG: Color = Color::srgb(0.05, 0.05, 0.07);
 const PANEL: Color = Color::srgb(0.08, 0.08, 0.10);
 const TAB_ACTIVE: Color = Color::srgb(0.25, 0.55, 0.15);
@@ -104,25 +66,17 @@ const ITEM_BG: Color = Color::srgb(0.08, 0.08, 0.10);
 const ITEM_FOCUS_BG: Color = Color::srgb(0.25, 0.55, 0.15);
 const ACCENT: Color = Color::srgb(0.85, 0.6, 0.15);
 const TEXT_BRIGHT: Color = Color::srgb(0.95, 0.95, 0.95);
-const TEXT_DIM: Color = Color::srgb(0.6, 0.6, 0.6);
 const HIGHLIGHT: Color = Color::srgb(0.95, 0.95, 0.95);
 const REBIND_PROMPT: Color = Color::srgb(0.9, 0.7, 0.1);
 
 // ---------------------------------------------------------------------------
-// Spawn
+// Spawn — frame (title + tab bar + content panel)
 // ---------------------------------------------------------------------------
 
-pub fn spawn(
-    mut commands: Commands,
-    __settings: Res<GameSettings>,
-    state: Res<SettingsState>,
-    bindings: Res<ContextInputMaps>,
-    ui_theme: Res<UiTheme>,
-    ui_font_handle: Res<super::UiFontHandle>,
-) {
-    let def = ctx_def(Ctx::SettingsMenu);
+pub fn spawn(mut commands: Commands) {
+    let def = cdda_context::nav::ctx_def(Ctx::SettingsMenu);
 
-    let mut panel_entity = Entity::PLACEHOLDER;
+    let mut content_entity = Entity::PLACEHOLDER;
 
     commands
         .spawn((
@@ -153,6 +107,7 @@ pub fn spawn(
                 },
             ));
 
+            // Tab bar — each button selects a tab via `NextState<SettingsTab>`.
             parent
                 .spawn(Node {
                     display: Display::Flex,
@@ -164,7 +119,6 @@ pub fn spawn(
                 })
                 .with_children(|bar| {
                     for tab in SettingsTab::all() {
-                        let is_active = *tab == state.active_tab;
                         bar.spawn((
                             TabButton(*tab),
                             Button,
@@ -173,9 +127,15 @@ pub fn spawn(
                                 border: UiRect::all(Val::Px(1.0)),
                                 ..default()
                             },
-                            BackgroundColor(if is_active { TAB_ACTIVE } else { TAB_INACTIVE }),
-                            BorderColor::all(if is_active { HIGHLIGHT } else { Color::NONE }),
+                            BackgroundColor(TAB_INACTIVE),
                         ))
+                        .observe(
+                            move |mut click: On<Pointer<Click>>,
+                                  mut next: ResMut<NextState<SettingsTab>>| {
+                                next.set(*tab);
+                                click.propagate(false);
+                            },
+                        )
                         .with_child((
                             Text::new(tab.label()),
                             TextFont {
@@ -187,9 +147,12 @@ pub fn spawn(
                     }
                 });
 
-            panel_entity = parent
+            content_entity = parent
                 .spawn((
                     ContentPanel,
+                    KeyboardScroll,
+                    FocusedRow::default(),
+                    ScrollPosition::default(),
                     Node {
                         width: Val::Percent(80.0),
                         flex_grow: 1.0,
@@ -197,112 +160,58 @@ pub fn spawn(
                         flex_direction: FlexDirection::Column,
                         padding: UiRect::all(Val::Px(16.0)),
                         border: UiRect::all(Val::Px(1.0)),
-                        overflow: Overflow::clip_y(),
+                        overflow: Overflow::scroll_y(),
                         ..default()
                     },
                     BackgroundColor(PANEL),
-                    BorderColor::all(Color::srgba(0.2, 0.2, 0.3, 0.5)),
-                    ScrollPosition::default(),
                 ))
                 .id();
         });
 
-    let theme_label = ui_theme.preset.label().to_string();
-    populate_into(
-        commands,
-        panel_entity,
-        &state,
-        Some(&bindings),
-        &theme_label,
-        &ui_font_handle,
-    );
+    let _ = content_entity;
 }
 
-fn populate_into(
-    mut commands: Commands,
-    panel: Entity,
-    state: &SettingsState,
-    bindings: Option<&ContextInputMaps>,
-    theme_label: &str,
-    ui_font_handle: &super::UiFontHandle,
-) {
-    // Wrap everything in a single entity so `despawn_children` on the panel
-    // removes all content atomically.
-    commands
-        .entity(panel)
-        .with_children(|content| match state.active_tab {
-            SettingsTab::General => general_tab(content, state),
-            SettingsTab::Graphics => graphics_tab(content, state),
-            SettingsTab::Sound => sound_tab(content, state),
-            SettingsTab::Interface => interface_tab(content, state, theme_label),
-            SettingsTab::Keybindings => keybindings_tab(content, state, bindings, ui_font_handle),
-        });
-}
+// ---------------------------------------------------------------------------
+// Row helper
+// ---------------------------------------------------------------------------
 
-fn general_tab(parent: &mut RelatedSpawnerCommands<'_, ChildOf>, state: &SettingsState) {
-    let items = [
-        ("Auto-save", "Enabled (every 5 min)"),
-        ("Auto-notes", "Yes"),
-        ("Circular distance", "No"),
-    ];
-    for (i, (label, value)) in items.iter().enumerate() {
-        row(parent, i, &format!("{label}: {value}"), state);
-    }
-}
-
-fn graphics_tab(parent: &mut RelatedSpawnerCommands<'_, ChildOf>, state: &SettingsState) {
-    let items = [
-        ("Terminal size", "80×25"),
-        ("Font size", "16"),
-        ("Fullscreen", "No"),
-    ];
-    for (i, (label, value)) in items.iter().enumerate() {
-        row(parent, i, &format!("{label}: {value}"), state);
-    }
-}
-
-fn sound_tab(parent: &mut RelatedSpawnerCommands<'_, ChildOf>, state: &SettingsState) {
-    let items = [("Music volume", "80%"), ("SFX volume", "100%")];
-    for (i, (label, value)) in items.iter().enumerate() {
-        row(parent, i, &format!("{label}: {value}"), state);
-    }
-}
-
-fn interface_tab(
+fn row(
     parent: &mut RelatedSpawnerCommands<'_, ChildOf>,
+    index: usize,
+    label: &str,
     state: &SettingsState,
-    theme_label: &str,
 ) {
-    let items: Vec<(&str, String)> = vec![
-        ("Sidebar style", "classic".to_string()),
-        ("Show compass", "Yes".to_string()),
-        ("Minimap height", "100".to_string()),
-        ("Force capital Y/N", "Yes".to_string()),
-        ("Color Scheme", format!("{} (←/→ to cycle)", theme_label)),
-    ];
-    for (i, (label, value)) in items.iter().enumerate() {
-        row(parent, i, &format!("{label}: {value}"), state);
-    }
-}
-
-fn keybindings_tab(
-    parent: &mut RelatedSpawnerCommands<'_, ChildOf>,
-    state: &SettingsState,
-    bindings: Option<&ContextInputMaps>,
-    ui_font_handle: &super::UiFontHandle,
-) {
-    let Some(bindings) = bindings else {
-        parent.spawn((
-            Text::new("No bindings available."),
-            TextFont {
-                font_size: 18.0,
+    let is_focused = index == state.focused_row;
+    parent
+        .spawn((
+            SettingsItem(index),
+            Button,
+            Node {
+                width: Val::Percent(100.0),
+                padding: UiRect::axes(Val::Px(12.0), Val::Px(8.0)),
+                margin: UiRect::vertical(Val::Px(2.0)),
+                border: UiRect::all(Val::Px(1.0)),
                 ..default()
             },
-            TextColor(TEXT_DIM),
+            BackgroundColor(if is_focused { ITEM_FOCUS_BG } else { ITEM_BG }),
+            BorderColor::all(if is_focused { HIGHLIGHT } else { Color::NONE }),
+        ))
+        .with_child((
+            Text::new(label),
+            TextFont {
+                font_size: 20.0,
+                ..default()
+            },
+            TextColor(TEXT_BRIGHT),
         ));
-        return;
-    };
+}
 
+fn keybindings_rows(
+    parent: &mut RelatedSpawnerCommands<'_, ChildOf>,
+    state: &SettingsState,
+    bindings: &ContextInputMaps,
+    ui_font_handle: &super::UiFontHandle,
+) {
     let contexts = &[
         InputContextId::Gameplay,
         InputContextId::Inventory,
@@ -313,13 +222,11 @@ fn keybindings_tab(
     let mut row_index = 0usize;
 
     for ctx in contexts {
-        // list_bindings returns Vec<(BindableAction, String)> sorted by label
         let pairs = bindings.list_bindings(ctx);
         if pairs.is_empty() {
             continue;
         }
 
-        // Section header
         parent.spawn((
             Text::new(format!("——— {} ———", ctx_label(ctx))),
             TextFont {
@@ -376,141 +283,121 @@ fn keybindings_tab(
             row_index += 1;
         }
     }
-
-    if row_index == 0 {
-        parent.spawn((
-            Text::new("No keybindings loaded."),
-            TextFont {
-                font_size: 18.0,
-                ..default()
-            },
-            TextColor(TEXT_DIM),
-            Node {
-                margin: UiRect::all(Val::Px(16.0)),
-                ..default()
-            },
-        ));
-    }
 }
 
 // ---------------------------------------------------------------------------
-// Row helper
+// Rebuild — populate the active tab's rows when the tab or its state changes.
 // ---------------------------------------------------------------------------
 
-fn row(
-    parent: &mut RelatedSpawnerCommands<'_, ChildOf>,
-    index: usize,
-    label: &str,
-    state: &SettingsState,
-) {
-    let is_focused = index == state.focused_row;
-    parent
-        .spawn((
-            SettingsItem(index),
-            Button,
-            Node {
-                width: Val::Percent(100.0),
-                padding: UiRect::axes(Val::Px(12.0), Val::Px(8.0)),
-                margin: UiRect::vertical(Val::Px(2.0)),
-                border: UiRect::all(Val::Px(1.0)),
-                ..default()
-            },
-            BackgroundColor(if is_focused { ITEM_FOCUS_BG } else { ITEM_BG }),
-            BorderColor::all(if is_focused { HIGHLIGHT } else { Color::NONE }),
-        ))
-        .with_child((
-            Text::new(label),
-            TextFont {
-                font_size: 20.0,
-                ..default()
-            },
-            TextColor(TEXT_BRIGHT),
-        ));
-}
-
-// ---------------------------------------------------------------------------
-// Rebuild on tab switch
-// ---------------------------------------------------------------------------
-
+/// (Re)build the active tab's rows into the `ContentPanel`. Runs on
+/// `Changed<State<SettingsTab>>` or `Changed<SettingsState>`.
 pub fn rebuild_content_panel(
     mut commands: Commands,
-    mut state: ResMut<SettingsState>,
-    __settings: Res<GameSettings>,
+    tab_state: Res<BevyState<SettingsTab>>,
+    state: Res<SettingsState>,
     bindings: Res<ContextInputMaps>,
-    panel: Query<Entity, With<ContentPanel>>,
     mut ui_theme: ResMut<UiTheme>,
     ui_font_handle: Res<super::UiFontHandle>,
+    panel: Query<Entity, With<ContentPanel>>,
 ) {
-    if !state.tab_changed {
+    if !tab_state.is_changed() && !state.is_changed() {
         return;
     }
-    state.tab_changed = false;
+
+    // Sync the UiTheme from state.
+    ui_theme.preset = ThemePreset::ALL[state.interface_theme % ThemePreset::ALL.len()];
 
     let Ok(panel_entity) = panel.single() else {
         return;
     };
 
-    // Sync the UiTheme from state
-    let preset_idx = state.interface_theme % ThemePreset::ALL.len();
-    ui_theme.preset = ThemePreset::ALL[preset_idx];
-
-    // Atomic clear — removes all children of the panel in one command
+    // Atomic clear, then repopulate.
     commands.entity(panel_entity).despawn_children();
-
-    let snapshot = SettingsState {
-        active_tab: state.active_tab,
-        focused_row: state.focused_row,
-        interface_theme: state.interface_theme,
-        ..Default::default()
-    };
-
-    let theme_label = ui_theme.preset.label().to_string();
-    populate_into(
-        commands,
-        panel_entity,
-        &snapshot,
-        Some(&bindings),
-        &theme_label,
-        &ui_font_handle,
-    );
+    commands
+        .entity(panel_entity)
+        .with_children(|content| match *tab_state.get() {
+            SettingsTab::General => {
+                for (i, (l, v)) in [
+                    ("Auto-save", "Enabled (every 5 min)"),
+                    ("Auto-notes", "Yes"),
+                    ("Circular distance", "No"),
+                ]
+                .iter()
+                .enumerate()
+                {
+                    let label = format!("{l}: {v}");
+                    row(content, i, &label, &state);
+                }
+            }
+            SettingsTab::Graphics => {
+                for (i, (l, v)) in [
+                    ("Terminal size", "80×25"),
+                    ("Font size", "16"),
+                    ("Fullscreen", "No"),
+                ]
+                .iter()
+                .enumerate()
+                {
+                    let label = format!("{l}: {v}");
+                    row(content, i, &label, &state);
+                }
+            }
+            SettingsTab::Sound => {
+                for (i, (l, v)) in [("Music volume", "80%"), ("SFX volume", "100%")]
+                    .iter()
+                    .enumerate()
+                {
+                    let label = format!("{l}: {v}");
+                    row(content, i, &label, &state);
+                }
+            }
+            SettingsTab::Interface => {
+                let items: Vec<(&str, String)> = vec![
+                    ("Sidebar style", "classic".into()),
+                    ("Show compass", "Yes".into()),
+                    ("Minimap height", "100".into()),
+                    ("Force capital Y/N", "Yes".into()),
+                    (
+                        "Color Scheme",
+                        format!("{} (←/→ to cycle)", ui_theme.preset.label()),
+                    ),
+                ];
+                for (i, (l, v)) in items.iter().enumerate() {
+                    let label = format!("{l}: {v}");
+                    row(content, i, &label, &state);
+                }
+            }
+            SettingsTab::Keybindings => {
+                keybindings_rows(content, &state, &bindings, &ui_font_handle);
+            }
+        });
 }
 
 // ---------------------------------------------------------------------------
 // Navigation
 // ---------------------------------------------------------------------------
 
-fn switch_tab(state: &mut SettingsState, dir: isize) {
-    let tabs = SettingsTab::all();
-    let idx = tabs
-        .iter()
-        .position(|t| *t == state.active_tab)
-        .unwrap_or(0);
-    let len = tabs.len() as isize;
-    let new = ((idx as isize + dir).rem_euclid(len)) as usize;
-    state.active_tab = tabs[new];
-    state.focused_row = 0;
-    state.tab_changed = true;
-}
-
 pub fn navigate(
-    mut action_reader: bevy::ecs::message::MessageReader<cdda_input::InputAction>,
+    mut action_reader: bevy::ecs::message::MessageReader<InputAction>,
     mut state: ResMut<SettingsState>,
+    tab_state: Res<BevyState<SettingsTab>>,
+    mut tab_next: ResMut<NextState<SettingsTab>>,
     bindings: Res<ContextInputMaps>,
 ) {
-    // Color Scheme row index in the Interface tab
     const COLOR_SCHEME_ROW: usize = 4;
 
     for event in action_reader.read() {
         match &event.action {
-            cdda_input::GameAction::NavigatePrevTab => {
-                switch_tab(&mut state, -1);
+            GameAction::NavigatePrevTab => {
+                tab_next.set(tab_state.get().prev());
+                state.focused_row = 0;
             }
-            cdda_input::GameAction::NavigateNextTab => {
-                switch_tab(&mut state, 1);
+            GameAction::NavigateNextTab => {
+                tab_next.set(tab_state.get().next());
+                state.focused_row = 0;
             }
-            cdda_input::GameAction::NavigateLeft => {
-                // If on Interface tab and focused on Color Scheme, cycle theme left
-                if state.active_tab == SettingsTab::Interface
+            GameAction::NavigateLeft => {
+                if *tab_state.get() == SettingsTab::Interface
                     && state.focused_row == COLOR_SCHEME_ROW
                 {
                     let n = ThemePreset::ALL.len();
@@ -519,37 +406,36 @@ pub fn navigate(
                     } else {
                         state.interface_theme - 1
                     };
-                    state.tab_changed = true;
                 } else {
-                    switch_tab(&mut state, -1);
+                    tab_next.set(tab_state.get().prev());
+                    state.focused_row = 0;
                 }
             }
-            cdda_input::GameAction::NavigateRight => {
-                // If on Interface tab and focused on Color Scheme, cycle theme right
-                if state.active_tab == SettingsTab::Interface
+            GameAction::NavigateRight => {
+                if *tab_state.get() == SettingsTab::Interface
                     && state.focused_row == COLOR_SCHEME_ROW
                 {
                     state.interface_theme = (state.interface_theme + 1) % ThemePreset::ALL.len();
-                    state.tab_changed = true;
                 } else {
-                    switch_tab(&mut state, 1);
+                    tab_next.set(tab_state.get().next());
+                    state.focused_row = 0;
                 }
             }
-            cdda_input::GameAction::NavigateUp => {
-                let count = current_tab_row_count(&state, &bindings);
+            GameAction::NavigateUp => {
+                let count = current_tab_row_count(tab_state.get(), &bindings);
                 if count > 0 {
                     state.focused_row = state.focused_row.saturating_sub(1);
                 }
             }
-            cdda_input::GameAction::NavigateDown => {
-                let count = current_tab_row_count(&state, &bindings);
+            GameAction::NavigateDown => {
+                let count = current_tab_row_count(tab_state.get(), &bindings);
                 if count > 0 {
                     state.focused_row = (state.focused_row + 1).min(count.saturating_sub(1));
                 }
             }
-            cdda_input::GameAction::NavigateHome => state.focused_row = 0,
-            cdda_input::GameAction::NavigateEnd => {
-                let count = current_tab_row_count(&state, &bindings);
+            GameAction::NavigateHome => state.focused_row = 0,
+            GameAction::NavigateEnd => {
+                let count = current_tab_row_count(tab_state.get(), &bindings);
                 if count > 0 {
                     state.focused_row = count.saturating_sub(1);
                 }
@@ -560,43 +446,35 @@ pub fn navigate(
 }
 
 pub fn handle_confirm(
-    mut action_reader: bevy::ecs::message::MessageReader<cdda_input::InputAction>,
+    mut action_reader: bevy::ecs::message::MessageReader<InputAction>,
     mut state: ResMut<SettingsState>,
+    tab_state: Res<BevyState<SettingsTab>>,
     bindings: Res<ContextInputMaps>,
     mut rebind_capture: ResMut<RebindCapture>,
 ) {
     for event in action_reader.read() {
-        if event.action == cdda_input::GameAction::Confirm {
-            if state.active_tab == SettingsTab::Keybindings {
+        if event.action == GameAction::Confirm {
+            if *tab_state.get() == SettingsTab::Keybindings {
                 if let Some((ctx, action)) = find_binding_at_row(&state, &bindings) {
                     state.rebinding_action = Some((ctx, action.clone()));
-                    state.tab_changed = true;
                     rebind_capture.pending = Some(RebindCaptureInner {
                         context: ctx,
                         action: action.clone(),
                     });
                 }
             }
-        } else if event.action == cdda_input::GameAction::Cancel {
+        } else if event.action == GameAction::Cancel {
             if state.rebinding_action.is_some() {
                 state.rebinding_action = None;
-                state.tab_changed = true;
                 rebind_capture.pending.take();
             }
         }
     }
 }
 
-pub fn detect_rebind_complete(
-    mut state: ResMut<SettingsState>,
-    rebind_capture: Res<RebindCapture>,
-) {
-    if state.rebinding_action.is_some() && rebind_capture.pending.is_none() {
-        // The rebind was completed (handle_raw_input captured a key and
-        // cleared RebindCapture).  Clear the UI state so the row returns
-        // to normal display.
+pub fn detect_rebind_complete(mut state: ResMut<SettingsState>, rebind: Res<RebindCapture>) {
+    if state.rebinding_action.is_some() && rebind.pending.is_none() {
         state.rebinding_action = None;
-        state.tab_changed = true;
     }
 }
 
@@ -605,11 +483,11 @@ pub fn detect_rebind_complete(
 // ---------------------------------------------------------------------------
 
 pub fn sync_tab_highlight(
-    state: Res<SettingsState>,
+    tab_state: Res<BevyState<SettingsTab>>,
     mut tabs: Query<(&TabButton, &mut BackgroundColor, &mut BorderColor)>,
 ) {
     for (tab, mut bg, mut border) in &mut tabs {
-        if tab.0 == state.active_tab {
+        if tab.0 == *tab_state.get() {
             bg.set_if_neq(BackgroundColor(TAB_ACTIVE));
             *border = BorderColor::all(HIGHLIGHT);
         } else {
@@ -622,9 +500,8 @@ pub fn sync_tab_highlight(
 pub fn sync_item_highlight(
     state: Res<SettingsState>,
     mut items: Query<(&SettingsItem, &mut BackgroundColor, &mut BorderColor)>,
-    mut content_panel: Query<&mut ScrollPosition, With<ContentPanel>>,
+    mut pane: Query<&mut FocusedRow, With<ContentPanel>>,
 ) {
-    const ROW_HEIGHT_PX: f32 = 40.0;
     for (item, mut bg, mut border) in &mut items {
         if item.0 == state.focused_row {
             bg.set_if_neq(BackgroundColor(ITEM_FOCUS_BG));
@@ -634,22 +511,15 @@ pub fn sync_item_highlight(
             *border = BorderColor::all(Color::NONE);
         }
     }
-    if let Ok(mut scroll) = content_panel.single_mut() {
-        scroll.y = state.focused_row as f32 * ROW_HEIGHT_PX;
+    // Feed the shared keep-focused-visible scroll (scroll::scroll_to_focused_row).
+    if let Ok(mut focus) = pane.single_mut() {
+        focus.0 = state.focused_row;
     }
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-fn _yn(b: bool) -> String {
-    if b {
-        "Yes".into()
-    } else {
-        "No".into()
-    }
-}
 
 fn ctx_label(ctx: &InputContextId) -> String {
     match ctx {
@@ -671,10 +541,9 @@ fn ctx_label(ctx: &InputContextId) -> String {
     }
 }
 
-fn current_tab_row_count(state: &SettingsState, bindings: &ContextInputMaps) -> usize {
-    match state.active_tab {
-        SettingsTab::General => 3,
-        SettingsTab::Graphics => 3,
+fn row_count(tab: &SettingsTab, bindings: &ContextInputMaps) -> usize {
+    match tab {
+        SettingsTab::General | SettingsTab::Graphics => 3,
         SettingsTab::Sound => 2,
         SettingsTab::Interface => 5,
         SettingsTab::Keybindings => {
@@ -696,6 +565,10 @@ fn current_tab_row_count(state: &SettingsState, bindings: &ContextInputMaps) -> 
     }
 }
 
+fn current_tab_row_count(tab: &SettingsTab, bindings: &ContextInputMaps) -> usize {
+    row_count(tab, bindings)
+}
+
 fn find_binding_at_row(
     state: &SettingsState,
     bindings: &ContextInputMaps,
@@ -708,12 +581,10 @@ fn find_binding_at_row(
     ];
     let mut row = 0usize;
     for ctx in contexts {
-        // list_bindings returns Vec<(BindableAction, String)> sorted by label
         let pairs = bindings.list_bindings(ctx);
         if pairs.is_empty() {
             continue;
         }
-
         for (action, _) in &pairs {
             if row == state.focused_row {
                 return Some((*ctx, *action));

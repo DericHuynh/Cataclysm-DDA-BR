@@ -10,7 +10,7 @@ use bevy_state::state_scoped::DespawnOnExit;
 use cdda_context::ctx::Ctx;
 use cdda_context::nav::{ctx_def, FocusedCommandIndex};
 use cdda_context::InputFocus;
-use cdda_input::{ActiveKeybindings, BindableAction};
+use cdda_input::{ActionSource, ActiveKeybindings, BindableAction, GameAction, InputAction};
 
 /// Marks a command button, storing its index into the screen_def command list.
 #[derive(Component)]
@@ -93,6 +93,20 @@ pub fn spawn(
                             Color::NONE
                         }),
                     ))
+                    // Mouse: set the focused command to this button, then emit
+                    // a `Confirm` `InputAction` so navigation reuses the single
+                    // dispatch path in `handle_navigation_input` (keyboard does
+                    // the same).
+                    .observe(
+                        move |mut click: On<Pointer<Click>>,
+                              mut focused: ResMut<FocusedCommandIndex>,
+                              mut writer: MessageWriter<InputAction>| {
+                            focused.set(i);
+                            writer
+                                .write(InputAction::new(GameAction::Confirm, ActionSource::Mouse));
+                            click.propagate(false);
+                        },
+                    )
                     .with_child((
                         Text::new(display),
                         TextFont {

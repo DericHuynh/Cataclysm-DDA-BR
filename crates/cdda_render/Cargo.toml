@@ -16,6 +16,7 @@ cdda_sim = { path = "../cdda_sim" }
 bevy = { workspace = true, default-features = false, features = [
     "bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_render",
     "bevy_sprite", "bevy_text", "bevy_ui", "bevy_winit", "x11",
+    "ui_picking",
 ] }
 bevy_ecs.workspace = true
 bevy_state.workspace = true

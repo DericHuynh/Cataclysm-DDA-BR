@@ -58,9 +58,9 @@ Layer 4 — world and data:
 
 Layer 5 — app shell (full Bevy, binaries):
 
-- `crates/cdda_context/AGENTS.md` — Headless Ctx state machine, navigation, focus, overlays, menu. Current layering debt: depends on `cdda_sim::runtime::state::AppState` for state transitions.
+- `crates/cdda_context/AGENTS.md` — Headless Ctx state machine, navigation, focus, overlays, menu, and Bevy `SubStates` nested-menu types (`SettingsTab`). Current layering debt: depends on `cdda_sim::runtime::state::AppState` for state transitions.
 - `crates/cdda_input/AGENTS.md` — Input plugin, action bridging, keybinding maps.
-- `crates/cdda_render/AGENTS.md` — UI rendering, ASCII viewport, tile rendering, theming. May read `cdda_overmap_gen` resources for overmap preview/config UI.
+- `crates/cdda_render/AGENTS.md` — UI rendering, ASCII viewport, tile rendering, theming, and mouse-driven menu picking (`On<Pointer<Click>>`). May read `cdda_overmap_gen` resources for overmap preview/config UI.
 - `crates/cdda_replay/AGENTS.md` — Deterministic session recording and replay.
 - `crates/cdda_app/AGENTS.md` — Binary entry point (`cdda`); wires all subsystems and Bevy `DefaultPlugins`.
 - `crates/cdda_cli/AGENTS.md` — `cdda-cli` binary: `schema`, `gen-schemas`, `validate`, `stats`, `check`, `ablation`, `city-view`. Mod developer tools.

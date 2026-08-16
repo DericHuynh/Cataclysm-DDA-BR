@@ -17,20 +17,17 @@ use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
 
 use super::FooterHint;
+use crate::render::item_detail::{spawn_item_detail, ItemDetailQueries};
+use crate::render::theme::{self, UiTheme};
 use cdda_context::ctx::Ctx;
 use cdda_context::screen::CddaScreen;
-use cdda_sim::crafting::systems::{CategoryIndex, CraftEntry, CraftState};
 use cdda_data::def_world::DefinitionWorld;
 use cdda_data::interner::{
     AmmoTypeRegistry, BodyPartRegistry, ComestibleRegistry, ItemTypeRegistry, QualityRegistry,
     SkillRegistry,
 };
 use cdda_input::BindableAction;
-use crate::render::item_detail::{spawn_item_detail, ItemDetailQueries};
-use crate::render::theme::{self, UiTheme};
-
-/// Number of recipe rows visible at once in the scroll window.
-const VISIBLE_ROWS: usize = 22;
+use cdda_sim::crafting::systems::{CategoryIndex, CraftEntry, CraftState};
 
 // ---------------------------------------------------------------------------
 // Marker components for targeted content rebuild
@@ -179,6 +176,9 @@ pub fn spawn_crafting_ui(mut commands: Commands, _theme: &UiTheme) {
                     // Left: recipe list
                     body.spawn((
                         RecipeListContainer,
+                        crate::render::scroll::KeyboardScroll,
+                        crate::render::scroll::FocusedRow::default(),
+                        ScrollPosition::default(),
                         Node {
                             width: Val::Percent(45.0),
                             min_width: Val::Percent(45.0),
@@ -186,7 +186,7 @@ pub fn spawn_crafting_ui(mut commands: Commands, _theme: &UiTheme) {
                             flex_shrink: 0.0,
                             flex_grow: 0.0,
                             flex_direction: FlexDirection::Column,
-                            overflow: Overflow::clip(),
+                            overflow: Overflow::scroll_y(),
                             ..default()
                         },
                         BackgroundColor(theme::ITEM_BG),
@@ -509,13 +509,6 @@ pub fn update_crafting_ui(
 
             let focus_clamped = focus.min(total_in_cat.saturating_sub(1));
 
-            let scroll_start = if focus_clamped >= VISIBLE_ROWS {
-                focus_clamped + 1 - VISIBLE_ROWS
-            } else {
-                0
-            };
-            let scroll_end = (scroll_start + VISIBLE_ROWS).min(total_in_cat);
-
             // Position counter
             list_node
                 .spawn((Node {
@@ -531,13 +524,10 @@ pub fn update_crafting_ui(
                     TextColor(theme::TEXT_DIM),
                 ));
 
-            // Recipe rows
-            for (i, entry) in category_filtered[scroll_start..scroll_end]
-                .iter()
-                .enumerate()
-            {
-                let abs_index = scroll_start + i;
-                let is_focused = abs_index == focus_clamped;
+            // Recipe rows — rendered in full; the pane's `ScrollPosition` + the
+            // shared keep-focused-visible scroll handle clipping and scrolling.
+            for (i, entry) in category_filtered.iter().enumerate() {
+                let is_focused = i == focus_clamped;
                 let row_bg = if is_focused {
                     theme.item_focus_bg()
                 } else {
@@ -589,6 +579,13 @@ pub fn update_crafting_ui(
                     });
             }
         });
+
+    // Feed the recipe list's focused row to the shared keep-visible scroll.
+    commands
+        .entity(list)
+        .insert(crate::render::scroll::FocusedRow(
+            focus.min(total_in_cat.saturating_sub(1)),
+        ));
 
     // ── Detail panel ───────────────────────────────────────────────────────
     commands

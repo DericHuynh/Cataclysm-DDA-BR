@@ -18,18 +18,20 @@ use bevy::prelude::*;
 use bevy_ecs::message::{MessageReader, MessageWriter};
 use bevy_state::prelude::NextState;
 
+use crate::render::dev_spawn::DevSpawnFocus;
 use cdda_components::actor::{ActionPoints, HandCount};
 use cdda_components::context::{push_ctx, ContextStack, Ctx, FocusedCommandIndex};
-use cdda_components::def::ItemVolume;
+use cdda_components::def::{ItemName, ItemVolume};
 use cdda_components::dev::{DevCamera, DevGroundItemName, DevPlayer};
 use cdda_components::events::{ItemMoveEvent, MoveLocation};
 use cdda_components::input::{GameAction, InputAction, InputContextId, InputContextStack};
 use cdda_components::item::{
-    ContainerContents, InsideContainer, InventoryFocus, Invlet, MountedPockets, WieldedBy,
-    WieldedItems, FLOOR_CAP_ML,
+    ContainerContents, InsideContainer, InventoryFocus, Invlet, ItemType, MountedPockets,
+    WieldedBy, WieldedItems, FLOOR_CAP_ML,
 };
 use cdda_components::sim::WorldPosition;
 use cdda_core_types::core::coords::{WorldPos, ZLevel, TILES_PER_OMT};
+use cdda_data::interner::ItemTypeRegistry;
 use cdda_sim::actor::turn::{AP_COST_PICKUP, AP_COST_WIELD};
 use cdda_sim::crafting::systems::{CategoryIndex, CraftEntry, CraftState, PendingCraft};
 use cdda_sim::inventory::examine_resource::ExaminedItem;
@@ -668,6 +670,118 @@ pub fn dev_pickup_drop_system(
                         count: 1,
                     });
                 }
+            }
+            _ => {}
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Dev spawn panel input
+// ---------------------------------------------------------------------------
+
+/// Keyboard + filter handling for the debug spawn panel (`Ctx::DevSpawnPanel`).
+///
+/// This is a presenter adapter (like `crafting_menu_input`): it reads the
+/// decoupled `InputAction` stream and the raw `KeyboardInput` stream (while an
+/// item filter is active), mutates the `DevSpawnFocus` UI state, and on `Confirm`
+/// materialises a fresh item from the selected def into the dev player's body
+/// pocket.
+pub fn dev_spawn_input(
+    mut reader: MessageReader<InputAction>,
+    mut keyboard: MessageReader<KeyboardInput>,
+    mut focus: ResMut<DevSpawnFocus>,
+    mut input_ctx: ResMut<InputContextStack>,
+    mut commands: Commands,
+    mut type_registry: ResMut<ItemTypeRegistry>,
+    player_query: Query<Entity, With<DevPlayer>>,
+    mounted_pockets: Query<&MountedPockets>,
+) {
+    // Filter mode: consume actions and turn raw keys into filter text. This
+    // matches the crafting-menu filter flow (see `crafting_menu_input`).
+    if focus.filtering {
+        for _ in reader.read() {}
+
+        for ev in keyboard.read() {
+            if ev.state == ButtonState::Released || ev.repeat {
+                continue;
+            }
+            match &ev.logical_key {
+                Key::Character(ch) if !ch.chars().any(|c| c.is_control()) => {
+                    focus.filter.push_str(ch.as_str());
+                    focus.index = 0;
+                }
+                Key::Space => {
+                    focus.filter.push(' ');
+                    focus.index = 0;
+                }
+                Key::Backspace => {
+                    focus.filter.pop();
+                    focus.index = 0;
+                }
+                Key::Enter => {
+                    focus.filtering = false;
+                    input_ctx.pop();
+                }
+                Key::Escape => {
+                    focus.filtering = false;
+                    focus.filter.clear();
+                    focus.index = 0;
+                    input_ctx.pop();
+                }
+                _ => {}
+            }
+        }
+        return;
+    }
+
+    let total = focus.filtered_entries().len();
+    let clamp = |i: usize| -> usize {
+        if total == 0 {
+            0
+        } else {
+            i.min(total - 1)
+        }
+    };
+
+    for event in reader.read() {
+        match &event.action {
+            GameAction::NavigateUp | GameAction::NavigateLeft => {
+                focus.index = clamp(focus.index.saturating_sub(1));
+            }
+            GameAction::NavigateDown | GameAction::NavigateRight => {
+                focus.index = clamp(focus.index + 1);
+            }
+            GameAction::NavigateHome => focus.index = 0,
+            GameAction::NavigateEnd => focus.index = clamp(total),
+            GameAction::Filter => {
+                if !focus.filtering {
+                    focus.filtering = true;
+                    input_ctx.push(InputContextId::TextInput);
+                }
+            }
+            GameAction::Confirm => {
+                let Some(player) = player_query.iter().next() else {
+                    continue;
+                };
+                // Fetch the selected entry fresh (avoid holding a borrow of
+                // `focus` across the loop where `focus.index` is mutated).
+                let filtered = focus.filtered_entries();
+                let Some(entry) = filtered.get(focus.index) else {
+                    continue;
+                };
+                let token = type_registry.intern(&entry.def_id);
+                let pocket = mounted_pockets
+                    .get(player)
+                    .ok()
+                    .and_then(|mp| mp.iter().next())
+                    .unwrap_or(player);
+                commands.spawn((
+                    ItemType(token),
+                    ItemName(entry.name.clone()),
+                    InsideContainer(pocket),
+                ));
+                tracing::info!("Dev-spawned {} ({})", entry.name, entry.def_id);
             }
             _ => {}
         }

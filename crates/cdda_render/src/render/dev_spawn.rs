@@ -24,9 +24,6 @@ use cdda_data::interner::{
 use cdda_input::ActiveKeybindings;
 use cdda_input::BindableAction;
 
-// Rows visible at once in the list (controls centered-scroll window).
-const VISIBLE_ROWS: usize = 22;
-
 // ---------------------------------------------------------------------------
 // Dev spawn focus — migrated from the old cdda_worldgen crate
 // ---------------------------------------------------------------------------
@@ -190,6 +187,10 @@ pub fn spawn_dev_spawn_panel(
                     // Left: list panel — children rebuilt each frame
                     body.spawn((
                         SpawnListPanel,
+                        crate::render::scroll::KeyboardScroll,
+                        crate::render::scroll::FocusedRow::default(),
+                        crate::render::scroll::VirtualList::default(),
+                        ScrollPosition::default(),
                         Node {
                             width: Val::Percent(38.0),
                             min_width: Val::Percent(38.0),
@@ -198,7 +199,7 @@ pub fn spawn_dev_spawn_panel(
                             flex_shrink: 0.0,
                             flex_grow: 0.0,
                             flex_direction: FlexDirection::Column,
-                            overflow: Overflow::clip(),
+                            overflow: Overflow::scroll_y(),
                             border: UiRect::right(Val::Px(1.0)),
                             ..default()
                         },
@@ -269,7 +270,7 @@ pub(crate) fn update_dev_spawn_panel(
     mut commands: Commands,
     focus: Res<DevSpawnFocus>,
     title_bar: Query<Entity, With<SpawnTitleBar>>,
-    list_panel: Query<Entity, With<SpawnListPanel>>,
+    mut list_panel: Query<(Entity, &mut crate::render::scroll::VirtualList), With<SpawnListPanel>>,
     detail_panel: Query<Entity, With<SpawnDetailPanel>>,
     filter_bar: Query<Entity, With<SpawnFilterBar>>,
     detail: ItemDetailQueries,
@@ -314,10 +315,10 @@ pub(crate) fn update_dev_spawn_panel(
     }
 
     // ── List panel ────────────────────────────────────────────────────────
-    if let Ok(list_e) = list_panel.single() {
-        // Centered scroll: selected row stays near the middle.
-        let scroll_start = focus.index.saturating_sub(VISIBLE_ROWS / 2);
-        let scroll_end = (scroll_start + VISIBLE_ROWS).min(total);
+    if let Ok((list_e, mut virtual_list)) = list_panel.single_mut() {
+        // Keep the virtualization size in sync with the data; the window is
+        // recomputed next frame from `ScrollPosition` by `update_virtual_windows`.
+        virtual_list.total_rows = total;
 
         commands
             .entity(list_e)
@@ -366,8 +367,24 @@ pub(crate) fn update_dev_spawn_panel(
                     TextColor(theme::TEXT_DIM),
                 ));
 
-                for i in scroll_start..scroll_end {
-                    let entry = &filtered[i];
+                // Virtualized rows: a top spacer preserves scroll offset, then
+                // only the visible window's rows are spawned (so a 40k-item
+                // catalog stays cheap), then a bottom spacer keeps the scroll
+                // range equal to the full data height.
+                let (win_start, win_end) = virtual_list.window;
+                let top_px = crate::render::scroll::virtual_top_spacer_px(&virtual_list);
+                let bottom_px = crate::render::scroll::virtual_bottom_spacer_px(&virtual_list);
+                if top_px > 0.0 {
+                    list.spawn(Node {
+                        height: Val::Px(top_px),
+                        ..default()
+                    });
+                }
+
+                for i in win_start..win_end {
+                    let Some(entry) = filtered.get(i) else {
+                        break;
+                    };
                     let is_focused = i == focus.index;
                     let row_bg = if is_focused {
                         theme.item_focus_bg()
@@ -405,7 +422,18 @@ pub(crate) fn update_dev_spawn_panel(
                         ));
                     });
                 }
+                if bottom_px > 0.0 {
+                    list.spawn(Node {
+                        height: Val::Px(bottom_px),
+                        ..default()
+                    });
+                }
             });
+
+        // Feed the focused row to the shared keep-visible scroll.
+        commands
+            .entity(list_e)
+            .insert(crate::render::scroll::FocusedRow(focus.index));
     }
 
     // ── Detail panel (shared widget) ─────────────────────────────────────

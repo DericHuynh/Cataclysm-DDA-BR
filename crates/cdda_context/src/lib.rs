@@ -16,6 +16,7 @@ pub mod menu;
 pub mod nav;
 pub mod overlay;
 pub mod screen;
+pub mod substate;
 pub mod systems;
 
 pub use actions::{ContextAction, ContextActions};
@@ -33,6 +34,7 @@ pub use overlay::{
     cleanup_activity_overlay, is_input_blocked, sync_activity_overlay, Overlay, OverlayStack,
 };
 pub use screen::{CddaScreen, Screen};
+pub use substate::SettingsTab;
 pub use systems::{ctx_and_cursor, menu_navigation};
 
 // ----- Plugin -------------------------------------------------------------
@@ -55,6 +57,8 @@ impl Plugin for ContextPlugin {
     fn build(&self, app: &mut App) {
         // Bevy States — drives OnEnter/OnExit scheduling
         app.init_state::<Ctx>();
+        // Nested menu state: only exists while its parent screen is active.
+        app.add_sub_state::<crate::substate::SettingsTab>();
 
         // Resources
         app.insert_resource(ContextActions::default());

@@ -763,8 +763,6 @@ pub(crate) struct RegistryViewerState {
     /// 1 = entries (middle), 2 = raw JSON (detail left), 3 = parsed fields
     /// (detail right). Tab cycles; arrows navigate *within* the focused pane.
     pub pane: usize,
-    /// Scroll offset for the detail panes (raw/parsed) so ↑/↓ can page them.
-    pub detail_scroll: usize,
 }
 
 impl RegistryViewerState {
@@ -886,13 +884,17 @@ pub fn spawn_registry_viewer(world: &mut World) {
                     // LEFT: Category panel
                     body.spawn((
                         RegCategoryPanel,
+                        crate::render::scroll::KeyboardScroll,
+                        crate::render::scroll::VirtualList::default(),
+                        crate::render::scroll::FocusedRow::default(),
+                        ScrollPosition::default(),
                         Node {
                             width: Val::Percent(20.0),
                             min_width: Val::Px(140.0),
                             flex_shrink: 0.0,
                             flex_grow: 0.0,
                             flex_direction: FlexDirection::Column,
-                            overflow: Overflow::clip(),
+                            overflow: Overflow::scroll_y(),
                             border: UiRect::right(Val::Px(1.0)),
                             ..default()
                         },
@@ -902,13 +904,17 @@ pub fn spawn_registry_viewer(world: &mut World) {
                     // MIDDLE: Entry list
                     body.spawn((
                         RegEntryListPanel,
+                        crate::render::scroll::KeyboardScroll,
+                        crate::render::scroll::VirtualList::default(),
+                        crate::render::scroll::FocusedRow::default(),
+                        ScrollPosition::default(),
                         Node {
                             width: Val::Percent(20.0),
                             min_width: Val::Px(140.0),
                             flex_shrink: 0.0,
                             flex_grow: 0.0,
                             flex_direction: FlexDirection::Column,
-                            overflow: Overflow::clip(),
+                            overflow: Overflow::scroll_y(),
                             border: UiRect::right(Val::Px(1.0)),
                             ..default()
                         },
@@ -931,6 +937,8 @@ pub fn spawn_registry_viewer(world: &mut World) {
                         // LEFT HALF: Raw JSON
                         detail.spawn((
                             RegRawJsonPanel,
+                            crate::render::scroll::KeyboardScroll,
+                            ScrollPosition::default(),
                             Node {
                                 width: Val::Percent(50.0),
                                 min_width: Val::Px(200.0),
@@ -938,7 +946,7 @@ pub fn spawn_registry_viewer(world: &mut World) {
                                 flex_shrink: 0.0,
                                 flex_direction: FlexDirection::Column,
                                 padding: UiRect::all(Val::Px(8.0)),
-                                overflow: Overflow::clip(),
+                                overflow: Overflow::scroll_y(),
                                 border: UiRect::right(Val::Px(1.0)),
                                 ..default()
                             },
@@ -948,12 +956,14 @@ pub fn spawn_registry_viewer(world: &mut World) {
                         // RIGHT HALF: Parsed fields
                         detail.spawn((
                             RegParsedFieldsPanel,
+                            crate::render::scroll::KeyboardScroll,
+                            ScrollPosition::default(),
                             Node {
                                 flex_grow: 1.0,
                                 min_width: Val::Px(200.0),
                                 flex_direction: FlexDirection::Column,
                                 padding: UiRect::all(Val::Px(8.0)),
-                                overflow: Overflow::clip(),
+                                overflow: Overflow::scroll_y(),
                                 ..default()
                             },
                             BackgroundColor(theme::BG),
@@ -1029,10 +1039,9 @@ mod tests {
 // Update
 // ===========================================================================
 
-/// Return a line-window of `text` starting at `scroll` (in lines), used to
-/// page long raw-JSON / parsed-fields content in the detail panes.
-/// Always shows the first line so headers stay anchored (scroll is an offset
-/// into the *body* beyond that).
+/// Return a line-window of `text` starting at `scroll` (in lines). Only used by
+/// the inline tests; production paging now uses Bevy's native scroll.
+#[cfg(test)]
 fn scroll_window(text: &str, scroll: usize) -> String {
     if scroll == 0 {
         return text.to_string();
@@ -1101,6 +1110,61 @@ fn pane_name(pane: usize) -> &'static str {
     }
 }
 
+/// For an index-navigated list pane: sync its `VirtualList` size + `FocusedRow`
+/// to the focused index and return the visible row window `[start, end)`. The
+/// pane's window is recomputed from its `ScrollPosition` each PreUpdate by
+/// `scroll::update_virtual_windows`; this only feeds `total_rows` and sets the
+/// focused row so the shared keep-visible scroll shows it.
+fn virtual_list_for_panel(
+    world: &mut World,
+    panel: Entity,
+    total_rows: usize,
+    focused: usize,
+) -> (usize, usize) {
+    let mut q = world.query::<(
+        &mut crate::render::scroll::VirtualList,
+        &mut crate::render::scroll::FocusedRow,
+    )>();
+    let Ok((mut vl, mut fr)) = q.get_mut(world, panel) else {
+        return (0, total_rows);
+    };
+    vl.total_rows = total_rows;
+    let window = vl.window;
+    fr.0 = focused;
+    (
+        window.0.min(total_rows),
+        window.1.min(total_rows).max(window.0),
+    )
+}
+
+/// Spawn a top/bottom spacer pair within a list pane so native scroll position
+/// maps to the item index while only the window's rows are rendered.
+fn spawn_virtual_spacers(
+    cmd: &mut EntityWorldMut,
+    start: usize,
+    end: usize,
+    total: usize,
+    row_px: f32,
+) {
+    if start > 0 {
+        cmd.with_children(|p| {
+            p.spawn(Node {
+                height: Val::Px(start as f32 * row_px),
+                ..default()
+            });
+        });
+    }
+    let remaining = total.saturating_sub(end);
+    if remaining > 0 {
+        cmd.with_children(|p| {
+            p.spawn(Node {
+                height: Val::Px(remaining as f32 * row_px),
+                ..default()
+            });
+        });
+    }
+}
+
 pub fn update_registry_viewer(world: &mut World) {
     let theme = world.resource::<UiTheme>().clone();
 
@@ -1133,7 +1197,6 @@ pub fn update_registry_viewer(world: &mut World) {
         } else {
             (state.pane + 1) % RegistryViewerState::PANE_COUNT
         };
-        state.detail_scroll = 0;
         changed = true;
     }
 
@@ -1200,13 +1263,6 @@ pub fn update_registry_viewer(world: &mut World) {
                 } else {
                     RegistryViewerState::PANE_RAW
                 };
-                state.detail_scroll = 0;
-                changed = true;
-            } else if up || down || page_up || page_down {
-                let page = if page_up || page_down { 25 } else { 3 };
-                let dir: i32 = if up || page_up { -1 } else { 1 };
-                let mut state = world.resource_mut::<RegistryViewerState>();
-                state.detail_scroll = (state.detail_scroll as i32 + dir * page).max(0) as usize;
                 changed = true;
             }
         }
@@ -1219,7 +1275,7 @@ pub fn update_registry_viewer(world: &mut World) {
     }
 
     // Phase 2: Snapshot state for rendering
-    let (cat_idx, ent_idx, cats, all_entries, active_pane, detail_scroll) = {
+    let (cat_idx, ent_idx, cats, all_entries, active_pane) = {
         let s = world.resource::<RegistryViewerState>();
         (
             s.category_index,
@@ -1227,7 +1283,6 @@ pub fn update_registry_viewer(world: &mut World) {
             s.categories.clone(),
             s.all_entries.clone(),
             s.pane,
-            s.detail_scroll,
         )
     };
     let current_entries = all_entries.get(cat_idx).cloned().unwrap_or_default();
@@ -1288,40 +1343,42 @@ pub fn update_registry_viewer(world: &mut World) {
         .iter(world)
         .next()
     {
-        world
-            .entity_mut(list_e)
-            .despawn_children()
-            .with_children(|list| {
-                for (i, cat) in cats.iter().enumerate() {
-                    let selected = i == cat_idx;
-                    list.spawn((
-                        Node {
-                            width: Val::Percent(100.0),
-                            padding: UiRect::axes(Val::Px(10.0), Val::Px(6.0)),
-                            ..default()
-                        },
-                        BackgroundColor(if selected {
-                            theme.accent().with_alpha(0.3)
-                        } else if i % 2 == 0 {
-                            theme::PANEL_BG
-                        } else {
-                            theme::ROW_ALT_BG
-                        }),
-                    ))
-                    .with_child((
-                        Text::new(format!("{}  ({})", cat.name, cat.count)),
-                        TextFont {
-                            font_size: 13.0,
-                            ..default()
-                        },
-                        TextColor(if selected {
-                            theme.accent()
-                        } else {
-                            theme::TEXT_BRIGHT
-                        }),
-                    ));
-                }
-            });
+        let total = cats.len();
+        let (start, end) = virtual_list_for_panel(world, list_e, total, cat_idx);
+        let mut list_cmd = world.entity_mut(list_e);
+        list_cmd.despawn_children();
+        spawn_virtual_spacers(&mut list_cmd, start, end, total, 30.0);
+        list_cmd.with_children(|list| {
+            for (i, cat) in cats.iter().enumerate().skip(start).take(end - start) {
+                let selected = i == cat_idx;
+                list.spawn((
+                    Node {
+                        width: Val::Percent(100.0),
+                        padding: UiRect::axes(Val::Px(10.0), Val::Px(6.0)),
+                        ..default()
+                    },
+                    BackgroundColor(if selected {
+                        theme.accent().with_alpha(0.3)
+                    } else if i % 2 == 0 {
+                        theme::PANEL_BG
+                    } else {
+                        theme::ROW_ALT_BG
+                    }),
+                ))
+                .with_child((
+                    Text::new(format!("{}  ({})", cat.name, cat.count)),
+                    TextFont {
+                        font_size: 13.0,
+                        ..default()
+                    },
+                    TextColor(if selected {
+                        theme.accent()
+                    } else {
+                        theme::TEXT_BRIGHT
+                    }),
+                ));
+            }
+        });
     }
 
     // ── Entry list (middle) ──────────────────────────────────────────────
@@ -1330,62 +1387,61 @@ pub fn update_registry_viewer(world: &mut World) {
         .iter(world)
         .next()
     {
-        const VISIBLE_ROWS: usize = 30;
         let total = current_entries.len();
-        let scroll = ent_idx.saturating_sub(VISIBLE_ROWS / 2);
-        let end = (scroll + VISIBLE_ROWS).min(total);
-
-        world
-            .entity_mut(list_e)
-            .despawn_children()
-            .with_children(|list| {
-                if current_entries.is_empty() {
-                    list.spawn(Node {
-                        padding: UiRect::axes(Val::Px(12.0), Val::Px(10.0)),
+        let (start, end) = virtual_list_for_panel(world, list_e, total, ent_idx);
+        let mut list_cmd = world.entity_mut(list_e);
+        list_cmd.despawn_children();
+        spawn_virtual_spacers(&mut list_cmd, start, end, total, 26.0);
+        list_cmd.with_children(|list| {
+            if current_entries.is_empty() {
+                list.spawn(Node {
+                    padding: UiRect::axes(Val::Px(12.0), Val::Px(10.0)),
+                    ..default()
+                })
+                .with_child((
+                    Text::new("No entries"),
+                    TextFont {
+                        font_size: 14.0,
                         ..default()
-                    })
-                    .with_child((
-                        Text::new("No entries"),
-                        TextFont {
-                            font_size: 14.0,
-                            ..default()
-                        },
-                        TextColor(theme::TEXT_DIM),
-                    ));
-                    return;
-                }
-                for i in scroll..end {
-                    let Some(entry) = current_entries.get(i) else {
-                        break;
-                    };
-                    list.spawn((
-                        Node {
-                            width: Val::Percent(100.0),
-                            padding: UiRect::axes(Val::Px(10.0), Val::Px(5.0)),
-                            ..default()
-                        },
-                        BackgroundColor(if i == ent_idx {
-                            theme.accent().with_alpha(0.25)
-                        } else if i % 2 == 0 {
-                            theme::PANEL_BG
-                        } else {
-                            theme::ROW_ALT_BG
-                        }),
-                    ))
-                    .with_child((
-                        Text::new(entry.id.clone()),
-                        TextFont {
-                            font_size: 12.0,
-                            ..default()
-                        },
-                        TextColor(if i == ent_idx {
-                            theme::TEXT_BRIGHT
-                        } else {
-                            theme::TEXT_DIM
-                        }),
-                    ));
-                }
-            });
+                    },
+                    TextColor(theme::TEXT_DIM),
+                ));
+                return;
+            }
+            for (i, entry) in current_entries
+                .iter()
+                .enumerate()
+                .skip(start)
+                .take(end - start)
+            {
+                list.spawn((
+                    Node {
+                        width: Val::Percent(100.0),
+                        padding: UiRect::axes(Val::Px(10.0), Val::Px(5.0)),
+                        ..default()
+                    },
+                    BackgroundColor(if i == ent_idx {
+                        theme.accent().with_alpha(0.25)
+                    } else if i % 2 == 0 {
+                        theme::PANEL_BG
+                    } else {
+                        theme::ROW_ALT_BG
+                    }),
+                ))
+                .with_child((
+                    Text::new(entry.id.clone()),
+                    TextFont {
+                        font_size: 12.0,
+                        ..default()
+                    },
+                    TextColor(if i == ent_idx {
+                        theme::TEXT_BRIGHT
+                    } else {
+                        theme::TEXT_DIM
+                    }),
+                ));
+            }
+        });
     }
 
     // ── Detail panel (right) — two sub-panels ────────────────────────────
@@ -1421,22 +1477,21 @@ pub fn update_registry_viewer(world: &mut World) {
                     },
                     BackgroundColor(theme::TEXT_DIM.with_alpha(0.3)),
                 ));
-                // Raw JSON content — slice to a window following detail_scroll.
+                // Raw JSON content — native scroll handles windowing now.
                 let raw_text = if entry.raw_json.is_empty() {
                     "No raw JSON available\n(possibly saved with a different type key)".to_string()
                 } else {
                     entry.raw_json.clone()
                 };
-                let scrolled = scroll_window(&raw_text, detail_scroll);
                 p.spawn(Node {
                     width: Val::Percent(100.0),
                     flex_grow: 1.0,
                     flex_direction: FlexDirection::Column,
-                    overflow: Overflow::clip(),
+                    overflow: Overflow::scroll_y(),
                     ..default()
                 })
                 .with_child((
-                    Text::new(scrolled),
+                    Text::new(raw_text),
                     TextFont {
                         font_size: 11.0,
                         ..default()
@@ -1489,22 +1544,21 @@ pub fn update_registry_viewer(world: &mut World) {
                         theme::TEXT_DIM
                     }),
                 ));
-                // Parsed fields content — slice to a window following detail_scroll.
+                // Parsed fields content — native scroll handles windowing now.
                 let fields_text = if entry.parsed_fields.is_empty() {
                     "No parsed fields available".to_string()
                 } else {
                     entry.parsed_fields.clone()
                 };
-                let scrolled = scroll_window(&fields_text, detail_scroll);
                 p.spawn(Node {
                     width: Val::Percent(100.0),
                     flex_grow: 1.0,
                     flex_direction: FlexDirection::Column,
-                    overflow: Overflow::clip(),
+                    overflow: Overflow::scroll_y(),
                     ..default()
                 })
                 .with_child((
-                    Text::new(scrolled),
+                    Text::new(fields_text),
                     TextFont {
                         font_size: 11.0,
                         ..default()

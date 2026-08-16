@@ -10,22 +10,22 @@
 use std::collections::HashMap;
 
 use super::FooterHint;
-use cdda_context::ctx::Ctx;
-use cdda_context::screen::CddaScreen;
-use cdda_components::context::ContextActions;
-use cdda_data::interner::ItemTypeRegistry;
-use cdda_input::ActiveKeybindings;
-use cdda_input::BindableAction;
 use crate::render::theme::{self, UiTheme};
 use crate::render::tiles::TileRegistry;
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
+use cdda_components::context::ContextActions;
 use cdda_components::def::{ItemName, ItemSymbol};
 use cdda_components::dev::{DevGroundItemName, DevPlayer};
 use cdda_components::item::{
     ContainerContents, InProgressCraft, InventoryFocus, Invlet, ItemType, MountedPockets,
     StackCount, WieldedBy, WieldedItems, WornBy,
 };
+use cdda_context::ctx::Ctx;
+use cdda_context::screen::CddaScreen;
+use cdda_data::interner::ItemTypeRegistry;
+use cdda_input::ActiveKeybindings;
+use cdda_input::BindableAction;
 
 // ---------------------------------------------------------------------------
 // Markers
@@ -185,11 +185,15 @@ fn spawn_inventory_ui(
 
                         left.spawn((
                             InvListContainer,
+                            crate::render::scroll::KeyboardScroll,
+                            crate::render::scroll::FocusedRow::default(),
+                            crate::render::scroll::VirtualList::default(),
+                            ScrollPosition::default(),
                             Node {
                                 flex_direction: FlexDirection::Column,
                                 width: Val::Percent(100.0),
                                 flex_grow: 1.0,
-                                overflow: Overflow::clip_y(),
+                                overflow: Overflow::scroll_y(),
                                 ..default()
                             },
                         ));
@@ -243,11 +247,13 @@ fn spawn_inventory_ui(
 
                                     wp.spawn((
                                         InvWieldedContainer,
+                                        crate::render::scroll::KeyboardScroll,
+                                        ScrollPosition::default(),
                                         Node {
                                             flex_direction: FlexDirection::Column,
                                             width: Val::Percent(100.0),
                                             flex_grow: 1.0,
-                                            overflow: Overflow::clip_y(),
+                                            overflow: Overflow::scroll_y(),
                                             ..default()
                                         },
                                     ));
@@ -290,11 +296,13 @@ fn spawn_inventory_ui(
 
                                     worn.spawn((
                                         InvWornContainer,
+                                        crate::render::scroll::KeyboardScroll,
+                                        ScrollPosition::default(),
                                         Node {
                                             flex_direction: FlexDirection::Column,
                                             width: Val::Percent(100.0),
                                             flex_grow: 1.0,
-                                            overflow: Overflow::clip_y(),
+                                            overflow: Overflow::scroll_y(),
                                             ..default()
                                         },
                                     ));
@@ -413,6 +421,9 @@ fn build_item_panel_from_data(
     has_focus: bool,
     focus_index: usize,
     compact: bool,
+    // Visible row window `[start, end)` from the pane's `VirtualList`. `None`
+    // renders every row (small panels).
+    virtual_window: Option<(usize, usize)>,
     registry: &TileRegistry,
     theme: &UiTheme,
 ) {
@@ -423,8 +434,30 @@ fn build_item_panel_from_data(
     let font_size = if compact { 14.0 } else { 15.0 };
     let icon_size = if compact { 20.0 } else { 24.0 };
     let pad_v = if compact { 4.0 } else { 5.0 };
+    let row_height = 15.0 + 2.0 * pad_v;
 
-    for (i, (invlet_char, _item_entity, data)) in items.iter().enumerate() {
+    // Virtualize: render only the visible window + spacer nodes above/below so
+    // the native `ScrollPosition` still spans the full data height (Bevy lays
+    // out every child, so a 40k-row pane must not spawn them all each frame).
+    let (mut win_start, mut win_end) = virtual_window.unwrap_or((0, items.len()));
+    win_start = win_start.min(items.len());
+    win_end = win_end.min(items.len()).max(win_start);
+
+    if win_start > 0 {
+        commands.entity(container).with_children(|p| {
+            p.spawn(Node {
+                height: Val::Px(win_start as f32 * row_height),
+                ..default()
+            });
+        });
+    }
+
+    for (i, (invlet_char, _item_entity, data)) in items
+        .iter()
+        .enumerate()
+        .skip(win_start)
+        .take(win_end - win_start)
+    {
         let is_focused = has_focus && i == focus_index;
         let is_crafting = data.craft_display.is_some();
 
@@ -513,6 +546,18 @@ fn build_item_panel_from_data(
             });
         });
     }
+
+    // Bottom spacer: fills the not-yet-rendered tail so the scroll range
+    // matches the full data height.
+    let remaining = items.len().saturating_sub(win_end);
+    if remaining > 0 {
+        commands.entity(container).with_children(|p| {
+            p.spawn(Node {
+                height: Val::Px(remaining as f32 * row_height),
+                ..default()
+            });
+        });
+    }
 }
 
 pub(crate) fn update_inventory_screen(world: &mut World) {
@@ -547,6 +592,17 @@ pub(crate) fn update_inventory_screen(world: &mut World) {
             Err(_) => return,
         }
     };
+
+    // Feed the pocket list's focused-row index to the shared keep-focused
+    // scroll (only panel 0 is the arrow-navigable pocket list).
+    if focus_panel == 0 {
+        if let Some(mut fr) = world
+            .entity_mut(container_entity)
+            .get_mut::<crate::render::scroll::FocusedRow>()
+        {
+            fr.0 = focus_index;
+        }
+    }
 
     // Player data — use relationships instead of Inventory hashmap
     let (mounted_pockets_entities, wielded_items_entities, worn_by_entities) = {
@@ -635,6 +691,20 @@ pub(crate) fn update_inventory_screen(world: &mut World) {
     // Clone TileRegistry for sprite lookups
     let registry = world.resource::<TileRegistry>().clone();
 
+    // Feed the pocket list's virtualization size and read its visible window
+    // (computed from `ScrollPosition` next frame by `update_virtual_windows`).
+    // Done before taking `world.commands()` (both borrow `&mut World`).
+    let pocket_window = {
+        let mut q = world.query::<&mut crate::render::scroll::VirtualList>();
+        match q.get_mut(world, container_entity) {
+            Ok(mut vl) => {
+                vl.total_rows = pocket_data.len();
+                Some(vl.window)
+            }
+            Err(_) => None,
+        }
+    };
+
     // ── Phase 2: Build UI with Commands ─────────────────────────────────
     let mut cmds = world.commands();
     cmds.entity(container_entity).despawn_children();
@@ -649,6 +719,7 @@ pub(crate) fn update_inventory_screen(world: &mut World) {
         focus_panel == 0,
         focus_index,
         false,
+        pocket_window,
         &registry,
         &theme,
     );
@@ -694,6 +765,7 @@ pub(crate) fn update_inventory_screen(world: &mut World) {
             focus_panel == 1,
             focus_index,
             true,
+            None,
             &registry,
             &theme,
         );
@@ -723,6 +795,7 @@ pub(crate) fn update_inventory_screen(world: &mut World) {
             false,
             0,
             true,
+            None,
             &registry,
             &theme,
         );

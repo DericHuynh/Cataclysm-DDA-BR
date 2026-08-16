@@ -11,11 +11,6 @@ use bevy_ecs::message::MessageReader;
 use bevy_state::state_scoped::DespawnOnExit;
 
 use super::FooterHint;
-use cdda_context::ctx::Ctx;
-use cdda_context::screen::CddaScreen;
-use cdda_components::context::ContextActions;
-use cdda_input::ActiveKeybindings;
-use cdda_input::{BindableAction, GameAction, InputAction};
 use crate::render::theme::{self, UiTheme};
 use cdda_components::actor::Stats;
 use cdda_components::actor::{
@@ -24,7 +19,12 @@ use cdda_components::actor::{
     MutationEntry, OnFire, PlayerData, ProficiencyEntry, SkillEntry, StatusEffect, Stunned,
     Visible, Vision, Wetness,
 };
+use cdda_components::context::ContextActions;
 use cdda_components::dev::DevPlayer;
+use cdda_context::ctx::Ctx;
+use cdda_context::screen::CddaScreen;
+use cdda_input::ActiveKeybindings;
+use cdda_input::{BindableAction, GameAction, InputAction};
 
 // ---------------------------------------------------------------------------
 // State
@@ -197,11 +197,14 @@ pub fn spawn_character_sheet_screen(world: &mut World) {
                     .with_children(|right| {
                         right.spawn((
                             CharSheetContentContainer,
+                            crate::render::scroll::KeyboardScroll,
+                            crate::render::scroll::FocusedRow::default(),
+                            bevy::ui::ScrollPosition::default(),
                             Node {
                                 flex_direction: FlexDirection::Column,
                                 width: Val::Percent(100.0),
                                 flex_grow: 1.0,
-                                overflow: Overflow::clip_y(),
+                                overflow: Overflow::scroll_y(),
                                 ..default()
                             },
                         ));
@@ -525,7 +528,7 @@ pub fn update_character_sheet_screen(
                         right,
                         &format!("{:<24}  {:>5}  {:>8}", "Skill", "Level", "XP"),
                     );
-                    for (i, entry) in skills.iter().enumerate().skip(state.scroll) {
+                    for (i, entry) in skills.iter().enumerate() {
                         let row_str = format!(
                             "{:<24}  {:>5}  {:>8}",
                             format!("skill #{}", entry.skill_id.0),
@@ -550,8 +553,7 @@ pub fn update_character_sheet_screen(
                     spawn_empty_message(right, "No traits or mutations.");
                 } else {
                     spawn_list_header(right, &format!("{:<30}  {}", "Trait / Mutation", "Visible"));
-                    for (i, (entity, entry)) in trait_entries.iter().enumerate().skip(state.scroll)
-                    {
+                    for (i, (entity, entry)) in trait_entries.iter().enumerate() {
                         let is_visible = visible_tags.get(*entity).is_ok();
                         let row_str = format!(
                             "{:<30}  {}",
@@ -580,7 +582,7 @@ pub fn update_character_sheet_screen(
                         right,
                         &format!("{:<28}  {:>6}  {}", "Effect", "Intens", "Duration"),
                     );
-                    for (i, entry) in effects.iter().enumerate().skip(state.scroll) {
+                    for (i, entry) in effects.iter().enumerate() {
                         let duration_str = format!("{}t", entry.remaining.0);
                         let row_str = format!(
                             "{:<28}  {:>6}  {}",
@@ -616,8 +618,7 @@ pub fn update_character_sheet_screen(
                         right,
                         &format!("{:<30}  {:>8}  {}", "Bionic", "Power", "Active"),
                     );
-                    for (i, (entity, entry)) in bionic_entries.iter().enumerate().skip(state.scroll)
-                    {
+                    for (i, (entity, entry)) in bionic_entries.iter().enumerate() {
                         let is_active = active_tags.get(*entity).is_ok();
                         let row_str = format!(
                             "{:<30}  {:>8}  {}",
@@ -649,7 +650,7 @@ pub fn update_character_sheet_screen(
                     spawn_empty_message(right, "No proficiencies known.");
                 } else {
                     spawn_list_header(right, "Proficiency");
-                    for (i, entry) in profs.iter().enumerate().skip(state.scroll) {
+                    for (i, entry) in profs.iter().enumerate() {
                         let row_str = format!("proficiency #{}", entry.id.as_str());
                         spawn_content_row(right, &row_str, i % 2 == 0, theme::TEXT_BRIGHT);
                     }
@@ -699,6 +700,18 @@ pub fn character_sheet_input(
             }
             _ => {}
         }
+    }
+}
+
+/// Feed `CharacterSheetState.scroll` (the focused-row index) into the pane's
+/// `FocusedRow`, so the shared `scroll::scroll_to_focused_row` keeps the focused
+/// row visible within the native `ScrollPosition` pane.
+pub fn sync_character_scroll(
+    state: Res<CharacterSheetState>,
+    mut pane: Query<&mut crate::render::scroll::FocusedRow, With<CharSheetContentContainer>>,
+) {
+    if let Ok(mut focus) = pane.single_mut() {
+        focus.0 = state.scroll;
     }
 }
 

@@ -26,6 +26,7 @@ pub mod item_detail;
 pub mod main_menu;
 pub mod overmap;
 pub mod registry;
+pub mod scroll;
 pub mod settings;
 pub mod theme;
 pub mod tiles;
@@ -98,6 +99,19 @@ impl Plugin for CddaRenderPlugin {
         // across all screens. No per-screen footer systems needed.
         app.add_systems(Update, refresh_all_footer_hints);
 
+        // Shared scroll primitives: arrow-key + wheel + focus-keep scrolling for
+        // any node tagged `scroll::KeyboardScroll`. Global because any pane may
+        // opt in; inactive panes just have no scrollable nodes.
+        app.add_systems(
+            PreUpdate,
+            (
+                scroll::update_virtual_windows,
+                scroll::scroll_with_wheel,
+                scroll::scroll_with_keyboard,
+            ),
+        );
+        app.add_systems(Update, scroll::scroll_to_focused_row);
+
         // ── Main menu ─────────────────────────────────────────────────────
         app.add_systems(OnEnter(Screen::MainMenu), main_menu::spawn);
         app.add_systems(
@@ -119,7 +133,8 @@ impl Plugin for CddaRenderPlugin {
                 .run_if(in_state(Screen::SettingsMenu)),
         );
 
-        // Tab content rebuild + visual sync
+        // Tab content rebuild + visual sync. Rebuild runs on
+        // `Changed<SettingsTab>` / `Changed<SettingsState>`
         app.add_systems(
             Update,
             (
@@ -154,6 +169,10 @@ impl Plugin for CddaRenderPlugin {
             Update,
             dev_spawn::update_dev_spawn_panel.run_if(in_state(Screen::DevSpawnPanel)),
         );
+        app.add_systems(
+            Update,
+            input::dev_spawn_input.run_if(in_state(Screen::DevSpawnPanel)),
+        );
 
         // ── Inventory screen — spawn and update handled by CddaScreen trait ──
 
@@ -163,6 +182,7 @@ impl Plugin for CddaRenderPlugin {
             (
                 character::update_character_sheet_screen,
                 character::character_sheet_input,
+                character::sync_character_scroll,
             )
                 .run_if(in_state(Screen::CharacterSheet)),
         );

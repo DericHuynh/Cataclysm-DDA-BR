@@ -17,8 +17,8 @@ components, and the `CddaScreen` registration trait. Has no dependency on
   this crate's `ctx.rs` / `nav.rs`.
 - Current layering note: `cdda_context` depends on `cdda_sim::runtime::state::AppState` for state transitions. This is a layering debt; future work should move the shared app-state enum into a lower-level crate or `cdda_components`.
 - Modules: `actions.rs`, `config.rs`, `ctx.rs`, `cursor.rs`, `focus.rs`,
-  `menu.rs`, `nav.rs`, `overlay.rs`, `screen.rs`, `systems.rs`. All are flat,
-  no durable sub-folders.
+  `menu.rs`, `nav.rs`, `overlay.rs`, `screen.rs`, `substate.rs`, `systems.rs`.
+  All are flat, no durable sub-folders.
 
 ## Local Contracts
 - **`ContextStack` (not `NavStack`)** — `Resource<Vec<Ctx>>` from
@@ -30,6 +30,13 @@ components, and the `CddaScreen` registration trait. Has no dependency on
   `Overmap`, …), input prompts (`TextInput`, `QuantityInput`,
   `DirectionSelect`), debug panels (`DevSpawnPanel`, `RegistryViewer`),
   `DevWorldgen`, and `Custom(u32)` as an extensibility hatch.
+- **Nested menus use Bevy `SubStates`** (`substate.rs`) for screens with tabbed
+  depth. `SettingsTab` is a `SubStates` scoped under `Ctx::SettingsMenu`, so it
+  only exists while that screen is active; the active tab lives in
+  `State<SettingsTab>` and is switched via `NextState<SettingsTab>`. Per-tab
+  UI rows are tagged `DespawnOnExit(SettingsTab)` for scoped cleanup. This is
+  the idiomatic replacement for hand-rolled tab resources; keep new tabbed
+  screens' tab enums here (headless) and drive their content from the state.
 - **Focus is split across two crates**:
   - `InputFocus` (this crate, `focus.rs`) — `Resource<Option<Entity>>` for
     entity-level keyboard focus across `KeyboardFocusable` components.
@@ -96,6 +103,9 @@ components, and the `CddaScreen` registration trait. Has no dependency on
   - `focused_index_test.rs` — `FocusedCommandIndex` save/load semantics.
   - `config_test.rs` — `GameSettings`, `CharacterCreationState`,
     `WorldCreationSettings` defaults and mutation.
+  - `substate_test.rs` — `SettingsTab` ordering helpers and `SubStates`
+    registration/transition via a minimal Bevy `App` (the only test here that
+    builds an `App`).
   Run with `cargo nextest run -p cdda_context`.
 - Cross-crate wiring still lives at the workspace level:
   `tests/screen_integration_test.rs` exercises `CddaScreen` plugin wiring,
