@@ -1,7 +1,15 @@
 //! HTN task types: compound tasks (methods), primitive tasks (operators), and
 //! goal tasks (back-planning targets).
+//!
+//! Every task name, method name, and subtask reference is stored as a
+//! [`Ustr`] — an interned, `Copy` string handle. Within a domain there are few
+//! unique names but many references (a subtask can be listed dozens of times),
+//! so interning makes comparing/substituting names a single pointer compare and
+//! keeps the domain compact. The `&str` API (`name()`, `get_task`) is preserved
+//! via deref coercion.
 
 use bevy_reflect::{Reflect, TypeRegistry};
+use ustr::Ustr;
 
 use crate::conditions::HtnCondition;
 use crate::effects::Effect;
@@ -17,11 +25,11 @@ use crate::operators::Operator;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Method {
     /// Optional human-readable name (from `method "foo" { ... }`).
-    pub name: Option<String>,
+    pub name: Option<Ustr>,
     /// Conditions that must all hold for this method to be chosen.
     pub preconditions: Vec<HtnCondition>,
     /// Names of subtasks (compound or primitive) chosen by this method.
-    pub subtasks: Vec<String>,
+    pub subtasks: Vec<Ustr>,
 }
 
 impl Method {
@@ -42,7 +50,7 @@ impl Method {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompoundTask {
     /// Task name.
-    pub name: String,
+    pub name: Ustr,
     /// Ordered decomposition alternatives.
     pub methods: Vec<Method>,
 }
@@ -82,7 +90,7 @@ impl CompoundTask {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PrimitiveTask {
     /// Task name.
-    pub name: String,
+    pub name: Ustr,
     /// The operator that executes this task at run time.
     pub operator: Operator,
     /// Conditions that must all hold for this task to be pickable.
@@ -130,7 +138,7 @@ impl PrimitiveTask {
 #[derive(Debug, Clone, PartialEq)]
 pub struct GoalTask {
     /// Task name.
-    pub name: String,
+    pub name: Ustr,
     /// The desired effects that form the goal state.
     pub effects: Vec<Effect>,
 }

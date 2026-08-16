@@ -25,6 +25,7 @@
 use std::collections::HashSet;
 
 use bevy_reflect::{Reflect, TypeRegistry};
+use ustr::Ustr;
 
 use crate::domain::HtnDomain;
 use crate::effects::Effect;
@@ -61,14 +62,14 @@ impl<'a> BackPlanner<'a> {
         }
 
         let mut state = initial_state.clone();
-        let mut needed: HashSet<String> = goal
+        let mut needed: HashSet<Ustr> = goal
             .effects
             .iter()
             .map(Effect::field)
-            .map(ToString::to_string)
+            .map(Ustr::from)
             .collect();
 
-        let mut plan: Vec<String> = Vec::new();
+        let mut plan: Vec<Ustr> = Vec::new();
         let mut search_limit = 200;
 
         while !needed.is_empty() && search_limit > 0 {
@@ -84,7 +85,7 @@ impl<'a> BackPlanner<'a> {
                         // applied; a fully order-robust check would re-verify by
                         // conditions + goal predicates.)
                         for e in p.effects.iter() {
-                            if needed.remove(e.field()) {
+                            if needed.remove(&Ustr::from(e.field())) {
                                 break;
                             }
                         }
@@ -111,17 +112,18 @@ impl<'a> BackPlanner<'a> {
     /// Choose a single primitive task whose effects produce a value for a
     /// currently-needed goal field, preferring the one that covers the most
     /// needed fields (a cheap, deterministic heuristic).
-    fn pick_one(&self, needed: &HashSet<String>, state: &dyn Reflect) -> Option<String> {
-        let mut best: Option<(usize, String)> = None;
+    fn pick_one(&self, needed: &HashSet<Ustr>, state: &dyn Reflect) -> Option<Ustr> {
+        let mut best: Option<(usize, Ustr)> = None;
         for name in self.domain.primitive_names() {
-            let Some(Task::Primitive(p)) = self.domain.get_task(&name) else {
+            let Some(Task::Primitive(p)) = self.domain.get_task(name.as_str()) else {
                 continue;
             };
-            let produced: HashSet<&str> = p
+            let produced: HashSet<Ustr> = p
                 .effects
                 .iter()
                 .map(Effect::field)
-                .filter(|f| needed.contains(*f))
+                .map(Ustr::from)
+                .filter(|f| needed.contains(f))
                 .collect();
             if produced.is_empty() {
                 continue;
@@ -132,7 +134,7 @@ impl<'a> BackPlanner<'a> {
             }
             let score = produced.len();
             if best.as_ref().map(|(s, _)| score > *s).unwrap_or(true) {
-                best = Some((score, p.name.clone()));
+                best = Some((score, name));
             }
         }
         best.map(|(_, name)| name)

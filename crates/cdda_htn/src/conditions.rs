@@ -5,17 +5,21 @@
 //! (`field`, `try_downcast_ref`, `reflect_partial_eq`, `reflect_ref().as_enum()`).
 
 use bevy_reflect::{Enum, Reflect, Struct, TypeRegistry};
+use ustr::Ustr;
 
 use crate::error::{HtnError, HtnResult};
 
 /// A predicate over state fields, written in the `.htn` file and evaluated by
 /// reflection against the plan state at plan time.
+///
+/// Field/enum names are interned [`Ustr`]s: comparing a condition's referenced
+/// field to a known name is a single pointer compare.
 #[derive(Debug, Clone, PartialEq)]
 pub enum HtnCondition {
     /// Field equals a boolean literal.
     EqualsBool {
         /// The state field to read.
-        field: String,
+        field: Ustr,
         /// The boolean to compare against.
         value: bool,
         /// Whether the comparison is negated (`!=`).
@@ -24,7 +28,7 @@ pub enum HtnCondition {
     /// Field equals an integer literal.
     EqualsInt {
         /// The state field to read.
-        field: String,
+        field: Ustr,
         /// The integer to compare against.
         value: i32,
         /// Whether the comparison is negated (`!=`).
@@ -33,7 +37,7 @@ pub enum HtnCondition {
     /// Field equals a float literal.
     EqualsFloat {
         /// The state field to read.
-        field: String,
+        field: Ustr,
         /// The float to compare against.
         value: f32,
         /// Whether the comparison is negated (`!=`).
@@ -42,34 +46,34 @@ pub enum HtnCondition {
     /// Field is (or is not) `None` — only valid on `Option` fields.
     EqualsNone {
         /// The state field to read.
-        field: String,
+        field: Ustr,
         /// Whether the comparison is negated (`!= None`, i.e. is `Some`).
         notted: bool,
     },
     /// Field equals an enum variant.
     EqualsEnum {
         /// The state field to read.
-        field: String,
+        field: Ustr,
         /// The enum type's name.
-        enum_type: String,
+        enum_type: Ustr,
         /// The variant to compare against.
-        enum_variant: String,
+        enum_variant: Ustr,
         /// Whether the comparison is negated (`!=`).
         notted: bool,
     },
     /// Two fields hold equal values.
     EqualsIdentifier {
         /// The first state field to read.
-        field: String,
+        field: Ustr,
         /// The second state field to read.
-        other_field: String,
+        other_field: Ustr,
         /// Whether the comparison is negated (`!=`).
         notted: bool,
     },
     /// Integer field is greater than a literal (optionally including equality).
     GreaterThanInt {
         /// The state field to read.
-        field: String,
+        field: Ustr,
         /// The integer threshold.
         threshold: i32,
         /// `true` for `>=`, `false` for `>`.
@@ -78,7 +82,7 @@ pub enum HtnCondition {
     /// Float field is greater than a literal (optionally including equality).
     GreaterThanFloat {
         /// The state field to read.
-        field: String,
+        field: Ustr,
         /// The float threshold.
         threshold: f32,
         /// `true` for `>=`, `false` for `>`.
@@ -87,16 +91,16 @@ pub enum HtnCondition {
     /// Integer field is greater than another field's value.
     GreaterThanIdentifier {
         /// The state field to read.
-        field: String,
+        field: Ustr,
         /// The other field to compare against.
-        other_field: String,
+        other_field: Ustr,
         /// `true` for `>=`, `false` for `>`.
         orequals: bool,
     },
     /// Integer field is less than a literal (optionally including equality).
     LessThanInt {
         /// The state field to read.
-        field: String,
+        field: Ustr,
         /// The integer threshold.
         threshold: i32,
         /// `true` for `<=`, `false` for `<`.
@@ -105,7 +109,7 @@ pub enum HtnCondition {
     /// Float field is less than a literal (optionally including equality).
     LessThanFloat {
         /// The state field to read.
-        field: String,
+        field: Ustr,
         /// The float threshold.
         threshold: f32,
         /// `true` for `<=`, `false` for `<`.
@@ -114,9 +118,9 @@ pub enum HtnCondition {
     /// Integer field is less than another field's value.
     LessThanIdentifier {
         /// The state field to read.
-        field: String,
+        field: Ustr,
         /// The other field to compare against.
-        other_field: String,
+        other_field: Ustr,
         /// `true` for `<=`, `false` for `<`.
         orequals: bool,
     },

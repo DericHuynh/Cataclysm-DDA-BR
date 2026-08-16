@@ -322,11 +322,11 @@ fn construct_operator_returns_registered_default() {
 #[test]
 fn plan_mtr_ordering() {
     let low = Plan {
-        tasks: vec!["A".to_string()],
+        tasks: vec!["A".into()],
         mtr: cdda_htn::planner::Mtr(vec![0]),
     };
     let high = Plan {
-        tasks: vec!["B".to_string()],
+        tasks: vec!["B".into()],
         mtr: cdda_htn::planner::Mtr(vec![1]),
     };
     assert!(low.is_preferred_over(&high));

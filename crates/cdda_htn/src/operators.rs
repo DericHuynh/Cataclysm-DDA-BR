@@ -11,6 +11,7 @@
 //! execution, so domains stay moddable without editing Rust.
 
 use bevy_reflect::{std_traits::ReflectDefault, FromType, Reflect, TypeRegistry};
+use ustr::Ustr;
 
 use crate::error::{HtnError, HtnResult};
 
@@ -22,9 +23,9 @@ use crate::error::{HtnError, HtnResult};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Operator {
     /// The operator type's name (must match a registered `Reflect` type).
-    pub name: String,
+    pub name: Ustr,
     /// State field names used to initialise the operator's data.
-    pub params: Vec<String>,
+    pub params: Vec<Ustr>,
 }
 
 impl Operator {
@@ -34,7 +35,7 @@ impl Operator {
     }
 
     /// The operator's parameter names.
-    pub fn params(&self) -> &[String] {
+    pub fn params(&self) -> &[Ustr] {
         &self.params
     }
 }
@@ -112,14 +113,14 @@ impl<E: HtnOperator> FromType<E> for ReflectHtnOperator {
 /// Verify a named operator exists in the type registry with the reflection data
 /// needed to execute it (Default + ReflectHtnOperator). Call after parsing a
 /// domain, before running it.
-pub fn verify_operator(registry: &TypeRegistry, name: &str, params: &[String]) -> HtnResult<()> {
+pub fn verify_operator(registry: &TypeRegistry, name: &str, params: &[Ustr]) -> HtnResult<()> {
     let Some(reg) = registry
         .get_with_short_type_path(name)
         .or_else(|| registry.get_with_type_path(name))
     else {
         return Err(HtnError::Operator {
             name: name.to_string(),
-            params: params.to_vec(),
+            params: params.iter().map(ToString::to_string).collect(),
             details: "No type registry entry. Call `app.register_type::<T>()` (or the
             registry equivalent) for this operator."
                 .into(),
@@ -128,7 +129,7 @@ pub fn verify_operator(registry: &TypeRegistry, name: &str, params: &[String]) -
     if reg.data::<ReflectDefault>().is_none() {
         return Err(HtnError::Operator {
             name: name.to_string(),
-            params: params.to_vec(),
+            params: params.iter().map(ToString::to_string).collect(),
             details: "Missing ReflectDefault. Add `#[reflect(Default)]` to the operator type."
                 .into(),
         });
@@ -136,7 +137,7 @@ pub fn verify_operator(registry: &TypeRegistry, name: &str, params: &[String]) -
     if reg.data::<ReflectHtnOperator>().is_none() {
         return Err(HtnError::Operator {
             name: name.to_string(),
-            params: params.to_vec(),
+            params: params.iter().map(ToString::to_string).collect(),
             details: "Missing ReflectHtnOperator. Implement `HtnOperator` and register it.".into(),
         });
     }
@@ -162,14 +163,14 @@ where
     else {
         return Err(HtnError::Operator {
             name: operator.name().to_string(),
-            params: operator.params().to_vec(),
+            params: operator.params().iter().map(ToString::to_string).collect(),
             details: "No type registry entry for operator".into(),
         });
     };
     let Some(reflect_default) = reg.data::<ReflectDefault>() else {
         return Err(HtnError::Operator {
             name: operator.name().to_string(),
-            params: operator.params().to_vec(),
+            params: operator.params().iter().map(ToString::to_string).collect(),
             details: "Missing ReflectDefault".into(),
         });
     };

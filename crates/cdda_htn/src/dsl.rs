@@ -1,7 +1,10 @@
 //! `.htn` DSL parser — build a domain from text (e.g. an imported asset).
 
+use std::collections::HashMap;
+
 use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
+use ustr::Ustr;
 
 use crate::conditions::HtnCondition;
 use crate::domain::HtnDomain;
@@ -36,15 +39,17 @@ fn parse_bool(s: &str, ctx: &str) -> HtnResult<bool> {
         }),
     }
 }
-fn parse_enum(s: &str, ctx: &str) -> HtnResult<(String, String)> {
-    let parts: Vec<&str> = s.split("::").collect();
-    if parts.len() != 2 {
+fn parse_enum(s: &str, ctx: &str) -> HtnResult<(Ustr, Ustr)> {
+    let mut parts = s.split("::");
+    let ty = parts.next();
+    let variant = parts.next();
+    if parts.next().is_some() || ty.is_none() || variant.is_none() {
         return Err(HtnError::Condition {
             syntax: ctx.into(),
             details: format!("Invalid enum `{s}` — expected `Enum::Variant`"),
         });
     }
-    Ok((parts[0].into(), parts[1].into()))
+    Ok((ty.unwrap().into(), variant.unwrap().into()))
 }
 
 fn notted(op: Rule) -> bool {
@@ -54,7 +59,7 @@ fn notted(op: Rule) -> bool {
 fn parse_condition(pair: Pair<Rule>) -> HtnResult<HtnCondition> {
     let syntax = pair.as_str().to_string();
     let mut it = pair.into_inner();
-    let field = it.next().unwrap().as_str().to_string();
+    let field: Ustr = it.next().unwrap().as_str().into();
     let op = it.next().unwrap().as_rule();
     let value = it.next().unwrap();
     let val_rule = value.as_rule();
@@ -84,12 +89,12 @@ fn parse_condition(pair: Pair<Rule>) -> HtnResult<HtnCondition> {
         },
         (Rule::op_gte | Rule::op_gt, Rule::identifier) => HtnCondition::GreaterThanIdentifier {
             field,
-            other_field: val_str.to_string(),
+            other_field: val_str.into(),
             orequals: op == Rule::op_gte,
         },
         (Rule::op_lte | Rule::op_lt, Rule::identifier) => HtnCondition::LessThanIdentifier {
             field,
-            other_field: val_str.to_string(),
+            other_field: val_str.into(),
             orequals: op == Rule::op_lte,
         },
         (Rule::op_eq | Rule::op_neq, Rule::bool_value) => HtnCondition::EqualsBool {
@@ -121,7 +126,7 @@ fn parse_condition(pair: Pair<Rule>) -> HtnResult<HtnCondition> {
         }
         (Rule::op_eq | Rule::op_neq, Rule::identifier) => HtnCondition::EqualsIdentifier {
             field,
-            other_field: val_str.to_string(),
+            other_field: val_str.into(),
             notted,
         },
         _ => {
@@ -139,7 +144,7 @@ fn parse_effect(pair: Pair<Rule>) -> HtnResult<Effect> {
     let effect_pair = pair.into_inner().next().unwrap();
     let effect_rule = effect_pair.as_rule();
     let mut parts = effect_pair.into_inner();
-    let field = parts.next().unwrap().as_str().to_string();
+    let field: Ustr = parts.next().unwrap().as_str().into();
     let val_pair = parts.next().unwrap();
     let val_rule = val_pair.as_rule();
     let val_str = val_pair.as_str();
@@ -168,7 +173,7 @@ fn parse_effect(pair: Pair<Rule>) -> HtnResult<Effect> {
         (Rule::set_effect_literal, Rule::none_value) => Effect::SetNone { field },
         (Rule::set_effect_identifier, Rule::identifier) => Effect::SetIdentifier {
             field,
-            field_source: val_str.to_string(),
+            field_source: val_str.into(),
         },
         (Rule::set_effect_inc_literal, Rule::int_value) => Effect::IncrementInt {
             field,
@@ -193,7 +198,7 @@ fn parse_effect(pair: Pair<Rule>) -> HtnResult<Effect> {
             // mirror the reference crate: treat it as an identifier copy.)
             Effect::SetIdentifier {
                 field,
-                field_source: val_str.to_string(),
+                field_source: val_str.into(),
             }
         }
         _ => {
@@ -208,7 +213,7 @@ fn parse_effect(pair: Pair<Rule>) -> HtnResult<Effect> {
 
 fn parse_primitive(pair: Pair<Rule>) -> HtnResult<PrimitiveTask> {
     let mut inner = pair.into_inner();
-    let name = inner.next().unwrap().as_str().trim_matches('"').to_string();
+    let name: Ustr = inner.next().unwrap().as_str().trim_matches('"').into();
     let mut operator = None;
     let mut preconditions = Vec::new();
     let mut effects = Vec::new();
@@ -219,10 +224,10 @@ fn parse_primitive(pair: Pair<Rule>) -> HtnResult<PrimitiveTask> {
             Rule::operator_statement => {
                 let op_def = stmt.into_inner().next().unwrap();
                 let mut op_parts = op_def.into_inner();
-                let op_name = op_parts.next().unwrap().as_str().to_string();
-                let params: Vec<String> = op_parts.map(|p| p.as_str().to_string()).collect();
+                let op_name = op_parts.next().unwrap();
+                let params: Vec<Ustr> = op_parts.map(|p| p.as_str().into()).collect();
                 operator = Some(Operator {
-                    name: op_name,
+                    name: op_name.as_str().into(),
                     params,
                 });
             }
@@ -259,7 +264,7 @@ fn parse_method(pair: Pair<Rule>) -> HtnResult<Method> {
     let mut name = None;
     if let Some(p) = inner.peek() {
         if p.as_rule() == Rule::STRING {
-            name = Some(inner.next().unwrap().as_str().trim_matches('"').to_string());
+            name = Some(inner.next().unwrap().as_str().trim_matches('"').into());
         }
     }
     let mut preconditions = Vec::new();
@@ -276,7 +281,7 @@ fn parse_method(pair: Pair<Rule>) -> HtnResult<Method> {
                     .into_inner()
                     .filter(|p| p.as_rule() == Rule::identifier)
                 {
-                    subtasks.push(t.as_str().to_string());
+                    subtasks.push(t.as_str().into());
                 }
             }
             _ => {}
@@ -291,7 +296,7 @@ fn parse_method(pair: Pair<Rule>) -> HtnResult<Method> {
 
 fn parse_compound(pair: Pair<Rule>) -> HtnResult<CompoundTask> {
     let mut inner = pair.into_inner();
-    let name = inner.next().unwrap().as_str().trim_matches('"').to_string();
+    let name = inner.next().unwrap().as_str().trim_matches('"').into();
     let mut methods = Vec::new();
     for m in inner.filter(|p| p.as_rule() == Rule::method) {
         methods.push(parse_method(m)?);
@@ -301,7 +306,7 @@ fn parse_compound(pair: Pair<Rule>) -> HtnResult<CompoundTask> {
 
 fn parse_goal(pair: Pair<Rule>) -> HtnResult<GoalTask> {
     let mut inner = pair.into_inner();
-    let name = inner.next().unwrap().as_str().trim_matches('"').to_string();
+    let name = inner.next().unwrap().as_str().trim_matches('"').into();
     let mut effects = Vec::new();
     for stmt in inner {
         if stmt.as_rule() == Rule::effects_statement {
@@ -341,8 +346,11 @@ pub fn parse_htn(input: &str) -> HtnResult<HtnDomain> {
             _ => {}
         }
     }
-    Ok(HtnDomain {
+    let mut domain = HtnDomain {
         schema: schema.unwrap_or_else(|| "0.0.0".into()),
         tasks,
-    })
+        index_of: HashMap::new(),
+    };
+    domain.rebuild_index();
+    Ok(domain)
 }

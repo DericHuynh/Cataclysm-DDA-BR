@@ -10,67 +10,71 @@
 //! (identifier copies).
 
 use bevy_reflect::{DynamicVariant, PartialReflect, Reflect, ReflectFromReflect, TypeRegistry};
+use ustr::Ustr;
 
 use crate::error::{HtnError, HtnResult};
 
 /// A write to a state field. Applied to the plan state during forward planning
 /// (as an "anticipated" effect) and at execution time. `goal_task` bodies use
 /// effects to declare the desired end state for **back-planning**.
+///
+/// Field names are interned [`Ustr`]s, so constructing/comparing an effect is a
+/// single pointer compare and effect lists stay compact.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Effect {
     /// Set a boolean field to a literal.
     SetBool {
         /// The state field to write.
-        field: String,
+        field: Ustr,
         /// The boolean value to assign.
         value: bool,
     },
     /// Set an integer field to a literal.
     SetInt {
         /// The state field to write.
-        field: String,
+        field: Ustr,
         /// The integer value to assign.
         value: i32,
     },
     /// Set a float field to a literal.
     SetFloat {
         /// The state field to write.
-        field: String,
+        field: Ustr,
         /// The float value to assign.
         value: f32,
     },
     /// Switch an enum field to the named unit variant.
     SetEnum {
         /// The state field to write.
-        field: String,
+        field: Ustr,
         /// The enum type's name (used only for diagnostics/verification).
-        enum_type: String,
+        enum_type: Ustr,
         /// The unit variant to switch to.
-        enum_variant: String,
+        enum_variant: Ustr,
     },
     /// Set an `Option` field to `None`.
     SetNone {
         /// The state field to write.
-        field: String,
+        field: Ustr,
     },
     /// Copy one field's value into another.
     SetIdentifier {
         /// The state field to write.
-        field: String,
+        field: Ustr,
         /// The source field whose value is copied.
-        field_source: String,
+        field_source: Ustr,
     },
     /// Add a constant to an integer field.
     IncrementInt {
         /// The state field to write.
-        field: String,
+        field: Ustr,
         /// Amount to add (negative for subtraction).
         by: i32,
     },
     /// Add a constant to a float field.
     IncrementFloat {
         /// The state field to write.
-        field: String,
+        field: Ustr,
         /// Amount to add (negative for subtraction).
         by: f32,
     },

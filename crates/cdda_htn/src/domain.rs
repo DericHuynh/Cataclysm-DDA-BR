@@ -1,6 +1,9 @@
 //! [`HtnDomain`] — the parsed, validated network of tasks.
 
+use std::collections::HashMap;
+
 use bevy_reflect::{Reflect, TypeRegistry};
+use ustr::Ustr;
 
 use crate::error::HtnResult;
 use crate::operators::verify_operator;
@@ -14,6 +17,10 @@ pub struct HtnDomain {
     pub schema: String,
     /// All tasks in declaration order.
     pub tasks: Vec<Task>,
+    /// `name -> index` lookup into [`Self::tasks`], built once at parse time so
+    /// the planners resolve subtask names in O(1) without rebuilding a map on
+    /// every `plan` call. Keyed by interned [`Ustr`] for cheap hashing.
+    pub(crate) index_of: HashMap<Ustr, usize>,
 }
 
 impl HtnDomain {
@@ -31,9 +38,25 @@ impl HtnDomain {
             .or_else(|| self.tasks.first())
     }
 
-    /// Look up a task by name.
+    /// Look up a task by name (O(1) via the precomputed index map).
     pub fn get_task(&self, name: &str) -> Option<&Task> {
-        self.tasks.iter().find(|t| t.name() == name)
+        let key = Ustr::from(name);
+        let idx = *self.index_of.get(&key)?;
+        self.tasks.get(idx)
+    }
+
+    /// Resolve a task name to its index into [`Self::tasks`] (O(1)).
+    pub(crate) fn task_index(&self, name: Ustr) -> Option<usize> {
+        self.index_of.get(&name).copied()
+    }
+
+    /// Build the `name -> index` lookup map. Called at parse time.
+    pub(crate) fn rebuild_index(&mut self) {
+        self.index_of.clear();
+        self.index_of.reserve(self.tasks.len());
+        for (i, t) in self.tasks.iter().enumerate() {
+            self.index_of.insert(t.name().into(), i);
+        }
     }
 
     /// Look up a goal task by name (for back-planning).
@@ -72,11 +95,11 @@ impl HtnDomain {
     }
 
     /// The name of every primitive task in the domain (for back-planning).
-    pub fn primitive_names(&self) -> Vec<String> {
+    pub fn primitive_names(&self) -> Vec<Ustr> {
         self.tasks
             .iter()
             .filter_map(|t| match t {
-                Task::Primitive(p) => Some(p.name.clone()),
+                Task::Primitive(p) => Some(p.name),
                 _ => None,
             })
             .collect()

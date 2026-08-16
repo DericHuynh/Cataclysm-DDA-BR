@@ -10,6 +10,7 @@
 use cdda_htn::back_planner::BackPlanner;
 use cdda_htn::planner::HtnPlanner;
 use cdda_htn::{HtnDomain, HtnResult, HtnState};
+use ustr::Ustr;
 
 /// A ready-to-use HTN test arena.
 pub struct HtnTestBed {
@@ -48,7 +49,7 @@ impl HtnTestBed {
     }
 
     /// Forward-plan the root task against a concrete state.
-    pub fn plan_forward<S>(&self, state: &S) -> Vec<String>
+    pub fn plan_forward<S>(&self, state: &S) -> Vec<Ustr>
     where
         S: HtnState,
     {
@@ -58,7 +59,7 @@ impl HtnTestBed {
 
     /// Backward-plan toward a named goal task from a concrete state.
     #[allow(dead_code)]
-    pub fn plan_backward<S>(&self, goal: &str, state: &S) -> HtnResult<Vec<String>>
+    pub fn plan_backward<S>(&self, goal: &str, state: &S) -> HtnResult<Vec<Ustr>>
     where
         S: HtnState,
     {

@@ -21,6 +21,7 @@ use cdda_htn::planner::HtnPlanner;
 use cdda_htn::HtnDomain;
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
+use ustr::Ustr;
 
 /// The world map location a miner can occupy — mirrors `Location` in the
 /// reference miner example.
@@ -48,10 +49,18 @@ struct MinerState {
 }
 
 /// The output of the planner: written back onto each entity (like the reference
-/// `bevy_bae`/`bevy_htn` `Plan` component). Carries just the task names so the
-/// benchmark forces a real component write.
+/// `bevy_bae`/`bevy_htn` `Plan` component). Carries just the (interned) task
+/// names so the benchmark forces a real component write while exercising the
+/// `ustr`-based plan path.
 #[derive(Component, Debug, Default)]
-struct Plan(Vec<String>);
+struct Plan(Vec<Ustr>);
+
+/// Running count of actors planned so far, written by [`run_ai`]. Using a single
+/// atomics resource keeps the `par_iter_mut` closure free of commands; the
+/// planner work per entity dominates the (rare) cross-thread contention on this
+/// counter, so a thread-local accumulation pass is not worth its setup cost.
+#[derive(Resource, Default)]
+struct AiProcessed(std::sync::atomic::AtomicUsize);
 
 /// Immutable domain+registry shared by every AI system run. Both derive
 /// `Resource` and are registered once.
@@ -151,42 +160,58 @@ primitive_task "GoToOutside" {
 }
 "#;
 
-/// The AI system: for every miner entity, plan the root task and store the
-/// result as a `Plan` component. This is the per-frame AI cost.
+/// The AI system: for every miner entity, plan the root task and write the
+/// result into its `Plan` component.
+///
+/// Runs the query in **parallel** via [`Query::par_iter_mut`], the per-frame AI
+/// cost. Each closure builds its own [`HtnPlanner`] (an immutable
+/// `domain + registry` view, no shared mutable state), so the population plans
+/// concurrently; the `par_iter_mut` batch is scheduled across the
+/// multi-threaded `ComputeTaskPool`.
 fn run_ai(
     resources: Res<HtnResources>,
-    mut q: Query<(Entity, &MinerState, Option<&mut Plan>)>,
-    mut commands: Commands,
-) -> usize {
-    let mut processed = 0;
-    for (entity, state, plan) in q.iter_mut() {
-        processed += 1;
+    mut q: Query<(&MinerState, &mut Plan)>,
+    processed: Res<AiProcessed>,
+) {
+    processed.0.store(0, std::sync::atomic::Ordering::Relaxed);
+    q.par_iter_mut().for_each(|(state, mut plan)| {
         let mut planner = HtnPlanner::new(&resources.domain, &resources.registry);
         let planned = planner.plan("EarnGold", state);
-        let names = planned.task_names().to_vec();
-        if let Some(mut p) = plan {
-            p.0 = names;
-        } else {
-            commands.entity(entity).insert(Plan(names));
-        }
-    }
-    processed
+        plan.0 = planned.task_names().to_vec();
+        processed
+            .0
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    });
 }
 
-/// Spawn `n` miner entities with varied state, then return the world.
-fn spawn_world(n: usize) -> World {
+/// Spawn `n` miner entities with varied state, then return a `(world, schedule)`
+/// ready to run the AI system — mirroring how a production Bevy app runs it via
+/// the multi-threaded [`Schedule`] executor (which initializes the
+/// `ComputeTaskPool`).
+fn spawn_world(n: usize) -> (World, Schedule) {
     let mut res = World::new();
     res.insert_resource(HtnResources::new());
-    res.spawn_batch((0..n).map(|i| MinerState {
-        gold: (i % 5) as i32,
-        has_ore: i % 3 == 0,
-        has_metal: i % 7 == 0,
-        energy: 80 - (i % 40) as i32,
-        hunger: 20 + (i % 60) as i32,
-        location: Location::Outside,
+    res.insert_resource(AiProcessed::default());
+    res.spawn_batch((0..n).map(|i| {
+        (
+            MinerState {
+                gold: (i % 5) as i32,
+                has_ore: i % 3 == 0,
+                has_metal: i % 7 == 0,
+                energy: 80 - (i % 40) as i32,
+                hunger: 20 + (i % 60) as i32,
+                location: Location::Outside,
+            },
+            // Pre-insert the output component so the AI system can write into it
+            // directly in parallel (steady-state: every actor already has a plan).
+            Plan(Vec::new()),
+        )
     }))
     .count();
-    res
+
+    let mut schedule = Schedule::default();
+    schedule.add_systems(run_ai);
+    (res, schedule)
 }
 
 pub fn miner_planner(c: &mut Criterion) {
@@ -194,14 +219,19 @@ pub fn miner_planner(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("cdda_htn_bevy_ecs");
 
-    // Full-frame throughput: run the AI system over the whole entity population.
+    // Full-frame throughput: run the AI system over the whole entity population
+    // through a Bevy `Schedule`, exactly as production does.
     for n in [10_000usize, 50_000, 200_000] {
-        let mut world = spawn_world(n);
-        let ai = world.register_system(run_ai);
+        let (mut world, mut schedule) = spawn_world(n);
         group.throughput(criterion::Throughput::Elements(n as u64));
         group.bench_function(format!("frame_{n}_miner_entities"), |b| {
             b.iter(|| {
-                black_box(world.run_system(ai).expect("run AI system"));
+                schedule.run(&mut world);
+                let processed = world
+                    .resource::<AiProcessed>()
+                    .0
+                    .load(std::sync::atomic::Ordering::Relaxed);
+                warn_if_processed(processed, n);
             });
         });
     }
@@ -216,6 +246,11 @@ pub fn miner_planner(c: &mut Criterion) {
     });
 
     group.finish();
+}
+
+#[track_caller]
+fn warn_if_processed(actual: usize, expected: usize) {
+    assert_eq!(actual, expected, "AI system missed entities");
 }
 
 criterion_group!(benches, miner_planner);

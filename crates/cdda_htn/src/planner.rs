@@ -11,17 +11,24 @@
 //!
 //! # Performance
 //!
-//! The hot loop works on **task indices**, never `String` names. The working
+//! The hot loop works on **`usize` task indices**, never names. The working
 //! stack and the backtracking frames hold `usize` indices into
-//! [`HtnDomain::tasks`], so each push/pop copies an `usize` instead of cloning a
-//! `String`, and frame restore copies a small `Vec<usize>` instead of a
-//! `Vec<String>`. A `name -> index` map is built once per `plan` call so
-//! subtask resolution is O(1), not a linear scan. Task names are only
-//! materialized when the final [`Plan`] is constructed.
+//! [`HtnDomain::tasks`]. Domains intern task names as [`Ustr`] keys in a
+//! precomputed `name -> index` map, so subtask resolution is O(1), not a linear
+//! scan.
+//!
+//! `plan` and `mtr` are **append-only**, so backtracking frames store only the
+//! two **lengths** (not cloned `Vec`s) — on backtrack a `truncate` restores the
+//! exact prefix, which is provably identical to restoring a full clone but
+//! avoids ~2 heap allocations + O(n) copies per recursion level. This is the
+//! dominant win for domains that recursively decompose a root toward the sanity
+//! limit (e.g. the miner benchmark). Task names are only materialized as
+//! [`Ustr`]s when the final [`Plan`] is constructed.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 
 use bevy_reflect::TypeRegistry;
+use ustr::Ustr;
 
 use crate::domain::HtnDomain;
 use crate::tasks::Task;
@@ -47,19 +54,20 @@ impl std::fmt::Display for Mtr {
     }
 }
 
-/// A completed forward plan: an ordered list of primitive task names plus the
-/// MTR describing how each compound was decomposed.
+/// A completed forward plan: an ordered list of primitive task names (interned
+/// [`Ustr`]s, so it's cheap to copy, compare, and hand around) plus the MTR
+/// describing how each compound was decomposed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Plan {
     /// Primitive task names, in execution order.
-    pub tasks: Vec<String>,
+    pub tasks: Vec<Ustr>,
     /// Method indices chosen at each decomposition level.
     pub mtr: Mtr,
 }
 
 impl Plan {
-    /// The ordered primitive task names.
-    pub fn task_names(&self) -> &[String] {
+    /// The ordered primitive task names (interned handles; deref to `&str`).
+    pub fn task_names(&self) -> &[Ustr] {
         &self.tasks
     }
 
@@ -83,18 +91,29 @@ impl Plan {
 
 /// Planner state used during one decomposition site for backtracking.
 ///
-/// Stores **task indices** (not names) so frame snapshots clone a few `usize`s
-/// instead of heap-allocated `String`s.
+/// Stores **task indices** (not names) so frames stay tiny and copy-free.
+///
+/// # Backtracking via lengths
+///
+/// [`HtnPlanner`] builds `plan` and `mtr` **append-only** during a monotonic
+/// recursive descent (primitives and method indices are only ever `push`ed).
+/// So instead of deep-cloning both `Vec`s into every frame (which costs ~2n
+/// allocations + O(n) copies per recursion level — catastrophic when a domain
+/// recursively decomposes its root toward the sanity limit), we snapshot just
+/// the two lengths. On backtrack we `truncate` back to those lengths, which is
+/// provably identical to restoring a clone because the prefix of an append-only
+/// Vec never changes. `skip_next` alone traces the search branch, so this stays
+/// a fully correct DFS MTR backtrack.
 #[derive(Debug)]
 struct DecompositionFrame {
     /// The compound task index being decomposed.
     task: usize,
-    /// The final plan (task indices) as built before this decomposition.
-    plan: Vec<usize>,
+    /// `plan.len()` before this decomposition's subtasks were entered.
+    plan_len: usize,
     /// The number of methods to skip (index+1 of the one just tried).
     skip_next: usize,
-    /// The MTR before adding this decomposition's method index.
-    mtr: Vec<usize>,
+    /// `mtr.len()` before adding this decomposition's method index.
+    mtr_len: usize,
 }
 
 /// A forward planner over a parsed [`HtnDomain`].
@@ -133,14 +152,8 @@ impl<'a> HtnPlanner<'a> {
 
         let tasks = &self.domain.tasks;
 
-        // Build a name -> index map once so subtask resolution is O(1) rather
-        // than a linear scan per decomposition step.
-        let mut index_of: HashMap<&str, usize> = HashMap::with_capacity(tasks.len());
-        for (i, t) in tasks.iter().enumerate() {
-            index_of.insert(t.name(), i);
-        }
-
-        let Some(&root_idx) = index_of.get(root) else {
+        let root = Ustr::from(root);
+        let Some(&root_idx) = self.domain.index_of.get(&root) else {
             return Plan {
                 tasks: Vec::new(),
                 mtr: Mtr(Vec::new()),
@@ -168,22 +181,24 @@ impl<'a> HtnPlanner<'a> {
                         mtr.push(idx);
                         let frame = DecompositionFrame {
                             task: current,
-                            plan: plan.clone(),
+                            plan_len: plan.len(),
                             skip_next: idx + 1,
-                            mtr: mtr.clone(),
+                            // Snapshot *after* the push so restoring truncates
+                            // back to a world that includes this method choice.
+                            mtr_len: mtr.len(),
                         };
                         decomp_stack.push(frame);
                         // Push subtask indices in reverse so the first pops first.
                         for sub in method.subtasks.iter().rev() {
-                            if let Some(&sub_idx) = index_of.get(sub.as_str()) {
+                            if let Some(sub_idx) = self.domain.task_index(*sub) {
                                 stack.push_front(sub_idx);
                             }
                         }
                         skip = 0;
                         continue;
                     } else if let Some(frame) = decomp_stack.pop() {
-                        plan = frame.plan;
-                        mtr = frame.mtr;
+                        plan.truncate(frame.plan_len);
+                        mtr.truncate(frame.mtr_len);
                         skip = frame.skip_next;
                         stack.push_front(frame.task);
                         continue;
@@ -203,8 +218,8 @@ impl<'a> HtnPlanner<'a> {
                         skip = 0;
                         continue;
                     } else if let Some(frame) = decomp_stack.pop() {
-                        plan = frame.plan;
-                        mtr = frame.mtr;
+                        plan.truncate(frame.plan_len);
+                        mtr.truncate(frame.mtr_len);
                         skip = frame.skip_next;
                         stack.push_front(frame.task);
                         continue;
@@ -225,7 +240,8 @@ impl<'a> HtnPlanner<'a> {
     }
 }
 
-/// Convert a plan of task indices into task-name `String`s in the same order.
-fn materialize_names(tasks: &[Task], plan: &[usize]) -> Vec<String> {
-    plan.iter().map(|&i| tasks[i].name().to_string()).collect()
+/// Convert a plan of task indices into interned task-name [`Ustr`]s in the same
+/// order.
+fn materialize_names(tasks: &[Task], plan: &[usize]) -> Vec<Ustr> {
+    plan.iter().map(|&i| tasks[i].name().into()).collect()
 }
