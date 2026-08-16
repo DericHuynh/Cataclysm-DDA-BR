@@ -13,6 +13,7 @@ members = [
     "crates/cdda_context",
     "crates/cdda_data",
     "crates/cdda_defs_raw",
+    "crates/cdda_htn",
     "crates/cdda_input",
     "crates/cdda_integration_tests",
 ]
@@ -30,6 +31,8 @@ serde_json      = "1"
 schemars        = { version = "0.8", features = ["derive"] }
 thiserror       = "2"
 indexmap        = "2"
+pest            = "2"
+pest_derive     = "2"
 tracing              = "0.1"
 tracing-subscriber   = { version = "0.3", features = ["env-filter"] }
 smallvec        = "1"
@@ -38,6 +41,9 @@ clap            = { version = "4", features = ["derive"] }
 pathfinding     = "4"
 postcard        = { version = "1", features = ["alloc"] }
 tempfile        = "3.27.0"
+
+# Benchmarking
+criterion        = "0.8"
 
 # Bevy ecosystem
 bevy                = { version = "0.18", default-features = false, features = ["bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_render", "bevy_sprite", "bevy_text", "bevy_ui", "bevy_winit", "x11", "bevy_gilrs"] }
@@ -61,6 +67,7 @@ cdda_data = { path = "crates/cdda_data" }
 cdda_input = { path = "crates/cdda_input" }
 cdda_integration_tests = { path = "crates/cdda_integration_tests" }
 cdda_defs_raw = { path = "crates/cdda_defs_raw" }
+cdda_htn = { path = "crates/cdda_htn" }
 
 [profile.dev]
 opt-level = 0

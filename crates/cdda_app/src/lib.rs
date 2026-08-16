@@ -49,7 +49,7 @@ use cdda_sim::actor::plugin::ActorPlugin;
 use cdda_sim::actor::temperature::temperature_phase;
 use cdda_sim::actor::turn::{debug_turn_queue, tick_move_points, TurnQueue};
 use cdda_sim::actor::vision::update_vision;
-use cdda_sim::ai::systems::ai_phase;
+use cdda_sim::ai::plugin::AiPlugin;
 use cdda_sim::crafting::plugin::CraftingPlugin;
 use cdda_sim::crafting::systems::on_examine_item_changed;
 use cdda_sim::intent::plugin::IntentPlugin;
@@ -162,6 +162,7 @@ impl Plugin for CddaPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
             ActivityPlugin,
+            AiPlugin,
             ActorPlugin,
             ItemPlugin,
             CddaAssetsPlugin,
@@ -296,9 +297,7 @@ impl Plugin for CddaPlugin {
         app.add_systems(
             Update,
             (
-                // Intent generation: AI decisions + player input → ActionIntent
-                ai_phase.in_set(SimSet::IntentDeclare),
-                // Camera sync runs after IntentResolve to capture new positions.
+                // Intent generation: player input → ActionIntent (AI is in AiPlugin)
                 dev_player_intent_generate.in_set(SimSet::Vision),
                 effects_phase.in_set(SimSet::Effects),
                 healing_phase.in_set(SimSet::Healing),

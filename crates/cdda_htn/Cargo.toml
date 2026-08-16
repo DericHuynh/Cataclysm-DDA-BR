@@ -1,0 +1,22 @@
+[package]
+name = "cdda_htn"
+version = "0.1.0"
+edition = "2021"
+description = "Hierarchical Task Network planner for CDDA AI — imports .htn files, strongly-typed reflection-driven operators, forward (+MTR) and backward (goal-state) planning."
+
+[dependencies]
+bevy_reflect.workspace = true
+bevy_asset.workspace = true
+serde.workspace = true
+pest.workspace = true
+pest_derive.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+bevy_ecs.workspace = true
+bevy_reflect.workspace = true
+criterion = { workspace = true }
+
+[[bench]]
+name = "ai_throughput"
+harness = false

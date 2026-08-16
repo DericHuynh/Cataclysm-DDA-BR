@@ -230,3 +230,48 @@ fn resolve_start_craft(
         entity, recipe
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runtime::test_utils::TestBed;
+
+    /// A monster with **more** AP than the player must be buffered and resolved
+    /// first — there is no player-first guarantee. This is the fairness contract
+    /// that distinguishes the rewrite from CDDA's blocking player loop.
+    #[test]
+    fn higher_ap_monster_goes_before_lower_ap_player() {
+        let mut test = TestBed::new();
+        test.insert_resource(IntentQueue::default());
+        test.register::<ActionIntent>()
+            .register::<ActionPoints>()
+            .register::<IsAlive>()
+            .register::<WorldPosition>();
+
+        // Monster at 150 AP, player at 50 AP.
+        let z = cdda_core_types::core::coords::ZLevel::new(0);
+        let monster = test.spawn((
+            ActionPoints::new(150),
+            IsAlive,
+            ActionIntent::Wait,
+            WorldPosition(WorldPos::new(0, 0, z)),
+        ));
+        let player = test.spawn((
+            ActionPoints::new(50),
+            IsAlive,
+            ActionIntent::Wait,
+            WorldPosition(WorldPos::new(0, 0, z)),
+        ));
+
+        // Buffer + sort by AP: collect_intents writes the AP-sorted queue.
+        test.run_system(collect_intents);
+
+        let queue = test.resource::<IntentQueue>();
+        assert_eq!(queue.queued.len(), 2, "both intents buffered");
+        assert_eq!(
+            queue.queued[0].entity, monster,
+            "highest-AP (monster, 150) must act first — no player priority"
+        );
+        assert_eq!(queue.queued[1].entity, player, "player (50 AP) second");
+    }
+}

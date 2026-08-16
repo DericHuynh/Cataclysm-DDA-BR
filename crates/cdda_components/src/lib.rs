@@ -15,6 +15,7 @@ pub use cdda_core_types::core::WorldPos;
 
 pub mod activity;
 pub mod actor;
+pub mod ai;
 pub mod context;
 pub mod def;
 pub mod def_markers;

@@ -143,6 +143,32 @@ String-based type-safe identifiers via `DefId<T>`. Each definition category
 has a marker type (ItemDef, MonsterDef, TerrainDef, etc.) for type-level
 distinction.
 
+### Fair turn ordering (no player priority)
+Player input and AI decisions both declare an `ActionIntent` into a single
+buffered `IntentQueue` that is sorted by **action points descending** and
+resolved first-highest-AP-wins. This deliberately differs from CDDA-Master's
+blocking player loop (where the player acts for their whole budget before `monmove()`):
+in the rewrite a fast monster can act before a slow player. Validated by the
+`higher_ap_monster_goes_before_lower_ap_player` test.
+
+### Pluggable AI planners
+Each AI mob carries one planner marker component
+(`PlannerBehaviourTree` / `PlannerGoap` / `PlannerHtn` / inert `PlannerNone`)
+that selects its decision algorithm. A per-marker system (`drive_<planner>`,
+`.run_if` on the marker) produces an `AiGoal` which is translated into an
+`ActionIntent` feeding the shared queue. So a dumb zombie can use a behaviour
+tree, a feral zombie GOAP, and a survivor / high-level zombie an HTN — all
+planners share one dispatch seam and one AP-sort.
+
+The HTN planner itself lives in the **headless `cdda_htn` crate** (a leaf with
+no ECS / `Component` / `cdda_sim` dependency), so it can be adopted by any AI
+layer. It imports `.htn` files (the `htn.pest` DSL), drives strongly-typed
+operators via `bevy_reflect`, and supports both **forward** planning (MTR
+backtracking over method decomposition) and **backward / goal-state** planning
+given a `goal_task`. The marker/`cdda_sim` integration (wiring `PlannerHtn` to
+produce `ActionIntent`s) is the seam the sim exposes; the full HTN hookup is a
+follow-up.
+
 ## Known Technical Debt
 
 See the root `AGENTS.md` and the priority list below. Key issues:

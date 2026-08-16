@@ -1,60 +1,189 @@
-//! AI phase — entities decide actions.
+//! AI systems — per-planner behaviour dispatch feeding the shared intent queue.
 //!
-//! AI systems READ world state and WRITE intent components only.
-//! No world mutation during evaluation.
+//! An AI entity wears exactly one planner marker (`PlannerBehaviourTree`,
+//! `PlannerGoap`, `PlannerHtn`, or the inert `PlannerNone`).  A dedicated
+//! system per planner type runs only for entities carrying that marker
+//! (`.run_if(With<PlannerX>)`), decides an [`AiGoal`], and translates it into
+//! an [`ActionIntent`] component on the entity.
 //!
-//! AI decisions use:
-//! - `EntitySpatialIndex` for proximity/threat detection
-//! - `SightEvent` and `SoundEvent` message queues for sensory input
-//! - Creature stats (Health, CombatStats, MonsterStats, Vision, Faction)
-//! - Personality traits (NpcPersonality for NPCs, MonsterFlags for monsters)
+//! The intents **do not get resolved here** — they flow into the same buffered
+//! `IntentQueue` that `collect_intents` sorts by action points and
+//! `resolve_intents` drains during `SimSet::IntentResolve`.  Because the player
+//! also declares an intent via `collect_intents` (never resolved inline), there
+//! is **no player-first guarantee**: the highest-AP actor that turn acts first.
+//!
+//! ## Adding a planner
+//!
+//! 1. Add a marker component in `cdda_components::ai`.
+//! 2. Add a `drive_<planner>` system here and register it in `AiPlugin`
+//!    with `.run_if(With<PlannerX>)`.
+//! 3. Have it produce an [`AiGoal`] and call [`declare_goal`].
 
 use bevy_ecs::prelude::*;
+use cdda_components::actor::{ActionPoints, IsAlive};
+use cdda_components::ai::{AiGoal, PlannerBehaviourTree, PlannerGoap, PlannerHtn};
+use cdda_components::def::IsDef;
+use cdda_components::intent::ActionIntent;
+use cdda_components::sim::WorldPosition;
 use cdda_core_types::core::coords::WorldPos;
 
 // ---------------------------------------------------------------------------
-// Types
+// Intent declaration helper
 // ---------------------------------------------------------------------------
 
-/// The goal an AI entity decides to pursue this action.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AiGoal {
-    /// Move toward and attack a specific target.
-    Attack { target: Entity },
-    /// Move in a random direction.
-    Wander,
-    /// Move away from a threat.
-    Flee { from: Entity },
-    /// Stay within a certain radius of a position.
-    Guard { position: WorldPos },
-    /// Pathfind toward a target, attacking when in range.
-    Hunt { target: Entity },
+/// Translate a chosen [`AiGoal`] into an [`ActionIntent`] and write it onto the
+/// entity.  `Idle`/`Guard` emit nothing (inert) — the entity simply does not
+/// act this turn.
+///
+/// This is the single seam between "what the planner wants" and "how the sim
+/// acts"; adding a goal branch does not touch intent resolution.
+pub fn declare_goal(commands: &mut Commands, entity: Entity, goal: AiGoal) {
+    let intent = match goal {
+        AiGoal::Attack { target } => ActionIntent::MeleeAttack { target },
+        // A planner that settles on a movement goal emits a concrete single-tile
+        // step. Real planners (BT/GOAP/HTN) pick the direction from pathing;
+        // the stand-in wanders +x so the intent genuinely enters the queue.
+        AiGoal::Hunt { .. } | AiGoal::Wander | AiGoal::Flee { .. } | AiGoal::Guard { .. } => {
+            ActionIntent::Move { dx: 1, dy: 0 }
+        }
+        AiGoal::Interact => ActionIntent::Wait,
+        AiGoal::Idle => return,
+    };
+    commands.entity(entity).insert(intent);
 }
 
 // ---------------------------------------------------------------------------
-// Public API
-// --------------------------------------------------------------------------
+// Planner decision stubs
+// ---------------------------------------------------------------------------
 
-/// Decide what action an AI entity should take this tick.
-///
-/// Reads world state and returns an `AiGoal` without mutating
-/// anything.
-pub fn decide_action(world: &World, entity: Entity) -> AiGoal {
-    let _ = (world, entity);
-    todo!("AI decision making: evaluate threats → choose goal (Attack/Wander/Flee/Guard/Hunt)")
+/// Dumb, predictable mobs: a behaviour tree is a cheap fixed-rule decision. The
+/// stand-in picks `Wander`; a real BT would select attack/flee/move from data.
+fn behaviour_tree_goal(
+    _entity: Entity,
+    _pos: Option<&WorldPosition>,
+    _ap: Option<&ActionPoints>,
+) -> AiGoal {
+    AiGoal::Wander
 }
 
-/// Execute an AI decision: translate the `AiGoal` into actual
-/// movement or combat actions via `attempt_move`, `resolve_melee_attack`,
-/// etc.
-pub fn execute_ai_action(world: &mut World, entity: Entity, goal: AiGoal) {
-    let _ = (world, entity, goal);
-    todo!("execute decided action: match goal → movement/combat system calls")
+/// Goal-driven mobs (feral zombies): appear out of world state. Stand-in:
+/// wander.
+fn goap_goal(_entity: Entity, _pos: Option<&WorldPosition>, _ap: Option<&ActionPoints>) -> AiGoal {
+    AiGoal::Wander
 }
 
-/// All AI logic for one tick.
-///
-/// For each creature: evaluate threats, choose targets, set movement intents.
-pub fn ai_phase() {
-    // STUB: no-op until AI implemented
+/// Hierarchical-task mobs (survivors/hunters): decompose top-level goals.
+/// Stand-in: wander.
+fn htn_goal(_entity: Entity, _pos: Option<&WorldPosition>, _ap: Option<&ActionPoints>) -> AiGoal {
+    AiGoal::Wander
+}
+
+// ---------------------------------------------------------------------------
+// Per-marker systems (run_if guards in the plugin)
+// ---------------------------------------------------------------------------
+
+/// Behaviour tree planner system.
+pub fn drive_behaviour_tree(
+    mut commands: Commands,
+    q: Query<
+        (Entity, &WorldPosition, &ActionPoints),
+        (With<PlannerBehaviourTree>, With<IsAlive>, Without<IsDef>),
+    >,
+) {
+    for (e, p, a) in &q {
+        declare_goal(&mut commands, e, behaviour_tree_goal(e, Some(p), Some(a)));
+    }
+}
+
+/// GOAP planner system.
+pub fn drive_goap(
+    mut commands: Commands,
+    q: Query<
+        (Entity, &WorldPosition, &ActionPoints),
+        (With<PlannerGoap>, With<IsAlive>, Without<IsDef>),
+    >,
+) {
+    for (e, p, a) in &q {
+        declare_goal(&mut commands, e, goap_goal(e, Some(p), Some(a)));
+    }
+}
+
+/// HTN planner system.
+pub fn drive_htn(
+    mut commands: Commands,
+    q: Query<
+        (Entity, &WorldPosition, &ActionPoints),
+        (With<PlannerHtn>, With<IsAlive>, Without<IsDef>),
+    >,
+) {
+    for (e, p, a) in &q {
+        declare_goal(&mut commands, e, htn_goal(e, Some(p), Some(a)));
+    }
+}
+
+/// Inert planner — exists so `PlannerNone` can be a valid (non-acting) marker.
+pub fn drive_none() {}
+
+// ---------------------------------------------------------------------------
+// Run conditions (used by the plugin's `.run_if(...)`)
+// ---------------------------------------------------------------------------
+
+/// True when at least one `PlannerBehaviourTree` AI entity exists.
+pub fn has_behaviour_tree_agents(q: Query<(), With<PlannerBehaviourTree>>) -> bool {
+    !q.is_empty()
+}
+
+/// True when at least one `PlannerGoap` AI entity exists.
+pub fn has_goap_agents(q: Query<(), With<PlannerGoap>>) -> bool {
+    !q.is_empty()
+}
+
+/// True when at least one `PlannerHtn` AI entity exists.
+pub fn has_htn_agents(q: Query<(), With<PlannerHtn>>) -> bool {
+    !q.is_empty()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::intent::systems::collect_intents;
+    use crate::runtime::test_utils::TestBed;
+    use cdda_components::intent::IntentQueue;
+
+    /// A GOAP-planner mob's `drive_goap` system must emit an `ActionIntent` that
+    /// reaches the shared AP-sorted buffer — i.e. monsters participate in turn
+    /// ordering alongside the player.
+    #[test]
+    fn goap_mob_declares_intent_into_shared_queue() {
+        let mut test = TestBed::new();
+        test.insert_resource(IntentQueue::default());
+        test.register::<ActionIntent>()
+            .register::<ActionPoints>()
+            .register::<IsAlive>()
+            .register::<WorldPosition>()
+            .register::<PlannerGoap>();
+
+        let z = cdda_core_types::core::coords::ZLevel::new(0);
+        let mob = test.spawn((
+            PlannerGoap,
+            ActionPoints::new(100),
+            IsAlive,
+            WorldPosition(WorldPos::new(0, 0, z)),
+        ));
+
+        // GOAP planner runs → writes an ActionIntent onto the mob.
+        test.run_system(drive_goap);
+
+        // Then the intent collector buffers + sorts it.
+        test.run_system(collect_intents);
+
+        let queue = test.resource::<IntentQueue>();
+        assert_eq!(
+            queue.queued.len(),
+            1,
+            "GOAP mob's intent must reach the queue"
+        );
+        assert_eq!(queue.queued[0].entity, mob);
+        assert!(matches!(queue.queued[0].intent, ActionIntent::Move { .. }));
+    }
 }

@@ -29,7 +29,7 @@ The single workspace crate that owns every game-logic subsystem plus the runtime
 ## Child DOX Index
 - `src/runtime/` — `AppState`, `TurnState`, `GameTime`, `StartupConfig`, `LoadingStatus`, and the `TestBed` test harness. The most-consumed submodule; treat its public API as the workspace's test contract.
 - `src/actor/` — Creature turn scheduling, movement, bionics, effects, healing, temperature, morale, vision.
-- `src/ai/` — Monster/NPC decision making and the `AiGoal` enum.
+- `src/ai/` — Per-planner AI dispatch: `drive_behaviour_tree` / `drive_goap` / `drive_htn` (each `.run_if` on its planner marker) emit `ActionIntent` into the shared AP-sorted `IntentQueue` during `SimSet::IntentDeclare`, so monsters and the player are resolved together by highest AP (no player-first guarantee). Planner markers live in `cdda_components::ai`; real planner implements (BT/GOAP/HTN) slot into `systems.rs` per-marker systems.
 - `src/activity/` — Multi-turn player activity **systems** (`tick_crafting`, `tick_aiming`, …) and the `CRAFT_COMPLETE_HOOK` seam. The activity **data components** (`ActivityProgress`, `Crafting`, `Aiming`, `Reading`, `Waiting`, `Reloading`, `Interacting`, `ActivityTracker`) live in `cdda_components::activity` so UI/combat/inventory can query them without importing this crate.
 - `src/combat/` — Damage, hit/miss, melee, ranged.
 - `src/crafting/` — Recipe lookup, component consumption, progress. `crafting/input.rs` now holds only `process_pending_craft` (the use-case executor); the menu keyboard handler lives in `cdda_render::render::input`.

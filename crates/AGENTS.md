@@ -48,6 +48,7 @@ Layer 2 — ECS components and shared schedule:
 Layer 3 — game logic (Bevy ECS only):
 
 - The nine game-logic submodules all live in `cdda_sim`. See the `src/<area>/` index in `crates/cdda_sim/AGENTS.md`.
+- `crates/cdda_htn/AGENTS.md` — **Headless HTN planner** (forward MTR + backward goal-state), `.htn` DSL parser, reflection-driven operators. Library leaf: no ECS/`Component` and no `cdda_sim`/`cdda_components` dependency (its ECS-driven Criterion benchmark lives in dev-deps only). Adopted by `cdda_sim::ai` to drive `PlannerHtn` mobs (wiring is a follow-up).
 
 Layer 4 — world and data:
 
