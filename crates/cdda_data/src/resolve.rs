@@ -70,6 +70,27 @@ pub fn resolve_copy_from(
         }
     }
 
+    // A *named* abstract (`"abstract": "some_id"`) is a real definition whose
+    // identifier lives in the `abstract` field; the boolean form
+    // (`"abstract": true`) is a template that never reaches the registry.
+    // `apply_definition` strips the `abstract` key, so restore it as `id` here
+    // (unless the def already carries an explicit `id`) to keep named-abstra
+    // defs deserializable after resolution.
+    if resolved
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .is_none()
+    {
+        if let Some(abs_id) = raw.get("abstract").and_then(serde_json::Value::as_str) {
+            if let Some(obj) = resolved.as_object_mut() {
+                obj.insert(
+                    "id".to_string(),
+                    serde_json::Value::String(abs_id.to_string()),
+                );
+            }
+        }
+    }
+
     chain.pop();
     Ok(resolved)
 }
@@ -165,7 +186,7 @@ fn apply_relative(target: &mut Value, key: &str, val: &Value) {
     if let (Some(current), Some(delta)) = (entry.as_i64(), val.as_i64()) {
         *entry = Value::Number(serde_json::Number::from(current + delta));
     } else if let (Some(current), Some(delta)) = (entry.as_f64(), val.as_f64()) {
-        if let Some(n) = serde_json::Number::from_f64(current + delta) {
+        if let Some(n) = relative_number(current, delta) {
             *entry = Value::Number(n);
         }
     }
@@ -190,7 +211,7 @@ fn apply_proportional(target: &mut Value, key: &str, val: &Value) {
     match entry {
         Value::Number(n) => {
             if let Some(current) = n.as_f64() {
-                if let Some(new_n) = serde_json::Number::from_f64(current * factor) {
+                if let Some(new_n) = scaled_number(current, factor) {
                     *entry = Value::Number(new_n);
                 }
             }
@@ -202,6 +223,74 @@ fn apply_proportional(target: &mut Value, key: &str, val: &Value) {
         }
         _ => {}
     }
+}
+
+/// Add `delta` to `current`, preserving integer-ness for integer operands so
+/// integer fields stay integer (CDDA `relative` on ints stays int).
+fn relative_number(current: f64, delta: f64) -> Option<serde_json::Number> {
+    if !delta.is_finite() {
+        return None;
+    }
+    let result = current + delta;
+    if result.is_infinite() || result.is_nan() {
+        return None;
+    }
+    if current.fract() == 0.0 && delta.fract() == 0.0 {
+        return number_from_integral_f64(result);
+    }
+    clean_float(result)
+}
+
+/// Multiply `current` by `factor`. If `current` is an integral amount (CDDA
+/// integer attribute like `damage`/`range`/`recoil`), emit an integer rounded to
+/// nearest (CDDA semantics) so it still deserializes into `i32`/`u64` fields.
+/// Otherwise snap to a bounded number of decimals to kill FP noise.
+fn scaled_number(current: f64, factor: f64) -> Option<serde_json::Number> {
+    if !factor.is_finite() {
+        return None;
+    }
+    let result = current * factor;
+    if result.is_infinite() || result.is_nan() {
+        return None;
+    }
+    // Integer operand → integer result (round to nearest), matching CDDA's
+    // integer-field scaling.
+    if current.fract() == 0.0 {
+        let rounded = result.round();
+        return number_from_integral_f64(rounded);
+    }
+    clean_float(result)
+}
+
+/// FP-noise tolerance and round-trip precision bounds.
+const EPSILON: f64 = 1e-9;
+const MAX_DECIMALS: u32 = 10;
+
+/// Emit an integer JSON number when `v` is (within epsilon of) an integral
+/// value, otherwise a float snapped to a bounded number of decimals.
+fn clean_float(v: f64) -> Option<serde_json::Number> {
+    if !v.is_finite() {
+        return None;
+    }
+    let rounded = v.round();
+    if (v - rounded).abs() < EPSILON {
+        return number_from_integral_f64(rounded);
+    }
+    let scale = 10f64.powi(MAX_DECIMALS as i32);
+    let snapped = (v * scale).round() / scale;
+    serde_json::Number::from_f64(snapped)
+}
+
+/// Convert an integral `f64` into an integer JSON number (so it deserializes
+/// into `i32`/`u64` fields), falling back to a float if out of integer range.
+fn number_from_integral_f64(v: f64) -> Option<serde_json::Number> {
+    if v >= 0.0 && v <= u64::MAX as f64 {
+        return Some(serde_json::Number::from(v as u64));
+    }
+    if v >= i64::MIN as f64 && v <= i64::MAX as f64 {
+        return Some(serde_json::Number::from(v as i64));
+    }
+    serde_json::Number::from_f64(v)
 }
 
 /// Parse a CDDA `"<number> <unit>"` string, multiply the numeric part by
@@ -535,5 +624,95 @@ mod tests {
         let mut chain = Vec::new();
         let resolved = resolve_copy_from("child", &defs, &mut chain).unwrap();
         assert_eq!(resolved["weight"].as_str(), Some("50 g"));
+    }
+
+    // ── Regression: B bug 1 ── integer fields stay integer after relative /
+    // proportional (no FP noise like `825.0000000000001`), so the resolved JSON
+    // still deserializes into i32/u64 fields.
+    #[test]
+    fn test_proportional_on_integer_emits_integer() {
+        let mut defs = HashMap::new();
+        defs.insert("base".into(), json!({"id": "base", "recoil": 750}));
+        defs.insert(
+            "child".into(),
+            json!({"id": "child", "copy-from": "base", "proportional": {"recoil": 1.1}}),
+        );
+        let mut chain = Vec::new();
+        let resolved = resolve_copy_from("child", &defs, &mut chain).unwrap();
+        // 750 * 1.1 = 825.0000000000001 → must be integer 825.
+        assert_eq!(resolved["recoil"].as_i64(), Some(825));
+        assert!(resolved["recoil"].is_i64());
+    }
+
+    #[test]
+    fn test_proportional_integer_rounding() {
+        // CDDA rounds fractional results of integer fields (0.6 * 13 = 7.8 → 8).
+        let mut defs = HashMap::new();
+        defs.insert("base".into(), json!({"id": "base", "range": 13}));
+        defs.insert(
+            "child".into(),
+            json!({"id": "child", "copy-from": "base", "proportional": {"range": 0.6}}),
+        );
+        let mut chain = Vec::new();
+        let resolved = resolve_copy_from("child", &defs, &mut chain).unwrap();
+        assert_eq!(resolved["range"].as_i64(), Some(8));
+    }
+
+    #[test]
+    fn test_relative_on_integer_stays_integer() {
+        let mut defs = HashMap::new();
+        defs.insert("base".into(), json!({"id": "base", "dispersion": 10}));
+        defs.insert(
+            "child".into(),
+            json!({"id": "child", "copy-from": "base", "relative": {"dispersion": 2}}),
+        );
+        let mut chain = Vec::new();
+        let resolved = resolve_copy_from("child", &defs, &mut chain).unwrap();
+        assert_eq!(resolved["dispersion"].as_i64(), Some(12));
+        assert!(resolved["dispersion"].is_i64());
+    }
+
+    // ── Regression: B bug 2 — a *named* abstract (`"abstract": "some_id"`)
+    // is a real def whose identifier must be preserved through resolution as
+    // `id` (not stripped), so it deserializes.
+    #[test]
+    fn test_named_abstract_promotes_to_id() {
+        let mut defs = HashMap::new();
+        defs.insert(
+            "20x66_abstract".into(),
+            json!({
+                "abstract": "20x66_abstract",
+                "type": "ITEM",
+                "weight": "66 g",
+                "volume": "415 ml",
+            }),
+        );
+        defs.insert(
+            "20x66_slug".into(),
+            json!({"id": "20x66_slug", "copy-from": "20x66_abstract", "price": "2 USD"}),
+        );
+        let mut chain = Vec::new();
+        let resolved = resolve_copy_from("20x66_abstract", &defs, &mut chain).unwrap();
+        assert_eq!(resolved["id"].as_str(), Some("20x66_abstract"));
+        assert_eq!(resolved["weight"].as_str(), Some("66 g"));
+
+        // And it still works as a copy-from parent: the child inherits.
+        let mut chain = Vec::new();
+        let child = resolve_copy_from("20x66_slug", &defs, &mut chain).unwrap();
+        assert_eq!(child["id"].as_str(), Some("20x66_slug"));
+        assert_eq!(child["weight"].as_str(), Some("66 g"));
+    }
+
+    #[test]
+    fn test_boolean_abstract_template_has_no_id() {
+        // `"abstract": true` is a template — it must NOT get an id.
+        let mut defs = HashMap::new();
+        defs.insert(
+            "tpl".into(),
+            json!({"abstract": true, "type": "ITEM", "weight": "1 g"}),
+        );
+        let mut chain = Vec::new();
+        let resolved = resolve_copy_from("tpl", &defs, &mut chain).unwrap();
+        assert_eq!(resolved["id"].as_str(), None);
     }
 }

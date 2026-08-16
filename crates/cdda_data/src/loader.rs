@@ -328,10 +328,56 @@ impl Loader {
         };
 
         for raw in raws {
-            // Try "id" first (supports both string and array IDs)
-            if let Some(id) = raw.value.get("id").and_then(Self::first_id_from_value) {
-                // If duplicate ID, later defs override earlier ones (last-write-wins)
-                map.insert(id.to_string(), raw.value.clone());
+            // Recipes are identified by their *composite* id: `result` plus an
+            // optional `id_suffix` (`herbal_tea` + `from_tea_bag` →
+            // `herbal_tea_from_tea_bag`). CDDA recipes `copy-from` by that
+            // composite name. A recipe with a `result` is keyed by its
+            // composite (or bare `result` when no suffix); a recipe with no
+            // `result` (a named abstract like `"abstract": "seed_extraction_base"`)
+            // falls through to abstract keying below.
+            if type_name == "recipe" {
+                let result = raw.value.get("result").and_then(serde_json::Value::as_str);
+                // A recipe's composite identity is `result` plus an `id_suffix`
+                // OR a `variant` (`deck_of_cards` + `variant:
+                // deck_of_cards_makeshift` → `deck_of_cards_deck_of_cards_makeshift`).
+                // `copy-from` references resolve against this composite name.
+                let suffix = raw
+                    .value
+                    .get("id_suffix")
+                    .or_else(|| raw.value.get("variant"))
+                    .and_then(serde_json::Value::as_str)
+                    .filter(|s| !s.is_empty());
+                if let Some(result) = result {
+                    let key = match suffix {
+                        Some(sfx) => format!("{result}_{sfx}"),
+                        None => result.to_string(),
+                    };
+                    // A pure `variant` re-declaration that `copy-from`s its own
+                    // computed key is a duplicate, not a real base — skip it so
+                    // it doesn't overwrite the primary recipe or self-cycle.
+                    let self_copy = raw
+                        .value
+                        .get("copy-from")
+                        .and_then(serde_json::Value::as_str)
+                        == Some(key.as_str());
+                    if !self_copy || raw.value.get("variant").is_none() {
+                        map.insert(key, raw.value.clone());
+                    }
+                    continue;
+                }
+                // No `result` → fall through to abstract keying below.
+            }
+
+            // Try "id" first. An array-valued id means the def is registered
+            // under *every* element (CDDA multi-id defs like
+            // `"id": ["corpse_bowels_neck_right", ..., "corpse_bowels_empty_edge"]`),
+            // and any of them may be a `copy-from` target.
+            if let Some(idv) = raw.value.get("id") {
+                if let Some(ids) = all_ids_from_value(idv) {
+                    for id in ids {
+                        map.insert(id, raw.value.clone());
+                    }
+                }
             } else if let Some(result) = raw.value.get("result").and_then(|v| v.as_str()) {
                 // Fallback for recipes and similar types
                 map.insert(result.to_string(), raw.value.clone());
@@ -487,6 +533,88 @@ impl Loader {
             "Loaded {} {} definitions ({} abstract skipped)",
             loaded_count, type_name, abstract_count
         );
+    }
+
+    /// Resolve a single type's raw definitions to their **final resolved raw
+    /// JSON** without deserializing into typed structs.
+    ///
+    /// This is the lossless Phase-A seam used by the round-trip test: it runs
+    /// exactly the same copy-from / abstract resolution as
+    /// [`resolve_type_with_pipeline`](Self::resolve_type_with_pipeline), but
+    /// stops *before* `serde_json::from_value`, returning each def's final
+    /// `Value`. A consumer can `from_value::<DefRaw>` then re-serialize and
+    /// compare back to this value to prove parse→unparse is lossless.
+    ///
+    /// Returns `(id, resolved_json)` pairs, sorted by id. Defs that fail
+    /// resolution (missing copy-from parent / circular) are skipped and
+    /// returned as `Err(id)` in the second element, so callers can report them
+    /// but still verify the resolvable ones.
+    pub fn resolve_type_raw(&self, type_name: &str) -> (Vec<(String, Value)>, Vec<String>) {
+        let raw_map = self.build_raw_map(type_name);
+        if raw_map.is_empty() {
+            return (Vec::new(), Vec::new());
+        }
+
+        // Topologically sort by copy-from dependency.
+        let sorted_ids = match resolve::topological_sort(&raw_map) {
+            Ok(ids) => ids,
+            Err(cycles) => {
+                for cycle in &cycles {
+                    warn!(
+                        "{:?}: circular copy-from dependency {:?} (round-trip will skip)",
+                        type_name, cycle
+                    );
+                }
+                raw_map.keys().map(|k| k.as_str()).collect::<Vec<_>>()
+            }
+        };
+
+        let mut resolved: Vec<(String, Value)> = Vec::new();
+        let mut failures: Vec<String> = Vec::new();
+
+        for &def_key in &sorted_ids {
+            let mut chain = Vec::new();
+            let resolved_value = match resolve::resolve_copy_from(def_key, &raw_map, &mut chain) {
+                Ok(v) => v,
+                Err(_) => {
+                    failures.push(def_key.to_string());
+                    continue;
+                }
+            };
+
+            // Skip abstract templates (matching resolve_type_with_pipeline).
+            let abstract_bool = resolved_value
+                .get("abstract_")
+                .or_else(|| resolved_value.get("abstract"));
+            if matches!(abstract_bool, Some(Value::Bool(true))) {
+                continue;
+            }
+
+            // Promote `"abstract": "name"` to `id` (mirrors normalize step).
+            let has_id = resolved_value
+                .get("id")
+                .and_then(Self::first_id_from_value)
+                .is_some();
+            let normalized = if !has_id {
+                if let Some(abs_id) = resolved_value.get("abstract").and_then(|v| v.as_str()) {
+                    let mut obj = resolved_value.as_object().cloned().unwrap_or_default();
+                    obj.insert("id".to_string(), Value::String(abs_id.to_string()));
+                    Value::Object(obj)
+                } else {
+                    resolved_value
+                }
+            } else {
+                resolved_value
+            };
+
+            let id = Self::extract_def_id(&normalized)
+                .or_else(|| Some(def_key.to_string()))
+                .unwrap_or_default();
+            resolved.push((id, normalized));
+        }
+
+        resolved.sort_by(|a, b| a.0.cmp(&b.0));
+        (resolved, failures)
     }
 
     /// Pass 2: resolve all raw definitions into typed structs.
@@ -1166,6 +1294,28 @@ impl Loader {
     }
 }
 
+/// Return all string ids for a JSON "id" field (which may be a single string
+/// or an array of strings). Returns `Some(vec)` when the value is a string or
+/// array of strings, `None` otherwise.
+fn all_ids_from_value(v: &Value) -> Option<Vec<String>> {
+    match v {
+        Value::String(s) => Some(vec![s.clone()]),
+        Value::Array(arr) => {
+            let ids: Vec<String> = arr
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .map(String::from)
+                .collect();
+            if ids.is_empty() {
+                None
+            } else {
+                Some(ids)
+            }
+        }
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1479,5 +1629,95 @@ mod tests {
         assert_eq!(loader.raw_by_type.len(), 1);
         assert_eq!(loader.raw_by_type["ITEM"].len(), 1);
         assert_eq!(loader.raw_by_type["ITEM"][0].id, Some("rock".to_string()));
+    }
+
+    // -----------------------------------------------------------------------
+    // build_raw_map — recipe composite ids and array multi-ids
+    // -----------------------------------------------------------------------
+
+    fn loader_with_items(type_name: &str, defs: Vec<Value>) -> Loader {
+        let mut loader = Loader::new(vec![]);
+        let raws = defs
+            .into_iter()
+            .map(|value| RawDef {
+                id: value
+                    .get("id")
+                    .and_then(serde_json::Value::as_str)
+                    .map(|s| s.to_string()),
+                value,
+                source: PathBuf::from("test.json"),
+            })
+            .collect();
+        loader.raw_by_type.insert(type_name.to_string(), raws);
+        loader
+    }
+
+    #[test]
+    fn recipe_keyed_by_composite_id() {
+        let defs = vec![json!({
+            "type": "recipe",
+            "result": "herbal_tea",
+            "id_suffix": "from_tea_bag"
+        })];
+        let loader = loader_with_items("recipe", defs);
+        let map = loader.build_raw_map("recipe");
+        assert!(
+            map.contains_key("herbal_tea_from_tea_bag"),
+            "composite key missing"
+        );
+    }
+
+    #[test]
+    fn recipe_keyed_by_variant_composite_id() {
+        let defs = vec![json!({
+            "type": "recipe",
+            "result": "deck_of_cards",
+            "variant": "deck_of_cards_makeshift"
+        })];
+        let loader = loader_with_items("recipe", defs);
+        let map = loader.build_raw_map("recipe");
+        assert!(map.contains_key("deck_of_cards_deck_of_cards_makeshift"));
+    }
+
+    #[test]
+    fn recipe_abstract_base_is_keyed() {
+        let defs = vec![json!({
+            "type": "recipe",
+            "abstract": "seed_extraction_base"
+        })];
+        let loader = loader_with_items("recipe", defs);
+        let map = loader.build_raw_map("recipe");
+        assert!(map.contains_key("seed_extraction_base"));
+    }
+
+    #[test]
+    fn recipe_variant_self_copy_does_not_clobber() {
+        let base = json!({"type": "recipe", "result": "apron_cotton", "time": "3 h"});
+        let variant = json!({
+            "type": "recipe",
+            "result": "apron_cotton",
+            "variant": "maid_apron",
+            "copy-from": "apron_cotton"
+        });
+        let loader = loader_with_items("recipe", vec![base.clone(), variant]);
+        let map = loader.build_raw_map("recipe");
+        assert_eq!(
+            map["apron_cotton"]
+                .get("time")
+                .and_then(serde_json::Value::as_str),
+            Some("3 h")
+        );
+    }
+
+    #[test]
+    fn array_id_registers_all_elements() {
+        let defs = vec![json!({
+            "type": "overmap_terrain",
+            "id": ["corpse_bowels_neck_right", "corpse_bowels_empty_edge"]
+        })];
+        let loader = loader_with_items("overmap_terrain", defs);
+        let map = loader.build_raw_map("overmap_terrain");
+        assert!(map.contains_key("corpse_bowels_neck_right"));
+        assert!(map.contains_key("corpse_bowels_empty_edge"));
     }
 }

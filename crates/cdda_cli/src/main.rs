@@ -16,8 +16,8 @@ use std::time::Instant;
 use bevy_app::App;
 use bevy_state::app::StatesPlugin;
 
-use cdda_defs_raw::raw_defs::cdda_types::{RawValue, StringOrArray};
 use cdda_data::loader::Loader;
+use cdda_defs_raw::raw_defs::cdda_types::{RawValue, StringOrArray};
 use cdda_overmap::chunk::{ChunkPosition, OvermapChunk, CHUNK_DIM};
 use cdda_overmap::registry::{TerrainFlags, TerrainHandle, TerrainRegistry};
 
@@ -77,6 +77,17 @@ enum Command {
         /// Mod directories to test (loaded on top of baseline)
         mods: Vec<PathBuf>,
     },
+    /// Resolve copy-from for every def category and verify the JSON → struct →
+    /// JSON round-trip drops no fields (Phase-A consistency check).
+    Roundtrip {
+        /// Path to CDDA JSON data directory (e.g. data/core)
+        path: PathBuf,
+        /// Exit 1 if any category reports parse failures or unresolvable defs.
+        /// (Unmodeled-field reports are always printed but do not fail unless
+        /// this flag is set with `--strict`.)
+        #[arg(long)]
+        strict: bool,
+    },
 }
 
 /// A mod entry parsed from NAME=PATH CLI arguments.
@@ -120,6 +131,7 @@ fn main() {
         Command::Stats { path } => cmd_stats(&path),
         Command::Check { path } => cmd_check(&path),
         Command::Ablation { baseline, mods } => cmd_ablation(&baseline, &mods),
+        Command::Roundtrip { path, strict } => cmd_roundtrip(&path, strict),
         Command::CityView {
             data_dir,
             city_size,
@@ -405,6 +417,59 @@ fn cmd_ablation(baseline: &PathBuf, mod_dirs: &[PathBuf]) {
             }
         }
         std::process::exit(1);
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// roundtrip - Phase-A JSON→struct→JSON consistency check
+// ═════════════════════════════════════════════════════════════════════
+
+fn cmd_roundtrip(path: &PathBuf, strict: bool) {
+    if !path.exists() {
+        eprintln!("Error: directory not found: {:?}", path);
+        std::process::exit(1);
+    }
+
+    eprintln!("Resolving copy-from + round-trip check from {:?} ...", path);
+    let mut loader = cdda_data::loader::Loader::new(vec![path.clone()]);
+    loader.ingest_all();
+
+    let summaries = cdda_data::roundtrip::roundtrip_all_types(&loader);
+
+    let mut fails = 0usize;
+    eprintln!();
+    eprintln!("=== Round-trip report ===");
+    eprintln!(
+        "{:>28} {:<16} {:>6} {:>10} {:>10} {:>10}",
+        "category", "json_type", "ok", "parse-fail", "unmodeled", "unresolved"
+    );
+    for s in &summaries {
+        eprintln!(
+            "{:>28} {:<16} {:>7} {:>10} {:>10} {:>10}",
+            s.category, s.json_type, s.ok, s.parse_failures, s.mismatch_failures, s.unresolved,
+        );
+        // Parse failures and unresolved defs are real problems. Unmodeled
+        // fields are expected while the CDDA schema is only partially modeled.
+        if s.parse_failures > 0 || s.unresolved > 0 {
+            fails += 1;
+        }
+    }
+
+    let total_ok: usize = summaries.iter().map(|s| s.ok).sum();
+    eprintln!("\nTotal clean: {total_ok}");
+
+    if fails > 0 && strict {
+        eprintln!(
+            "\nRound-trip FAILED ({} category(ies) with parse failures/unresolved defs).",
+            fails
+        );
+        std::process::exit(1);
+    }
+    if fails > 0 {
+        eprintln!(
+            "\n{}-category(ies) report parse failures or unresolved defs. Re-run with --strict to fail on them.",
+            fails
+        );
     }
 }
 

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// How activity progress is measured.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(rename_all = "snake_case")]
 pub enum BasedOnType {
     /// Progress measured in real time (independent of character speed).
     Time,
@@ -37,6 +37,31 @@ pub enum DistractionType {
     Mutation,
     Oxygen,
     Withdrawal,
+}
+
+/// Named exertion level applied to an ongoing activity's stamina cost.
+///
+/// CDDA's `activity_level` is a string enum in JSON (e.g. `"NO_EXERCISE"`),
+/// interpreted as a multiplier. We model the named level here; the numeric
+/// multiplier is derived in the simulation layer.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Serialize, Deserialize, JsonSchema, Default,
+)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ActivityExertion {
+    /// No stamina cost.
+    #[default]
+    NoExercise,
+    /// Very light exertion.
+    LightExercise,
+    /// Moderate exertion.
+    ModerateExercise,
+    /// Brisk exertion.
+    BriskExercise,
+    /// Heavy exertion.
+    ActiveExercise,
+    /// Extra-heavy exertion.
+    ExtraExercise,
 }
 
 /// An activity type definition from JSON type `"activity_type"`.
@@ -89,8 +114,9 @@ pub struct ActivityTypeDef {
     #[serde(default)]
     pub based_on: BasedOnType,
 
-    /// Exertion level during this activity (NO_EXERCISE = 0.0 to MAX_EXERCISE = 1.0+).
-    pub activity_level: f32,
+    /// Exertion level during this activity (NO_EXERCISE = 0.0 to MAX_EXERCISE).
+    #[serde(default)]
+    pub activity_level: ActivityExertion,
 
     /// Distraction types that are ignored by default for this activity.
     #[serde(default)]
@@ -107,4 +133,48 @@ pub struct ActivityTypeDef {
 
 fn default_true() -> bool {
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    /// Regression: CDDA `activity_type` JSON uses string `activity_level`
+    /// (e.g. "NO_EXERCISE") and lowercase `based_on` ("time"/"speed"/"neither").
+    /// These must deserialize (the struct previously declared `f32` and
+    /// SCREAMING_SNAKE_CASE, breaking parse).
+    #[test]
+    fn deserializes_real_activity_type() {
+        let json = json!({
+            "type": "activity_type",
+            "id": "act_read_test",
+            "verb": "reading",
+            "rooted": true,
+            "based_on": "time",
+            "activity_level": "MODERATE_EXERCISE",
+            "interruptable_with_kb": false
+        });
+        let def: ActivityTypeDef = serde_json::from_value(json).unwrap();
+        assert_eq!(def.based_on, BasedOnType::Time);
+        assert_eq!(def.activity_level, ActivityExertion::ModerateExercise);
+        assert_eq!(def.interruptable_with_kb, false);
+    }
+
+    /// All six exertion levels parse from their CDDA string forms.
+    #[test]
+    fn all_exertion_levels_parse() {
+        for (s, expect) in [
+            ("NO_EXERCISE", ActivityExertion::NoExercise),
+            ("LIGHT_EXERCISE", ActivityExertion::LightExercise),
+            ("MODERATE_EXERCISE", ActivityExertion::ModerateExercise),
+            ("BRISK_EXERCISE", ActivityExertion::BriskExercise),
+            ("ACTIVE_EXERCISE", ActivityExertion::ActiveExercise),
+            ("EXTRA_EXERCISE", ActivityExertion::ExtraExercise),
+        ] {
+            let v = serde_json::Value::String(s.to_string());
+            let parsed: ActivityExertion = serde_json::from_value(v).unwrap();
+            assert_eq!(parsed, expect);
+        }
+    }
 }

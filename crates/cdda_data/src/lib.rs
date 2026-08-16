@@ -25,6 +25,7 @@ pub mod populate_flags;
 pub mod raw_values;
 pub mod registry;
 pub mod resolve;
+pub mod roundtrip;
 pub mod schema;
 pub mod schema_gen;
 

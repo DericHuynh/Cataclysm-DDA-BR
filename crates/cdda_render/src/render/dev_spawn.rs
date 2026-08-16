@@ -13,9 +13,10 @@ use bevy_state::state_scoped::DespawnOnExit;
 use super::FooterHint;
 use crate::render::item_detail::{spawn_item_detail, ItemDetailQueries};
 use crate::render::theme::{self, UiTheme};
+use cdda_components::context::ContextActions;
+use cdda_components::def::{DefStrId, IsDef, ItemName};
 use cdda_context::ctx::Ctx;
 use cdda_context::screen::CddaScreen;
-use cdda_components::context::ContextActions;
 use cdda_data::interner::{
     AmmoTypeRegistry, BodyPartRegistry, ComestibleRegistry, ItemTypeRegistry, QualityRegistry,
     SkillRegistry,
@@ -61,6 +62,32 @@ impl DevSpawnFocus {
                 .collect()
         }
     }
+}
+
+/// Populate [`DevSpawnFocus`]'s item catalog from the definition world.
+///
+/// Every item-definition entity (marked `IsDef` with an `ItemName`) becomes a
+/// catalog entry.  Run on `OnEnter(DevSpawnPanel)`.  Idempotent — if the
+/// catalog already has entries it returns early so the screen doesn't resize
+/// itself on every keypress.
+pub fn dev_spawn_populate(
+    mut focus: ResMut<DevSpawnFocus>,
+    items: Query<(Entity, &ItemName, &DefStrId), With<IsDef>>,
+) {
+    if !focus.catalog.is_empty() {
+        return;
+    }
+    let mut entries: Vec<DevCatalogEntry> = items
+        .iter()
+        .map(|(def_entity, name, id)| DevCatalogEntry {
+            def_id: id.0.clone(),
+            name: name.0.clone(),
+            def_entity,
+        })
+        .collect();
+    entries.sort_by(|a, b| a.name.cmp(&b.name));
+    focus.catalog = entries;
+    focus.index = 0;
 }
 
 // ---------------------------------------------------------------------------

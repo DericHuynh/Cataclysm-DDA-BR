@@ -91,6 +91,17 @@ impl Default for CddaStartupConfig {
 ///
 /// The intent resolution system in `SimSet::IntentResolve` handles the actual
 /// movement, AP deduction, and precondition checking.
+/// Read player keyboard input and generate `ActionIntent` on the dev player.
+///
+/// The intent resolution system in `SimSet::IntentResolve` handles the actual
+/// movement, AP deduction, and precondition checking.
+///
+/// The dev-world viewport renders **OMT** cells (one overmap tile per cell)
+/// and the [`DevCamera`] is in OMT units, while the player's `WorldPosition`
+/// is in **world tiles**. Advance the player by a full `TILES_PER_OMT` step so
+/// a single keypress visibly moves the viewport by exactly one cell — the
+/// `DevCamera` is derived from `WorldPosition / TILES_PER_OMT`, so the units
+/// line back up.
 pub fn dev_player_move(
     keys: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
@@ -113,9 +124,11 @@ pub fn dev_player_move(
 
     if dx != 0 || dy != 0 {
         if let Some(player) = player_query.iter().next() {
-            commands
-                .entity(player)
-                .insert(ActionIntent::Move { dx, dy });
+            // One OMT per keypress (see doc comment above): 24 world tiles.
+            commands.entity(player).insert(ActionIntent::Move {
+                dx: dx * TILES_PER_OMT,
+                dy: dy * TILES_PER_OMT,
+            });
         }
     }
 }

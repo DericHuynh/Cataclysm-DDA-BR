@@ -144,7 +144,11 @@ impl Plugin for CddaRenderPlugin {
         // ── Debug spawn panel ─────────────────────────────────────────────
         app.add_systems(
             OnEnter(Screen::DevSpawnPanel),
-            dev_spawn::spawn_dev_spawn_panel,
+            (
+                dev_spawn::dev_spawn_populate,
+                dev_spawn::spawn_dev_spawn_panel,
+            )
+                .chain(),
         );
         app.add_systems(
             Update,

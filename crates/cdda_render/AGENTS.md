@@ -98,7 +98,12 @@ Per-screen files in `src/render/`:
   `tile_info.json` parser, OMT-suffix stripping, sprite manifest ingestion.
 - `registry.rs` — `RegistryScreen` (`Ctx::RegistryViewer`); debug viewer over
   the def registry: title, category panel, entry list, detail + raw-JSON +
-  parsed-fields panels.
+  parsed-fields panels. **Pane-focus navigation**: `Tab`/`Shift+Tab` cycles the
+  focused pane (categories → entries → raw JSON → parsed); `←/→/↑/↓` navigate
+  within the focused pane; `PgUp`/`PgDn` page the entries or scroll the detail
+  panes. Each def shows a STATUS line reporting the round-trip/coverage check
+  result, and the active pane is tinted. Owns `RegistryViewerState`
+  (`pane`, `detail_scroll`).
 - `main_menu.rs` — `main_menu::spawn` / `sync_focus` for `Ctx::MainMenu`;
   bevy_ui `Node` flex column of `CommandButton`s.
 - `settings.rs` — `SettingsScreen` (`Ctx::SettingsMenu`); tabbed settings UI
