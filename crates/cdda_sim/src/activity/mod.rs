@@ -7,21 +7,22 @@
 //!
 //! ## Architecture
 //!
-//! * `ActivityProgress` — common progress tracking component (moves_total/left/phase).
-//! * `Crafting`, `Aiming`, `Reading`, `Waiting`, `Reloading`, `Interacting` —
-//!   per-activity-type data components.
+//! The **data components** (`ActivityProgress`, `Crafting`, `Aiming`, `Reading`,
+//! `Waiting`, `Reloading`, `Interacting`, `ActivityTracker`) live in
+//! `cdda_components::activity` so the UI, combat, and inventory/body layers can
+//! query them without depending on this crate's systems. This module keeps only
+//! the **systems** (`tick_crafting`, `tick_aiming`, …) that advance them, plus
+//! the plugin wiring — i.e. systems live in the crate whose main task is the
+//! sim, while the data is shared across layers.
+//!
 //! * `tick_crafting`, `tick_aiming`, etc. — per-activity regular systems with
 //!   typed queries (no `&mut World`).
-//! * `ActivityTracker` — ECS component tracking weariness and calorie balance.
 
 pub mod actor;
-pub mod components;
 pub mod plugin;
 pub mod systems;
-pub mod tracker;
 
-pub use components::{
-    ActivityPhase, ActivityProgress, ActivityTypeId, Aiming, Crafting, Interacting, Reading,
-    Reloading, Waiting,
+pub use cdda_components::activity::{
+    ActivityPhase, ActivityProgress, ActivityTracker, ActivityTypeId, Aiming, Crafting,
+    Interacting, Reading, Reloading, Waiting,
 };
-pub use tracker::ActivityTracker;

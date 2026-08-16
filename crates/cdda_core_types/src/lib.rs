@@ -5,6 +5,4 @@
 //! downstream crates.
 
 pub mod core;
-pub mod rng;
 pub mod sim_id;
-pub mod wyrand;

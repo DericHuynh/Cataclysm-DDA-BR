@@ -1,9 +1,0 @@
-[package]
-name = "cdda_events"
-version = "0.1.0"
-edition = "2021"
-description = "CDDA event types for decoupled system communication."
-
-[dependencies]
-bevy_ecs.workspace = true
-cdda_core_types = { path = "../cdda_core_types" }

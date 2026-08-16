@@ -10,9 +10,8 @@ use bevy_state::prelude::*;
 
 use crate::overlay::OverlayStack;
 pub use cdda_components::context::{pop_ctx, push_ctx, ContextStack, Ctx, FocusedCommandIndex};
+pub use cdda_components::events::{GameEvent, GameEventDispatch};
 use cdda_components::input::{GameAction, InputAction};
-pub use cdda_events::GameEvent;
-pub use cdda_events::GameEventDispatch;
 
 // ---------------------------------------------------------------------------
 // TransitionTarget

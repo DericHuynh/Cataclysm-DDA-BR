@@ -4,7 +4,8 @@
 The single workspace crate that owns every game-logic subsystem plus the runtime harness (`AppState`, `GameTime`, `TestBed`). Formed by consolidating 9 thin game-logic crates (`cdda_actor`, `cdda_ai`, `cdda_activity`, `cdda_combat`, `cdda_crafting`, `cdda_equipment`, `cdda_inventory`, `cdda_item`, `cdda_noise`) with the original `cdda_sim` runtime.
 
 ## Ownership
-- Bevy deps: `bevy_ecs`, `bevy_reflect`, `bevy_app`, `bevy_state`, `bevy_input` (with `keyboard`), plus `serde`, `cdda_core_types`, `cdda_components`, `cdda_events`, `cdda_context`, `cdda_data`, `tracing`.
+## Ownership
+- Bevy deps: `bevy_ecs`, `bevy_reflect`, `bevy_app`, `bevy_state`, `bevy_input` (with `keyboard`), plus `serde`, `cdda_core_types`, `cdda_components`, `cdda_data`, `tracing`.
 - Public surface is organised as submodules. Consumers reach into `cdda_sim::<area>::…` directly.
 
 ## Local Contracts
@@ -29,7 +30,7 @@ The single workspace crate that owns every game-logic subsystem plus the runtime
 - `src/runtime/` — `AppState`, `TurnState`, `GameTime`, `StartupConfig`, `LoadingStatus`, and the `TestBed` test harness. The most-consumed submodule; treat its public API as the workspace's test contract.
 - `src/actor/` — Creature turn scheduling, movement, bionics, effects, healing, temperature, morale, vision.
 - `src/ai/` — Monster/NPC decision making and the `AiGoal` enum.
-- `src/activity/` — Multi-turn player activities (`PlayerActivity`, `ActivityPhase`, `ActivityActor`, `ActivityTracker`) and the `CRAFT_COMPLETE_HOOK` seam.
+- `src/activity/` — Multi-turn player activity **systems** (`tick_crafting`, `tick_aiming`, …) and the `CRAFT_COMPLETE_HOOK` seam. The activity **data components** (`ActivityProgress`, `Crafting`, `Aiming`, `Reading`, `Waiting`, `Reloading`, `Interacting`, `ActivityTracker`) live in `cdda_components::activity` so UI/combat/inventory can query them without importing this crate.
 - `src/combat/` — Damage, hit/miss, melee, ranged.
 - `src/crafting/` — Recipe lookup, component consumption, progress. `crafting/input.rs` now holds only `process_pending_craft` (the use-case executor); the menu keyboard handler lives in `cdda_render::render::input`.
 - `src/equipment/` — Wielding, wearing, encumbrance.

@@ -13,4 +13,3 @@ schemars.workspace = true
 leafwing-input-manager.workspace = true
 fixedbitset = "0.5.7"
 cdda_core_types = { path = "../cdda_core_types" }
-cdda_events = { path = "../cdda_events" }

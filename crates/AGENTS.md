@@ -10,11 +10,12 @@ Owns the Cargo workspace — 15 member crates (13 source + 1 test-only + 1 raw-d
 
 ## Local Contracts
 - **Layer 1 — pure domain types** (no Bevy ECS): `cdda_core_types`.
-- **Layer 2 — ECS components and shared schedule**: `cdda_components`, `cdda_events`, `cdda_sim` (the runtime harness plus all consolidated game-logic submodules).
+- **Layer 2 — ECS components and shared schedule**: `cdda_components` (the single home for all shared domain `Component`s and event/message types), `cdda_sim` (the runtime harness plus all consolidated game-logic submodules).
 - **Layer 3 — game logic** (Bevy ECS only, no full Bevy): all of the consolidated `cdda_sim::{actor, ai, activity, combat, crafting, equipment, inventory, item, noise}` submodules.
 - **Layer 4 — world and data crates**: `cdda_data`, `cdda_overmap`, `cdda_overmap_gen`.
 - **Layer 5 — app shell** (full Bevy, binaries): `cdda_context`, `cdda_input`, `cdda_render`, `cdda_replay`, `cdda_app`, `cdda_cli`.
 - **UI input adapters live in `cdda_render` (`render/input.rs`), never `cdda_sim`.** `cdda_sim` is the pure use-case layer and must not match the display-UI `GameAction` enum. This is the workspace's "presenter-above-sim" contract: new screen-keyboard handlers go in `cdda_render`, and `cdda_sim` exposes use-case functions for them to call.
+- **All shared domain `Component`s live in `cdda_components`.** A domain's *data* (its components, marker components, relationships) is the cross-domain communication medium; a domain's *systems* live in the crate whose main task they serve (e.g. crafting systems in `cdda_sim::crafting`). When domain A needs data owned by domain B, it queries the shared entity's marker + components + `States` — it does **not** import B's system/function. This is how inventory ↔ crafting ↔ body-parts ↔ map tiles coordinate: via one entity carrying the relevant components/markers, not via cross-crate function calls.
 - **Test-only**: `cdda_integration_tests` (no library, no `cargo build`; only `cargo test --workspace` compiles it).
 - No crate may depend on `cdda_app` or `cdda_cli`. Those are leaf entry points.
 - A crate that would need a reverse-layer dep must extract the shared types into a new crate (see `TARGET_ARCHITECTURE.md` § No Circular Dependencies).
@@ -41,9 +42,7 @@ Layer 1 — pure domain types (no Bevy ECS):
 
 Layer 2 — ECS components and shared schedule:
 
-- `crates/cdda_components/AGENTS.md` — All Bevy ECS components: actor, item, def, schedule, input, context, messages, events, stats, tokens.
-- `crates/cdda_events/AGENTS.md` — Observer-based event types.
-- `crates/cdda_intent/AGENTS.md` — String-typed intent vocabulary. The canonical input/output language between systems, UI, AI, and replay. No Bevy.
+- `crates/cdda_components/AGENTS.md` — All Bevy ECS components (actor, item, activity, def, schedule, input, context, messages, events, stats, tokens), event/message types, `Ctx` states, and the cross-domain coordination contract (marker components + shared data + `States`).
 - `crates/cdda_sim/AGENTS.md` — `AppState` + `TestBed` runtime harness **plus** every game-logic submodule (actor, ai, activity, combat, crafting, equipment, inventory, item, noise). The single source of truth for the simulation engine.
 
 Layer 3 — game logic (Bevy ECS only):

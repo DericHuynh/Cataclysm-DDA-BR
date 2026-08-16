@@ -20,13 +20,11 @@ use cdda_components::actor::ActionPoints;
 use cdda_components::item::InProgressCraft;
 use cdda_components::messages::CraftCompleted;
 
-use super::components::{
-    ActivityPhase, ActivityProgress, Aiming, Crafting, Interacting, Reading, Reloading, Waiting,
-};
-use super::tracker::{
-    ActivityTracker, BRISK_EXERCISE, LIGHT_EXERCISE, MODERATE_EXERCISE, NO_EXERCISE,
-};
 use crate::actor::turn::AP_COST_CRAFT_TICK;
+use cdda_components::activity::{
+    ActivityPhase, ActivityProgress, ActivityTracker, Aiming, Crafting, Interacting, Reading,
+    Reloading, Waiting, BRISK_EXERCISE, LIGHT_EXERCISE, MODERATE_EXERCISE, NO_EXERCISE,
+};
 
 // ===========================================================================
 // Crafting

@@ -13,7 +13,7 @@ Pure value types for CDDA: coords, units, IDs, damage, flags, RNG, and the simul
 - Coordinates live under `core/coords/`. Each coordinate has a docstring explaining what space (world, submap, overmap) and scale (tile, OMT) it represents.
 - `DefId<T>` wraps a `String` plus a phantom marker type. The marker types (`ItemDef`, `MonsterDef`, etc.) are declared in `cdda_components::def_markers` to avoid a circular dep.
 - Units are typed (e.g. `Volume(u64)`, `Weight(u64)`, `Energy(u64)`, `Length(u32)`, `Time(i64)`); arithmetic operators live in `core/units/`. Do not pass raw numeric values across crate boundaries — use the typed wrappers.
-- RNG: `wyrand` is the default for deterministic gameplay. `rng.rs` re-exports the chosen generator plus a Bevy-friendly `Resource` wrapper.
+- RNG: `SeededRng` (in `rng.rs`) is a thin `rand::StdRng` wrapper for deterministic sim/turn randomness, seeded from `u64` and serializable. The deterministic **worldgen** RNG is `cdda_overmap::rng::XorShiftRng` — a verbatim port of CDDA master's LCG, kept separate because worldgen must stay byte-identical to the original. `SimId` (in `sim_id.rs`) is a deterministic per-entity tag derived from `(world_seed, spawn_counter)` for replay state-hashing.
 - The 138 `raw_defs/*.rs` files were moved to `cdda_defs_raw` in Phase 3a to give consumers a smaller compile surface. New def types go there.
 
 ## Work Guidance
@@ -30,6 +30,6 @@ Pure value types for CDDA: coords, units, IDs, damage, flags, RNG, and the simul
 ## Child DOX Index
 - `src/core/coords/` — Coordinate types and direction helpers. No further durable sub-boundaries; each file owns one coordinate family.
 - `src/core/units/` — Typed units (energy, length, time, volume, weight). No further durable sub-boundaries.
-- `src/rng.rs`, `src/sim_id.rs`, `src/wyrand.rs` — RNG and ID helpers. No further durable sub-boundaries.
+- `src/rng.rs`, `src/sim_id.rs` — RNG (SeededRng) and SimId helpers. No further durable sub-boundaries.
 - `src/core/damage.rs`, `src/core/error.rs`, `src/core/flags.rs`, `src/core/id.rs` — Damage model, error types, flag set, `DefId`/`DefCategory`. No further durable sub-boundaries.
 - `tests/` — Coordinate, RNG, stats, and units unit tests. No further durable sub-boundaries.

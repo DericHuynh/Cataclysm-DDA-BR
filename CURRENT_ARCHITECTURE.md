@@ -16,29 +16,30 @@ Bevy ECS 0.18. The project is organized into 22 workspace crates under
 
 | Crate | Purpose |
 |---|---|
-| `cdda_core_types` | Value objects (Volume, Weight, Energy, Time), coordinate types (WorldPos, OmPos, etc.), generic `DefId<T>` string IDs, raw JSON definition structs, damage model, error types, RNG (WyRand) |
+| `cdda_core_types` | Value objects (Volume, Weight, Energy, Time), coordinate types (WorldPos, OmPos, etc.), generic `DefId<T>` string IDs, raw JSON definition structs, damage model, error types, RNG (SeededRng, SimId) |
 
 ### Layer 2 — ECS components and shared schedule definitions
 
 | Crate | Purpose | Bevy Deps |
 |---|---|---|
-| `cdda_components` | All Bevy ECS components: actor (creature, stats, bionics, effects, skills, mutations, morale, body parts), item (containers, pockets, inventory), def (definition template components), schedule (GameSet, SimSet), input (GameAction, BindableAction), events/messages, context (Ctx states, navigation) | `bevy_ecs`, `bevy_reflect` |
-| `cdda_events` | Observer-based event types (DamageEvent, DeathEvent, EquipEvent, etc.) | `bevy_ecs` |
-| `cdda_sim` | Simulation layer: state machine (AppState, TurnState), test utilities (TestBed) | `bevy_ecs` |
+| `cdda_components` | All Bevy ECS components: actor (creature, stats, bionics, effects, skills, mutations, morale, body parts), item (containers, pockets, inventory), activity (progress, crafting, reading, weariness), def (definition template components), schedule (GameSet, SimSet), input (GameAction, BindableAction), events/messages, context (Ctx states, navigation). **Single home for all shared domain components and event/message types.** | `bevy_ecs`, `bevy_reflect` |
+| `cdda_sim` | Simulation layer: the consolidated game-logic submodules (actor, ai, activity, combat, crafting, equipment, inventory, item, noise) plus the state machine (AppState, TurnState) and test utilities (TestBed). Owns systems, not component data. | `bevy_ecs` |
 
 ### Layer 3 — Game logic crates
 
-| Crate | Purpose | Bevy Deps |
-|---|---|---|
-| `cdda_actor` | Creature systems: turn scheduling (ActionPoints), movement, bionics activation/deactivation, effects ticking, healing, temperature, morale decay, vision | `bevy_ecs` |
-| `cdda_item` | Item logic: item relations, stacking, merging | `bevy_ecs` |
-| `cdda_activity` | Player activity system (crafting, moving, waiting) | `bevy_ecs` |
-| `cdda_combat` | Combat mechanics: damage calculation, hit/miss, melee, ranged | `bevy_ecs` |
-| `cdda_crafting` | Crafting system: recipe lookup, component consumption, progress tracking | `bevy_ecs` |
-| `cdda_equipment` | Equipment system: wielding, wearing, encumbrance | `bevy_ecs` |
-| `cdda_inventory` | Inventory system: item bins, invlet assignment, item movement events, merge/stack | `bevy_ecs` |
-| `cdda_ai` | AI behaviors: monster/NPC decision-making, pathfinding | `bevy_ecs` |
-| `cdda_noise` | Sound propagation: noise events for AI sensory input | `bevy_ecs` |
+The game-logic subsystems listed below were **consolidated into `cdda_sim` submodules** (the older separate crates `cdda_actor`, `cdda_item`, `cdda_activity`, `cdda_combat`, `cdda_crafting`, `cdda_equipment`, `cdda_inventory`, `cdda_ai`, `cdda_noise` no longer exist as crates). Each submodule owns one gameplay concern's systems and shares data via `cdda_components`:
+
+| Subsystem (`cdda_sim::`) | Purpose |
+|---|---|
+| `actor` | Creature turn scheduling (ActionPoints), movement, bionics, effects, healing, temperature, morale, vision |
+| `item` | Item type registration |
+| `activity` | Player activity ticking (crafting, aiming, reading, waiting, reloading) — drives `cdda_components::activity` |
+| `combat` | Damage, hit/miss, melee, ranged |
+| `crafting` | Recipe lookup, component consumption, progress |
+| `equipment` | Wielding, wearing, encumbrance |
+| `inventory` | Stacks, invlets, binned lookups, item movement |
+| `ai` | Monster/NPC decision-making, pathfinding |
+| `noise` | Sound propagation for AI sensory input |
 
 ### Layer 4 — World and data crates
 

@@ -21,7 +21,7 @@ use cdda_components::dev::DevPlayer;
 use cdda_components::item::{ContainerContents, InProgressCraft, InsideContainer};
 use cdda_components::messages::CraftCompleted;
 use cdda_data::interner::{ItemTypeRegistry, QualityRegistry};
-use cdda_sim::activity::components::{ActivityProgress, Crafting};
+use cdda_components::activity::{ActivityProgress, Crafting};
 use cdda_sim::activity::systems::tick_crafting;
 use cdda_sim::actor::turn::AP_COST_CRAFT_TICK;
 use cdda_sim::crafting::systems::{complete_craft, start_craft};

@@ -72,7 +72,7 @@ impl OverlayStack {
 /// Push an `ActivityProgress` overlay when any activity becomes active.
 /// Runs after activity tick systems.
 pub fn sync_activity_overlay(world: &mut World) {
-    use cdda_sim::activity::components::{ActivityPhase, ActivityProgress};
+    use cdda_components::activity::{ActivityPhase, ActivityProgress};
 
     let mut to_push: Vec<(Entity, String, u32)> = Vec::new();
     {
@@ -107,7 +107,7 @@ pub fn sync_activity_overlay(world: &mut World) {
 
 /// Remove `ActivityProgress` overlays when no active progress exists.
 pub fn cleanup_activity_overlay(world: &mut World) {
-    use cdda_sim::activity::components::{ActivityPhase, ActivityProgress};
+    use cdda_components::activity::{ActivityPhase, ActivityProgress};
 
     let has_active = {
         let mut q = world.query::<&ActivityProgress>();

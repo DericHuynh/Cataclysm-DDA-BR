@@ -11,12 +11,10 @@ members = [
     "crates/cdda_sim",
     "crates/cdda_replay",
     "crates/cdda_context",
-    "crates/cdda_events",
     "crates/cdda_data",
     "crates/cdda_defs_raw",
     "crates/cdda_input",
     "crates/cdda_integration_tests",
-    "crates/cdda_intent",
 ]
 
 [workspace.dependencies]
@@ -32,7 +30,6 @@ serde_json      = "1"
 schemars        = { version = "0.8", features = ["derive"] }
 thiserror       = "2"
 indexmap        = "2"
-rand            = "0.9"
 tracing              = "0.1"
 tracing-subscriber   = { version = "0.3", features = ["env-filter"] }
 smallvec        = "1"
@@ -60,11 +57,9 @@ cdda_overmap_gen = { path = "crates/cdda_overmap_gen" }
 cdda_sim = { path = "crates/cdda_sim" }
 cdda_replay = { path = "crates/cdda_replay" }
 cdda_context = { path = "crates/cdda_context" }
-cdda_events = { path = "crates/cdda_events" }
 cdda_data = { path = "crates/cdda_data" }
 cdda_input = { path = "crates/cdda_input" }
 cdda_integration_tests = { path = "crates/cdda_integration_tests" }
-cdda_intent = { path = "crates/cdda_intent" }
 cdda_defs_raw = { path = "crates/cdda_defs_raw" }
 
 [profile.dev]

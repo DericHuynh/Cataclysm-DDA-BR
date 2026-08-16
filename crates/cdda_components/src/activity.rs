@@ -1,16 +1,160 @@
-//! `ActivityTracker` — weariness and calorie balance tracking.
+//! ECS components for the activity system.
 //!
-//! Mirrors the C++ `activity_tracker` class from `activity_tracker.cpp`.
-//! Tracks exertion level across turns to compute weariness (fatigue) and
-//! its interaction with calorie intake.
+//! Each activity type gets its own component (e.g. `Crafting`, `Aiming`).
+//! `ActivityProgress` tracks common progress fields for any activity.
+//!
+//! ## Multi-activity architecture
+//!
+//! Each activity component carries its own progress tracking so that a
+//! character can hold multiple activities simultaneously in the future
+//! (e.g. dual-wield crafting with a trait).  Currently the simulation only
+//! creates one activity at a time, but the component design does not
+//! prevent multiple.
+//!
+//! ## Why these live in `cdda_components`
+//!
+//! Activity state is cross-cutting: the simulation ticks it, the UI reads and
+//! displays it (crafting panel), combat applies weariness penalties, and the
+//! inventory/body systems coordinate with it (craft → equip → drop). Per the
+//! workspace contract, all Bevy `Component`s live here so any layer can query
+//! them by marker + component without importing another domain's logic.
 
-use bevy_ecs::prelude::*;
+use bevy_ecs::entity::Entity;
+use bevy_ecs::prelude::Component;
 use bevy_reflect::Reflect;
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
-// Constants (from game_constants.h)
+// ActivityTypeId — string ID of an activity_type def
 // ---------------------------------------------------------------------------
+
+/// The string identifier of an `activity_type` definition (e.g. `"ACT_READ"`).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ActivityTypeId(pub String);
+
+impl ActivityTypeId {
+    pub fn new(id: impl Into<String>) -> Self {
+        Self(id.into())
+    }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ActivityPhase
+// ---------------------------------------------------------------------------
+
+/// Lifecycle phase of an activity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ActivityPhase {
+    /// `start()` has not yet been called.
+    #[default]
+    Pending,
+    /// Activity is in progress (ticked each frame).
+    Active,
+    /// Activity has been suspended (can be resumed later).
+    Suspended,
+    /// Activity has finished or been cancelled — should be removed.
+    Done,
+}
+
+// ---------------------------------------------------------------------------
+// ActivityProgress — shared progress tracking for any activity
+// ---------------------------------------------------------------------------
+
+/// Common move-count progress for any multi-turn activity.
+///
+/// Attached alongside a type-specific activity component (e.g. `Crafting`).
+/// Systems tick both together.
+#[derive(Component, Debug)]
+pub struct ActivityProgress {
+    /// Total moves required to complete the activity.
+    pub moves_total: i32,
+    /// Remaining moves; decremented each turn.
+    pub moves_left: i32,
+    /// Current lifecycle phase.
+    pub phase: ActivityPhase,
+}
+
+impl Default for ActivityProgress {
+    fn default() -> Self {
+        Self {
+            moves_total: 0,
+            moves_left: 0,
+            phase: ActivityPhase::Pending,
+        }
+    }
+}
+
+impl ActivityProgress {
+    pub fn new(moves: i32) -> Self {
+        Self {
+            moves_total: moves,
+            moves_left: moves,
+            phase: ActivityPhase::Pending,
+        }
+    }
+    pub fn is_complete(&self) -> bool {
+        self.moves_left <= 0
+    }
+}
+
+// ===========================================================================
+// Per-activity data components
+// ===========================================================================
+
+/// Crafting activity — drives an `InProgressCraft` entity.
+///
+/// Each `tick_crafting` system call spends AP, advances `InProgressCraft::ap_spent`,
+/// and emits `CraftCompleted` when done.
+#[derive(Component, Debug, Clone)]
+pub struct Crafting {
+    /// The `InProgressCraft` entity in the player's inventory.
+    pub craft_entity: Entity,
+}
+
+/// Aiming activity — accumulates aim percent each tick.
+#[derive(Component, Debug, Clone)]
+pub struct Aiming {
+    pub target_aim_percent: u32,
+    pub cur_aim: u32,
+}
+
+/// Reading activity — reads a book for skill/morale gains.
+#[derive(Component, Debug, Clone)]
+pub struct Reading {
+    pub book_entity: Entity,
+    pub skill_id: String,
+    pub turns_read: i32,
+    pub turns_total: i32,
+}
+
+/// Waiting activity — burn turns doing nothing.
+#[derive(Component, Debug, Clone)]
+pub struct Waiting {
+    pub turns: i32,
+}
+
+/// Reloading activity — load ammo into a weapon.
+#[derive(Component, Debug, Clone)]
+pub struct Reloading {
+    pub item_entity: Entity,
+    pub ammo_entity: Entity,
+    pub quantity: i32,
+    pub speed_factor: f32,
+}
+
+/// Generic interaction activity (examining, using furniture, etc.).
+#[derive(Component, Debug, Clone)]
+pub struct Interacting {
+    pub description: String,
+    pub duration: i32,
+}
+
+// ===========================================================================
+// ActivityTracker — weariness and calorie balance
+// ===========================================================================
 
 /// Exertion constant: no exercise at all.
 pub const NO_EXERCISE: f32 = 0.0;
@@ -28,15 +172,11 @@ pub const EXTRA_EXERCISE: f32 = 1.0;
 /// Weariness threshold denominator. Tracker/intake ratio above this = weariness level 1.
 const WEARINESS_THRESHOLD: i32 = 4000;
 
-// ---------------------------------------------------------------------------
-// ActivityTracker
-// ---------------------------------------------------------------------------
-
 /// Tracks weariness (fatigue) from exertion and calorie balance.
 ///
-/// Attached to every character entity. Updated each turn by `tick_activities`
-/// via `log_activity()` and `new_turn()`. Weariness is queried by UI/combat
-/// systems to apply fatigue penalties.
+/// Attached to every character entity. Updated each turn by the activity
+/// tick systems via `log_activity()` and `new_turn()`. Weariness is queried by
+/// UI, combat, and stamina systems to apply fatigue penalties.
 #[derive(Component, Debug, Clone, Serialize, Deserialize, Reflect, Default)]
 pub struct ActivityTracker {
     /// Cumulative weariness tracker (increases with exertion calories burned).
@@ -163,7 +303,12 @@ impl ActivityTracker {
     /// `bmr` is the character's base metabolic rate (calories/day).
     /// `sleepiness_mod` scales the reduction rate when drowsy.
     /// `sleepiness_regen_mod` scales additional regen during sleep.
-    pub fn try_reduce_weariness(&mut self, bmr: i32, sleepiness_mod: f32, sleepiness_regen_mod: f32) {
+    pub fn try_reduce_weariness(
+        &mut self,
+        bmr: i32,
+        sleepiness_mod: f32,
+        sleepiness_regen_mod: f32,
+    ) {
         const TICKS_PER_REDUCTION: f32 = 3.0;
 
         if self.low_activity_ticks < TICKS_PER_REDUCTION {

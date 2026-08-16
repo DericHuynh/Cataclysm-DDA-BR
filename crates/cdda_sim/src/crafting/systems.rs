@@ -2,7 +2,7 @@
 
 use bevy_ecs::prelude::*;
 
-use crate::activity::components::{ActivityPhase, ActivityProgress, Crafting};
+use cdda_components::activity::{ActivityPhase, ActivityProgress, Crafting};
 use cdda_components::def::{
     ItemName, RecipeCategory, RecipeComponents, RecipeQualities, RecipeResult, RecipeResultCount,
     RecipeSubcategory, RecipeTime,

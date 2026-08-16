@@ -4,7 +4,7 @@
 //! and stats.  Re-exports from cdda_core_types so that existing crate
 //! paths (e.g. `crate::core::coords::WorldPos`) resolve correctly.
 
-pub use cdda_core_types::{core, rng, sim_id, wyrand};
+pub use cdda_core_types::{core, sim_id};
 
 // Re-export commonly-used ID types at root level for backward compatibility.
 pub use cdda_core_types::core::id::DefCategory;
@@ -13,6 +13,7 @@ pub use cdda_core_types::core::Damage;
 pub use cdda_core_types::core::DefId;
 pub use cdda_core_types::core::WorldPos;
 
+pub mod activity;
 pub mod actor;
 pub mod context;
 pub mod def;

@@ -16,7 +16,6 @@ cdda_sim.workspace = true
 cdda_context.workspace = true
 cdda_data.workspace = true
 cdda_input.workspace = true
-cdda_events.workspace = true
 cdda_overmap.workspace = true
 cdda_overmap_gen.workspace = true
 cdda_render.workspace = true

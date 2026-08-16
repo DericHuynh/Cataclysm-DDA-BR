@@ -13,13 +13,13 @@
 
 use bevy_app::{App, Plugin, Update};
 use bevy_ecs::schedule::IntoScheduleConfigs;
+use cdda_components::activity::ActivityTracker;
 use cdda_components::schedule::SimSet;
 
 use super::systems::{
     cleanup_done_activities, tick_aiming, tick_crafting, tick_interacting, tick_reading,
     tick_reloading, tick_waiting,
 };
-use super::tracker::ActivityTracker;
 
 pub struct ActivityPlugin;
 
