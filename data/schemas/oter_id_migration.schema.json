@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OterIdMigrationDef",
+  "description": "An overmap terrain ID migration definition from JSON type `\"oter_id_migration\"`.\n\nMaps old overmap terrain IDs to new ones for migration purposes.",
+  "type": "object",
+  "required": [
+    "oter_ids"
+  ],
+  "properties": {
+    "id": {
+      "description": "Unique identifier (arbitrary). Not present in all JSON entries.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "oter_ids": {
+      "description": "Map of old terrain IDs to new terrain IDs.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

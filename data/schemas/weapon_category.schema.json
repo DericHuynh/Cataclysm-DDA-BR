@@ -1,0 +1,99 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WeaponCategoryDef",
+  "description": "A weapon category definition from JSON type `\"weapon_category\"`.\n\nDefines a category of weapons that share proficiency requirements.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag — if true, this definition is a template.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "copy_from": {
+      "description": "Base definition id to copy fields from.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"AUTOMATIC_RIFLES\", \"KNIVES\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "name": {
+      "description": "Display name.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "proficiencies": {
+      "description": "List of proficiency IDs required for this weapon category.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

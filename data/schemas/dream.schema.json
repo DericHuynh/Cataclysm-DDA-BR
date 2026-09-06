@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DreamDef",
+  "description": "A dream definition from JSON type `\"dream\"`.\n\nDefines dream messages associated with a mutation category threshold.",
+  "type": "object",
+  "required": [
+    "category",
+    "strength"
+  ],
+  "properties": {
+    "category": {
+      "description": "Mutation category (e.g. \"MUTCAT_BIRD\").",
+      "type": "string"
+    },
+    "messages": {
+      "description": "List of dream messages.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "strength": {
+      "description": "Dream strength/level threshold.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0.0
+    }
+  }
+}

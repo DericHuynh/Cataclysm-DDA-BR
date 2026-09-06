@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AttackVectorDef",
+  "description": "An attack vector definition from JSON type `\"attack_vector\"`.\n\nDefines a body part or combination of body parts used for attacks (e.g. punch, bite, headbutt, kick).",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "id": {
+      "description": "Unique identifier (e.g. \"vector_punch\", \"vector_bite\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "name": {
+      "description": "Display name of the attack vector.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

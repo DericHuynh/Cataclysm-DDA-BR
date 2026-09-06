@@ -128,6 +128,10 @@ pub struct DefRegistry {
     pub damage_types: HashMap<DefId<DamageTypeDef>, Arc<DamageTypeDef>>,
     pub anatomies: HashMap<DefId<AnatomyDef>, Arc<AnatomyDef>>,
     pub end_screens: HashMap<DefId<EndScreenDef>, Arc<EndScreenDef>>,
+    /// Data-authored HTN compound tasks (`"type": "htn_compound"`). Consumed
+    /// by the HTN domain compiler (`cdda_sim::ai::htn`), not by def-world
+    /// spawning — the planner bakes them into a `cdda_htn` domain.
+    pub htn_compounds: HashMap<DefId<HtnCompoundDef>, Arc<HtnCompoundDef>>,
 }
 
 impl DefRegistry {
@@ -242,6 +246,7 @@ impl DefRegistry {
             damage_types: HashMap::new(),
             anatomies: HashMap::new(),
             end_screens: HashMap::new(),
+            htn_compounds: HashMap::new(),
         }
     }
 }

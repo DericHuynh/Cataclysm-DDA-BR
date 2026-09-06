@@ -10,7 +10,11 @@ bevy_reflect.workspace = true
 bevy_app.workspace = true
 bevy_state.workspace = true
 bevy_input = { workspace = true, features = ["keyboard"] }
+bevy_time.workspace = true
+cdda_htn.workspace = true
 serde.workspace = true
+serde_json.workspace = true
+cdda_defs_raw = { path = "../cdda_defs_raw" }
 cdda_core_types = { path = "../cdda_core_types" }
 cdda_components = { path = "../cdda_components" }
 cdda_data = { path = "../cdda_data" }

@@ -1,0 +1,125 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HarvestDef",
+  "description": "A harvest definition from JSON type `\"harvest\"`.\n\nDefines what drops (items, mutagens, etc.) result from harvesting a corpse or dissecting a creature. Used for butchery and dissection results.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "entries": {
+      "description": "List of harvest entries describing possible drops.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/HarvestEntry"
+      }
+    },
+    "group": {
+      "description": "Group ID for drop distribution (alternative to inline entries).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"dissect_alpha_sample_single\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "message": {
+      "description": "Message displayed when harvesting.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_required_body_part": {
+      "description": "Body part required to be available for this harvest (e.g. \"head\", \"torso\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "HarvestEntry": {
+      "description": "A single entry in a harvest definition describing what drops and under what conditions.",
+      "type": "object",
+      "required": [
+        "drop"
+      ],
+      "properties": {
+        "base_num": {
+          "description": "Base number of drops (can be [min, max] range or fractional ratio).",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": true
+        },
+        "drop": {
+          "description": "Item or group ID to drop.",
+          "type": "string"
+        },
+        "flags": {
+          "description": "Flags modifying drop behavior (e.g. \"NO_STERILE\", \"NO_ROT\").",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "mass_ratio": {
+          "description": "Proportion of the target's mass that this drop represents (0.0 to 1.0).",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "max": {
+          "description": "Maximum number of this drop that can be obtained.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "scale_num": {
+          "description": "Scale number of drops based on size/mass (can be [min, max] range or fractional ratio).",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": true
+        },
+        "type": {
+          "description": "Type of drop (e.g. \"mutagen_group\", \"flesh\", \"bone\", \"skin\", \"offal\", \"bionic\").",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

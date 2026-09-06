@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "UncraftDef",
+  "description": "An uncraft definition from JSON type `\"uncraft\"`.\n\nDefines how to reverse-craft an item into its components.",
+  "type": "object",
+  "properties": {
+    "activity_level": {
+      "description": "Activity level required.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "components": {
+      "description": "Components produced (triple-nested array format like `[[[\"item\", count]]]`).",
+      "default": null
+    },
+    "difficulty": {
+      "description": "Difficulty of the uncraft.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "flags": {
+      "description": "Flags.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "qualities": {
+      "description": "Tool qualities required (CDDA nested format: `[[{\"id\": \"CUT\", \"level\": 2}]]`).",
+      "default": null
+    },
+    "result": {
+      "description": "The item result identifier (used as the key, like in RecipeDef). Can be missing for abstract templates that use \"abstract\" instead.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "skill_used": {
+      "description": "Using a specific skill for the uncraft.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "time": {
+      "description": "Time required to uncraft.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tools": {
+      "description": "Tools required.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "array",
+        "items": true
+      }
+    }
+  }
+}

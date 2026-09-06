@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AnatomyDef",
+  "description": "An anatomy definition from JSON type `\"anatomy\"`.\n\nDefines the body plan for a creature, listing its body parts in order.",
+  "type": "object",
+  "required": [
+    "id",
+    "parts"
+  ],
+  "properties": {
+    "id": {
+      "description": "Unique identifier (e.g. \"human_anatomy\", \"default_anatomy\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "parts": {
+      "description": "List of body part IDs in the order they are arranged.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RegionTerrainFurnitureDef",
+  "description": "A region terrain furniture definition from JSON type `\"region_terrain_furniture\"`.\n\nDefines how regional terrain and furniture types are resolved to concrete tiles within a region's map settings.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "furniture": {
+      "description": "Furniture configuration.",
+      "default": null
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"default_t_region_groundcover\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "terrain": {
+      "description": "Terrain configuration.",
+      "default": null
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

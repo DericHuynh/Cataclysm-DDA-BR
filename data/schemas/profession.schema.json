@@ -1,0 +1,175 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ProfessionDef",
+  "description": "A profession definition from JSON type `\"profession\"`.\n\nDefines a character profession (background/class) that the player can choose at character creation. Professions determine starting skills, items, traits, spells, and other character attributes.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "points"
+  ],
+  "properties": {
+    "addictions": {
+      "description": "Starting addictions.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": true
+    },
+    "description": {
+      "description": "Description text (can be localized).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "flags": {
+      "description": "Special flags for this profession.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"some_prof\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "items": {
+      "description": "Starting items organized by category (e.g. `{\"both\": {\"entries\": [{\"item\": \"tshirt\"}]}}`).",
+      "default": null
+    },
+    "missions": {
+      "description": "Starting missions.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "name": {
+      "description": "Display name (can be localized).",
+      "allOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        }
+      ]
+    },
+    "npc_background": {
+      "description": "NPC background reference ID.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "pinned": {
+      "description": "Whether the profession is pinned to the top of the selection list.",
+      "default": null
+    },
+    "points": {
+      "description": "Point cost of the profession (positive = costs points, negative = grants points).",
+      "type": "integer",
+      "format": "int32"
+    },
+    "proficiencies": {
+      "description": "Starting proficiencies.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "skills": {
+      "description": "Starting skills with levels (e.g. `[{\"level\": 2, \"name\": \"mechanics\"}]`).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": true
+    },
+    "spells": {
+      "description": "Starting spells with levels.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": true
+    },
+    "traits": {
+      "description": "Starting traits (mutation IDs).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

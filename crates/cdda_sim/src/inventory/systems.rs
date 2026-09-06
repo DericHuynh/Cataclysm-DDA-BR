@@ -28,7 +28,7 @@ use cdda_components::def::ItemVolume;
 use cdda_components::events::{ItemMoveEvent, MoveLocation};
 use cdda_components::item::{
     Container, ContainerContents, CurrentCharges, DefOrigin, InsideContainer, Invlet, ItemDamage,
-    MountedOn, MountedPockets, Pocket, StackCount, WieldedBy, WieldedItems, INVLET_CHARS,
+    MountedOn, MountedPockets, Pocket, StackCount, WieldedBy, WieldedItems, WornBy, INVLET_CHARS,
 };
 use cdda_components::sim::WorldPosition;
 use cdda_core_types::core::coords::WorldPos;
@@ -42,30 +42,78 @@ use super::pocket;
 
 /// Collects all item entities that are in `creature`'s inventory domain:
 /// directly in the creature's `ContainerContents`, in mounted pockets,
-/// and in wielded items.
+/// in wielded items, in worn clothing — **and recursively** inside every
+/// nested container and pocket found along the way (a battery inside a
+/// flashlight inside a backpack is the creature's item).
 pub fn all_items_for_creature(creature: Entity, world: &World) -> Vec<Entity> {
     let mut items = Vec::new();
+    let mut visited = std::collections::HashSet::new();
+    collect_inventory_domain(
+        creature,
+        world,
+        &mut items,
+        &mut visited,
+    );
+    items
+}
 
-    // Items directly inside the creature (ContainerContents on creature itself)
-    if let Some(cc) = world.get::<ContainerContents>(creature) {
-        items.extend(cc.iter());
+/// Recursive worker for [`all_items_for_creature`]: expands `holder`'s
+/// direct item links (contents, pockets, wielded, worn), then recurses into
+/// every item that can itself contain or mount further items. The `visited`
+/// set guards against relationship cycles.
+fn collect_inventory_domain(
+    holder: Entity,
+    world: &World,
+    items: &mut Vec<Entity>,
+    visited: &mut std::collections::HashSet<Entity>,
+) {
+    // Worn clothing/equipment (`WornOn` lives on the item and points at the
+    // wearer; `WornBy` is the inverse collection on the wearer).
+    if let Some(worn) = world.get::<WornBy>(holder) {
+        for item in worn.iter() {
+            push_item_recursively(item, world, items, visited);
+        }
     }
 
-    // Items inside mounted pockets
-    if let Some(mp) = world.get::<MountedPockets>(creature) {
+    // Items directly inside the holder's container contents.
+    if let Some(cc) = world.get::<ContainerContents>(holder) {
+        for item in cc.iter() {
+            push_item_recursively(item, world, items, visited);
+        }
+    }
+
+    // Items inside mounted pockets (a pocket entity attached to the holder).
+    if let Some(mp) = world.get::<MountedPockets>(holder) {
         for pocket in mp.iter() {
             if let Some(cc) = world.get::<ContainerContents>(pocket) {
-                items.extend(cc.iter());
+                for item in cc.iter() {
+                    push_item_recursively(item, world, items, visited);
+                }
             }
         }
     }
 
-    // Wielded items
-    if let Some(wi) = world.get::<WieldedItems>(creature) {
-        items.extend(wi.iter());
+    // Wielded items.
+    if let Some(wi) = world.get::<WieldedItems>(holder) {
+        for item in wi.iter() {
+            push_item_recursively(item, world, items, visited);
+        }
     }
+}
 
-    items
+/// Record one item and recurse into anything it contains or mounts.
+fn push_item_recursively(
+    item: Entity,
+    world: &World,
+    items: &mut Vec<Entity>,
+    visited: &mut std::collections::HashSet<Entity>,
+) {
+    if !visited.insert(item) {
+        return; // already collected (cycle or shared reference)
+    }
+    items.push(item);
+    // The item itself may be a container (nested) or carry mounted pockets.
+    collect_inventory_domain(item, world, items, visited);
 }
 
 /// Returns all invlet chars currently in use by items in `creature`'s domain.
@@ -95,28 +143,90 @@ fn find_owning_creature_q(
     }
 }
 
-/// Collects all items reachable from a creature using query references.
+/// Collects all items reachable from a creature using query references —
+/// the query-based twin of [`all_items_for_creature`] with the same
+/// recursive nested-container/pocket traversal and worn-equipment coverage.
 pub fn all_items_for_creature_q(
     creature: Entity,
     contents_q: &Query<&ContainerContents>,
     mounted_q: &Query<&MountedPockets>,
     wielded_q: &Query<&WieldedItems>,
+    worn_q: &Query<&WornBy>,
 ) -> Vec<Entity> {
     let mut items = Vec::new();
-    if let Ok(cc) = contents_q.get(creature) {
-        items.extend(cc.iter());
+    let mut visited = std::collections::HashSet::new();
+    collect_inventory_domain_q(
+        creature,
+        contents_q,
+        mounted_q,
+        wielded_q,
+        worn_q,
+        &mut items,
+        &mut visited,
+    );
+    items
+}
+
+/// Recursive worker for [`all_items_for_creature_q`].
+#[allow(clippy::too_many_arguments)]
+fn collect_inventory_domain_q(
+    holder: Entity,
+    contents_q: &Query<&ContainerContents>,
+    mounted_q: &Query<&MountedPockets>,
+    wielded_q: &Query<&WieldedItems>,
+    worn_q: &Query<&WornBy>,
+    items: &mut Vec<Entity>,
+    visited: &mut std::collections::HashSet<Entity>,
+) {
+    if let Ok(worn) = worn_q.get(holder) {
+        for item in worn.iter() {
+            push_item_recursively_q(item, contents_q, mounted_q, wielded_q, worn_q, items, visited);
+        }
     }
-    if let Ok(mp) = mounted_q.get(creature) {
+    if let Ok(cc) = contents_q.get(holder) {
+        for item in cc.iter() {
+            push_item_recursively_q(item, contents_q, mounted_q, wielded_q, worn_q, items, visited);
+        }
+    }
+    if let Ok(mp) = mounted_q.get(holder) {
         for pocket in mp.iter() {
             if let Ok(cc) = contents_q.get(pocket) {
-                items.extend(cc.iter());
+                for item in cc.iter() {
+                    push_item_recursively_q(
+                        item,
+                        contents_q,
+                        mounted_q,
+                        wielded_q,
+                        worn_q,
+                        items,
+                        visited,
+                    );
+                }
             }
         }
     }
-    if let Ok(wi) = wielded_q.get(creature) {
-        items.extend(wi.iter());
+    if let Ok(wi) = wielded_q.get(holder) {
+        for item in wi.iter() {
+            push_item_recursively_q(item, contents_q, mounted_q, wielded_q, worn_q, items, visited);
+        }
     }
-    items
+}
+
+/// Record one item and recurse into anything it contains or mounts (query form).
+fn push_item_recursively_q(
+    item: Entity,
+    contents_q: &Query<&ContainerContents>,
+    mounted_q: &Query<&MountedPockets>,
+    wielded_q: &Query<&WieldedItems>,
+    worn_q: &Query<&WornBy>,
+    items: &mut Vec<Entity>,
+    visited: &mut std::collections::HashSet<Entity>,
+) {
+    if !visited.insert(item) {
+        return;
+    }
+    items.push(item);
+    collect_inventory_domain_q(item, contents_q, mounted_q, wielded_q, worn_q, items, visited);
 }
 
 /// Find an existing item in `creature`'s domain that `item` can merge into.
@@ -126,6 +236,7 @@ fn find_merge_target_for_creature_q(
     contents_q: &Query<&ContainerContents>,
     mounted_q: &Query<&MountedPockets>,
     wielded_q: &Query<&WieldedItems>,
+    worn_q: &Query<&WornBy>,
     origins_q: &Query<&DefOrigin>,
     damages_q: &Query<&ItemDamage>,
     charges_q: &Query<&CurrentCharges>,
@@ -138,7 +249,7 @@ fn find_merge_target_for_creature_q(
         return None;
     }
 
-    for candidate in all_items_for_creature_q(creature, contents_q, mounted_q, wielded_q) {
+    for candidate in all_items_for_creature_q(creature, contents_q, mounted_q, wielded_q, worn_q) {
         if candidate == item || contents_q.get(candidate).is_err() {
             continue;
         }
@@ -162,9 +273,10 @@ fn used_invlets_q(
     contents_q: &Query<&ContainerContents>,
     mounted_q: &Query<&MountedPockets>,
     wielded_q: &Query<&WieldedItems>,
+    worn_q: &Query<&WornBy>,
     _invlet_q: &Query<&Invlet>,
 ) -> std::collections::HashSet<char> {
-    let items = all_items_for_creature_q(creature, contents_q, mounted_q, wielded_q);
+    let items = all_items_for_creature_q(creature, contents_q, mounted_q, wielded_q, worn_q);
     items
         .iter()
         .filter_map(|&e| _invlet_q.get(e).ok().map(|i| i.0))
@@ -178,9 +290,10 @@ fn allocate_invlet_for_q(
     contents_q: &Query<&ContainerContents>,
     mounted_q: &Query<&MountedPockets>,
     wielded_q: &Query<&WieldedItems>,
+    worn_q: &Query<&WornBy>,
     invlet_q: &Query<&Invlet>,
 ) -> Option<char> {
-    let used = used_invlets_q(creature, contents_q, mounted_q, wielded_q, invlet_q);
+    let used = used_invlets_q(creature, contents_q, mounted_q, wielded_q, worn_q, invlet_q);
     for c in fav_chars {
         if !used.contains(c) {
             return Some(*c);
@@ -301,6 +414,7 @@ pub fn assign_invlets_system(
     mounted_pockets: Query<&MountedPockets>,
     mounted_on: Query<&MountedOn>,
     wielded_items: Query<&WieldedItems>,
+    worn_items: Query<&WornBy>,
     item_origins: Query<&DefOrigin>,
     item_damages: Query<&ItemDamage>,
     current_charges_q: Query<&CurrentCharges>,
@@ -331,6 +445,7 @@ pub fn assign_invlets_system(
                 &container_contents,
                 &mounted_pockets,
                 &wielded_items,
+                &worn_items,
                 &item_origins,
                 &item_damages,
                 &current_charges_q,
@@ -351,6 +466,7 @@ pub fn assign_invlets_system(
                 &container_contents,
                 &mounted_pockets,
                 &wielded_items,
+                &worn_items,
                 &invlet_query,
             );
             if let Some(c) = c {
@@ -377,11 +493,13 @@ pub fn build_inventory_bins(
     contents_q: Query<&ContainerContents>,
     mounted_pockets_q: Query<&MountedPockets>,
     wielded_q: Query<&WieldedItems>,
+    worn_q: Query<&WornBy>,
     invlet_q: Query<&Invlet>,
 ) {
     bin.bins.clear();
     for creature in &creatures {
-        for item in all_items_for_creature_q(creature, &contents_q, &mounted_pockets_q, &wielded_q)
+        for item in
+            all_items_for_creature_q(creature, &contents_q, &mounted_pockets_q, &wielded_q, &worn_q)
         {
             if invlet_q.get(item).is_err() {
                 continue;

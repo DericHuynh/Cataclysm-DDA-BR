@@ -1,0 +1,287 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TalkTopicDef",
+  "description": "A talk topic definition from JSON type `\"talk_topic\"`.\n\nDefines a node in an NPC dialogue tree with a dynamic line and a set of possible responses the player can choose from.",
+  "type": "object",
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag — if true, this definition is a template.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "copy_from": {
+      "description": "Base definition id to copy fields from.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "dynamic": {
+      "description": "Whether this topic is a dynamic response calculated from the previous.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "dynamic_line": {
+      "description": "The dialogue line spoken by the NPC. Can be a string, a structured object, or an array of alternatives.",
+      "default": null
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"TALK_HELLO\", \"TALK_DONE\"). Can be a string or an array of strings (aliases).",
+      "default": null
+    },
+    "repeat": {
+      "description": "Whether this topic can repeat (boolean or object).",
+      "default": null
+    },
+    "replace_current": {
+      "description": "Whether to replace the current topic instead of pushing to the history stack.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "responses": {
+      "description": "List of possible player responses.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/TalkResponse"
+      }
+    }
+  },
+  "definitions": {
+    "TalkResponse": {
+      "description": "A response option within a talk topic.",
+      "type": "object",
+      "properties": {
+        "always": {
+          "description": "Whether this response is always available.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "condition": {
+          "description": "Optional condition that controls whether this response is available. Can be a string (e.g. \"npc_available\") or a condition object.",
+          "default": null
+        },
+        "default": {
+          "description": "Whether this response is a default option.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "effect": {
+          "description": "Effect(s) to apply when this response is chosen. Can be a single effect object or an array of effects.",
+          "default": null
+        },
+        "failure": {
+          "description": "Result on trial failure (alternative topic/effect).",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TalkResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failure_explanation": {
+          "description": "Explanation text shown when the response condition fails.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "failure_topic": {
+          "description": "Topic to go to on condition failure (alternative to `failure.topic`).",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "falls_through": {
+          "description": "Whether this response falls through to the next matching response.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "speech": {
+          "description": "Optional speech text for the NPC when this response is chosen.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "success": {
+          "description": "Result on trial success (alternative topic/effect).",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TalkResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "switch": {
+          "description": "Whether this response switches the current topic.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "text": {
+          "description": "Display text for this response option.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "topic": {
+          "description": "The topic to transition to when this response is chosen. Can be a single topic string or an array of topic strings. May be absent for responses that only use `effect`.",
+          "default": null
+        },
+        "trial": {
+          "description": "Optional trial that determines if the response succeeds.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TalkTrial"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "TalkResult": {
+      "description": "Result of a trial success or failure.",
+      "type": "object",
+      "properties": {
+        "effect": {
+          "description": "Effect(s) to apply.",
+          "default": null
+        },
+        "speech": {
+          "description": "Speech text for the NPC.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text": {
+          "description": "Text to display (alternative to dynamic_line).",
+          "default": null
+        },
+        "topic": {
+          "description": "Topic to transition to.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "trial": {
+          "description": "Trial to use instead.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TalkTrial"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "TalkTrial": {
+      "description": "A trial that determines whether a response succeeds or fails.",
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "condition": {
+          "description": "Condition for the trial (used with type \"CONDITION\").",
+          "default": null
+        },
+        "cost": {
+          "description": "Base cost of the trial.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "difficulty": {
+          "description": "Difficulty of the trial.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "mod_": {
+          "description": "Modifier applied to the trial.",
+          "default": null
+        },
+        "range": {
+          "description": "High/low range for the trial.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "skill": {
+          "description": "Skill used for the trial.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "skill_tier": {
+          "description": "Skill tier used for the trial.",
+          "default": null
+        },
+        "type": {
+          "description": "Trial type (e.g. \"CONDITION\", \"PERSUADE\", \"INTIMIDATE\", \"NONE\").",
+          "type": "string"
+        }
+      }
+    }
+  }
+}

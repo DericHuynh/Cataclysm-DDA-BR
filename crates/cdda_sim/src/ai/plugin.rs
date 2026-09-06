@@ -1,30 +1,33 @@
-use bevy_app::{App, Plugin, Update};
+use bevy_app::{App, Plugin};
 use bevy_ecs::schedule::IntoScheduleConfigs;
-use cdda_components::schedule::SimSet;
+use cdda_components::schedule::{SimSet, SimulationAction};
 
 use super::systems::{
-    drive_behaviour_tree, drive_goap, drive_htn, drive_none, has_behaviour_tree_agents,
-    has_goap_agents, has_htn_agents,
+    drive_behaviour_tree, drive_goap, drive_none, has_behaviour_tree_agents, has_goap_agents,
+    has_htn_agents,
 };
+use crate::ai::htn::exec::drive_htn_system;
+use crate::intent::systems::collect_intents;
 
 pub struct AiPlugin;
 
 impl Plugin for AiPlugin {
     fn build(&self, app: &mut App) {
-        // Each planner system runs *only* when at least one entity carries its
-        // marker (the `has_*_agents` run conditions), and they all run in the
-        // declare phase so their produced intents join the same AP-sorted
-        // `IntentQueue` as the player's.  No planner has priority — the
-        // highest-AP intent (player or mob) resolves first.
+        // Planner systems run inside SimulationAction for the ACTING entity
+        // selected by the budget scheduler (ActingEntity resource). Direct
+        // test calls without that resource keep the previous all-agents
+        // behavior. Producers are anchored before the collector: sharing
+        // SimSet::IntentDeclare alone does NOT order them.
         app.add_systems(
-            Update,
+            SimulationAction,
             (
                 drive_behaviour_tree.run_if(has_behaviour_tree_agents),
                 drive_goap.run_if(has_goap_agents),
-                drive_htn.run_if(has_htn_agents),
-                drive_none, // inert — PlannerNone entities never act
+                drive_htn_system.run_if(has_htn_agents),
+                drive_none,
             )
-                .in_set(SimSet::IntentDeclare),
+                .in_set(SimSet::IntentDeclare)
+                .before(collect_intents),
         );
     }
 }

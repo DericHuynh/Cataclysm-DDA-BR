@@ -1,0 +1,200 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ConstructionDef",
+  "description": "A construction definition from JSON type `\"construction\"`.\n\nDefines a construction or deconstruction activity that the player can perform to modify the world.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag — if true, this definition is a template.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "activity_level": {
+      "description": "Activity level (e.g. \"EXTRA_EXERCISE\", \"MODERATE_EXERCISE\", \"BRISK_EXERCISE\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "byproducts": {
+      "description": "Items produced as byproducts. Can be a string (deconstruction result set), a map, or an array of byproduct objects.",
+      "default": null
+    },
+    "category": {
+      "description": "Construction category (e.g. \"CONSTRUCT\", \"DECONSTRUCT\", \"REPAIR\", \"REINFORCE\", \"WINDOWS\", \"BULK\", \"FURNITURE\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "components": {
+      "description": "Components required as nested arrays. e.g. [[[\"nail\", 16, \"LIST\"]], [[\"2x4\", 4]]]",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "array",
+        "items": true
+      }
+    },
+    "copy_from": {
+      "description": "Base definition id to copy fields from.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "dark_craftable": {
+      "description": "Whether this can be crafted in the dark.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "difficulty": {
+      "description": "Difficulty of the construction.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "do_turn_special": {
+      "description": "Special action to perform each turn during construction. Can be a string or an object.",
+      "default": null
+    },
+    "group": {
+      "description": "Group this construction belongs to (for UI grouping).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"constr_remove_window_empty\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "on_display": {
+      "description": "Whether this construction is displayed in the menu.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "post_flags": {
+      "description": "Post-construction flags to apply to the tile. Can be a string or an array of strings.",
+      "default": null
+    },
+    "post_furniture": {
+      "description": "Post-construction furniture to place. Can be a string or an object.",
+      "default": null
+    },
+    "post_special": {
+      "description": "Post-construction special action (e.g. \"done_dig_grave\"). Can be a string or an object.",
+      "default": null
+    },
+    "post_terrain": {
+      "description": "Post-construction terrain to place. Can be a string or an object.",
+      "default": null
+    },
+    "pre_flags": {
+      "description": "Pre-construction flags (any of these flags must be present on the tile). Can be a string, an array of strings, or a map with flag options.",
+      "default": null
+    },
+    "pre_furniture": {
+      "description": "Pre-construction furniture requirement. Can be a string or an object.",
+      "default": null
+    },
+    "pre_special": {
+      "description": "Pre-construction special check (e.g. \"check_empty\"). Can be a string or an array of strings.",
+      "default": null
+    },
+    "pre_terrain": {
+      "description": "Pre-construction terrain requirement. Can be a string or an object.",
+      "default": null
+    },
+    "qualities": {
+      "description": "Tools required as nested arrays. e.g. [[{\"id\": \"HAMMER\", \"level\": 2}], [{\"id\": \"SAW_M\", \"level\": 1}]] Can also be a flat array of tool objects.",
+      "default": null
+    },
+    "required_skills": {
+      "description": "Required skills as pairs of [skill_id, level]. e.g. [[\"fabrication\", 3]].",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "array",
+        "items": true
+      }
+    },
+    "skill": {
+      "description": "Primary skill for this construction (alternative to required_skills).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "time": {
+      "description": "Time required to complete the construction (e.g. \"60 m\", \"5 m\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tools": {
+      "description": "Tools required (alternative format). e.g. [[[\"oxy_torch\", 4], [\"welder\", 20]]]",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "array",
+        "items": true
+      }
+    },
+    "using": {
+      "description": "Item groups/recipes to use (for pre-defined tool/component sets). e.g. [[\"wood_removal_standard\", 1]]",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "array",
+        "items": true
+      }
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

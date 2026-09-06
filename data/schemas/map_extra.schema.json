@@ -1,0 +1,107 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MapExtraDef",
+  "description": "A map extra definition from JSON type `\"map_extra\"`.\n\nDefines a special feature that can appear on the overmap (e.g. craters, crashed helicopters, roadblocks, portals).",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "description": {
+      "description": "Description of the map extra.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "flags": {
+      "description": "Flags associated with the map extra.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "generator": {
+      "description": "Generator configuration for placing this map extra.",
+      "default": null
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"mx_crater\", \"mx_helicopter\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "mapgen_palette": {
+      "description": "Mapgen palette used by this map extra.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "name": {
+      "description": "Display name of the map extra.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EventStatisticDef",
+  "description": "An event statistic definition from JSON type `\"event_statistic\"`.\n\nDefines a statistic tracked by the game's event system (e.g. number of zombie kills, distance traveled).",
+  "type": "object",
+  "required": [
+    "id",
+    "stat_type"
+  ],
+  "properties": {
+    "event_type": {
+      "description": "Event type to track (e.g. \"character_kills_zombie\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "field": {
+      "description": "Field to extract from the event.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"num_avatar_zombie_kills\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "stat_type": {
+      "description": "Statistic type (e.g. \"count\", \"unique_value\", \"last_value\").",
+      "type": "string"
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

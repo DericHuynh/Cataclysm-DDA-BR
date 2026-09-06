@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "JsonFlagDef",
+  "description": "A json_flag definition from JSON type `\"json_flag\"`.\n\nDefines a flag that can be referenced by other definitions (e.g. terrain, items, monsters). Flags are used to tag game objects with specific behaviors or properties.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag — if true, this definition is a template that should not be instantiated directly.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "copy_from": {
+      "description": "Base definition id to copy fields from.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "description": {
+      "description": "Description text.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"DEBUG_ONLY\", \"SWIM_UNDER\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "info": {
+      "description": "Info text describing the flag's purpose.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "restriction": {
+      "description": "Restriction text (e.g. \"Item must be a chainmail compatible armor piece\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

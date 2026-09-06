@@ -1,0 +1,258 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ActivityTypeDef",
+  "description": "An activity type definition from JSON type `\"activity_type\"`.\n\nDefines a player activity (e.g. reading, reloading, crafting) with its verb display text and behavioral flags. Maps directly to the C++ `activity_type` class fields loaded from `activity_type.cpp::load()`.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "activity_level": {
+      "description": "Exertion level during this activity (NO_EXERCISE = 0.0 to MAX_EXERCISE).",
+      "default": "NO_EXERCISE",
+      "allOf": [
+        {
+          "$ref": "#/definitions/ActivityExertion"
+        }
+      ]
+    },
+    "auto_needs": {
+      "description": "If true, the character will automatically consume from auto-eat/drink zones.",
+      "default": false,
+      "type": "boolean"
+    },
+    "based_on": {
+      "description": "How activity progress is measured.",
+      "default": "speed",
+      "allOf": [
+        {
+          "$ref": "#/definitions/BasedOnType"
+        }
+      ]
+    },
+    "can_resume": {
+      "description": "Whether the activity can be suspended and resumed.",
+      "default": true,
+      "type": "boolean"
+    },
+    "completion_eoc": {
+      "description": "Effect-on-condition to run when the activity completes.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "do_turn_eoc": {
+      "description": "Effect-on-condition to run each turn of the activity.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "fetch_items_to_zone": {
+      "description": "Whether the activity should fetch items to an associated zone.",
+      "default": true,
+      "type": "boolean"
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"ACT_RELOAD\", \"ACT_READ\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "ignored_distractions": {
+      "description": "Distraction types that are ignored by default for this activity.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/DistractionType"
+      }
+    },
+    "interruptable": {
+      "description": "Whether the activity can be interrupted by distractions.",
+      "default": true,
+      "type": "boolean"
+    },
+    "interruptable_with_kb": {
+      "description": "Whether the activity can be interrupted by keyboard input.",
+      "default": true,
+      "type": "boolean"
+    },
+    "multi_activity": {
+      "description": "Whether this is a multi-activity (runs multiple sub-activities).",
+      "default": false,
+      "type": "boolean"
+    },
+    "refuel_fires": {
+      "description": "If true, the character will refuel an adjacent fire if firewood is nearby.",
+      "default": false,
+      "type": "boolean"
+    },
+    "rooted": {
+      "description": "Whether the character is rooted in place during the activity.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "verb": {
+      "description": "Verb phrase describing the activity (e.g. \"reloading\", \"reading\").",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "ActivityExertion": {
+      "description": "Named exertion level applied to an ongoing activity's stamina cost.\n\nCDDA's `activity_level` is a string enum in JSON (e.g. `\"NO_EXERCISE\"`), interpreted as a multiplier. We model the named level here; the numeric multiplier is derived in the simulation layer.",
+      "oneOf": [
+        {
+          "description": "No stamina cost.",
+          "type": "string",
+          "enum": [
+            "NO_EXERCISE"
+          ]
+        },
+        {
+          "description": "Very light exertion.",
+          "type": "string",
+          "enum": [
+            "LIGHT_EXERCISE"
+          ]
+        },
+        {
+          "description": "Moderate exertion.",
+          "type": "string",
+          "enum": [
+            "MODERATE_EXERCISE"
+          ]
+        },
+        {
+          "description": "Brisk exertion.",
+          "type": "string",
+          "enum": [
+            "BRISK_EXERCISE"
+          ]
+        },
+        {
+          "description": "Heavy exertion.",
+          "type": "string",
+          "enum": [
+            "ACTIVE_EXERCISE"
+          ]
+        },
+        {
+          "description": "Extra-heavy exertion.",
+          "type": "string",
+          "enum": [
+            "EXTRA_EXERCISE"
+          ]
+        }
+      ]
+    },
+    "BasedOnType": {
+      "description": "How activity progress is measured.",
+      "oneOf": [
+        {
+          "description": "Progress measured in real time (independent of character speed).",
+          "type": "string",
+          "enum": [
+            "time"
+          ]
+        },
+        {
+          "description": "Progress measured in character move points (speed-dependent).",
+          "type": "string",
+          "enum": [
+            "speed"
+          ]
+        },
+        {
+          "description": "Progress driven entirely by the do_turn handler or actor.",
+          "type": "string",
+          "enum": [
+            "neither"
+          ]
+        }
+      ]
+    },
+    "DefId": {
+      "type": "string"
+    },
+    "DistractionType": {
+      "description": "An event that can interrupt an ongoing activity.",
+      "type": "string",
+      "enum": [
+        "noise",
+        "pain",
+        "attacked",
+        "hostile_spotted_far",
+        "hostile_spotted_near",
+        "talked_to",
+        "asthma",
+        "motion_alarm",
+        "weather_change",
+        "portal_storm_popup",
+        "eoc",
+        "dangerous_field",
+        "hunger",
+        "thirst",
+        "temperature",
+        "mutation",
+        "oxygen",
+        "withdrawal"
+      ]
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

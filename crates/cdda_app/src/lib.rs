@@ -10,16 +10,14 @@ use bevy::app::{App, Plugin, PluginGroup, Update};
 use bevy::prelude::*;
 use bevy::render::settings::{RenderCreation, WgpuSettings};
 use bevy::render::RenderPlugin;
-use bevy::time::common_conditions::on_timer;
 use bevy::window::PresentMode;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_state::app::AppExtStates;
 use bevy_state::prelude::OnEnter;
 use bevy_state::state::{NextState, State};
-use std::time::Duration;
 
 use cdda_components::intent::ActionIntent;
-use cdda_components::schedule::{GameSet, SimSet};
+use cdda_components::schedule::{GameSet, SimSet, SimulationTurn};
 use cdda_context::ctx::Ctx as Screen;
 use cdda_context::screen::Screen as ScreenPlugin;
 use cdda_context::ContextStack;
@@ -29,10 +27,7 @@ use crate::startup::load_data_system;
 use crate::startup::{examine_item_input, spawn_dev_world};
 use cdda_components::actor::IsAlive;
 use cdda_components::dev::{DevCamera, DevPlayer};
-use cdda_components::events::ItemMoveEvent;
-use cdda_components::intent::IntentQueue;
 use cdda_components::item::InventoryFocus;
-use cdda_components::messages;
 use cdda_components::sim::WorldPosition;
 use cdda_context::overlay::{
     cleanup_activity_overlay, handle_overlay_cancel, sync_activity_overlay,
@@ -42,24 +37,9 @@ use cdda_data::assets::CddaAssetsPlugin;
 use cdda_overmap::spatial::EntitySpatialIndex;
 use cdda_overmap::OvermapCamera;
 use cdda_overmap_gen::pipeline::OvermapGenPlugin;
-use cdda_sim::activity::plugin::ActivityPlugin;
-use cdda_sim::actor::bionics::tick_bionics;
-use cdda_sim::actor::effects::effects_phase;
-use cdda_sim::actor::healing::healing_phase;
-use cdda_sim::actor::morale::tick_morale_decay;
-use cdda_sim::actor::plugin::ActorPlugin;
-use cdda_sim::actor::temperature::temperature_phase;
-use cdda_sim::actor::turn::{debug_turn_queue, tick_move_points, TurnQueue};
-use cdda_sim::actor::vision::update_vision;
-use cdda_sim::ai::plugin::AiPlugin;
-use cdda_sim::crafting::plugin::CraftingPlugin;
 use cdda_sim::crafting::systems::on_examine_item_changed;
-use cdda_sim::intent::plugin::IntentPlugin;
-use cdda_sim::inventory::systems::{
-    assign_invlets_system, build_inventory_bins, process_item_move_events, InventoryBin,
-};
-use cdda_sim::item::plugin::ItemPlugin;
 use cdda_sim::runtime::state::{AppState, StartupConfig};
+use cdda_sim::runtime::SimulationPlugin;
 
 // ---------------------------------------------------------------------------
 // Startup config
@@ -89,21 +69,9 @@ impl Default for CddaStartupConfig {
 // Dev player movement
 // ---------------------------------------------------------------------------
 
-/// Read player keyboard input and generate `ActionIntent` on the dev player.
-///
-/// The intent resolution system in `SimSet::IntentResolve` handles the actual
-/// movement, AP deduction, and precondition checking.
-/// Read player keyboard input and generate `ActionIntent` on the dev player.
-///
-/// The intent resolution system in `SimSet::IntentResolve` handles the actual
-/// movement, AP deduction, and precondition checking.
-///
-/// The dev-world viewport renders **OMT** cells (one overmap tile per cell)
-/// and the [`DevCamera`] is in OMT units, while the player's `WorldPosition`
-/// is in **world tiles**. Advance the player by a full `TILES_PER_OMT` step so
-/// a single keypress visibly moves the viewport by exactly one cell — the
-/// `DevCamera` is derived from `WorldPosition / TILES_PER_OMT`, so the units
-/// line back up.
+/// Declare a one-world-tile movement action on the dev player.
+/// The OMT preview camera follows only when a tile boundary is crossed; the
+/// preview's scale must not turn a normal walk into a 24-tile teleport.
 pub fn dev_player_move(
     keys: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
@@ -126,18 +94,15 @@ pub fn dev_player_move(
 
     if dx != 0 || dy != 0 {
         if let Some(player) = player_query.iter().next() {
-            // One OMT per keypress (see doc comment above): 24 world tiles.
-            commands.entity(player).insert(ActionIntent::Move {
-                dx: dx * TILES_PER_OMT,
-                dy: dy * TILES_PER_OMT,
-            });
+            commands
+                .entity(player)
+                .insert(ActionIntent::Move { dx, dy });
         }
     }
 }
 
 /// After intent resolution, sync camera positions to the dev player's
-/// new location.  Runs in `SimSet::IntentResolve` to update the viewport
-/// in the same frame.
+/// new location. Runs in `GameSet::Render`, after the simulation driver.
 pub fn dev_player_intent_generate(
     mut dev_cam: ResMut<DevCamera>,
     mut overmap_cam: ResMut<OvermapCamera>,
@@ -162,32 +127,34 @@ pub struct CddaPlugin;
 
 impl Plugin for CddaPlugin {
     fn build(&self, app: &mut App) {
+        // Headless and graphical applications share the same simulation wiring.
         app.add_plugins((
-            ActivityPlugin,
-            AiPlugin,
-            ActorPlugin,
-            ItemPlugin,
+            SimulationPlugin,
             CddaAssetsPlugin,
-            CraftingPlugin,
-            IntentPlugin,
             cdda_data::flags::CddaDataPlugin,
         ));
 
         app.init_resource::<EntitySpatialIndex>();
         app.init_resource::<OvermapCamera>();
+        // Spatial index maintenance: gameplay positions are `WorldPosition`
+        // (movement writes it); raw `WorldPos` entities stay supported.
+        app.add_systems(
+            SimulationTurn,
+            cdda_overmap::sync_spatial_index
+                .in_set(SimSet::SpatialUpdate)
+                .run_if(in_state(AppState::InGame)),
+        );
+        app.add_observer(cdda_overmap::remove_from_spatial_index);
+        app.add_observer(cdda_overmap::remove_raw_pos_from_spatial_index);
 
         app.add_plugins(OvermapGenPlugin);
 
         app.init_state::<AppState>();
         app.init_resource::<StartupConfig>();
-        app.init_resource::<TurnQueue>();
-        app.init_resource::<InventoryBin>();
         app.init_resource::<cdda_sim::inventory::examine_resource::ExaminedItem>();
         app.init_resource::<InventoryFocus>();
         app.init_resource::<DevCamera>();
         app.init_resource::<cdda_sim::runtime::state::LoadingStatus>();
-        app.init_resource::<cdda_sim::runtime::state::GameTime>();
-        app.init_resource::<IntentQueue>();
         app.init_resource::<CddaDataFiles>();
 
         // ── Screen transitions ─────────────────────────────────────────
@@ -211,34 +178,7 @@ impl Plugin for CddaPlugin {
             |mut next: ResMut<NextState<Screen>>| next.set(Screen::Gameplay),
         );
 
-        // ── System set ordering ────────────────────────────────────────
-        app.configure_sets(
-            Update,
-            (GameSet::Input, GameSet::Sim, GameSet::Render).chain(),
-        );
-        app.configure_sets(
-            Update,
-            (
-                SimSet::TurnTick,
-                SimSet::IntentDeclare,
-                SimSet::IntentResolve,
-                SimSet::Activity,
-                SimSet::Effects,
-                SimSet::Healing,
-                SimSet::Bionics,
-                SimSet::Morale,
-                SimSet::Temperature,
-                SimSet::Vision,
-                SimSet::Spawning,
-                SimSet::Inventory,
-                SimSet::SpatialUpdate,
-            )
-                .chain()
-                .in_set(GameSet::Sim),
-        );
-
-        app.add_message::<ItemMoveEvent>();
-        app.add_message::<messages::TurnAdvanced>();
+        // The SimulationPlugin owns logical phase ordering and message resources.
 
         // ── Screen plugins ─────────────────────────────────────────────
         app.add_plugins(ScreenPlugin::<
@@ -292,34 +232,16 @@ impl Plugin for CddaPlugin {
         // Asset-driven hot reload of CDDA data files currently in use.
         app.add_systems(
             Update,
-            reload_modified_data.run_if(in_state(AppState::InGame)),
+            reload_modified_data
+                .in_set(GameSet::Input)
+                .run_if(in_state(AppState::InGame)),
         );
 
-        // ── Turn tick ──────────────────────────────────────────────────
+        // Camera synchronization is presentation, not simulation time.
         app.add_systems(
             Update,
-            tick_move_points
-                .in_set(SimSet::TurnTick)
-                .run_if(in_state(AppState::InGame))
-                .run_if(on_timer(Duration::from_millis(100))),
-        );
-
-        // ── Simulation systems ─────────────────────────────────────────
-        app.add_systems(
-            Update,
-            (
-                // Intent generation: player input → ActionIntent (AI is in AiPlugin)
-                dev_player_intent_generate.in_set(SimSet::Vision),
-                effects_phase.in_set(SimSet::Effects),
-                healing_phase.in_set(SimSet::Healing),
-                tick_bionics.in_set(SimSet::Bionics),
-                tick_morale_decay.in_set(SimSet::Morale),
-                temperature_phase.in_set(SimSet::Temperature),
-                update_vision.in_set(SimSet::Vision),
-                process_item_move_events.in_set(SimSet::Inventory),
-                assign_invlets_system.in_set(SimSet::Inventory),
-                build_inventory_bins.in_set(SimSet::Inventory),
-            )
+            dev_player_intent_generate
+                .in_set(GameSet::Render)
                 .run_if(in_state(AppState::InGame)),
         );
 
@@ -329,14 +251,14 @@ impl Plugin for CddaPlugin {
         app.add_systems(
             Update,
             cdda_render::render::input::dev_pickup_drop_system
-                .in_set(SimSet::Inventory)
+                .in_set(GameSet::Input)
                 .run_if(in_state(Screen::Gameplay))
                 .run_if(in_state(AppState::InGame)),
         );
         app.add_systems(
             Update,
             cdda_render::render::input::inventory_screen_input
-                .in_set(SimSet::Inventory)
+                .in_set(GameSet::Input)
                 .run_if(in_state(Screen::Inventory))
                 .run_if(in_state(AppState::InGame)),
         );
@@ -356,26 +278,28 @@ impl Plugin for CddaPlugin {
         // ── UI overlay systems ─────────────────────────────────────────
         app.add_systems(
             Update,
-            handle_overlay_cancel.run_if(in_state(AppState::InGame)),
+            handle_overlay_cancel
+                .in_set(GameSet::Input)
+                .run_if(in_state(AppState::InGame)),
         );
         app.add_systems(
             Update,
             (sync_activity_overlay, cleanup_activity_overlay)
                 .chain()
-                .in_set(SimSet::Activity)
+                .in_set(GameSet::Render)
                 .run_if(in_state(AppState::InGame)),
         );
         app.add_systems(
             Update,
             examine_item_input
-                .in_set(SimSet::Inventory)
+                .in_set(GameSet::Input)
                 .run_if(in_state(AppState::InGame))
                 .run_if(in_state(Screen::ItemExamine)),
         );
         app.add_systems(
             Update,
             on_examine_item_changed
-                .in_set(SimSet::Inventory)
+                .in_set(GameSet::Input)
                 .run_if(in_state(AppState::InGame))
                 .run_if(in_state(Screen::ItemExamine)),
         );

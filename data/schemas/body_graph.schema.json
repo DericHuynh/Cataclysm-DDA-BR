@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BodyGraphDef",
+  "description": "A body graph definition from JSON type `\"body_graph\"`.\n\nDefines an ASCII-art style graphical representation of a body part for use in the UI.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "copy_from": {
+      "description": "Base definition id to copy fields from.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "fill_color": {
+      "description": "Fill color for unlabeled areas.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "fill_sym": {
+      "description": "Fill symbol for unlabeled areas.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"arm_r\", \"head\", \"full_body\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "mirror": {
+      "description": "Another body graph ID to mirror.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "parent_bodypart": {
+      "description": "Parent body part this graph is associated with.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "parts": {
+      "description": "Mapping of labels to sub body parts and colors.",
+      "default": null
+    },
+    "rows": {
+      "description": "Rows of the ASCII art graph.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

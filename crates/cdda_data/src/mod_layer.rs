@@ -61,6 +61,8 @@ pub enum ModError {
     MissingDependency(String, String),
     #[error("Mod '{0}' has no modinfo.json or mod.json")]
     MissingManifest(String),
+    #[error("Data error while layering mods: {0}")]
+    Data(String),
     #[error("IO error: {0}")]
     Io(std::io::Error),
 }
@@ -92,8 +94,11 @@ pub struct ModManager {
     pub available: Vec<ModInfo>,
     /// The base core registry (loaded before any mods).
     pub core_registry: DefRegistry,
-    /// The core loader instance (used as base for mod loaders).
-    _core_loader: Loader,
+    /// The core loader instance: it RETAINS the core raw definitions, so each
+    /// mod's directory can be ingested into the same raw map and re-resolved —
+    /// mod defs layer over core (and over earlier mods) with last-write-wins
+    /// per ID, and may `copy-from` core or earlier-mod definitions.
+    core_loader: Loader,
 }
 
 impl ModManager {
@@ -102,7 +107,7 @@ impl ModManager {
         ModManager {
             available: Vec::new(),
             core_registry,
-            _core_loader: core_loader,
+            core_loader,
         }
     }
 
@@ -267,9 +272,14 @@ impl ModManager {
 
     /// Resolve and load mods in dependency order.
     ///
-    /// Each mod's JSON directory is loaded through a fresh `Loader` and
-    /// its definitions are merged into the running registry.
-    pub fn load_mods(&self, mod_ids: &[String]) -> Result<Vec<ModLoadResult>, ModError> {
+    /// Each mod's JSON directory is ingested into the SAME loader that holds
+    /// the core raw definitions, then the whole accumulated raw set is
+    /// re-resolved: the returned registry for mod *N* contains core + mods
+    /// 1..=N, layered with last-write-wins per ID, so mod definitions
+    /// override core definitions and may `copy-from` core or earlier-mod
+    /// defs. (This is the fix for the old behavior that ingested mod data but
+    /// returned a clone of the untouched core registry.)
+    pub fn load_mods(&mut self, mod_ids: &[String]) -> Result<Vec<ModLoadResult>, ModError> {
         let order = self.topological_sort(mod_ids)?;
         let index: HashMap<&str, &ModInfo> =
             self.available.iter().map(|m| (m.id.as_str(), m)).collect();
@@ -279,16 +289,25 @@ impl ModManager {
         for mod_id in &order {
             let info = index[mod_id.as_str()];
 
-            // Load this mod's JSON
-            let mut loader = Loader::new(vec![info.path.clone()]);
-            let raw_by_type = loader.ingest_all();
+            // Ingest this mod's JSON into the accumulating raw map. The
+            // returned `raw_defs` are only THIS mod's definitions (the diff
+            // against what the loader held before), matching the
+            // `ModLoadResult` contract.
+            let (raw_defs, ingest_errors) = self.core_loader.ingest_dir(&info.path);
+            for err in ingest_errors {
+                tracing::warn!("Mod '{mod_id}' ingest warning: {err}");
+            }
 
-            let merged_registry = self.core_registry.clone();
+            // Re-resolve core + every ingested mod so far.
+            let registry = self
+                .core_loader
+                .resolve()
+                .map_err(|errs| ModError::Data(format!("mod '{mod_id}': {errs:?}")))?;
 
             results.push(ModLoadResult {
                 mod_info: info.clone(),
-                raw_defs: raw_by_type,
-                registry: merged_registry,
+                raw_defs,
+                registry,
             });
         }
 
@@ -551,6 +570,150 @@ mod tests {
             .topological_sort(&["mod_b".into(), "mod_a".into()])
             .unwrap();
         assert_eq!(result, vec!["mod_a", "mod_b"]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Mod application (the layering contract)
+    // -----------------------------------------------------------------------
+
+    /// Write `content` into `dir/<name>` (creating dirs).
+    fn write_json(dir: &std::path::Path, name: &str, content: &str) {
+        use std::io::Write;
+        std::fs::create_dir_all(dir).unwrap();
+        let mut f = std::fs::File::create(dir.join(name)).unwrap();
+        f.write_all(content.as_bytes()).unwrap();
+    }
+
+    /// End-to-end layering: a mod's definitions must actually land in the
+    /// merged registry — new defs added, core defs overridden last-write-wins,
+    /// and `copy-from` against core resolved. The old behavior ingested mod
+    /// data but returned a clone of the untouched core registry.
+    #[test]
+    fn load_mods_applies_mod_definitions_over_core() {
+        use crate::Loader;
+
+        let tmp = std::env::temp_dir().join(format!("cdda_mod_layer_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let core_dir = tmp.join("core");
+        let mod_dir = tmp.join("mods").join("test_mod");
+
+        write_json(
+            &core_dir,
+            "core_items.json",
+            r#"[
+                {"type": "ITEM", "id": "core_item", "name": {"str": "Core Item"}, "volume": "250 ml", "category": "tools"}
+            ]"#,
+        );
+        write_json(
+            &mod_dir,
+            "modinfo.json",
+            r#"{"type": "MOD_INFO", "id": "test_mod", "name": "Test Mod", "dependencies": ["dda"]}"#,
+        );
+        write_json(
+            &mod_dir,
+            "mod_items.json",
+            r#"[
+                {"type": "ITEM", "id": "core_item", "name": {"str": "Modded Item"}, "volume": "500 ml", "category": "tools"},
+                {"type": "ITEM", "id": "mod_only_item", "name": {"str": "Mod Only"}, "volume": "1 L", "category": "tools"},
+                {"type": "ITEM", "id": "derived_item", "copy-from": "core_item", "name": {"str": "Derived"}, "category": "tools"}
+            ]"#,
+        );
+
+        // Load core through a real Loader, then layer the mod through it.
+        let mut loader = Loader::new(vec![core_dir.clone()]);
+        let core_registry = loader.load().expect("core loads");
+        let mut mgr = ModManager::new(core_registry, loader);
+        mgr.scan_mods(&tmp.join("mods")).unwrap();
+        let results = mgr.load_mods(&["test_mod".to_string()]).expect("mods load");
+        assert_eq!(results.len(), 1);
+        let final_registry = &results[0].registry;
+
+        assert!(
+            final_registry.items.contains_key(&"mod_only_item".to_string().into()),
+            "a mod-only definition must be present in the merged registry"
+        );
+        let overridden = final_registry
+            .items
+            .get(&"core_item".to_string().into())
+            .expect("core item still present");
+        assert_eq!(
+            overridden.volume,
+            cdda_core_types::core::units::Volume::from_milliliters(500),
+            "mod override wins over the core definition (last-write-wins)"
+        );
+        let derived = final_registry
+            .items
+            .get(&"derived_item".to_string().into())
+            .expect("copy-from against a core def resolves");
+        assert_eq!(
+            derived.volume,
+            cdda_core_types::core::units::Volume::from_milliliters(500),
+            "copy-from resolves against the LAYERED parent: the mod's override \
+             of core_item is what derived_item inherits"
+        );
+
+        // The core registry handed to the manager stays untouched.
+        assert!(
+            mgr.core_registry.items.contains_key(&"core_item".to_string().into())
+                && !mgr.core_registry.items.contains_key(&"mod_only_item".to_string().into()),
+            "ModManager.core_registry remains the pre-mod baseline"
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// Each loaded mod's `ModLoadResult.registry` is the running layered state:
+    /// a second mod sees the first mod's definitions.
+    #[test]
+    fn layered_registries_accumulate_in_dependency_order() {
+        use crate::Loader;
+
+        let tmp = std::env::temp_dir().join(format!("cdda_mod_layer_chain_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let core_dir = tmp.join("core");
+        let mod_a = tmp.join("mods").join("mod_a");
+        let mod_b = tmp.join("mods").join("mod_b");
+
+        write_json(&core_dir, "empty.json", "[]");
+        write_json(
+            &mod_a,
+            "modinfo.json",
+            r#"{"type": "MOD_INFO", "id": "mod_a", "dependencies": ["dda"]}"#,
+        );
+        write_json(
+            &mod_a,
+            "items.json",
+            r#"[{"type": "ITEM", "id": "a_item", "category": "tools"}]"#,
+        );
+        write_json(
+            &mod_b,
+            "modinfo.json",
+            r#"{"type": "MOD_INFO", "id": "mod_b", "dependencies": ["mod_a"]}"#,
+        );
+        write_json(
+            &mod_b,
+            "items.json",
+            r#"[{"type": "ITEM", "id": "b_item", "copy-from": "a_item", "category": "tools"}]"#,
+        );
+
+        let mut loader = Loader::new(vec![core_dir]);
+        let core_registry = loader.load().expect("core loads");
+        let mut mgr = ModManager::new(core_registry, loader);
+        mgr.scan_mods(&tmp.join("mods")).unwrap();
+        let results = mgr
+            .load_mods(&["mod_b".to_string(), "mod_a".to_string()])
+            .expect("mods load in dependency order");
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].mod_info.id, "mod_a");
+        assert_eq!(results[1].mod_info.id, "mod_b");
+
+        // After mod_a: a_item present, b_item not yet.
+        assert!(results[0].registry.items.contains_key(&"a_item".to_string().into()));
+        assert!(!results[0].registry.items.contains_key(&"b_item".to_string().into()));
+        // After mod_b: b_item resolved via copy-from against mod_a's def.
+        assert!(results[1].registry.items.contains_key(&"b_item".to_string().into()));
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]

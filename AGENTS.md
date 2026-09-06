@@ -93,9 +93,9 @@ Top-level workspaces and durable boundaries (each owns its own child index):
 
 Root-level files (not folders, no child DOX, but referenced from here):
 
-- `Cargo.toml` — **Virtual workspace manifest** (no root package, just `[workspace]` + `[workspace.dependencies]`). 15 member crates (13 source + 1 test-only + 1 raw-def AST leaf); pinned Bevy 0.18 ecosystem. Profile flags in `[profile.dev]` / `[profile.release]`.
+- `Cargo.toml` — **Virtual workspace manifest** (no root package, just `[workspace]` + `[workspace.dependencies]`). 15 member crates (12 source + 1 workspace-internal planner-core library `cdda_htn` + 1 raw-def AST leaf + 1 test-only); pinned Bevy 0.18 ecosystem. Profile flags in `[profile.dev]` / `[profile.release]`.
 - `Cargo.lock` — Resolved dependency lockfile. Committed.
 - `README.md` — Project overview, quick start, and crate table.
 - `CURRENT_ARCHITECTURE.md` — What is implemented now (crate layers, data loading pipeline, tick phases, design decisions, known debt).
-- `TARGET_ARCHITECTURE.md` — Planned migration path (god-function decomposition, ID unification, parse/world split, SoA tiles, three-tier hot reload).
+- `TARGET_ARCHITECTURE.md` — Architecture foundation checklist and remaining roadmap: canonical simulation/time, transactional action budgets, stable definition/save identities, local-map lifecycle, replay and production-schedule verification.
 - `LICENSE` — Project license.

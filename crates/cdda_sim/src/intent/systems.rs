@@ -1,263 +1,261 @@
-//! # Intent resolution — turn ordering by action points
+//! # Intent resolution — turn ordering by action points, correlated results
 //!
 //! Handles the intent → action pipeline:
 //!
 //! 1. **Declare** (`SimSet::IntentDeclare`): AI + player input insert `ActionIntent` components.
-//!    `collect_intents` gathers them into a global `IntentQueue`, sorted by AP descending.
+//!    `collect_intents` gathers them into a global `IntentQueue`, sorted by AP descending,
+//!    stamping each request with a correlated [`ActionRequestId`].
 //! 2. **Resolve** (`SimSet::IntentResolve`): `resolve_intents` drains the queue, validates
-//!    preconditions, and executes actions.  Later intents see the results of earlier ones.
+//!    preconditions, and commits actions under exclusive world access. Later intents
+//!    see earlier committed positions, ownership and AP before they validate.
 //!
-//! ## Precondition validation
+//! ## Correlated results (submission ≠ completion)
 //!
-//! Before executing any intent, the system checks:
-//! - The entity still has `IsAlive` (may have been killed by an earlier actor)
-//! - The entity still has sufficient `ActionPoints`
-//! - For targeted intents: the target entity still exists and is valid
+//! After resolving each request the simulation writes an [`ActionOutcome`]
+//! component onto the acting entity with the terminal verdict for **that
+//! request id**:
 //!
-//! Cancelled intents cost no AP.
+//! - `Completed` — Move / Wait / Pickup / Wield / Drop / Stow was committed.
+//! - `Rejected` — refused before execution (dead actor, negative/missing AP,
+//!   absent position, invalid/blocked move, missing/out-of-range/owned pickup
+//!   target). No AP charged.
+//! - `Failed` — accepted but not implemented on the intent path (UseItem,
+//!   Reload, StartRead, Interact, MeleeAttack, StartCraft). **Nothing
+//!   is performed and no AP is charged** — an unsupported action must never
+//!   report success.
+//!
+//! Terminal outcomes persist until the actor's next declaration replaces
+//! them; consumers must match on the request id. While no outcome (or an
+//! older one) exists the request is pending/running.
 //!
 //! ## Relationship to activities
 //!
-//! Intents that start multi-turn activities (`StartCraft`, `StartRead`) insert
-//! `(ActivityProgress, <Type>)` components.  The activity system (next phase)
-//! ticks them.  An entity with an active activity cannot declare new intents
-//! until the activity completes.
+//! Multi-turn activities (crafting, reading, …) are started through their
+//! authoritative use-case paths, not through stub intent resolvers; until an
+//! intent type has a real simulation operation behind it, resolving it is a
+//! `Failed` outcome, never a silent AP burn.
 
 use bevy_ecs::prelude::*;
 
+use crate::inventory::transfer::{apply_inventory_action, InventoryAction};
 use cdda_components::actor::{ActionPoints, IsAlive};
-use cdda_components::intent::{ActionIntent, IntentQueue, QueuedIntent};
-use cdda_components::item::{InProgressCraft, InsideContainer};
-use cdda_components::sim::WorldPosition;
+use cdda_components::intent::{
+    ActionIntent, ActionOutcome, ActionOutcomeState, ActionRequestCounter, ActionRequestId,
+    IntentQueue, QueuedIntent,
+};
+use cdda_components::schedule::ActingEntity;
+use cdda_components::sim::{Solid, WorldPosition};
 use cdda_core_types::core::coords::WorldPos;
+use cdda_core_types::sim_id::SimId;
 
-use crate::actor::turn::{AP_COST_PICKUP, AP_COST_WIELD, MOVE_COST_ATTACK_BASE, MOVE_COST_WALK};
+use crate::actor::turn::MOVE_COST_WALK;
 use tracing::info;
 
 // ---------------------------------------------------------------------------
 // collect_intents — gather all ActionIntent components, sort by AP
 // ---------------------------------------------------------------------------
 
-/// Collects every entity's `ActionIntent`, builds the `IntentQueue` sorted
-/// by AP descending (highest AP acts first).  Removes the `ActionIntent`
-/// component from each entity after collection.
+/// Collects the selected `ActingEntity`'s intent when that resource exists;
+/// otherwise collects all actors for isolated callers. Builds `IntentQueue`
+/// by AP descending (highest AP acts first), then `SimId` ascending. Actors
+/// with IDs precede entities without IDs at equal AP; test entities without a
+/// `SimId` fall back to `Entity::to_bits()` (stable only within that world).
+/// Duplicate IDs also fall back to Entity. IDs must be unique for replay order.
+/// Each request is stamped in this order with a fresh [`ActionRequestId`].
+/// Removes the `ActionIntent` component from each entity after collection.
 pub fn collect_intents(
     mut commands: Commands,
-    q_intents: Query<(Entity, &ActionIntent, &ActionPoints)>,
+    mut counter: ResMut<ActionRequestCounter>,
+    q_intents: Query<(Entity, &ActionIntent, &ActionPoints, Option<&SimId>)>,
     mut queue: ResMut<IntentQueue>,
+    acting: Option<Res<ActingEntity>>,
 ) {
     queue.queued.clear();
     queue.rejected = 0;
 
-    let mut entries: Vec<QueuedIntent> = q_intents
+    let mut entries: Vec<_> = q_intents
         .iter()
-        .map(|(entity, intent, ap)| QueuedIntent {
+        .filter(|(entity, _, _, _)| acting.as_ref().is_none_or(|acting| acting.0 == *entity))
+        .collect();
+    entries.sort_by_key(|(entity, _, ap, id)| {
+        (
+            std::cmp::Reverse(ap.current),
+            id.is_none(),
+            id.map(|id| id.0).unwrap_or_default(),
+            entity.to_bits(),
+        )
+    });
+
+    for (entity, intent, ap, _) in entries {
+        let request: ActionRequestId = counter.next();
+        commands
+            .entity(entity)
+            .insert(request)
+            .remove::<ActionIntent>();
+        queue.queued.push(QueuedIntent {
+            request,
             entity,
             intent: intent.clone(),
             ap: ap.current,
-        })
-        .collect();
-
-    // Sort by AP descending — highest acts first.
-    entries.sort_by(|a, b| b.ap.cmp(&a.ap));
-
-    // Remove the intent components so they don't persist to next turn.
-    for (entity, ..) in &q_intents {
-        commands.entity(entity).remove::<ActionIntent>();
+        });
     }
-
-    queue.queued = entries;
 }
 
 // ---------------------------------------------------------------------------
-// resolve_intents — drain IntentQueue, validate, execute
+// resolve_intents — drain IntentQueue, validate, execute, report
 // ---------------------------------------------------------------------------
 
-/// Resolve intents in AP-priority order.  For each intent, validate
-/// preconditions; if they pass, execute the action and deduct AP.
-pub fn resolve_intents(
-    mut commands: Commands,
-    mut queue: ResMut<IntentQueue>,
-    mut q_ap: Query<&mut ActionPoints>,
-    q_is_alive: Query<(), With<IsAlive>>,
-    q_pos: Query<&WorldPosition>,
-) {
-    // Drain all queued intents; order is already sorted.
-    let intents: Vec<QueuedIntent> = std::mem::take(&mut queue.queued);
-
+/// Resolve intents in AP-priority order against the live world, committing each
+/// action and its AP cost BEFORE publishing its correlated terminal outcome.
+/// Exclusive access is intentional: deferred Commands would let later requests
+/// validate against stale positions/ownership and both claim the same item.
+pub fn resolve_intents(world: &mut World) {
+    let intents = std::mem::take(&mut world.resource_mut::<IntentQueue>().queued);
     for pending in intents {
-        // ── Precondition: entity still alive ─────────────────────────
-        if q_is_alive.get(pending.entity).is_err() {
-            queue.rejected += 1;
-            continue;
+        // Starting at zero AP may enter debt; negative AP cannot act. Recheck
+        // the live balance, not the collection-time priority snapshot.
+        let can_act = world.get::<IsAlive>(pending.entity).is_some()
+            && world
+                .get::<ActionPoints>(pending.entity)
+                .is_some_and(|ap| ap.current >= 0);
+        let state = if !can_act {
+            ActionOutcomeState::Rejected
+        } else {
+            match &pending.intent {
+                ActionIntent::Move { dx, dy } => resolve_move(world, pending.entity, *dx, *dy),
+                ActionIntent::Pickup { item } => {
+                    resolve_inventory(world, pending.entity, *item, InventoryAction::Pickup)
+                }
+                ActionIntent::Wield { item } => {
+                    resolve_inventory(world, pending.entity, *item, InventoryAction::Wield)
+                }
+                ActionIntent::Drop { item } => {
+                    resolve_inventory(world, pending.entity, *item, InventoryAction::Drop)
+                }
+                ActionIntent::Stow { item } => {
+                    resolve_inventory(world, pending.entity, *item, InventoryAction::Stow)
+                }
+                ActionIntent::Wait => {
+                    spend_ap(world, pending.entity, 100);
+                    ActionOutcomeState::Completed
+                }
+                ActionIntent::MeleeAttack { .. }
+                | ActionIntent::UseItem { .. }
+                | ActionIntent::Reload { .. }
+                | ActionIntent::StartRead { .. }
+                | ActionIntent::Interact { .. }
+                | ActionIntent::StartCraft { .. } => {
+                    // Unsupported is not success, and never burns AP.
+                    info!(
+                        "action request {:?} for entity {:?} failed: {:?} is not implemented on the intent path",
+                        pending.request, pending.entity, pending.intent
+                    );
+                    ActionOutcomeState::Failed
+                }
+            }
+        };
+        if state != ActionOutcomeState::Completed {
+            world.resource_mut::<IntentQueue>().rejected += 1;
         }
-
-        // ── Precondition: entity still has enough AP ─────────────────
-        let ap_ok = q_ap
-            .get(pending.entity)
-            .map(|ap| ap.current >= 0)
-            .unwrap_or(false);
-        if !ap_ok {
-            queue.rejected += 1;
-            continue;
-        }
-
-        // ── Resolve ──────────────────────────────────────────────────
-        match &pending.intent {
-            ActionIntent::Move { dx, dy } => {
-                resolve_move(&mut commands, pending.entity, *dx, *dy, &mut q_ap, &q_pos);
-            }
-            ActionIntent::MeleeAttack { target } => {
-                // Precondition: target still alive
-                if q_is_alive.get(*target).is_err() {
-                    queue.rejected += 1;
-                    continue;
-                }
-                resolve_melee_attack(&mut commands, pending.entity, *target, &mut q_ap);
-            }
-            ActionIntent::Pickup { item } => {
-                resolve_pickup(&mut commands, pending.entity, *item, &mut q_ap);
-            }
-            ActionIntent::Wield { item } => {
-                resolve_wield(&mut commands, pending.entity, *item, &mut q_ap);
-            }
-            ActionIntent::StartCraft { recipe } => {
-                resolve_start_craft(&mut commands, pending.entity, *recipe, &mut q_ap);
-            }
-            ActionIntent::Wait => {
-                // Burn AP without doing anything.
-                if let Ok(mut ap) = q_ap.get_mut(pending.entity) {
-                    ap.spend(100);
-                }
-            }
-            // Stubs for unimplemented intent types:
-            ActionIntent::UseItem { .. }
-            | ActionIntent::Reload { .. }
-            | ActionIntent::StartRead { .. }
-            | ActionIntent::Interact { .. } => {
-                // Burn 100 AP as placeholder cost.
-                if let Ok(mut ap) = q_ap.get_mut(pending.entity) {
-                    ap.spend(100);
-                }
-            }
+        // A despawned actor cannot hold a component; count its rejection without
+        // issuing a deferred command to a nonexistent entity (or resurrecting it).
+        if let Ok(mut actor) = world.get_entity_mut(pending.entity) {
+            actor.insert(ActionOutcome::new(pending.request, state));
         }
     }
 }
 
-// ---------------------------------------------------------------------------
-// Intent resolvers — one per intent type
-// ---------------------------------------------------------------------------
-
-/// Move the entity one tile.  Deducts `MOVE_COST_WALK` AP.
-fn resolve_move(
-    commands: &mut Commands,
-    entity: Entity,
-    dx: i32,
-    dy: i32,
-    ap_q: &mut Query<&mut ActionPoints>,
-    pos_q: &Query<&WorldPosition>,
-) {
-    if let Ok(mut ap) = ap_q.get_mut(entity) {
-        ap.spend(MOVE_COST_WALK);
-    }
-    if let Ok(pos) = pos_q.get(entity) {
-        let new_pos = WorldPos::new(pos.get().x + dx, pos.get().y + dy, pos.get().z);
-        commands.entity(entity).insert(WorldPosition::new(new_pos));
-    }
+fn spend_ap(world: &mut World, actor: Entity, cost: i32) {
+    world
+        .get_mut::<ActionPoints>(actor)
+        .expect("actor AP validated before exclusive commit")
+        .spend(cost);
 }
 
-/// Resolve a melee attack: deduct AP, the combat system handles actual
-/// damage resolution later.
-fn resolve_melee_attack(
-    _commands: &mut Commands,
-    entity: Entity,
-    _target: Entity,
-    ap_q: &mut Query<&mut ActionPoints>,
-) {
-    if let Ok(mut ap) = ap_q.get_mut(entity) {
-        ap.spend(MOVE_COST_ATTACK_BASE);
+/// Commit a legal, nonzero one-tile step without occupying a Solid entity's
+/// current tile. Scan ECS positions rather than a potentially stale spatial
+/// index; terrain collision without a Solid entity is not represented here.
+fn resolve_move(world: &mut World, actor: Entity, dx: i32, dy: i32) -> ActionOutcomeState {
+    if !(-1..=1).contains(&dx) || !(-1..=1).contains(&dy) || (dx == 0 && dy == 0) {
+        return ActionOutcomeState::Rejected;
     }
-    // Actual damage resolution is handled by the combat phase.
-    // TODO: emit a MeleeAttackEvent or DamageEvent for the combat system.
-    let _ = entity;
+    let Some(pos) = world.get::<WorldPosition>(actor).map(WorldPosition::get) else {
+        return ActionOutcomeState::Rejected;
+    };
+    let (Some(x), Some(y)) = (pos.x.checked_add(dx), pos.y.checked_add(dy)) else {
+        return ActionOutcomeState::Rejected;
+    };
+    let destination = WorldPos::new(x, y, pos.z);
+    let mut solids = world.query_filtered::<(Entity, &WorldPosition), With<Solid>>();
+    if solids
+        .iter(world)
+        .any(|(entity, position)| entity != actor && position.get() == destination)
+    {
+        return ActionOutcomeState::Rejected;
+    }
+
+    world
+        .entity_mut(actor)
+        .insert(WorldPosition::new(destination));
+    spend_ap(world, actor, MOVE_COST_WALK);
+    ActionOutcomeState::Completed
 }
 
-/// Pick up an item: deduct AP, insert `InsideContainer(entity)` on the item.
-fn resolve_pickup(
-    commands: &mut Commands,
-    entity: Entity,
+fn resolve_inventory(
+    world: &mut World,
+    actor: Entity,
     item: Entity,
-    ap_q: &mut Query<&mut ActionPoints>,
-) {
-    if let Ok(mut ap) = ap_q.get_mut(entity) {
-        ap.spend(AP_COST_PICKUP);
+    action: InventoryAction,
+) -> ActionOutcomeState {
+    match apply_inventory_action(world, actor, item, action) {
+        Ok(()) => ActionOutcomeState::Completed,
+        Err(_) => ActionOutcomeState::Rejected,
     }
-    commands.entity(item).insert(InsideContainer(entity));
-}
-
-/// Wield an item: deduct AP, insert `WieldedBy(entity)` on the item.
-fn resolve_wield(
-    _commands: &mut Commands,
-    entity: Entity,
-    _item: Entity,
-    ap_q: &mut Query<&mut ActionPoints>,
-) {
-    if let Ok(mut ap) = ap_q.get_mut(entity) {
-        ap.spend(AP_COST_WIELD);
-    }
-    // Actual wield logic is handled by equipment systems.
-    let _ = entity;
-}
-
-/// Start crafting: insert `(ActivityProgress, Crafting)` components.
-/// The activity system picks up the progress next frame.
-fn resolve_start_craft(
-    commands: &mut Commands,
-    entity: Entity,
-    recipe: Entity,
-    ap_q: &mut Query<&mut ActionPoints>,
-) {
-    // Deduct one tick's worth of AP immediately.
-    if let Ok(mut ap) = ap_q.get_mut(entity) {
-        ap.spend(100);
-    }
-    // The activity system will handle the multi-turn craft progression.
-    // For now, insert the Crafting component stub; the real start_craft
-    // logic (recipe lookup, component consumption) lives in cdda_crafting.
-    let _ = recipe;
-    info!(
-        "StartCraft intent resolved for entity {:?}, recipe {:?}",
-        entity, recipe
-    );
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::actor::turn::AP_COST_PICKUP;
     use crate::runtime::test_utils::TestBed;
+    use cdda_components::item::InsideContainer;
+
+    fn bed() -> TestBed {
+        let mut test = TestBed::new();
+        test.insert_resource(IntentQueue::default());
+        test.insert_resource(ActionRequestCounter::default());
+        test.register::<ActionIntent>()
+            .register::<ActionPoints>()
+            .register::<IsAlive>()
+            .register::<WorldPosition>()
+            .register::<ActionRequestId>()
+            .register::<ActionOutcome>();
+        test
+    }
 
     /// A monster with **more** AP than the player must be buffered and resolved
     /// first — there is no player-first guarantee. This is the fairness contract
     /// that distinguishes the rewrite from CDDA's blocking player loop.
     #[test]
     fn higher_ap_monster_goes_before_lower_ap_player() {
-        let mut test = TestBed::new();
-        test.insert_resource(IntentQueue::default());
-        test.register::<ActionIntent>()
-            .register::<ActionPoints>()
-            .register::<IsAlive>()
-            .register::<WorldPosition>();
+        let mut test = bed();
 
         // Monster at 150 AP, player at 50 AP.
         let z = cdda_core_types::core::coords::ZLevel::new(0);
         let monster = test.spawn((
-            ActionPoints::new(150),
+            ActionPoints {
+                current: 150,
+                speed: 100,
+            },
             IsAlive,
             ActionIntent::Wait,
             WorldPosition(WorldPos::new(0, 0, z)),
         ));
         let player = test.spawn((
-            ActionPoints::new(50),
+            ActionPoints {
+                current: 50,
+                speed: 100,
+            },
             IsAlive,
             ActionIntent::Wait,
             WorldPosition(WorldPos::new(0, 0, z)),
@@ -273,5 +271,191 @@ mod tests {
             "highest-AP (monster, 150) must act first — no player priority"
         );
         assert_eq!(queue.queued[1].entity, player, "player (50 AP) second");
+    }
+
+    /// Every collected request carries a correlated id that lands on the actor,
+    /// and after resolution the actor holds the terminal verdict for *that* id.
+    #[test]
+    fn wait_intent_reports_a_correlated_completed_outcome() {
+        let mut test = bed();
+        let z = cdda_core_types::core::coords::ZLevel::new(0);
+        let actor = test.spawn((
+            ActionPoints {
+                current: 100,
+                speed: 100,
+            },
+            IsAlive,
+            ActionIntent::Wait,
+            WorldPosition(WorldPos::new(0, 0, z)),
+        ));
+
+        test.run_system(collect_intents);
+        let request = test
+            .world()
+            .get::<ActionRequestId>(actor)
+            .copied()
+            .expect("stamped");
+        assert_eq!(test.resource::<IntentQueue>().queued[0].request, request);
+
+        test.run_system(resolve_intents);
+
+        let outcome = test
+            .world()
+            .get::<ActionOutcome>(actor)
+            .copied()
+            .expect("outcome");
+        assert!(
+            outcome.matches(request),
+            "verdict matches the stamped request"
+        );
+        assert_eq!(outcome.state, ActionOutcomeState::Completed);
+        assert_eq!(
+            test.world().get::<ActionPoints>(actor).unwrap().current,
+            0,
+            "wait burns 100 AP exactly once"
+        );
+    }
+
+    /// A dead actor's request is `Rejected` with no AP charged; a moved actor's
+    /// request is `Completed` and its position genuinely changed.
+    #[test]
+    fn move_completes_and_dead_actors_are_rejected_without_ap_charge() {
+        let mut test = bed();
+        let z = cdda_core_types::core::coords::ZLevel::new(0);
+        let mover = test.spawn((
+            ActionPoints {
+                current: 100,
+                speed: 100,
+            },
+            IsAlive,
+            ActionIntent::Move { dx: 1, dy: 0 },
+            WorldPosition(WorldPos::new(5, 5, z)),
+        ));
+        let corpse = test.spawn((
+            ActionPoints {
+                current: 100,
+                speed: 100,
+            },
+            ActionIntent::Wait,
+            WorldPosition(WorldPos::new(0, 0, z)),
+        ));
+        // `ActionPoints` requires `IsAlive`, so the spawn above auto-inserted
+        // it — strip it to make this actor genuinely dead.
+        test.world_mut().entity_mut(corpse).remove::<IsAlive>();
+
+        test.run_system(collect_intents);
+        test.run_system(resolve_intents);
+
+        let mover_outcome = test.world().get::<ActionOutcome>(mover).copied().unwrap();
+        assert_eq!(mover_outcome.state, ActionOutcomeState::Completed);
+        assert_eq!(test.world().get::<WorldPosition>(mover).unwrap().get().x, 6);
+        assert_eq!(
+            test.world().get::<ActionPoints>(mover).unwrap().current,
+            100 - MOVE_COST_WALK
+        );
+
+        let corpse_outcome = test.world().get::<ActionOutcome>(corpse).copied().unwrap();
+        assert_eq!(corpse_outcome.state, ActionOutcomeState::Rejected);
+        assert_eq!(
+            test.world().get::<ActionPoints>(corpse).unwrap().current,
+            100,
+            "rejected requests charge no AP"
+        );
+    }
+
+    /// Unsupported intent types must NOT report success: they resolve to
+    /// `Failed`, perform nothing, and charge no AP.
+    #[test]
+    fn unsupported_intents_fail_without_performing_or_charging() {
+        let mut test = bed();
+        let z = cdda_core_types::core::coords::ZLevel::new(0);
+        let actor = test.spawn((
+            ActionPoints {
+                current: 100,
+                speed: 100,
+            },
+            IsAlive,
+            ActionIntent::UseItem {
+                item: Entity::PLACEHOLDER,
+            },
+            WorldPosition(WorldPos::new(0, 0, z)),
+        ));
+
+        test.run_system(collect_intents);
+        test.run_system(resolve_intents);
+
+        let outcome = test.world().get::<ActionOutcome>(actor).copied().unwrap();
+        assert_eq!(
+            outcome.state,
+            ActionOutcomeState::Failed,
+            "an unimplemented operation must never report Completed"
+        );
+        assert_eq!(
+            test.world().get::<ActionPoints>(actor).unwrap().current,
+            100,
+            "failed operations charge no AP"
+        );
+        assert!(test.resource::<IntentQueue>().rejected >= 1);
+    }
+
+    /// Pickup routes through the authoritative mutation: `InsideContainer`
+    /// inserted AND the ground position removed, so the item stops being a
+    /// world object the moment it is carried.
+    #[test]
+    fn pickup_inserts_container_and_removes_ground_position() {
+        let mut test = bed();
+        let z = cdda_core_types::core::coords::ZLevel::new(0);
+        let actor = test.spawn((
+            ActionPoints {
+                current: 100,
+                speed: 100,
+            },
+            IsAlive,
+            WorldPosition(WorldPos::new(0, 0, z)),
+        ));
+        let item = test.spawn(WorldPosition(WorldPos::new(1, 0, z)));
+        test.world_mut()
+            .entity_mut(actor)
+            .insert(ActionIntent::Pickup { item });
+
+        test.run_system(collect_intents);
+        test.run_system(resolve_intents);
+
+        let outcome = test.world().get::<ActionOutcome>(actor).copied().unwrap();
+        assert_eq!(outcome.state, ActionOutcomeState::Completed);
+        assert!(test.world().get::<InsideContainer>(item).is_some());
+        assert!(
+            test.world().get::<WorldPosition>(item).is_none(),
+            "carried items must not keep a ground position"
+        );
+        assert_eq!(
+            test.world().get::<ActionPoints>(actor).unwrap().current,
+            100 - AP_COST_PICKUP
+        );
+    }
+
+    /// Request ids are monotonic across turns so a stale outcome can never be
+    /// mistaken for the current request's verdict.
+    #[test]
+    fn request_ids_increase_monotonically() {
+        let mut test = bed();
+        let z = cdda_core_types::core::coords::ZLevel::new(0);
+        let actor = test.spawn((
+            ActionPoints {
+                current: 1000,
+                speed: 100,
+            },
+            IsAlive,
+            WorldPosition(WorldPos::new(0, 0, z)),
+        ));
+
+        for turn in 0..3 {
+            test.world_mut()
+                .entity_mut(actor)
+                .insert(ActionIntent::Wait);
+            test.run_system(collect_intents);
+            let id = test.world().get::<ActionRequestId>(actor).copied().unwrap();
+            assert_eq!(id.0, turn + 1, "one fresh id per declared request");
+        }
     }
 }

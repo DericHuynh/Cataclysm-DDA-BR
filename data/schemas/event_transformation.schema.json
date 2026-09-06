@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EventTransformationDef",
+  "description": "An event transformation definition from JSON type `\"event_transformation\"`.\n\nDefines a transformation pipeline for game events, filtering and reshaping event data for use in statistics and achievements.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "drop_fields": {
+      "description": "Fields to drop from the event data.",
+      "default": null
+    },
+    "event_transformation": {
+      "description": "ID of another event transformation to chain from.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "event_type": {
+      "description": "The event type to filter (e.g. \"character_kills_monster\", \"character_wakes_up\"). If not present, this transformation chains from another event_transformation.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"avatar_kills_monster\", \"avatar_wakes_up\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "new_fields": {
+      "description": "New fields to add to the event data.",
+      "default": null
+    },
+    "value_constraints": {
+      "description": "Constraints on field values to filter events.",
+      "default": null
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

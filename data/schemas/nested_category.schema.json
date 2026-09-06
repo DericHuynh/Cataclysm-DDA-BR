@@ -1,0 +1,128 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NestedCategoryDef",
+  "description": "A nested category definition from JSON type `\"nested_category\"`.\n\nDefines a category that groups related recipes in the crafting menu.",
+  "type": "object",
+  "required": [
+    "id",
+    "name"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "activity_level": {
+      "description": "Activity level required.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "category": {
+      "description": "Category (e.g. \"CC_WEAPON\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "copy_from": {
+      "description": "Base definition to copy fields from.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "description": {
+      "description": "Description text.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "id": {
+      "description": "Unique identifier.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "name": {
+      "description": "Display name.",
+      "type": "string"
+    },
+    "nested_category_data": {
+      "description": "List of recipe IDs in this nested category.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "subcategory": {
+      "description": "Subcategory (e.g. \"CSC_WEAPON_RANGED\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

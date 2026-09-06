@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SnippetDef",
+  "description": "A snippet definition from JSON type `\"snippet\"`.\n\nDefines a snippet category with associated text entries.",
+  "type": "object",
+  "required": [
+    "category"
+  ],
+  "properties": {
+    "category": {
+      "description": "Category identifier.",
+      "type": "string"
+    },
+    "text": {
+      "description": "Text content — can be a string, an array of strings/objects, or a single object.",
+      "default": null
+    }
+  }
+}

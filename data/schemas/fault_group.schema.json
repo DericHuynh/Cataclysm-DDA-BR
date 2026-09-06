@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FaultGroupDef",
+  "description": "A fault group definition from JSON type `\"fault_group\"`.\n\nDefines a group of faults that can be applied to items, with weighted probabilities.",
+  "type": "object",
+  "required": [
+    "group",
+    "id"
+  ],
+  "properties": {
+    "group": {
+      "description": "List of faults with their weights.",
+      "type": "array",
+      "items": true
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"plate_lc\", \"blade_general\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

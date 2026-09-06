@@ -1,0 +1,240 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NpcClassDef",
+  "description": "An NPC class definition from JSON type `\"npc_class\"`.\n\nDefines a template class for NPCs, specifying traits, skills, proficiencies, stat bonuses, and equipment.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag — if true, this definition is a template.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "bonus_aggression": {
+      "description": "Aggression bonus (for personality).",
+      "default": null
+    },
+    "bonus_altruism": {
+      "description": "Altruism bonus (for personality).",
+      "default": null
+    },
+    "bonus_bravery": {
+      "description": "Bravery bonus (for personality).",
+      "default": null
+    },
+    "bonus_collector": {
+      "description": "Collector bonus (for NPC barter pricing). Can be a number or a dice expression.",
+      "default": null
+    },
+    "bonus_dex": {
+      "description": "Dexterity bonus (number or dice expression).",
+      "default": null
+    },
+    "bonus_int": {
+      "description": "Intelligence bonus (number or dice expression).",
+      "default": null
+    },
+    "bonus_per": {
+      "description": "Perception bonus (number or dice expression).",
+      "default": null
+    },
+    "bonus_str": {
+      "description": "Strength bonus (number or dice expression).",
+      "default": null
+    },
+    "carry_override": {
+      "description": "Carry inventory item group override.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "common": {
+      "description": "Whether this class is commonly used for random NPCs.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "common_spawn_weight": {
+      "description": "Common spawn weight (float, default 1.0).",
+      "default": null,
+      "type": [
+        "number",
+        "null"
+      ],
+      "format": "double"
+    },
+    "copy_from": {
+      "description": "Base definition id to copy fields from.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "equipment": {
+      "description": "Equipment override item group ID.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"NC_SOLDIER\", \"NC_FARMER\", \"NC_DOCTOR\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "job_description": {
+      "description": "Job description text.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "name": {
+      "description": "Display name (localized string object, e.g. `{\"str\": \"Soldier\"}`).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "proficiencies": {
+      "description": "Proficiency IDs (array of strings).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "shopkeeper_item_group": {
+      "description": "Shopkeeper item group ID (for shop NPCs). Can be a string (group ID) or an array of shop item objects.",
+      "default": null
+    },
+    "shopkeeper_item_prices": {
+      "description": "Shopkeeper item price rules.",
+      "default": null
+    },
+    "skills": {
+      "description": "Skill assignments. Array of objects with skill ID and level/bonus.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/NpcClassSkill"
+      }
+    },
+    "traits": {
+      "description": "Trait assignments. Can be an array of: - `{\"trait\": \"TRAIT_ID\", \"weight\": 100}` - `{\"group\": \"group_id\"}` - `[\"TRAIT_ID\", 100]`",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": true
+    },
+    "weapon_override": {
+      "description": "Weapon item group ID.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "worn_override": {
+      "description": "Worn armor item group override.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "NpcClassSkill": {
+      "description": "A skill assignment for an NPC class.",
+      "type": "object",
+      "required": [
+        "skill"
+      ],
+      "properties": {
+        "bonus": {
+          "description": "Skill bonus (number or complex expression, alternative to `level`).",
+          "default": null
+        },
+        "level": {
+          "description": "Skill level (number or complex expression).",
+          "default": null
+        },
+        "skill": {
+          "description": "Skill ID (e.g. \"mechanics\", \"survival\", \"ALL\").",
+          "type": "string"
+        }
+      }
+    }
+  }
+}

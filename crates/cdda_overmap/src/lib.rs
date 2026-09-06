@@ -53,4 +53,7 @@ pub use query::{
 };
 pub use registry::{CoreTerrains, TerrainFlags, TerrainHandle, TerrainRegistry};
 pub use rng::XorShiftRng;
-pub use spatial::{remove_from_spatial_index, sync_spatial_index, EntitySpatialIndex};
+pub use spatial::{
+    remove_from_spatial_index, remove_raw_pos_from_spatial_index, sync_spatial_index,
+    EntitySpatialIndex,
+};

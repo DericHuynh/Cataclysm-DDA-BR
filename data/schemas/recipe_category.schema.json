@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RecipeCategoryDef",
+  "description": "A recipe category definition from JSON type `\"recipe_category\"`.\n\nDefines a category for grouping recipes in the crafting menu.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "id": {
+      "description": "Unique identifier (e.g. \"CC_WEAPON\", \"CC_FOOD\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "is_building": {
+      "description": "Whether this is a building category.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "is_hidden": {
+      "description": "Whether this category is hidden.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "is_practice": {
+      "description": "Whether this is a practice category.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "is_wildcard": {
+      "description": "Whether this is a wildcard category.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "recipe_subcategories": {
+      "description": "List of subcategories.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

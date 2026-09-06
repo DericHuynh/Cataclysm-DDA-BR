@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RequirementDef",
+  "description": "A crafting/construction requirement definition from JSON type `\"requirement\"`.\n\nDefines the components, tools, qualities, and skills needed to perform a recipe or construction action. Requirements can be reused across multiple recipes.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "components": {
+      "description": "List of component choices. Each inner list is an alternative (OR), and each item is [item_id, count]. Can also be a map/object in some cases.",
+      "default": null
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"ammo_9mm\", \"welding_standard\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "qualities": {
+      "description": "List of quality requirements. Each inner list is an alternative (OR), and each item is {\"id\": \"HAMMER\", \"level\": 2}. Can also be a map/object in some cases.",
+      "default": null
+    },
+    "skills": {
+      "description": "Required skills as [skill_id, level] pairs. Can also be a map/object in some cases.",
+      "default": null
+    },
+    "time": {
+      "description": "Time required in seconds (or other time format).",
+      "default": null
+    },
+    "tools": {
+      "description": "List of tool choices. Each inner list is an alternative (OR), and each item is [tool_id, count_or_charges]. Can also be a map/object in some cases.",
+      "default": null
+    },
+    "using": {
+      "description": "Reference to another requirement to reuse.",
+      "default": null
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

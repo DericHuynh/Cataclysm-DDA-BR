@@ -1,0 +1,171 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WeakpointSetDef",
+  "description": "A weakpoint set definition from JSON type `\"weakpoint_set\"`.\n\nDefines a set of weakpoints for a monster, specifying locations with modified damage multipliers, armor penetration, critical hit chances, coverage, and special effects.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "id": {
+      "description": "Unique identifier (e.g. \"wps_amalgamation_base\", \"wps_arthropod\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "weakpoints": {
+      "description": "List of weakpoints in this set.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/Weakpoint"
+      }
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "Weakpoint": {
+      "description": "A single weakpoint on a monster.",
+      "type": "object",
+      "properties": {
+        "armor_mult": {
+          "description": "Armor multiplier when hitting this weakpoint (by damage type).",
+          "default": null
+        },
+        "coverage": {
+          "description": "Base coverage percentage (0-100).",
+          "default": null
+        },
+        "coverage_mult": {
+          "description": "Coverage multiplier (e.g. {\"point\": 0.75} for smaller hit area).",
+          "default": null
+        },
+        "crit_mult": {
+          "description": "Critical hit multiplier when hitting this weakpoint.",
+          "default": null
+        },
+        "damage_mult": {
+          "description": "Damage multiplier when hitting this weakpoint (by damage type).",
+          "default": null
+        },
+        "difficulty": {
+          "description": "Difficulty to hit this weakpoint (melee and/or ranged).",
+          "default": null
+        },
+        "effects": {
+          "description": "Effects applied when this weakpoint is hit.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/WeakpointEffect"
+          }
+        },
+        "id": {
+          "description": "Identifier for this weakpoint (e.g. \"leg\", \"head\", \"eye\", \"acid_gland\").",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "is_head": {
+          "description": "Whether this weakpoint is on the head.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "Display name of the weakpoint (e.g. \"a leg\", \"the head\", \"the eye\").",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "WeakpointEffect": {
+      "description": "An effect triggered when a weakpoint is hit.",
+      "type": "object",
+      "properties": {
+        "chance": {
+          "description": "Chance of the effect triggering (0-100).",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "damage_required": {
+          "description": "Damage required to trigger this effect as [min, max].",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0.0
+          }
+        },
+        "duration": {
+          "description": "Duration of the effect in turns (can be [min, max] or single value).",
+          "default": null
+        },
+        "effect": {
+          "description": "Effect ID (e.g. \"staggered\", \"blind\", \"maimed_leg\", \"maimed_acid_gland\").",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "instant_death_chance": {
+          "description": "Whether this effect causes instant death.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "intensity": {
+          "description": "Intensity (can be a single value or [min, max]).",
+          "default": null
+        },
+        "message": {
+          "description": "Message displayed when the effect triggers.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "permanent": {
+          "description": "Whether this effect is permanent.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

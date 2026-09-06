@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CharacterModDef",
+  "description": "A character modifier definition from JSON type `\"character_mod\"`.\n\nDefines a modifier that affects character stats or behavior based on limb scores, builtins, or other conditions (e.g. aim speed, stamina cost).",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "description": {
+      "description": "Description of the modifier.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"aim_speed_skill_mod\", \"stamina_move_cost_mod\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

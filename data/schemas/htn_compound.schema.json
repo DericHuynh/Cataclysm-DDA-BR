@@ -1,0 +1,121 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HtnCompoundDef",
+  "description": "A data-authored HTN compound task (`\"type\": \"htn_compound\"`).",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "id": {
+      "description": "Unique identifier, e.g. `\"core:meet_needs\"`. Namespaced ids are the modding convention; overrides replace by id after mod layering.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "methods": {
+      "description": "Ordered decomposition methods (tried in declaration order).",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/HtnMethodDef"
+      }
+    },
+    "name": {
+      "description": "Display/debug name.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "parameters": {
+      "description": "Parameter names this compound accepts at call sites. A step referencing this compound may pass `\"args\": { \"<param>\": <value> }`; inside the compound body, `{\"param\": \"<name>\"}` markers are substituted with the bound value at compile time. Each distinct (task, arguments) specialization compiles as its OWN graph node.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "HtnCallDef": {
+      "description": "A native-predicate reference: which kernel to compile, with its raw arguments. The kernel owns its argument schema — this layer stores the JSON verbatim.",
+      "type": "object",
+      "required": [
+        "predicate"
+      ],
+      "properties": {
+        "args": {
+          "description": "Raw kernel arguments (schema-validated by the kernel at compile time).",
+          "default": null
+        },
+        "predicate": {
+          "description": "Registered kernel name, e.g. `\"cdda:hungry\"`.",
+          "type": "string"
+        }
+      }
+    },
+    "HtnMethodDef": {
+      "description": "One decomposition alternative of an [`HtnCompoundDef`].",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Method name — the override/diagnostic handle. Overrides target named methods; explicit declaration order is preserved.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "steps": {
+          "description": "Subtask steps in declaration order (a pure `then` chain).",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/HtnStepDef"
+          }
+        },
+        "when": {
+          "description": "Preconditions — all must hold for this method to be chosen. Each is a native-predicate reference; unknown predicate names are compile errors.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/HtnCallDef"
+          }
+        }
+      }
+    },
+    "HtnStepDef": {
+      "description": "One step of a method body: a native operator, a sub-task reference, or a `bind` step (a later extension — parsed but uninterpreted for now).",
+      "type": "object",
+      "properties": {
+        "args": {
+          "description": "Named operator/task arguments (raw; kernels validate their own).",
+          "default": null
+        },
+        "operator": {
+          "description": "Native operator kernel name, e.g. `\"cdda:consume\"`.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "task": {
+          "description": "Referenced compound task by definition id.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

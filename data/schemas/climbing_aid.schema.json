@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ClimbingAidDef",
+  "description": "A climbing aid definition from JSON type `\"climbing_aid\"`.\n\nDefines how a tile, item, or ability can be used for climbing.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag — if true, this definition is a template.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "condition": {
+      "description": "Condition under which this climbing aid can be used.",
+      "default": null
+    },
+    "copy_from": {
+      "description": "Base definition id to copy fields from.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "down": {
+      "description": "Configuration for climbing down.",
+      "default": null
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"vehicle\", \"furn_CLIMBABLE\", \"ability_WALL_CLING\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "slip_chance_mod": {
+      "description": "Modifier to slip chance (negative means safer).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

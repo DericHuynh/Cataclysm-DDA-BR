@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MoodFaceDef",
+  "description": "A mood_face definition from JSON type `\"mood_face\"`.\n\nDefines a set of mood faces for the player character, with different faces shown at different morale values.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag — if true, this definition is a template that should not be instantiated directly.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "copy_from": {
+      "description": "Base definition id to copy fields from.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"DEFAULT\", \"THRESH_FELINE\").",
+      "type": "string"
+    },
+    "values": {
+      "description": "List of mood value-to-face mappings.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/MoodFaceValue"
+      }
+    }
+  },
+  "definitions": {
+    "MoodFaceValue": {
+      "description": "A single mood face entry mapping a morale value threshold to a face string.",
+      "type": "object",
+      "required": [
+        "face",
+        "value"
+      ],
+      "properties": {
+        "face": {
+          "description": "Face string (may include color markup like `<color_green>:)</color>`).",
+          "type": "string"
+        },
+        "value": {
+          "description": "Morale value threshold.",
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    }
+  }
+}

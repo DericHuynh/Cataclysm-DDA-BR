@@ -1,0 +1,125 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "VitaminDef",
+  "description": "A vitamin definition from JSON type `\"vitamin\"`.\n\nDefines a vitamin/nutrient tracked by the game (e.g. vitamin C, calcium, iron). Vitamins have minimum and maximum levels, and can cause diseases when deficient or in excess.",
+  "type": "object",
+  "required": [
+    "id",
+    "name"
+  ],
+  "properties": {
+    "disease": {
+      "description": "Disease applied when below the minimum threshold: `[\"disease_id\", intensity]`.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": true
+    },
+    "disease_excess": {
+      "description": "Disease applied when above the maximum threshold: `[\"disease_id\", intensity]`.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": true
+    },
+    "flags": {
+      "description": "Flags for this vitamin.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"vitC\", \"calcium\", \"iron\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "max": {
+      "description": "Maximum healthy level (above this, disease_excess triggers).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "min": {
+      "description": "Minimum deficiency threshold (below this, disease triggers).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "name": {
+      "description": "Display name (can be localized).",
+      "allOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        }
+      ]
+    },
+    "vit_type": {
+      "description": "Type of vitamin (e.g. \"vitamin\", \"toxin\", \"drug\", \"fatigue\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

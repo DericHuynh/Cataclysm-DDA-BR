@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ProfessionItemSubstitutionsDef",
+  "description": "A profession item substitution definition from JSON type `\"profession_item_substitutions\"`.\n\nDefines substitutions for items in profession starting equipment based on character traits (e.g. replacing wool items for characters with wool allergy).\n\nThe JSON data may identify the item using `\"item\"`, `\"trait\"`, or `\"group\"` instead of `\"id\"`, so all identifier fields are optional.",
+  "type": "object",
+  "properties": {
+    "bonus": {
+      "description": "Bonus substitution rules.",
+      "default": null
+    },
+    "group": {
+      "description": "Item group for bonus items.",
+      "default": null
+    },
+    "id": {
+      "description": "Unique identifier (the item id being substituted).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "item": {
+      "description": "Item being substituted (used instead of `id`).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sub": {
+      "description": "Substitution rules.",
+      "default": null
+    },
+    "trait": {
+      "description": "Trait that triggers substitution.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

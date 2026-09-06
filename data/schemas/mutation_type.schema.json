@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MutationTypeDef",
+  "description": "A mutation category type definition from JSON type `\"mutation_type\"`.\n\nDefines a category of mutations (e.g. MUTCAT_BIRD, MUTCAT_FELINE, MUTCAT_LIZARD). Mutation categories group related mutations together and determine which category a character's mutation path belongs to.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "category": {
+      "description": "Categories this mutation type belongs to (e.g. [\"BIRD\"]).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"MUTCAT_BIRD\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "name": {
+      "description": "Display name (e.g. \"Bird\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

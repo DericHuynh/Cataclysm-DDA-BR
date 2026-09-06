@@ -1,0 +1,318 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SpellDef",
+  "description": "A spell definition from JSON type `\"SPELL\"`.\n\nDefines a magical spell or special ability with various effects, targeting rules, scaling parameters, and resource costs.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "additional_linked_spells": {
+      "description": "Additional linked spells that are also cast.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": true
+    },
+    "aoe_increment": {
+      "description": "Area of effect increment per level (numeric or math expression).",
+      "default": null
+    },
+    "base_casting_time": {
+      "description": "Base casting time in moves (numeric or math expression).",
+      "default": null
+    },
+    "base_energy_cost": {
+      "description": "Base energy cost (numeric or math expression).",
+      "default": null
+    },
+    "casting_time_increment": {
+      "description": "Casting time change per level (can be negative, numeric or math expression).",
+      "default": null
+    },
+    "components": {
+      "description": "Components required to cast the spell (references a component definition).",
+      "default": null
+    },
+    "damage_increment": {
+      "description": "Damage increment per level (numeric or math expression).",
+      "default": null
+    },
+    "description": {
+      "description": "Description of the spell's effect.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "difficulty": {
+      "description": "Spell difficulty (numeric or math expression).",
+      "default": null
+    },
+    "duration_increment": {
+      "description": "Duration increment per level (numeric or math expression).",
+      "default": null
+    },
+    "effect": {
+      "description": "Primary effect type (e.g. \"spawn_item\", \"summon\", \"attack\", \"revive\", \"upgrade\", \"noise\", \"guilt\").",
+      "default": null
+    },
+    "effect_str": {
+      "description": "Effect target string (e.g. item ID, monster group ID, effect ID).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "energy_increment": {
+      "description": "Energy cost change per level (can be negative, numeric or math expression).",
+      "default": null
+    },
+    "energy_source": {
+      "description": "Energy source (e.g. \"MANA\", \"HP\", \"STAMINA\", \"BIONIC\", \"FATIGUE\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "extra_effects": {
+      "description": "Additional spells linked to this one (extra effects).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": true
+    },
+    "field_chance": {
+      "description": "Chance of field spawning each tick (numeric or math expression).",
+      "default": null
+    },
+    "field_id": {
+      "description": "Field type to spawn (e.g. \"fd_fatigue\", \"fd_acid\", \"fd_blood\", \"fd_sludge\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "field_intensity_increment": {
+      "description": "Field intensity increment per level (numeric or math expression).",
+      "default": null
+    },
+    "final_casting_time": {
+      "description": "Final casting time at max_level (numeric or math expression).",
+      "default": null
+    },
+    "final_energy_cost": {
+      "description": "Final energy cost at max_level (numeric or math expression).",
+      "default": null
+    },
+    "flags": {
+      "description": "Spell flags (e.g. \"SILENT\", \"CONCENTRATE\", \"VERBAL\", \"SOMATIC\", \"PERMANENT\", \"NO_EXPLOSION_SFX\"). Can be a sequence or a map/object.",
+      "default": null
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"summon_trapspider\", \"burning_hands\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "learn_spells": {
+      "description": "List of spells learned when this spell reaches certain levels. Can be a sequence or a map of spell_id: level.",
+      "default": null
+    },
+    "magic_type": {
+      "description": "Magic type for the spell.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "max_aoe": {
+      "description": "Maximum area of effect radius at max_level (numeric or math expression).",
+      "default": null
+    },
+    "max_damage": {
+      "description": "Maximum damage at max_level (numeric or math expression).",
+      "default": null
+    },
+    "max_duration": {
+      "description": "Maximum duration at max_level (numeric or math expression).",
+      "default": null
+    },
+    "max_field_intensity": {
+      "description": "Maximum field intensity (numeric or math expression).",
+      "default": null
+    },
+    "max_level": {
+      "description": "Maximum level attainable for this spell (numeric or math expression).",
+      "default": null
+    },
+    "max_range": {
+      "description": "Maximum range at max_level (numeric or math expression).",
+      "default": null
+    },
+    "message": {
+      "description": "Message displayed when the spell is cast.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "min_aoe": {
+      "description": "Minimum area of effect radius at level 0 (numeric or math expression).",
+      "default": null
+    },
+    "min_damage": {
+      "description": "Minimum damage at level 0 (numeric or math expression).",
+      "default": null
+    },
+    "min_duration": {
+      "description": "Minimum duration (in movement points/moves) at level 0 (numeric or math expression).",
+      "default": null
+    },
+    "min_field_intensity": {
+      "description": "Minimum field intensity (numeric or math expression).",
+      "default": null
+    },
+    "min_range": {
+      "description": "Minimum range at level 0 (numeric or math expression).",
+      "default": null
+    },
+    "name": {
+      "description": "Display name of the spell.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "range_increment": {
+      "description": "Range increment per level (numeric or math expression).",
+      "default": null
+    },
+    "shape": {
+      "description": "Shape of the spell's area of effect (e.g. \"blast\", \"cone\", \"line\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "skill": {
+      "description": "Skill that improves this spell.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sound": {
+      "description": "Sound of the spell's field.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sound_id": {
+      "description": "Sound ID played on cast.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sound_type": {
+      "description": "Sound type played on cast (e.g. \"combat\", \"spell\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sound_variant": {
+      "description": "Sound variant played on cast.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "spell_class": {
+      "description": "Spell class (e.g. \"NONE\", \"ALCHEMIST\", \"MAGUS\", \"KEEN\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "valid_targets": {
+      "description": "Valid target types for the spell (e.g. [\"ground\", \"self\", \"hostile\", \"ally\"]). Can be a sequence or a map/object.",
+      "default": null
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

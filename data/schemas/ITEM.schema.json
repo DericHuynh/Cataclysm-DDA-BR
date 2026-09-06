@@ -68,6 +68,16 @@
         "null"
       ]
     },
+    "chapters": {
+      "description": "Book: number of chapters (0 = unlimited).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
     "charges": {
       "description": "Charges",
       "default": null,
@@ -152,6 +162,18 @@
         "null"
       ]
     },
+    "damage": {
+      "description": "Ammo damage — number, structured object `{\"damage_type\": \"bullet\", \"amount\": 25}`, or typed array.  Uses `RawValue` because CDDA ammo damage objects mix string and numeric values (unlike `MeleeDamage`).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "default_ammo": {
       "description": "Default ammo",
       "default": null,
@@ -171,6 +193,15 @@
           "type": "null"
         }
       ]
+    },
+    "dispersion": {
+      "description": "Inherent dispersion (accuracy penalty) of the ammunition.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
     },
     "extra": {
       "description": "Catch-all for unknown fields",
@@ -192,7 +223,7 @@
       }
     },
     "fun": {
-      "description": "Fun rating (for reading)",
+      "description": "Fun rating (for comestibles / food). For books, see `read_fun` instead.",
       "default": null,
       "type": [
         "integer",
@@ -210,6 +241,16 @@
     },
     "initial_charges": {
       "description": "Initial charges",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "intelligence": {
+      "description": "Book: intelligence requirement.",
       "default": null,
       "type": [
         "integer",
@@ -238,6 +279,14 @@
         "null"
       ]
     },
+    "martial_art": {
+      "description": "Book: martial art style this book teaches (e.g. \"style_aikido\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "material": {
       "description": "Materials this item is made from.",
       "default": [],
@@ -258,6 +307,16 @@
     },
     "max_charges": {
       "description": "Max charges",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "max_level": {
+      "description": "Book: max skill level this book teaches.",
       "default": null,
       "type": [
         "integer",
@@ -298,6 +357,15 @@
           "$ref": "#/definitions/Phase"
         }
       ]
+    },
+    "pierce": {
+      "description": "Armor penetration for ammunition.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
     },
     "pocket_data": {
       "description": "If set, this item is a container with the given pocket data.",
@@ -361,6 +429,51 @@
         "null"
       ],
       "format": "int32"
+    },
+    "range": {
+      "description": "Effective range of the ammunition (in tiles).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "read_fun": {
+      "description": "Book: fun from reading (separate from food `fun`).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "read_skill": {
+      "description": "Book: skill this item teaches (e.g. \"mechanics\", \"cooking\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "recoil": {
+      "description": "Recoil contributed by firing this ammunition.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "required_level": {
+      "description": "Book: required skill level to read.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
     },
     "revert_to": {
       "description": "Revert to item ID (for activated tools).",
@@ -446,6 +559,18 @@
       "items": {
         "type": "string"
       }
+    },
+    "time": {
+      "description": "Book: reading time (CDDA time string like \"30 m\" or \"8 m\"). Parsed via `Time` which accepts \"30 m\", \"1 h\", bare numbers, etc.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Time"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "to_hit": {
       "description": "To-hit modifier",
@@ -638,6 +763,17 @@
         },
         "encumbrance_modifiers": {
           "description": "Encumbrance modifiers.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "layers": {
+          "description": "Clothing layers this armor piece occupies (e.g. \"NORMAL\", \"OUTER\").",
           "default": null,
           "type": [
             "array",
@@ -1205,6 +1341,17 @@
             "null"
           ]
         },
+        "flag_restriction": {
+          "description": "Item flag restrictions (only items with these flags can go in this pocket).",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "holster": {
           "description": "Whether this pocket acts as a holster.",
           "default": null,
@@ -1512,6 +1659,11 @@
           ]
         }
       }
+    },
+    "Time": {
+      "description": "Game time measured in turns. 1 turn ≈ 1 second.\n\nAccepts both bare numbers (turns) and CDDA-style strings like `\"1 h\"`, `\"30 m\"`, `\"26 h 12 m\"`, `\"744m\"`.",
+      "type": "integer",
+      "format": "int64"
     },
     "ToHit": {
       "description": "To-hit modifier — the `\"to_hit\"` field on items.\n\nCDDA can have to_hit as a simple number (legacy) or as an object with grip/length/surface/balance keys.\n\nExamples: - `100` — simple numeric bonus - `{\"grip\": \"weapon\", \"length\": \"long\", \"surface\": \"any\", \"balance\": \"good\"}` — structured",

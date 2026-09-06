@@ -31,7 +31,5 @@ bevy_mod_debugdump = "0.15.0"
 serde_json.workspace = true
 
 [features]
-default = ["dynamic"]
-dynamic = ["bevy/dynamic_linking"]
 
 [dev-dependencies]

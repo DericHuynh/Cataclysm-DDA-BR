@@ -1,0 +1,234 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WeatherTypeDef",
+  "description": "A weather type definition from JSON type `\"weather_type\"`.\n\nDefines a type of weather (e.g. \"sunny\", \"rain\", \"snowing\").",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "color": {
+      "description": "Color used in UI.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "condition": {
+      "description": "Condition for this weather to occur.",
+      "default": null
+    },
+    "dangerous": {
+      "description": "Whether this weather is dangerous.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "debug_cause_eoc": {
+      "description": "Debug EOC for cause.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "debug_leave_eoc": {
+      "description": "Debug EOC for leave.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"sunny\", \"cloudy\", \"rain\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "light_modifier": {
+      "description": "Light modifier (additive).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "map_color": {
+      "description": "Color used on the map.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "name": {
+      "description": "Display name.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "precip": {
+      "description": "Precipitation type.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "priority": {
+      "description": "Priority for weather selection.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "rains": {
+      "description": "Whether it rains.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "ranged_penalty": {
+      "description": "Ranged combat penalty.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "required_weathers": {
+      "description": "Required preceding weather types.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "sight_penalty": {
+      "description": "Sight penalty multiplier.",
+      "default": null,
+      "type": [
+        "number",
+        "null"
+      ],
+      "format": "double"
+    },
+    "sound_attn": {
+      "description": "Sound attenuation.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "sound_category": {
+      "description": "Sound category.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sun_multiplier": {
+      "description": "Sun multiplier.",
+      "default": null,
+      "type": [
+        "number",
+        "null"
+      ],
+      "format": "double"
+    },
+    "sun_sym": {
+      "description": "Sun symbol.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sym": {
+      "description": "Symbol used in display.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tiles_animation": {
+      "description": "Tiles animation type.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "weather_animation": {
+      "description": "Weather animation configuration.",
+      "default": null
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,202 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MovementModeDef",
+  "description": "A movement_mode definition from JSON type `\"movement_mode\"`.\n\nDefines a movement mode (e.g. \"walk\", \"run\", \"crouch\", \"prone\") with display properties, speed multipliers, and exertion levels.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag — if true, this definition is a template that should not be instantiated directly.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "change_bad_mech": {
+      "description": "Change-to-bad message (in mech).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "change_bad_none": {
+      "description": "Change-to-bad message (no mount).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "change_good_animal": {
+      "description": "Change-to-good message (mounted on animal).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "change_good_mech": {
+      "description": "Change-to-good message (in mech).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "change_good_none": {
+      "description": "Change-to-good message (no mount).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "character": {
+      "description": "Character shown on the map for entities in this mode.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "copy_from": {
+      "description": "Base definition id to copy fields from.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "exertion_level": {
+      "description": "Exertion level (e.g. \"MODERATE_EXERCISE\", \"ACTIVE_EXERCISE\", \"NO_EXERCISE\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "exertion_level_animal_riding": {
+      "description": "Exertion level when riding an animal.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"walk\", \"run\", \"crouch\", \"prone\").",
+      "type": "string"
+    },
+    "move_speed_multiplier": {
+      "description": "Movement speed multiplier.",
+      "default": null,
+      "type": [
+        "number",
+        "null"
+      ],
+      "format": "double"
+    },
+    "move_type": {
+      "description": "Movement type string (e.g. \"walking\", \"running\", \"crouching\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "name": {
+      "description": "Display name (e.g. \"walk\", \"run\", \"crouch\", \"prone\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "panel_char": {
+      "description": "Character shown in the sidebar panel.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "panel_color": {
+      "description": "Color for the panel indicator.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "prepare_animal": {
+      "description": "Preparation message (mounted on animal).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "prepare_mech": {
+      "description": "Preparation message (in mech).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "prepare_none": {
+      "description": "Preparation message (no mount).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sound_multiplier": {
+      "description": "Sound volume multiplier.",
+      "default": null,
+      "type": [
+        "number",
+        "null"
+      ],
+      "format": "double"
+    },
+    "stamina_multiplier": {
+      "description": "Stamina consumption multiplier.",
+      "default": null,
+      "type": [
+        "number",
+        "null"
+      ],
+      "format": "double"
+    },
+    "stop_hauling": {
+      "description": "Whether to stop hauling when entering this mode.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "swim_speed_mod": {
+      "description": "Swim speed modifier (positive = slower in water).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "symbol_color": {
+      "description": "Color for the map symbol.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

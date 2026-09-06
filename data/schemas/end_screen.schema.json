@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EndScreenDef",
+  "description": "An end screen definition from JSON type `\"end_screen\"`.\n\nDefines a screen displayed when the player dies, with ASCII art and stats.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "added_info": {
+      "description": "Additional info sections (lines of text with positions).",
+      "default": [],
+      "type": "array",
+      "items": true
+    },
+    "condition": {
+      "description": "Condition under which this end screen is shown.",
+      "default": null
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"death_tombstone\", \"mycus_death\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "last_words_label": {
+      "description": "Label for the \"last words\" section.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "picture_id": {
+      "description": "ID of the ASCII art picture to display.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "priority": {
+      "description": "Priority for selecting which end screen to show.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,310 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WidgetDef",
+  "description": "A widget definition from JSON type `\"widget\"`.\n\nWidgets define UI elements such as text labels, number displays, graphs, layouts, and sidebars.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag — if true, this definition is a template.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "arrange": {
+      "description": "Layout direction: \"columns\", \"rows\", or other.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "bodypart": {
+      "description": "Body part associated with this widget (e.g. \"head\", \"torso\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "breaks": {
+      "description": "Breakpoints for color changes in graph widgets.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "number",
+        "format": "double"
+      }
+    },
+    "clauses": {
+      "description": "Clauses for conditional text display.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/WidgetClause"
+      }
+    },
+    "colors": {
+      "description": "Color values — can be a single string or an array of strings.",
+      "default": null
+    },
+    "copy_from": {
+      "description": "Base definition id to copy fields from.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "direction": {
+      "description": "Direction for compass widgets (e.g. \"N\", \"S\", \"E\", \"W\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "fill": {
+      "description": "Fill style for graph widgets: \"bucket\" or other.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "fill_style": {
+      "description": "Fill style (alternative field name).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "flags": {
+      "description": "Flags (e.g. \"W_LABEL_NONE\", \"W_NO_PADDING\").",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "height": {
+      "description": "Height of the widget in characters.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"activity_desc\", \"compass_text_template\").",
+      "type": "string"
+    },
+    "label": {
+      "description": "Display label for the widget (plain string or localized object).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "manages_scroll": {
+      "description": "Whether the widget manages its own scrolling.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "padding": {
+      "description": "Padding around the widget content.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "scrollbar": {
+      "description": "Whether the widget has a scrollbar.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "separator": {
+      "description": "Separator string for sidebar widgets.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "show_label": {
+      "description": "Show or hide the label.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "style": {
+      "description": "Widget style: \"text\", \"number\", \"graph\", \"layout\", \"sidebar\", etc.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "symbol": {
+      "description": "Single symbol character for the widget.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "symbols": {
+      "description": "Symbols used for graph rendering (e.g. \".\\\\|\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "text_align": {
+      "description": "Text alignment: \"left\", \"center\", \"right\".",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "var": {
+      "description": "Variable to display (e.g. \"compass_text\", \"power_text\", \"bp_hp\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "widgets": {
+      "description": "Child widget IDs for layout/sidebar widgets.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "width": {
+      "description": "Width of the widget in characters.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    }
+  },
+  "definitions": {
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "WidgetClause": {
+      "description": "A conditional clause for widget text display.",
+      "type": "object",
+      "properties": {
+        "color": {
+          "description": "Color to use when this clause is active.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "condition": {
+          "description": "Condition that must be true for this clause.",
+          "default": null
+        },
+        "id": {
+          "description": "Identifier for this clause.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text": {
+          "description": "Text to display when the condition is met.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/LocalizedString"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

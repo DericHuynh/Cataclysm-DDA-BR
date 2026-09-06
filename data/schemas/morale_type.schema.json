@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MoraleTypeDef",
+  "description": "A morale_type definition from JSON type `\"morale_type\"`.\n\nDefines a type of morale modifier (e.g. \"morale_food_good\", \"morale_music\"). Each morale type has a display text template shown to the player.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "id": {
+      "description": "Unique identifier (e.g. \"morale_food_good\", \"morale_chat\", \"morale_music\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "text": {
+      "description": "Display text template (e.g. \"Enjoyed %s\", \"Music\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

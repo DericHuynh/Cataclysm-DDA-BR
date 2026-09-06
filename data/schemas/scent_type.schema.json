@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ScentTypeDef",
+  "description": "A scent_type definition from JSON type `\"scent_type\"`.\n\nDefines a type of scent that can be tracked by monsters. Each scent type has a list of receptive species that can detect it.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "id": {
+      "description": "Unique identifier (e.g. \"sc_human\", \"sc_flower\", \"sc_fetid\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "receptive_species": {
+      "description": "List of monster species that can detect this scent.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MonsterFlagDef",
+  "description": "A monster flag definition from JSON type `\"monster_flag\"`.\n\nDefines a flag that can be applied to monsters to grant specific behaviors or properties (e.g. SEES, HEARS, WARM, POISON).",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "description": {
+      "description": "Description text.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"SEES\", \"HEARS\", \"WARM\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "info": {
+      "description": "Info text describing the flag's purpose.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

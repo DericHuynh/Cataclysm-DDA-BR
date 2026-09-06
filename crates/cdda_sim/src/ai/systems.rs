@@ -24,6 +24,7 @@ use cdda_components::actor::{ActionPoints, IsAlive};
 use cdda_components::ai::{AiGoal, PlannerBehaviourTree, PlannerGoap, PlannerHtn};
 use cdda_components::def::IsDef;
 use cdda_components::intent::ActionIntent;
+use cdda_components::schedule::ActingEntity;
 use cdda_components::sim::WorldPosition;
 use cdda_core_types::core::coords::WorldPos;
 
@@ -72,52 +73,43 @@ fn goap_goal(_entity: Entity, _pos: Option<&WorldPosition>, _ap: Option<&ActionP
     AiGoal::Wander
 }
 
-/// Hierarchical-task mobs (survivors/hunters): decompose top-level goals.
-/// Stand-in: wander.
-fn htn_goal(_entity: Entity, _pos: Option<&WorldPosition>, _ap: Option<&ActionPoints>) -> AiGoal {
-    AiGoal::Wander
-}
-
 // ---------------------------------------------------------------------------
 // Per-marker systems (run_if guards in the plugin)
 // ---------------------------------------------------------------------------
 
-/// Behaviour tree planner system.
+/// Behaviour tree planner system. Under the budget scheduler only the selected
+/// `ActingEntity` declares; without that resource (direct test calls) all
+/// agents declare as before.
 pub fn drive_behaviour_tree(
     mut commands: Commands,
+    acting: Option<Res<ActingEntity>>,
     q: Query<
         (Entity, &WorldPosition, &ActionPoints),
         (With<PlannerBehaviourTree>, With<IsAlive>, Without<IsDef>),
     >,
 ) {
     for (e, p, a) in &q {
+        if acting.as_ref().is_some_and(|a| a.0 != e) {
+            continue;
+        }
         declare_goal(&mut commands, e, behaviour_tree_goal(e, Some(p), Some(a)));
     }
 }
 
-/// GOAP planner system.
+/// GOAP planner system. Same selection gate as the behaviour-tree driver.
 pub fn drive_goap(
     mut commands: Commands,
+    acting: Option<Res<ActingEntity>>,
     q: Query<
         (Entity, &WorldPosition, &ActionPoints),
         (With<PlannerGoap>, With<IsAlive>, Without<IsDef>),
     >,
 ) {
     for (e, p, a) in &q {
+        if acting.as_ref().is_some_and(|a| a.0 != e) {
+            continue;
+        }
         declare_goal(&mut commands, e, goap_goal(e, Some(p), Some(a)));
-    }
-}
-
-/// HTN planner system.
-pub fn drive_htn(
-    mut commands: Commands,
-    q: Query<
-        (Entity, &WorldPosition, &ActionPoints),
-        (With<PlannerHtn>, With<IsAlive>, Without<IsDef>),
-    >,
-) {
-    for (e, p, a) in &q {
-        declare_goal(&mut commands, e, htn_goal(e, Some(p), Some(a)));
     }
 }
 
@@ -148,7 +140,7 @@ mod tests {
     use super::*;
     use crate::intent::systems::collect_intents;
     use crate::runtime::test_utils::TestBed;
-    use cdda_components::intent::IntentQueue;
+    use cdda_components::intent::{ActionRequestCounter, IntentQueue};
 
     /// A GOAP-planner mob's `drive_goap` system must emit an `ActionIntent` that
     /// reaches the shared AP-sorted buffer — i.e. monsters participate in turn
@@ -157,6 +149,7 @@ mod tests {
     fn goap_mob_declares_intent_into_shared_queue() {
         let mut test = TestBed::new();
         test.insert_resource(IntentQueue::default());
+        test.insert_resource(ActionRequestCounter::default());
         test.register::<ActionIntent>()
             .register::<ActionPoints>()
             .register::<IsAlive>()

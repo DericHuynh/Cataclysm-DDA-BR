@@ -15,29 +15,26 @@
 use bevy::input::keyboard::{Key, KeyboardInput};
 use bevy::input::ButtonState;
 use bevy::prelude::*;
-use bevy_ecs::message::{MessageReader, MessageWriter};
+use bevy_ecs::message::MessageReader;
 use bevy_state::prelude::NextState;
 
 use crate::render::dev_spawn::DevSpawnFocus;
-use cdda_components::actor::{ActionPoints, HandCount};
 use cdda_components::context::{push_ctx, ContextStack, Ctx, FocusedCommandIndex};
-use cdda_components::def::{ItemName, ItemVolume};
-use cdda_components::dev::{DevCamera, DevGroundItemName, DevPlayer};
-use cdda_components::events::{ItemMoveEvent, MoveLocation};
+use cdda_components::def::ItemName;
+use cdda_components::dev::{DevGroundItemName, DevPlayer};
 use cdda_components::input::{GameAction, InputAction, InputContextId, InputContextStack};
+use cdda_components::intent::ActionIntent;
 use cdda_components::item::{
-    ContainerContents, InsideContainer, InventoryFocus, Invlet, ItemType, MountedPockets,
-    WieldedBy, WieldedItems, FLOOR_CAP_ML,
+    ContainerContents, InsideContainer, InventoryFocus, Invlet, ItemType, MountedOn,
+    MountedPockets, WieldedBy, WieldedItems, WornBy, WornOn,
 };
 use cdda_components::sim::WorldPosition;
-use cdda_core_types::core::coords::{WorldPos, ZLevel, TILES_PER_OMT};
+use cdda_core_types::sim_id::SimId;
 use cdda_data::interner::ItemTypeRegistry;
-use cdda_sim::actor::turn::{AP_COST_PICKUP, AP_COST_WIELD};
 use cdda_sim::crafting::systems::{CategoryIndex, CraftEntry, CraftState, PendingCraft};
 use cdda_sim::inventory::examine_resource::ExaminedItem;
-use cdda_sim::inventory::pocket::get_body_pocket;
 use cdda_sim::inventory::systems::all_items_for_creature_q;
-use tracing::warn;
+use cdda_sim::inventory::transfer::within_reach;
 
 // ---------------------------------------------------------------------------
 // Crafting menu input
@@ -373,7 +370,8 @@ pub fn crafting_menu_input(
 /// Handle navigation and item actions while `Ctx::Inventory` is open.
 ///
 /// - **j / k / arrows** — move focus up / down through item rows
-/// - **Enter / e**       — drop the focused item at the camera's OMT tile
+/// - **Enter / e** — examine the focused item
+/// - **w** — declare Wield/Stow for the focused row; simulation validates it
 ///
 /// Gated by `run_if(in_state(Ctx::Inventory))` at registration in cdda_app.
 /// `GameAction::Cancel` (Esc/q) is handled by `handle_navigation_input` which
@@ -383,11 +381,11 @@ pub fn crafting_menu_input(
 pub fn inventory_screen_input(
     mut reader: MessageReader<InputAction>,
     mut focus: ResMut<InventoryFocus>,
-    player_query: Query<(Entity, &HandCount), With<DevPlayer>>,
+    player_query: Query<(Entity, Option<&ActionIntent>), With<DevPlayer>>,
     wielded_items_q: Query<&WieldedItems>,
     wielded_by_check: Query<Entity, With<WieldedBy>>,
+    worn_items_q: Query<&WornBy>,
     mounted_pockets_q: Query<&MountedPockets>,
-    mut ap_query: Query<&mut ActionPoints, With<DevPlayer>>,
     mut commands: Commands,
     mut stack: ResMut<ContextStack>,
     mut next_screen: ResMut<NextState<Ctx>>,
@@ -400,10 +398,10 @@ pub fn inventory_screen_input(
         return;
     }
 
-    let Ok((player_entity, hand_count)) = player_query.single() else {
+    let Ok((player_entity, pending_intent)) = player_query.single() else {
         return;
     };
-    let hand_limit = hand_count.0 as usize;
+    let mut submitted = pending_intent.is_some();
 
     // Collect pocket item entities: in containers/pockets with an Invlet, not
     // currently wielded.
@@ -412,6 +410,7 @@ pub fn inventory_screen_input(
         &contents_q,
         &mounted_pockets_q,
         &wielded_items_q,
+        &worn_items_q,
     );
     let mut pocket_items: Vec<(char, Entity)> = Vec::new();
     for item in all_items {
@@ -477,41 +476,19 @@ pub fn inventory_screen_input(
             }
 
             // [w] — wield from pocket panel, or unwield from wielded panel.
-            GameAction::UseItem => {
-                if focus.panel == 0 {
-                    // Wield: pocket → hand.
-                    if let Some(&(_, item_entity)) = pocket_items.get(focus.index) {
-                        let wielded_count = wielded_list.len();
-                        if wielded_count < hand_limit {
-                            commands
-                                .entity(item_entity)
-                                .remove::<InsideContainer>()
-                                .insert(WieldedBy(player_entity));
-                            if let Ok(mut ap) = ap_query.single_mut() {
-                                ap.spend(AP_COST_WIELD);
-                            }
-                        } else {
-                            warn!(
-                                "Hands full ({}/{}) — cannot wield.",
-                                wielded_count, hand_limit
-                            );
-                        }
-                    }
+            GameAction::UseItem if !submitted => {
+                let intent = if focus.panel == 0 {
+                    pocket_items
+                        .get(focus.index)
+                        .map(|(_, item)| ActionIntent::Wield { item: *item })
                 } else {
-                    // Unwield: hand → body pocket.
-                    if let Some(&item_entity) = wielded_list.get(focus.index) {
-                        let body_pocket = get_body_pocket(player_entity, &mounted_pockets_q)
-                            .unwrap_or(player_entity);
-                        commands
-                            .entity(item_entity)
-                            .remove::<WieldedBy>()
-                            .insert(InsideContainer(body_pocket));
-                        if let Ok(mut ap) = ap_query.single_mut() {
-                            ap.spend(AP_COST_WIELD);
-                        }
-                        let new_len = wielded_list.len().saturating_sub(1);
-                        focus.index = focus.index.min(new_len);
-                    }
+                    wielded_list
+                        .get(focus.index)
+                        .map(|item| ActionIntent::Stow { item: *item })
+                };
+                if let Some(intent) = intent {
+                    commands.entity(player_entity).insert(intent);
+                    submitted = true;
                 }
             }
 
@@ -540,138 +517,69 @@ pub fn inventory_screen_input(
 // Dev-world pickup / drop
 // ---------------------------------------------------------------------------
 
-/// Handles `Pickup` and `Drop` actions in the dev world.
-///
-/// - **g / Pickup** — picks up all items at the camera's current OMT tile.
-/// - **d / Drop**   — drops the first invlet-assigned item at the camera's tile.
-///
-/// Emits `ItemMoveEvent` messages for each item moved. The
-/// `process_item_move_events` system (which runs later in the same
-/// `SimSet::Inventory` phase) applies the actual component changes.
-///
-/// Moved from `cdda_sim::inventory::systems`.
+/// Declare one stable item action, never a transfer message or an AP mutation.
+/// Pickup uses the actor's tile reach, not the OMT camera; drop uses the lowest
+/// inventory letter. Existing requests are not overwritten by repeated input.
 pub fn dev_pickup_drop_system(
     mut reader: MessageReader<InputAction>,
-    camera: Res<DevCamera>,
-    player_query: Query<(Entity, &HandCount), With<DevPlayer>>,
+    player_query: Query<(Entity, &WorldPosition, Option<&ActionIntent>), With<DevPlayer>>,
     ground_item_query: Query<
-        (Entity, &WorldPosition, Option<&ItemVolume>),
-        With<DevGroundItemName>,
+        (Entity, &WorldPosition),
+        (
+            With<DevGroundItemName>,
+            Without<InsideContainer>,
+            Without<WieldedBy>,
+            Without<WornOn>,
+            Without<MountedOn>,
+        ),
     >,
-    item_volumes: Query<Option<&ItemVolume>>,
     wielded_items_q: Query<&WieldedItems>,
+    worn_items_q: Query<&WornBy>,
     mounted_pockets_q: Query<&MountedPockets>,
-    mut ap_query: Query<&mut ActionPoints, With<DevPlayer>>,
-    mut move_writer: MessageWriter<ItemMoveEvent>,
     contents_q: Query<&ContainerContents>,
     invlet_q: Query<&Invlet>,
+    ids: Query<&SimId>,
+    mut commands: Commands,
 ) {
-    let actions: Vec<GameAction> = reader.read().map(|e| e.action.clone()).collect();
-    if actions.is_empty() {
-        return;
-    }
-
-    let Ok((player_entity, hand_count)) = player_query.single() else {
+    let actions: Vec<_> = reader.read().map(|event| event.action.clone()).collect();
+    let Ok((player, position, pending)) = player_query.single() else {
         return;
     };
-    let hand_limit = hand_count.0 as usize;
-
+    if pending.is_some() {
+        return;
+    }
+    let stable_key = |entity: Entity| {
+        let id = ids.get(entity).ok();
+        (
+            id.is_none(),
+            id.map(|id| id.0).unwrap_or_default(),
+            entity.to_bits(),
+        )
+    };
     for action in actions {
-        match action {
-            GameAction::Pickup => {
-                let to_pickup: Vec<(Entity, WorldPos)> = ground_item_query
-                    .iter()
-                    .filter(|(_, wp, _)| {
-                        wp.0.x.div_euclid(TILES_PER_OMT) == camera.x
-                            && wp.0.y.div_euclid(TILES_PER_OMT) == camera.y
-                            && wp.0.z.0 as i32 == camera.z
-                    })
-                    .map(|(e, wp, _)| (e, wp.0))
-                    .collect();
-
-                for (item, pos) in to_pickup {
-                    // Fill hand slots first (WieldedBy), then fall back to
-                    // the body pocket.
-                    let wielded_count = wielded_items_q
-                        .get(player_entity)
-                        .ok()
-                        .map(|wi| wi.iter().count())
-                        .unwrap_or(0);
-
-                    if wielded_count < hand_limit {
-                        move_writer.write(ItemMoveEvent {
-                            item,
-                            from: MoveLocation::Ground(pos),
-                            to: MoveLocation::Wielded(player_entity),
-                            count: 1,
-                        });
-                    } else {
-                        let body_pocket = get_body_pocket(player_entity, &mounted_pockets_q)
-                            .unwrap_or(player_entity);
-                        move_writer.write(ItemMoveEvent {
-                            item,
-                            from: MoveLocation::Ground(pos),
-                            to: MoveLocation::Container(body_pocket),
-                            count: 1,
-                        });
-                    }
-                    if let Ok(mut ap) = ap_query.single_mut() {
-                        ap.spend(AP_COST_PICKUP);
-                    }
-                }
-            }
-
-            GameAction::Drop => {
-                // Drop the first invlet-assigned item in the player's domain.
-                let invlet_items: Vec<(char, Entity)> = all_items_for_creature_q(
-                    player_entity,
-                    &contents_q,
-                    &mounted_pockets_q,
-                    &wielded_items_q,
-                )
+        let intent = match action {
+            GameAction::Pickup => ground_item_query
                 .iter()
-                .filter_map(|&e| invlet_q.get(e).ok().map(|i| (i.0, e)))
-                .collect();
-
-                if let Some(&(_c, item_entity)) = invlet_items.first() {
-                    // Volume check: floor has a hard cap of FLOOR_CAP_ML.
-                    let item_vol = item_volumes
-                        .get(item_entity)
-                        .ok()
-                        .flatten()
-                        .map(|v| v.0)
-                        .unwrap_or(0);
-                    let floor_volume: u32 = ground_item_query
-                        .iter()
-                        .filter(|(_, wp, _)| {
-                            wp.0.x.div_euclid(TILES_PER_OMT) == camera.x
-                                && wp.0.y.div_euclid(TILES_PER_OMT) == camera.y
-                                && wp.0.z.0 as i32 == camera.z
-                        })
-                        .filter_map(|(_, _, vol)| vol.map(|v| v.0))
-                        .sum();
-                    if floor_volume + item_vol > FLOOR_CAP_ML {
-                        warn!(
-                            "Floor ({},{}) full: {}/{} mL — cannot drop.",
-                            camera.x, camera.y, floor_volume, FLOOR_CAP_ML
-                        );
-                        continue;
-                    }
-
-                    let drop_pos = WorldPos::new(
-                        camera.x * TILES_PER_OMT,
-                        camera.y * TILES_PER_OMT,
-                        ZLevel::new(camera.z as i8),
-                    );
-                    move_writer.write(ItemMoveEvent {
-                        item: item_entity,
-                        from: MoveLocation::Container(player_entity),
-                        to: MoveLocation::Ground(drop_pos),
-                        count: 1,
-                    });
-                }
-            }
-            _ => {}
+                .filter(|(_, item_pos)| within_reach(position.get(), item_pos.get()))
+                .map(|(entity, _)| entity)
+                .min_by_key(|entity| stable_key(*entity))
+                .map(|item| ActionIntent::Pickup { item }),
+            GameAction::Drop => all_items_for_creature_q(
+                player,
+                &contents_q,
+                &mounted_pockets_q,
+                &wielded_items_q,
+                &worn_items_q,
+            )
+            .into_iter()
+            .filter_map(|item| invlet_q.get(item).ok().map(|invlet| (invlet.0, item)))
+            .min_by_key(|(letter, entity)| (*letter, stable_key(*entity)))
+            .map(|(_, item)| ActionIntent::Drop { item }),
+            _ => None,
+        };
+        if let Some(intent) = intent {
+            commands.entity(player).insert(intent);
+            break;
         }
     }
 }
@@ -785,5 +693,170 @@ pub fn dev_spawn_input(
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod action_routing_tests {
+    use super::*;
+    use cdda_components::actor::ActionPoints;
+    use cdda_components::events::ItemMoveEvent;
+    use cdda_core_types::core::coords::{WorldPos, ZLevel};
+
+    fn pos(x: i32, z: i8) -> WorldPosition {
+        WorldPosition::new(WorldPos::new(x, 0, ZLevel::new(z)))
+    }
+
+    fn input(app: &mut App, action: GameAction) {
+        app.world_mut().write_message(InputAction::keyboard(action));
+        app.update();
+    }
+
+    #[test]
+    fn dev_pickup_is_one_stable_intent_near_actor_without_camera_or_side_effects() {
+        let mut app = App::new();
+        app.add_message::<InputAction>()
+            .add_message::<ItemMoveEvent>()
+            .add_systems(Update, dev_pickup_drop_system);
+        let player = app
+            .world_mut()
+            .spawn((
+                DevPlayer,
+                pos(101, 0),
+                ActionPoints {
+                    current: 100,
+                    speed: 100,
+                },
+            ))
+            .id();
+        let far = app
+            .world_mut()
+            .spawn((DevGroundItemName("far".into()), pos(0, 0), SimId(0)))
+            .id();
+        let other_z = app
+            .world_mut()
+            .spawn((DevGroundItemName("upstairs".into()), pos(101, 1), SimId(1)))
+            .id();
+        let higher_id = app
+            .world_mut()
+            .spawn((DevGroundItemName("higher".into()), pos(102, 0), SimId(3)))
+            .id();
+        let chosen = app
+            .world_mut()
+            .spawn((DevGroundItemName("chosen".into()), pos(101, 0), SimId(2)))
+            .id();
+        input(&mut app, GameAction::Pickup);
+        assert!(
+            matches!(app.world().get::<ActionIntent>(player), Some(ActionIntent::Pickup { item }) if *item == chosen)
+        );
+        for item in [far, other_z, higher_id, chosen] {
+            assert!(app.world().get::<WorldPosition>(item).is_some());
+            assert!(app.world().get::<InsideContainer>(item).is_none());
+            assert!(app.world().get::<WieldedBy>(item).is_none());
+        }
+        assert_eq!(
+            app.world().get::<ActionPoints>(player).unwrap().current,
+            100
+        );
+        assert!(app.world().resource::<Messages<ItemMoveEvent>>().is_empty());
+        // A pending action survives subsequent input until the sim consumes it.
+        input(&mut app, GameAction::Drop);
+        assert!(
+            matches!(app.world().get::<ActionIntent>(player), Some(ActionIntent::Pickup { item }) if *item == chosen)
+        );
+    }
+
+    #[test]
+    fn dev_drop_uses_lowest_letter_and_emits_no_transfer_or_ap_mutation() {
+        let mut app = App::new();
+        app.add_message::<InputAction>()
+            .add_message::<ItemMoveEvent>()
+            .add_systems(Update, dev_pickup_drop_system);
+        let player = app
+            .world_mut()
+            .spawn((
+                DevPlayer,
+                pos(17, 0),
+                ActionPoints {
+                    current: 100,
+                    speed: 100,
+                },
+            ))
+            .id();
+        let first = app
+            .world_mut()
+            .spawn((InsideContainer(player), Invlet('z')))
+            .id();
+        let chosen = app
+            .world_mut()
+            .spawn((InsideContainer(player), Invlet('a')))
+            .id();
+        input(&mut app, GameAction::Drop);
+        assert!(
+            matches!(app.world().get::<ActionIntent>(player), Some(ActionIntent::Drop { item }) if *item == chosen)
+        );
+        for item in [first, chosen] {
+            assert_eq!(app.world().get::<InsideContainer>(item).unwrap().0, player);
+            assert!(app.world().get::<WorldPosition>(item).is_none());
+        }
+        assert_eq!(
+            app.world().get::<ActionPoints>(player).unwrap().current,
+            100
+        );
+        assert!(app.world().resource::<Messages<ItemMoveEvent>>().is_empty());
+    }
+
+    #[test]
+    fn inventory_wield_and_stow_only_declare_focused_intents() {
+        let mut app = App::new();
+        app.add_message::<InputAction>()
+            .add_message::<ItemMoveEvent>()
+            .init_resource::<InventoryFocus>()
+            .init_resource::<ContextStack>()
+            .init_resource::<FocusedCommandIndex>()
+            .init_resource::<NextState<Ctx>>()
+            .add_systems(Update, inventory_screen_input);
+        let player = app
+            .world_mut()
+            .spawn((
+                DevPlayer,
+                ActionPoints {
+                    current: 100,
+                    speed: 100,
+                },
+            ))
+            .id();
+        let item = app
+            .world_mut()
+            .spawn((InsideContainer(player), Invlet('a')))
+            .id();
+        input(&mut app, GameAction::UseItem);
+        assert!(
+            matches!(app.world().get::<ActionIntent>(player), Some(ActionIntent::Wield { item: target }) if *target == item)
+        );
+        assert_eq!(app.world().get::<InsideContainer>(item).unwrap().0, player);
+        assert!(app.world().get::<WieldedBy>(item).is_none());
+        assert_eq!(
+            app.world().get::<ActionPoints>(player).unwrap().current,
+            100
+        );
+        // Model the sim's completed wield; the next adapter call must only Stow.
+        app.world_mut().entity_mut(player).remove::<ActionIntent>();
+        app.world_mut()
+            .entity_mut(item)
+            .remove::<InsideContainer>()
+            .insert(WieldedBy(player));
+        app.world_mut().resource_mut::<InventoryFocus>().panel = 1;
+        input(&mut app, GameAction::UseItem);
+        assert!(
+            matches!(app.world().get::<ActionIntent>(player), Some(ActionIntent::Stow { item: target }) if *target == item)
+        );
+        assert_eq!(app.world().get::<WieldedBy>(item).unwrap().0, player);
+        assert!(app.world().get::<InsideContainer>(item).is_none());
+        assert_eq!(
+            app.world().get::<ActionPoints>(player).unwrap().current,
+            100
+        );
+        assert!(app.world().resource::<Messages<ItemMoveEvent>>().is_empty());
     }
 }

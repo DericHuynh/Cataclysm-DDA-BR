@@ -1,0 +1,175 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NpcDef",
+  "description": "An NPC definition from JSON type `\"npc\"`.\n\nDefines a non-player character template with class, faction, attitude, and optional inline traits/skills.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag — if true, this definition is a template.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "age": {
+      "description": "Age of the NPC.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "attitude": {
+      "description": "Attitude towards the player (numeric 0-10 or string). 0 = friendly, 10 = hostile.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "bionics": {
+      "description": "Optional list of bionics.",
+      "default": null
+    },
+    "body_type": {
+      "description": "Body type.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "carry_override": {
+      "description": "Carry inventory item group override.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "chat": {
+      "description": "Starting chat topic (e.g. \"TALK_HELLO\", \"TALK_DONE\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "class": {
+      "description": "NPC class ID (e.g. \"NC_SOLDIER\", \"NC_FARMER\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "copy_from": {
+      "description": "Base definition id to copy fields from.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "faction": {
+      "description": "Faction ID (e.g. \"no_faction\", \"marloss\", \"free_merchants\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "gender": {
+      "description": "Gender: \"male\", \"female\", or other.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "height": {
+      "description": "Height of the NPC.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"deserter\", \"marloss_voice\", \"apis\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "melee_skill": {
+      "description": "Melee skill level.",
+      "default": null
+    },
+    "mission": {
+      "description": "Mission value (numeric).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "mission_offered": {
+      "description": "Optional mission(s) offered by this NPC. Can be a single mission ID string or an array of mission IDs.",
+      "default": null
+    },
+    "name_suffix": {
+      "description": "Name suffix appended to the class name (e.g. \"Deserter\", \"chef\"). Can be a plain string or a translatable object {\"str\": \"...\"}.",
+      "default": null
+    },
+    "name_unique": {
+      "description": "Unique display name (overrides the NPC class name).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "personality": {
+      "description": "Personality traits (complex object).",
+      "default": null
+    },
+    "proficiencies": {
+      "description": "Optional inline proficiencies.",
+      "default": null
+    },
+    "skills": {
+      "description": "Optional inline skills. Array of objects with `skill` and `level`.",
+      "default": null
+    },
+    "stats": {
+      "description": "Stats overrides (complex object with str/dex/int/per).",
+      "default": null
+    },
+    "traits": {
+      "description": "Optional inline traits. Can be an array of strings or an array of objects with `trait`, `group`, and `weight`.",
+      "default": null
+    },
+    "worn_armor": {
+      "description": "Worn armor item group override.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

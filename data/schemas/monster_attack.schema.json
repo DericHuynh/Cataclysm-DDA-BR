@@ -1,0 +1,217 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MonsterAttackDef",
+  "description": "A monster special attack definition from JSON type `\"monster_attack\"`.\n\nDefines a special attack that a monster can perform in combat, including melee strikes, grabs, ranged pulls, and EOC-triggered abilities.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "accuracy": {
+      "description": "Accuracy bonus for the attack.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "attack_type": {
+      "description": "Type of attack (e.g. \"melee\", \"bite\", \"eoc\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "blockable": {
+      "description": "Whether the attack can be blocked.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "condition": {
+      "description": "Condition for the attack to be available.",
+      "default": null
+    },
+    "cooldown": {
+      "description": "Cooldown in turns between uses.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "damage_max_instance": {
+      "description": "Maximum damage instances (array of {damage_type, amount} objects).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": true
+    },
+    "dodgeable": {
+      "description": "Whether the attack can be dodged.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "effects": {
+      "description": "Effects applied to the target on hit.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": true
+    },
+    "effects_require_dmg": {
+      "description": "Whether effects require damage to be dealt.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "eoc": {
+      "description": "EOC (effect-on-condition) ID for EOC-type attacks.",
+      "default": null
+    },
+    "grab": {
+      "description": "Whether this attack is a grab attempt.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "grab_data": {
+      "description": "Grab-specific data (e.g. grab effect, pull chance, pull weight ratio).",
+      "default": null
+    },
+    "hit_dmg_npc": {
+      "description": "Message when the attack hits and deals damage to an NPC.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "hit_dmg_u": {
+      "description": "Message when the attack hits and deals damage to the player.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "hitsize_min": {
+      "description": "Minimum size of the target hit (body part size index).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"acid_slash\", \"grab\", \"feral_weapon_pipe\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "miss_msg_npc": {
+      "description": "Message when the attack misses an NPC.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "miss_msg_u": {
+      "description": "Message when the attack misses the player.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "monster_message": {
+      "description": "Monster message displayed when the attack is used.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "move_cost": {
+      "description": "Move cost to perform the attack.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "no_dmg_msg_npc": {
+      "description": "Message when the attack hits but deals no damage to an NPC.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "no_dmg_msg_u": {
+      "description": "Message when the attack hits but deals no damage to the player.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "range": {
+      "description": "Attack range in tiles.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "self_effects_always": {
+      "description": "Effects always applied to the attacker.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": true
+    },
+    "self_effects_onhit": {
+      "description": "Effects applied to the attacker on hit.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": true
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

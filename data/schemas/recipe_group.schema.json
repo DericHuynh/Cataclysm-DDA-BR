@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RecipeGroupDef",
+  "description": "A recipe group definition from JSON type `\"recipe_group\"`.\n\nOrganizes recipes into groups for faction base and camp crafting menus. Each group belongs to a building type and contains a list of recipes with optional om_terrain restrictions.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "building_type": {
+      "description": "Building type this group belongs to (e.g. \"BASE\", \"NONE\", \"WORKSHOP\", \"FARM\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"fbbb_crafting_recipes_basic\", \"all_faction_base_types\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "recipes": {
+      "description": "List of recipes in this group.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/RecipeGroupEntry"
+      }
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "RecipeGroupEntry": {
+      "description": "A single recipe entry within a recipe group.",
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "description": {
+          "description": "Description displayed in the crafting menu.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "Recipe ID.",
+          "type": "string"
+        },
+        "om_terrains": {
+          "description": "Overmap terrains where this recipe is available.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": true
+        }
+      }
+    }
+  }
+}

@@ -1,14 +1,14 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "MapgenPaletteDef",
-  "description": "A mapgen palette definition from JSON type `\"palette\"`.\n\nPalettes are shared mappings from map characters to terrain/furniture/items/etc. Multiple mapgen defs can reference the same palette.",
+  "description": "A mapgen palette from JSON type `\"palette\"`.\n\nPalettes are shared symbol→entity mappings referenced by mapgen definitions. Multiple palette IDs can compose (via the `palettes` array).",
   "type": "object",
   "required": [
     "id"
   ],
   "properties": {
     "flags": {
-      "description": "Flags.",
+      "description": "General flags.",
       "default": [],
       "type": "array",
       "items": {
@@ -16,7 +16,7 @@
       }
     },
     "furniture": {
-      "description": "Character → furniture mappings.",
+      "description": "Symbol → furniture ID.  Same format as terrain.",
       "default": null,
       "type": [
         "object",
@@ -27,7 +27,7 @@
       }
     },
     "id": {
-      "description": "Unique identifier.",
+      "description": "Unique palette identifier.",
       "allOf": [
         {
           "$ref": "#/definitions/DefId"
@@ -35,7 +35,29 @@
       ]
     },
     "items": {
-      "description": "Character → item group mappings.",
+      "description": "Symbol → item group / spawn entry. Value is typically `{\"item\": \"group_id\", \"chance\": N}` or an array of such objects.",
+      "default": null,
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "$ref": "#/definitions/RawValue"
+      }
+    },
+    "liquids": {
+      "description": "Symbol → liquid placement data.",
+      "default": null,
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "$ref": "#/definitions/RawValue"
+      }
+    },
+    "monster": {
+      "description": "Symbol → monster spawn entry.",
       "default": null,
       "type": [
         "object",
@@ -46,7 +68,7 @@
       }
     },
     "palettes": {
-      "description": "Nested / referenced palettes.",
+      "description": "Other palettes to compose into this one (bottom-to-top layering).",
       "default": [],
       "type": "array",
       "items": {
@@ -54,7 +76,7 @@
       }
     },
     "parameters": {
-      "description": "Parameters for parameterized palettes.",
+      "description": "Parameter definitions for parameterized palettes.",
       "default": null,
       "type": [
         "object",
@@ -65,7 +87,7 @@
       }
     },
     "terrain": {
-      "description": "Character → terrain mappings.",
+      "description": "Symbol → terrain ID. Value can be a string (`\"t_floor\"`) or an array of `[id, weight]` tuples for weighted random selection.",
       "default": null,
       "type": [
         "object",
@@ -76,7 +98,7 @@
       }
     },
     "toilets": {
-      "description": "Toilet mappings.",
+      "description": "Symbol → toilet marker (value is typically `{}`).",
       "default": null,
       "type": [
         "object",
@@ -87,7 +109,7 @@
       }
     },
     "vendingmachines": {
-      "description": "Vending machine mappings.",
+      "description": "Symbol → vending machine config.",
       "default": null,
       "type": [
         "object",
@@ -103,18 +125,14 @@
       "type": "string"
     },
     "PaletteRef": {
-      "description": "A palette reference in mapgen, which can be a string or a parameterized reference.",
+      "description": "A reference to a palette — can be a plain string ID, a parameter, or a distribution of weighted options.",
       "anyOf": [
         {
-          "description": "Simple: palette ID string.",
-          "allOf": [
-            {
-              "$ref": "#/definitions/DefId"
-            }
-          ]
+          "description": "Simple: `\"domestic_general_palette\"`.",
+          "type": "string"
         },
         {
-          "description": "Parameterized: {\"param\": \"palette_id_param\"}.",
+          "description": "Parameterized: `{\"param\": \"food_type\"}`.",
           "type": "object",
           "required": [
             "param"
@@ -126,19 +144,19 @@
           }
         },
         {
-          "description": "Object: {\"palette\": \"id\"}.",
+          "description": "Object with palette key: `{\"palette\": \"roof_palette\"}`.",
           "type": "object",
           "required": [
             "palette"
           ],
           "properties": {
             "palette": {
-              "$ref": "#/definitions/DefId"
+              "type": "string"
             }
           }
         },
         {
-          "description": "Distribution: {\"distribution\": [[\"id\", weight], ...]}.",
+          "description": "Weighted distribution: `{\"distribution\": [[\"a\", 2], [\"b\", 1]]}`.",
           "type": "object",
           "required": [
             "distribution"

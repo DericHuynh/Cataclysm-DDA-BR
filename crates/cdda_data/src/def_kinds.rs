@@ -130,6 +130,7 @@ macro_rules! for_each_raw_def_kind {
                 $t!(DamageType, cdda_defs_raw::raw_defs::DamageTypeDef, "damage_type", damage_types, id);
                 $t!(Anatomy, cdda_defs_raw::raw_defs::AnatomyDef, "anatomy", anatomies, id);
                 $t!(EndScreen, cdda_defs_raw::raw_defs::EndScreenDef, "end_screen", end_screens, id);
+                $t!(HtnCompound, cdda_defs_raw::raw_defs::HtnCompoundDef, "htn_compound", htn_compounds, id);
             };
 
             // ── list-context mode ──────────────────────────────────────────────
@@ -242,6 +243,7 @@ macro_rules! for_each_raw_def_kind {
                     $mapper!(DamageType, cdda_defs_raw::raw_defs::DamageTypeDef, "damage_type", damage_types, id),
                     $mapper!(Anatomy, cdda_defs_raw::raw_defs::AnatomyDef, "anatomy", anatomies, id),
                     $mapper!(EndScreen, cdda_defs_raw::raw_defs::EndScreenDef, "end_screen", end_screens, id),
+                    $mapper!(HtnCompound, cdda_defs_raw::raw_defs::HtnCompoundDef, "htn_compound", htn_compounds, id),
                 ]
     };
 }

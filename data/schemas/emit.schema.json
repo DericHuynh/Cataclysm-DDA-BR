@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EmitDef",
+  "description": "An emit definition from JSON type `\"emit\"`.\n\nDefines an emission of a field (gas, smoke, etc.) from a source. Emissions can be produced by monsters, vehicles, or other game objects.",
+  "type": "object",
+  "required": [
+    "field",
+    "id"
+  ],
+  "properties": {
+    "chance": {
+      "description": "Percentage chance of emission occurring each tick.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "field": {
+      "description": "Field type emitted (e.g. \"fd_shadow\", \"fd_smoke\", \"fd_fire\").",
+      "type": "string"
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"emit_shadow\", \"emit_smoke_plume\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "intensity": {
+      "description": "Intensity of the emitted field.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "qty": {
+      "description": "Quantity of field emitted per tick.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

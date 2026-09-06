@@ -1,7 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "OvermapSpecialDef",
-  "description": "Overmap special definition from JSON type `\"overmap_special\"`.\n\nDefines a special placement of OMTs (e.g. a \"mansion\" that spans multiple tiles).",
   "type": "object",
   "required": [
     "id"
@@ -35,6 +34,29 @@
       "maxItems": 2,
       "minItems": 2
     },
+    "connections": {
+      "description": "Connections to roads/railroads from this special. Each connection specifies a point, terrain, and connection type.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/SpecialConnection"
+      }
+    },
+    "eoc": {
+      "description": "Effect-on-condition triggered on placement.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "flags": {
       "description": "Flags. CDDA can use a single string or an array of strings.",
       "default": "",
@@ -49,6 +71,18 @@
       "allOf": [
         {
           "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "joins": {
+      "description": "Mutable special: join definitions (array of join objects/strings).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
         }
       ]
     },
@@ -99,6 +133,40 @@
         }
       ]
     },
+    "phases": {
+      "description": "Mutable special: phases (array of phase objects, each with `rules`).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RawValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "priority": {
+      "description": "Priority for placement ordering (lower = earlier).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "root": {
+      "description": "Mutable special: name of the root overmap entry in `overmaps`.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "rotate": {
+      "description": "Whether rotation is allowed.",
+      "default": true,
+      "type": "boolean"
+    },
     "rotations": {
       "description": "Rotations allowed. CDDA can use a single string or an array of strings.",
       "default": "",
@@ -106,6 +174,26 @@
         {
           "$ref": "#/definitions/StringOrArray"
         }
+      ]
+    },
+    "spawns": {
+      "description": "Monster spawns associated with this special.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/SpecialSpawns"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "subtype": {
+      "description": "Subtype: \"fixed\" (default) or \"mutable\" for procedural placement.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
       ]
     }
   },
@@ -184,6 +272,102 @@
           }
         }
       ]
+    },
+    "SpecialConnection": {
+      "description": "Overmap special definition from JSON type `\"overmap_special\"`.\n\nDefines a special placement of OMTs (e.g. a \"mansion\" that spans multiple tiles). A connection defined within an overmap special (e.g. road connection).",
+      "type": "object",
+      "required": [
+        "point"
+      ],
+      "properties": {
+        "connection": {
+          "description": "Connection type ID (e.g. \"local_road\").",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "existing": {
+          "description": "Whether the connection already exists at this location.",
+          "default": false,
+          "type": "boolean"
+        },
+        "from": {
+          "description": "Hint direction from [dx, dy, dz].",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxItems": 3,
+          "minItems": 3
+        },
+        "point": {
+          "description": "Position offset from special origin [dx, dy, dz].",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxItems": 3,
+          "minItems": 3
+        },
+        "terrain": {
+          "description": "Terrain to place for the connection (e.g. \"road\").",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "SpecialSpawns": {
+      "description": "Monster spawn configuration within an overmap special.",
+      "type": "object",
+      "properties": {
+        "group": {
+          "description": "Monster group to spawn.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "population": {
+          "description": "Population range [min, max].",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxItems": 2,
+          "minItems": 2
+        },
+        "radius": {
+          "description": "Radius range [min, max].",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxItems": 2,
+          "minItems": 2
+        }
+      }
     },
     "StringOrArray": {
       "description": "A value that can be a single string or an array of strings.\n\nUsed by `connect_groups`, `connects_to`, `rotates_to`, and similar fields.\n\nExamples: - `\"wall\"` → `Single(\"wall\")` - `[\"wall\", \"fence\"]` → `Multi(vec![\"wall\", \"fence\"])`",

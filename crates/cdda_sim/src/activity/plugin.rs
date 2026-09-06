@@ -1,20 +1,15 @@
 //! Bevy plugin registering all activity system resources and systems.
 //!
-//! Each activity type has its own regular system.  Systems run in
-//! `SimSet::Activity` (after `TurnTick`, before `Ai`).  `cleanup_done_activities`
-//! runs after all tick systems as a safety net.
-//!
-//! ## Multi-activity future
-//!
-//! All systems query for different activity component types (`Crafting`,
-//! `Aiming`, etc.), so a character can hold multiple activities simultaneously
-//! without system conflict.  When that feature is enabled, all tick systems
-//! process their respective activities independently.
+//! Each activity type has its own regular system inside `SimulationTurn`'s
+//! `SimSet::Activity`, after intent resolution. `cleanup_done_activities` runs
+//! after tick systems. The outer simulation driver owns time and pause gating.
+//! Activity types share `ActivityProgress`; this does not permit concurrent
+//! activities on one actor. Shared AP arbitration remains a pending extension.
 
-use bevy_app::{App, Plugin, Update};
+use bevy_app::{App, Plugin};
 use bevy_ecs::schedule::IntoScheduleConfigs;
 use cdda_components::activity::ActivityTracker;
-use cdda_components::schedule::SimSet;
+use cdda_components::schedule::{SimSet, SimulationTurn};
 
 use super::systems::{
     cleanup_done_activities, tick_aiming, tick_crafting, tick_interacting, tick_reading,
@@ -28,10 +23,10 @@ impl Plugin for ActivityPlugin {
         app.register_type::<ActivityTracker>();
 
         // ── Per-activity tick systems ─────────────────────────────
-        // Each system only touches entities with its specific activity
-        // component type, so they can run in parallel.
+        // Bevy schedules these according to their actual component access;
+        // different activity tags alone do not establish query disjointness.
         app.add_systems(
-            Update,
+            SimulationTurn,
             (
                 tick_crafting,
                 tick_aiming,
@@ -46,7 +41,7 @@ impl Plugin for ActivityPlugin {
         // Safety net: runs after all tick systems to catch stale Done-phase
         // activities that weren't cleaned up inline.
         app.add_systems(
-            Update,
+            SimulationTurn,
             cleanup_done_activities
                 .in_set(SimSet::Activity)
                 .after(tick_crafting)

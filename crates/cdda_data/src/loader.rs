@@ -97,6 +97,35 @@ impl Loader {
         self.raw_by_type.clone()
     }
 
+    /// Ingest one more directory into the existing raw map and return only
+    /// the newly ingested definitions.
+    ///
+    /// This is the mod-layering seam: the loader keeps the core raw
+    /// definitions it already ingested, a mod dir is appended on top, and a
+    /// subsequent [`Self::resolve`] layers the mod over core with
+    /// last-write-wins per ID (and lets mod defs `copy-from` core defs).
+    pub fn ingest_dir(
+        &mut self,
+        dir: &Path,
+    ) -> (HashMap<String, Vec<RawDef>>, Vec<LoaderError>) {
+        let before: HashMap<String, usize> = self
+            .raw_by_type
+            .iter()
+            .map(|(k, v)| (k.clone(), v.len()))
+            .collect();
+        let mut errors: Vec<LoaderError> = Vec::new();
+        self.ingest_directory(dir, &mut errors);
+        self.canonicalize_types();
+        let mut new_defs: HashMap<String, Vec<RawDef>> = HashMap::new();
+        for (kind, raws) in &self.raw_by_type {
+            let start = before.get(kind).copied().unwrap_or(0);
+            if raws.len() > start {
+                new_defs.insert(kind.clone(), raws[start..].to_vec());
+            }
+        }
+        (new_defs, errors)
+    }
+
     /// Build the default mapping of CDDA JSON type strings to canonical types.
     ///
     /// CDDA has many ITEM subtypes (GUN, AMMO, COMESTIBLE, etc.) which all
@@ -546,9 +575,18 @@ impl Loader {
             // Step 5: Deserialize the resolved JSON into the typed struct
             match serde_json::from_value::<T>(normalized_value.clone()) {
                 Ok(def) => {
-                    // Extract the final ID (may differ from the map key for recipes etc.)
-                    let final_id = Self::extract_def_id(&normalized_value)
-                        .unwrap_or_else(|| def_key.to_string());
+                    // Extract the final ID (may differ from the map key for
+                    // array-valued ids etc.). Recipes are the exception: their
+                    // registry identity MUST be the composite raw-map key
+                    // (`result` + `id_suffix`/`variant`) — falling back to the
+                    // bare `result` here let different recipes producing the
+                    // same item overwrite each other.
+                    let final_id = if type_name == "recipe" {
+                        def_key.to_string()
+                    } else {
+                        Self::extract_def_id(&normalized_value)
+                            .unwrap_or_else(|| def_key.to_string())
+                    };
 
                     map.insert(DefId::from(final_id), Arc::new(def));
                     loaded_count += 1;
@@ -1060,6 +1098,38 @@ mod tests {
 
     /// Should use last-write-wins for duplicate IDs.
     #[test]
+    /// Recipe registry identity is the COMPOSITE key (`result` + suffix /
+    /// variant), never the bare `result`: two recipes producing the same item
+    /// must not overwrite each other.
+    #[test]
+    fn recipe_variant_identity_does_not_collapse() {
+        let dir = std::env::temp_dir().join(format!("cdda_recipe_id_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("recipes.json"),
+            r#"[
+                {"type": "recipe", "result": "meat_cooked", "time": 10, "category": "CC_COOKING"},
+                {"type": "recipe", "result": "meat_cooked", "id_suffix": "boil", "time": 20, "category": "CC_COOKING"},
+                {"type": "recipe", "result": "meat_cooked", "variant": "smoke", "time": 30, "category": "CC_COOKING"}
+            ]"#,
+        )
+        .unwrap();
+
+        let mut loader = Loader::new(vec![dir.clone()]);
+        let registry = loader.load().expect("loads");
+        assert_eq!(
+            registry.recipes.len(),
+            3,
+            "three distinct recipe identities survive (base + suffix + variant)"
+        );
+        assert!(registry.recipes.contains_key(&"meat_cooked".to_string().into()));
+        assert!(registry.recipes.contains_key(&"meat_cooked_boil".to_string().into()));
+        assert!(registry.recipes.contains_key(&"meat_cooked_smoke".to_string().into()));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     fn build_raw_map_last_write_wins() {
         // Arrange
         let mut loader = Loader::new(vec![]);

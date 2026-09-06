@@ -1,0 +1,520 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MartialArtDef",
+  "description": "A martial art style definition from JSON type `\"martial_art\"`.\n\nDefines a combat style with buffs, techniques, weapon restrictions, and learning requirements.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "allow_all_weapons": {
+      "description": "Whether all weapons are allowed.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "allow_melee": {
+      "description": "Whether melee weapons are allowed at all.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "arm_block": {
+      "description": "Number of arm blocks available.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "arm_block_with_bio_armor_arms": {
+      "description": "Whether arm blocks use bionic armor.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "bonus_blocks": {
+      "description": "Bonus to the number of blocks available.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "bonus_dodges": {
+      "description": "Bonus to the number of dodges available.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "description": {
+      "description": "Description of the martial art.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "flat_bonuses": {
+      "description": "Flat bonuses applied while in this style.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": true
+    },
+    "force_unarmed": {
+      "description": "Whether the style forces unarmed combat.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "free_dodges": {
+      "description": "Number of free dodges per turn.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"style_aikido\", \"style_bojutsu\", \"style_biojutsu\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "initiate": {
+      "description": "Messages displayed when initiating the style: [player_message, npc_message].",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "learn": {
+      "description": "Messages displayed when learning the style.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "learn_difficulty": {
+      "description": "Difficulty of learning this style.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "leg_block": {
+      "description": "Number of leg blocks available.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "leg_block_with_bio_armor_legs": {
+      "description": "Whether leg blocks use bionic armor.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "mult_bonuses": {
+      "description": "Multiplicative bonuses applied while in this style.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": true
+    },
+    "name": {
+      "description": "Display name of the martial art.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "onattack_buffs": {
+      "description": "Buffs applied when attacking.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/MartialArtBuff"
+      }
+    },
+    "onblock_buffs": {
+      "description": "Buffs applied when blocking.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/MartialArtBuff"
+      }
+    },
+    "oncrit_buffs": {
+      "description": "Buffs applied on critical hits.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/MartialArtBuff"
+      }
+    },
+    "ondodge_buffs": {
+      "description": "Buffs applied when dodging.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/MartialArtBuff"
+      }
+    },
+    "ongethit_buffs": {
+      "description": "Buffs applied when getting hit.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/MartialArtBuff"
+      }
+    },
+    "onhit_buffs": {
+      "description": "Buffs applied when hitting an opponent.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/MartialArtBuff"
+      }
+    },
+    "onkill_buffs": {
+      "description": "Buffs applied on killing an opponent.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/MartialArtBuff"
+      }
+    },
+    "onmove_buffs": {
+      "description": "Buffs applied when moving.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/MartialArtBuff"
+      }
+    },
+    "onpause_buffs": {
+      "description": "Buffs applied when pausing.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/MartialArtBuff"
+      }
+    },
+    "prevent_weapon_blocking": {
+      "description": "Whether weapon blocking is prevented.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "primary_skill": {
+      "description": "Primary skill for this style (e.g. \"bashing\", \"unarmed\", \"melee\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "priority": {
+      "description": "Priority for auto-selection (higher = preferred).",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "static_buffs": {
+      "description": "Static buffs that are always active while in this style.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/MartialArtBuff"
+      }
+    },
+    "strictly_melee": {
+      "description": "Whether only melee weapons are allowed.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "teachable": {
+      "description": "Whether the style can be taught to others.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "techniques": {
+      "description": "Technique IDs available in this style.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "unarmed_allowed": {
+      "description": "Whether unarmed attacks are allowed.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "weapon_category": {
+      "description": "Allowed weapon categories for this style.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "weapons": {
+      "description": "Allowed weapon IDs for this style.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "MartialArtBuff": {
+      "description": "A buff applied by a martial art under certain conditions.",
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "buff_duration": {
+          "description": "Duration of the buff in turns.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "description": {
+          "description": "Description of the buff's effects.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "flat_bonuses": {
+          "description": "Flat stat bonuses.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": true
+        },
+        "id": {
+          "description": "Unique identifier for this buff (e.g. \"buff_aikido_static1\").",
+          "type": "string"
+        },
+        "max_stacks": {
+          "description": "Maximum number of stacks.",
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "melee_allowed": {
+          "description": "Whether the buff allows melee weapons.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "mult_bonuses": {
+          "description": "Multiplicative stat bonuses.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": true
+        },
+        "name": {
+          "description": "Display name of the buff.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "persists": {
+          "description": "Whether the buff persists across turns.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "skill_requirements": {
+          "description": "Skill requirements to activate this buff.",
+          "default": null,
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": true
+        },
+        "unarmed_allowed": {
+          "description": "Whether the buff requires unarmed combat.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

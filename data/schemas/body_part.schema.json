@@ -1,0 +1,246 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BodyPartDef",
+  "description": "A body part definition from JSON type `\"body_part\"`.\n\nDefines a body part (e.g. \"head\", \"torso\", \"arm_l\", \"leg_l\").",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "accusative": {
+      "description": "Accusative form (can be a string, localized object, or missing).",
+      "default": null
+    },
+    "base_hp": {
+      "description": "Base hit points.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "bionic_slots": {
+      "description": "Bionic slots available.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "cold_morale_mod": {
+      "description": "Cold morale modifier.",
+      "default": null,
+      "type": [
+        "number",
+        "null"
+      ],
+      "format": "double"
+    },
+    "connected_to": {
+      "description": "Connected body part ID.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "copy_from": {
+      "description": "Base definition to copy fields from.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "drench_capacity": {
+      "description": "Drench capacity.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "extra": {
+      "description": "Catch-all for any additional fields.",
+      "default": null
+    },
+    "heading": {
+      "description": "Heading (e.g. \"Head\").",
+      "default": null
+    },
+    "heading_multiple": {
+      "description": "Heading multiple form (e.g. \"Head\").",
+      "default": null
+    },
+    "hit_difficulty": {
+      "description": "Hit difficulty (harder to hit with called shots). Can be integer or float.",
+      "default": null
+    },
+    "hit_size": {
+      "description": "Hit size (determines probability of being hit). Can be integer or float.",
+      "default": null
+    },
+    "hot_morale_mod": {
+      "description": "Hot morale modifier.",
+      "default": null,
+      "type": [
+        "number",
+        "null"
+      ],
+      "format": "double"
+    },
+    "hp_bar_ui_text": {
+      "description": "HP bar UI text (e.g. \"HEAD\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"head\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "is_vital": {
+      "description": "Whether this is a vital body part.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "legacy_id": {
+      "description": "Legacy ID for backwards compatibility.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "limb_type": {
+      "description": "Limb type (e.g. \"head\", \"arm\", \"leg\", \"torso\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "main_part": {
+      "description": "Main (parent) body part ID.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "name": {
+      "description": "Display name (can be a plain string, structured object, or missing for copy-from).",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "opposite_part": {
+      "description": "Opposite body part ID.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "side": {
+      "description": "Side (\"left\", \"right\", or neither).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "smash_message": {
+      "description": "Smash message when this part is damaged.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sub_parts": {
+      "description": "Sub-parts of this body part.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

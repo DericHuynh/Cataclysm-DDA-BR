@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LimbScoreDef",
+  "description": "A limb score definition from JSON type `\"limb_score\"`.\n\nDefines a score for a limb, such as manipulation, lifting, or vision.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "affected_by_encumb": {
+      "description": "Whether this score is affected by encumbrance.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "affected_by_wounds": {
+      "description": "Whether this score is affected by wounds.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"manip\", \"lift\", \"vision\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "name": {
+      "description": "Display name.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

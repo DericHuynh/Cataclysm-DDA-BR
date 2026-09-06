@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GateDef",
+  "description": "A gate definition from JSON type `\"gate\"`.\n\nDefines a gate or door that can be opened/closed via a control mechanism.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "bashing_damage": {
+      "description": "Bashing damage dealt by the gate.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "copy_from": {
+      "description": "Base definition id to copy fields from.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "door": {
+      "description": "The door terrain placed when the gate is closed.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "floor": {
+      "description": "The floor terrain placed when the gate is open.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"t_gates_mech_control\", \"t_barndoor\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "messages": {
+      "description": "Messages displayed when interacting with the gate.",
+      "default": null
+    },
+    "moves": {
+      "description": "Movement cost to operate the gate.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "walls": {
+      "description": "List of wall terrains that this gate is compatible with. An empty list matches any wall.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

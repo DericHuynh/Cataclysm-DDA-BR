@@ -1,0 +1,159 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FactionMissionDef",
+  "description": "A faction mission definition from JSON type `\"faction_mission\"`.\n\nDefines a mission that can be assigned to companions at a faction camp.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "activity": {
+      "description": "Activity level.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "desc": {
+      "description": "Description of the mission.",
+      "default": null
+    },
+    "difficulty": {
+      "description": "Difficulty level.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "effects": {
+      "description": "List of effects.",
+      "default": [],
+      "type": "array",
+      "items": true
+    },
+    "footer": {
+      "description": "Footer text.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"camp_gathering\", \"camp_hunting\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "items_label": {
+      "description": "Label for items produced.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "items_possibilities": {
+      "description": "Possible items that can be produced.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "name": {
+      "description": "Display name.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "positions": {
+      "description": "Number of positions available.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "risk": {
+      "description": "Risk level.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "skill": {
+      "description": "Skill used for the mission.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "time": {
+      "description": "Time estimate.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

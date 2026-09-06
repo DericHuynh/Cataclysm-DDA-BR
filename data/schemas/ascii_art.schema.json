@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AsciiArtDef",
+  "description": "An ascii_art definition from JSON type `\"ascii_art\"`.\n\nDefines an ASCII art picture that can be referenced by items and other game objects. The picture is an array of strings, each representing a line of ASCII art.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "copy_from": {
+      "description": "Base definition id to copy fields from.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"10mm_fmj\", \"223\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "picture": {
+      "description": "The ASCII art picture, as an array of strings (each string is a line).",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

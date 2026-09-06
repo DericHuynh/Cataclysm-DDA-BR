@@ -1,7 +1,7 @@
 # Crates DOX
 
 ## Purpose
-Owns the Cargo workspace — 15 member crates (13 source + 1 test-only + 1 raw-def AST leaf). Crate boundaries are aligned with dependency-layer separation and incremental-compile cost.
+Owns the Cargo workspace — 15 member crates (12 game/source crates + 1 workspace-internal planner-core library `cdda_htn` + 1 raw-def AST leaf `cdda_defs_raw` + 1 test-only `cdda_integration_tests`). Crate boundaries are aligned with dependency-layer separation and incremental-compile cost.
 
 ## Ownership
 - The workspace manifest is at the repository root: `Cargo.toml` and `Cargo.lock`.
@@ -10,12 +10,14 @@ Owns the Cargo workspace — 15 member crates (13 source + 1 test-only + 1 raw-d
 
 ## Local Contracts
 - **Layer 1 — pure domain types** (no Bevy ECS): `cdda_core_types`.
+- **Layer 1.5 — planner-core library** (bevy_ecs only, no `cdda_*` deps): `cdda_htn` (developed standalone as `bevy_bhtn`, moved into the workspace, and renamed — the `cdda_htn` name it now owns was vacated by the removed reflection-based planner). Any Layer ≥ 2 crate may depend on it; it must never depend on a `cdda_*` crate. The game integration seam is `cdda_sim::ai::htn`.
 - **Layer 2 — ECS components and shared schedule**: `cdda_components` (the single home for all shared domain `Component`s and event/message types), `cdda_sim` (the runtime harness plus all consolidated game-logic submodules).
 - **Layer 3 — game logic** (Bevy ECS only, no full Bevy): all of the consolidated `cdda_sim::{actor, ai, activity, combat, crafting, equipment, inventory, item, noise}` submodules.
 - **Layer 4 — world and data crates**: `cdda_data`, `cdda_overmap`, `cdda_overmap_gen`.
 - **Layer 5 — app shell** (full Bevy, binaries): `cdda_context`, `cdda_input`, `cdda_render`, `cdda_replay`, `cdda_app`, `cdda_cli`.
 - **UI input adapters live in `cdda_render` (`render/input.rs`), never `cdda_sim`.** `cdda_sim` is the pure use-case layer and must not match the display-UI `GameAction` enum. This is the workspace's "presenter-above-sim" contract: new screen-keyboard handlers go in `cdda_render`, and `cdda_sim` exposes use-case functions for them to call.
-- **All shared domain `Component`s live in `cdda_components`.** A domain's *data* (its components, marker components, relationships) is the cross-domain communication medium; a domain's *systems* live in the crate whose main task they serve (e.g. crafting systems in `cdda_sim::crafting`). When domain A needs data owned by domain B, it queries the shared entity's marker + components + `States` — it does **not** import B's system/function. This is how inventory ↔ crafting ↔ body-parts ↔ map tiles coordinate: via one entity carrying the relevant components/markers, not via cross-crate function calls.
+- **Shared domain components live in `cdda_components`; authoritative operations live in their owning simulation subsystem.** Read shared components/read models across domains. Route invariant-sensitive mutations through shared validating operations rather than duplicating validation or directly calling another domain's scheduled system. Bevy relationships alone do not enforce gameplay ownership/capacity/cost invariants.
+- **One headless simulation contract:** `cdda_sim::runtime::SimulationPlugin` owns `SimulationTurn`, gameplay plugin wiring, time and pause. The app supplies input/render/world adapters; tests use the same persistent schedule. `GameSet` orders outer Update adapters; `SimSet` orders logical simulation only. See cdda_sim/AGENTS.md for the explicit remaining AP-budget and command-routing work.
 - **Test-only**: `cdda_integration_tests` (no library, no `cargo build`; only `cargo test --workspace` compiles it).
 - No crate may depend on `cdda_app` or `cdda_cli`. Those are leaf entry points.
 - A crate that would need a reverse-layer dep must extract the shared types into a new crate (see `TARGET_ARCHITECTURE.md` § No Circular Dependencies).
@@ -38,7 +40,7 @@ Owns the Cargo workspace — 15 member crates (13 source + 1 test-only + 1 raw-d
 Layer 1 — pure domain types (no Bevy ECS):
 
 - `crates/cdda_core_types/AGENTS.md` — Value types, coordinates, `DefId<T>`, damage model, RNG. No raw def structs anymore (they moved to `cdda_defs_raw` in Phase 3a).
-- `crates/cdda_defs_raw/AGENTS.md` — The 138 raw JSON def structs. Typed AST layer of the data pipeline; no Bevy, no logic.
+- `crates/cdda_defs_raw/AGENTS.md` — The 139 raw JSON def structs. Typed AST layer of the data pipeline; no Bevy, no logic.
 
 Layer 2 — ECS components and shared schedule:
 
@@ -47,8 +49,7 @@ Layer 2 — ECS components and shared schedule:
 
 Layer 3 — game logic (Bevy ECS only):
 
-- The nine game-logic submodules all live in `cdda_sim`. See the `src/<area>/` index in `crates/cdda_sim/AGENTS.md`.
-- `crates/cdda_htn/AGENTS.md` — **Headless HTN planner** (forward MTR + backward goal-state), `.htn` DSL parser, reflection-driven operators. Library leaf: no ECS/`Component` and no `cdda_sim`/`cdda_components` dependency (its ECS-driven Criterion benchmark lives in dev-deps only). Adopted by `cdda_sim::ai` to drive `PlannerHtn` mobs (wiring is a follow-up).
+- The nine game-logic submodules all live in `cdda_sim`. See the `src/<area>/` index in `crates/cdda_sim/AGENTS.md` (including `src/ai/htn/`, the HTN game integration over `cdda_htn`). The former `cdda_htn` crate has been **removed** — its replacement is the workspace-internal `crates/cdda_htn` planner core (the crate formerly named `bevy_bhtn`) plus the `cdda_sim::ai::htn` integration module.
 
 Layer 4 — world and data:
 

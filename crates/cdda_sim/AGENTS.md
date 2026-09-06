@@ -1,40 +1,47 @@
 # cdda_sim
 
 ## Purpose
-The single workspace crate that owns every game-logic subsystem plus the runtime harness (`AppState`, `GameTime`, `TestBed`). Formed by consolidating 9 thin game-logic crates (`cdda_actor`, `cdda_ai`, `cdda_activity`, `cdda_combat`, `cdda_crafting`, `cdda_equipment`, `cdda_inventory`, `cdda_item`, `cdda_noise`) with the original `cdda_sim` runtime.
+Owns gameplay systems and the canonical headless simulation runtime. The graphical app, headless scenarios, and future replay driver must use the same schedule rather than reproducing its wiring.
 
 ## Ownership
-## Ownership
-- Bevy deps: `bevy_ecs`, `bevy_reflect`, `bevy_app`, `bevy_state`, `bevy_input` (with `keyboard`), plus `serde`, `cdda_core_types`, `cdda_components`, `cdda_data`, `tracing`.
-- Public surface is organised as submodules. Consumers reach into `cdda_sim::<area>::…` directly.
+- `runtime/` owns the simulation driver, clock adapter, lifecycle types and test helpers.
+- Gameplay systems live under `actor`, `ai`, `intent`, `activity`, `combat`, `crafting`, `equipment`, `inventory`, `item`, and `noise`.
+- Shared domain components live in `cdda_components`; local execution state may live here.
+- Dependencies include `cdda_components`, `cdda_core_types`, `cdda_data`, `cdda_defs_raw`, and the workspace-internal `cdda_htn` planner core. No renderer dependency.
 
 ## Local Contracts
-- **One crate, nine game-logic submodules, one runtime harness.** `cdda_sim::runtime` is the `AppState` + `TestBed` harness. The other nine submodules own one gameplay concern each.
-- **`cdda_sim` is UI-word free.** No submodule matches the display-UI `GameAction` enum or reads `InputAction` messages. Screen-keyboard navigation and item-action adapters (the "presenter" layer) live in `cdda_render::render::input`. `cdda_sim` exposes only use-case functions (e.g. `start_craft`, `process_pending_craft`, `all_items_for_creature_q`, `pickup_item`) that the presenter calls. Verify with `grep -r "GameAction" crates/cdda_sim/` — it must return nothing.
-- **Flat re-exports at the lib root** keep two old call sites alive: `cdda_sim::state` → `cdda_sim::runtime::state`, and `cdda_sim::test_utils` → `cdda_sim::runtime::test_utils`. Both are `#[deprecated]` and will be removed in a follow-up.
-- All callers reach this crate through the consolidated public surface at `cdda_sim::<area>::…`. There are no deprecation shim crates anymore — the migration is complete.
+- **Canonical wiring:** `runtime::SimulationPlugin` installs gameplay plugins/resources and the persistent `SimulationTurn` schedule. It orders `GameSet::Input → Sim → Render` in outer `Update`; only `drive_simulation` runs in the Sim slot. Register authoritative systems in `SimulationTurn`, not `Update`. World adapters can extend its `SimSet::SpatialUpdate` phase.
+- **Time:** one logical turn = one game second, matching definition `Time`. `GameTime` is in `cdda_components::sim`. `SimClock` is ONLY the optional real-time wall accumulator, default 100 ms pacing; it is fail-closed, rejects a zero step, retains bounded catch-up backlog, and clears wall debt while paused.
+- **Driver:** `SimulationControl` defaults to `TurnBased` (wait for declared living-actor actions, pending craft/item moves, or ongoing activities). `Manual` advances only via queued `request_steps` or `step_simulation`; `RealTime` consumes wall time. `max_steps_per_update` bounds work without dropping backlog. Explicit requested steps survive pause. `step_simulation(&mut World)` returns false if paused or an installed `AppState` is not `InGame`; headless apps may omit AppState. A raw `world.run_schedule(SimulationTurn)` bypasses the driver gate and is not the supported stepping API.
+- **Phase order:** TurnTick → Activity → Effects → Healing → Bionics → Morale → Temperature → Vision → Spawning → Inventory → SpatialUpdate inside `SimulationTurn`. IntentDeclare → IntentResolve run inside `SimulationAction`, which the budget scheduler runs repeatedly per world turn.
+- **AP-budget action loop:** after world phases, `step_simulation` repeatedly selects the highest-AP living actor (SimId/Entity stable tie-break, actors with `ActivityProgress` excluded) and runs `SimulationAction` for it (AI declare → collect → resolve). A committed action re-queues the actor while AP > 0, so fast actors act multiple times per world turn; a pass without a committed action parks the actor until the next turn. One declared intent is one action — leftover player budget banks for later turns. Rejected/planless actors cannot loop within a turn (bounded at 64 selections).
+- **Intent commit:** `resolve_intents` is an exclusive sequential world commit: validate live state, commit mutations/AP, then publish matching terminal outcome. Subsequent requests see committed positions, ownership and AP. Equal AP orders by SimId ascending (identified entities first), with Entity bits fallback for untagged fixtures/duplicate IDs. Request IDs are allocated in sorted order; replay requires unique SimIds.
+- **Action validation:** `inventory::transfer::apply_inventory_action` is the shared transactional boundary for item actions. Move requires an existing position, nonzero one-tile offset and a non-overflowing, unoccupied destination (ECS `Solid` entities; local terrain not yet represented). Pickup/Wield/Drop/Stow validate live exclusive location, ownership-chain/cycle safety, same-z Chebyshev ≤ 1 reach for ground items, HandCount for wielding (missing hands = none), and the exact-tile floor cap for drops; each charges 100 AP once after validation. Move/Wait/Pickup/Wield/Drop/Stow complete; MeleeAttack/UseItem/Reload/StartRead/Interact/StartCraft remain unsupported on the intent path (Failed, no AP). Rejected/Failed charge no AP. A despawned actor has no outcome component, but its rejection is counted. Pocket capacity/weight/restrictions and legacy `ItemMoveEvent`/merge consolidation remain deferred.
+- **Submission is not completion:** terminal `ActionOutcome` persists and consumers correlate request IDs. HTN never commits predicted effects; the simulation is authoritative. Planner costs are estimates only.
+- **UI boundary:** do not match `GameAction`/read `InputAction` in simulation systems. Screen adapters live in `cdda_render::render::input` and now declare `ActionIntent`s only for wield/stow/pickup/drop (no AP/relationship/`ItemMoveEvent` bypass). Remaining legacy bypasses: dev spawn, pending-craft routing, and the `ItemMoveEvent`/merge consumer path.
+- `state` and `test_utils` lib-root aliases are deprecated; use `runtime::*`.
 
 ## Work Guidance
-- New code in a game-logic area goes into the matching submodule under `crates/cdda_sim/src/<area>/`. If the area is genuinely new, add a new submodule and declare it in `src/lib.rs`.
-- **Do not match `GameAction`/`InputAction` in `cdda_sim`.** Screen keyboard input belongs in `cdda_render::render::input` (the presenter layer above the sim). If a screen needs input-aware behavior, expose a use-case function here and call it from the render adapter.
-- `runtime/` is the only submodule that other crates typically import directly. Everything else goes through the consolidated public surface at `cdda_sim::<area>::…`.
-- The two `#[deprecated]` re-exports (`cdda_sim::state` and `cdda_sim::test_utils`) should disappear in a future commit. The compiler will point the author at the right path on each call.
+- New behavior goes in its owning subsystem; register it through SimulationPlugin or the subsystem plugin on the canonical schedule.
+- Entity relationships maintain reverse links, not gameplay invariants. Use explicit validating operations for transfers, merges, equipment and costs. Reinsert immutable relationships via World or Commands; do not mutate their fields in place.
+- Explicit phases/transactions own simulation causality. Events are appropriate for notifications and bounded reactions, not a substitute for action commit ordering.
+- Use real persistent App/schedule tests for timing, pause, message cursors, deferred visibility and production wiring. `TestBed::run_system` recreates a system each call and is only an isolated-function helper.
 
 ## Verification
-- `cargo check -p cdda_sim` for compile sanity.
-- `cargo nextest run -p cdda_sim` runs the consolidated test suite (fall back to `cargo test -p cdda_sim` if `nextest` is unavailable). The pre-consolidation tests under `crates/cdda_actor/tests/`, `crates/cdda_combat/tests/`, and `crates/cdda_inventory/tests/` are now under `crates/cdda_sim/tests/{actor,combat,inventory}/`. Other tests live alongside the code they test in the relevant submodule.
-- `cargo nextest run --workspace` runs everything: this crate, the data plane, the renderer, and the integration tests (fall back to `cargo test --workspace` if `nextest` is unavailable).
-- Cross-crate impact: changes to `TestBed` (in `runtime/test_utils.rs`) ripple to every crate that uses it. The harness API is the most volatile surface in this crate.
+- `cargo check -p cdda_sim`.
+- `cargo nextest run -p cdda_sim` (fallback cargo test if nextest unavailable).
+- `cargo nextest run -p cdda_sim --test simulation_schedule_test --test intent_transaction_test --test htn_integration_test` covers production stepping/frame partition/pause/calendar, sequential commits and the planner integration.
+- Workspace integration: `cargo check -p cdda_app` and `cargo nextest run --workspace --exclude cdda_app` (app default dynamic-link test loader is environment-sensitive).
+- Cargo discovers top-level `tests/*.rs` only; the migrated nested suites are wired through the `migrated_{actor,combat,inventory}.rs` aggregators (302 restored tests, 83 pre-existing `#[ignore]` stubs). The discovery guard in `migrated_actor.rs` fails if aggregator modules drift.
 
 ## Child DOX Index
-- `src/runtime/` — `AppState`, `TurnState`, `GameTime`, `StartupConfig`, `LoadingStatus`, and the `TestBed` test harness. The most-consumed submodule; treat its public API as the workspace's test contract.
-- `src/actor/` — Creature turn scheduling, movement, bionics, effects, healing, temperature, morale, vision.
-- `src/ai/` — Per-planner AI dispatch: `drive_behaviour_tree` / `drive_goap` / `drive_htn` (each `.run_if` on its planner marker) emit `ActionIntent` into the shared AP-sorted `IntentQueue` during `SimSet::IntentDeclare`, so monsters and the player are resolved together by highest AP (no player-first guarantee). Planner markers live in `cdda_components::ai`; real planner implements (BT/GOAP/HTN) slot into `systems.rs` per-marker systems.
-- `src/activity/` — Multi-turn player activity **systems** (`tick_crafting`, `tick_aiming`, …) and the `CRAFT_COMPLETE_HOOK` seam. The activity **data components** (`ActivityProgress`, `Crafting`, `Aiming`, `Reading`, `Waiting`, `Reloading`, `Interacting`, `ActivityTracker`) live in `cdda_components::activity` so UI/combat/inventory can query them without importing this crate.
-- `src/combat/` — Damage, hit/miss, melee, ranged.
-- `src/crafting/` — Recipe lookup, component consumption, progress. `crafting/input.rs` now holds only `process_pending_craft` (the use-case executor); the menu keyboard handler lives in `cdda_render::render::input`.
-- `src/equipment/` — Wielding, wearing, encumbrance.
-- `src/inventory/` — Stacks, invlets, binned lookups, item movement, the `ExaminedItem` resource, the `InventoryBin` cache. The `inventory_screen_input` / `dev_pickup_drop_system` UI adapters now live in `cdda_render::render::input`.
-- `src/item/` — `ItemPlugin` for type registration.
-- `src/noise.rs` — 3D simplex noise matching CDDA master.
-- `tests/actor/`, `tests/combat/`, `tests/inventory/` — per-submodule test directories (moved from the corresponding old crate's `tests/`). Plus flat test files at the top of `tests/` for the cross-submodule suites (ammo, armor, body part, calendar, food, item damage, monster, recipe, tool, wield/wear).
+- `src/runtime/` — `plugin.rs` canonical SimulationPlugin/SimulationControl/SimulationMode/step_simulation; `clock.rs` real-time accumulator; `state.rs` AppState/StartupConfig; `test_utils.rs` isolated TestBed.
+- `src/intent/` — stable collection, live sequential validation/commit, correlated outcomes.
+- `src/actor/` — AP grant, effects, movement, healing, bionics, morale, temperature and vision (some physiology remains stubbed).
+- `src/ai/` — per-marker BT/GOAP placeholder producers and real HTN driver before intent collection.
+- `src/ai/htn/` — kernel registry, actor observations, parameterized JSON compound compiler and request/result execution adapter over `cdda_htn`; built domain and ItemCatalog are an immutable resource pair. Startup/reload publication and plan-generation invalidation still need full integration.
+- `src/activity/` — per-type activity ticks and cleanup over shared activity components; craft completion messages are handled in the same logical turn.
+- `src/crafting/` — recipe/state lookup, pending craft start and completion. Menu index OnEnter registration remains here; no InputAction matching.
+- `src/inventory/` — recursive worn/wielded/contents/pocket traversal with dedup, `transfer.rs` transactional Pickup/Wield/Drop/Stow boundary, legacy movement messages, invlets, stacks and bins. Legacy `ItemMoveEvent`/merge consolidation and pocket capacity enforcement remain pending.
+- `src/combat/`, `src/equipment/`, `src/item/`, `src/noise.rs` — combat/equipment operations, type registration, noise functions.
+- `tests/` — top-level domain tests plus `simulation_schedule_test.rs`, `intent_transaction_test.rs`, `inventory_action_test.rs`, `htn_integration_test.rs`, `inventory_traversal_test.rs`, and the `migrated_{actor,combat,inventory}.rs` discovery aggregators.

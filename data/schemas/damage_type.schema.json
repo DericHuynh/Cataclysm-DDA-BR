@@ -1,0 +1,165 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DamageTypeDef",
+  "description": "A damage type definition from JSON type `\"damage_type\"`.\n\nDefines a type of damage (e.g. \"bash\", \"cut\", \"stab\", \"bullet\").",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "bash_conversion_factor": {
+      "description": "Bash conversion factor.",
+      "default": null,
+      "type": [
+        "number",
+        "null"
+      ],
+      "format": "double"
+    },
+    "derived_from": {
+      "description": "Derived from another damage type.",
+      "default": null
+    },
+    "edged": {
+      "description": "Whether this is edged damage.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "environmental": {
+      "description": "Whether this is environmental damage.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"bash\", \"cut\", \"stab\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "immune_flags": {
+      "description": "Immune flags for characters and monsters.",
+      "default": null
+    },
+    "magic_color": {
+      "description": "Color used for magic damage indicators.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "material_required": {
+      "description": "Whether this damage requires materials to protect against.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "melee_only": {
+      "description": "Whether this damage type is melee-only.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "mon_difficulty": {
+      "description": "Whether this damage contributes to monster difficulty.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "name": {
+      "description": "Display name.",
+      "default": null,
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "no_resist": {
+      "description": "Whether this damage type has no resistance.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "physical": {
+      "description": "Whether this is physical damage.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "skill": {
+      "description": "Skill used for this damage type.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

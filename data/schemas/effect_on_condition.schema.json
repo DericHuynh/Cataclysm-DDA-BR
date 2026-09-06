@@ -1,0 +1,118 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EffectOnConditionDef",
+  "description": "An effect_on_condition definition from JSON type `\"effect_on_condition\"`.\n\nEOCs are scripts that run when certain conditions are met. They can be used for ambient effects, quest triggers, timed events, and more.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag — if true, this definition is a template.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "condition": {
+      "description": "Condition that must be true for the effect to run.",
+      "default": null
+    },
+    "copy_from": {
+      "description": "Base definition id to copy fields from.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "deactivate_condition": {
+      "description": "Condition that deactivates this EOC.",
+      "default": null
+    },
+    "effect": {
+      "description": "The effect(s) to execute when triggered. Can be a single effect object or an array of effect objects.",
+      "default": null
+    },
+    "eoc_type": {
+      "description": "Type of EOC: \"ACTIVATION\", \"EVENT\", \"AVATAR_DEATH\", \"RECURRING\", \"PREVENT_DEATH\", \"NPC_DEATH\", etc.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "false_effect": {
+      "description": "Effect(s) to run when the condition is false.",
+      "default": null
+    },
+    "global": {
+      "description": "Whether this EOC runs globally (affects all NPCs).",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"EOC_SLEEP\", \"EOC_RandEnc\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "npcs": {
+      "description": "List of NPC IDs this EOC applies to.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "queue": {
+      "description": "Queue type for the event.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "recurrence": {
+      "description": "Recurrence interval — can be a number (turns), a time string (\"1 hours\"), a range [\"1 hours\", \"2 hours\"], or a complex object.",
+      "default": null
+    },
+    "required_event": {
+      "description": "Event type required to trigger this EOC (for \"EVENT\" type).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "run_for_npcs": {
+      "description": "Whether this EOC should run for NPCs.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "run_once": {
+      "description": "Whether this EOC runs once.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,193 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MonsterGroupDef",
+  "description": "A monster group definition from JSON type `\"monstergroup\"`.\n\nDefines a weighted group of monsters used for spawning in various locations. Groups can reference individual monsters or other groups recursively.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "default_monster": {
+      "description": "Default monster to spawn when no entry matches conditions.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"GROUP_CIVILIANS_UPGRADE\", \"GROUP_ZOMBIE\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "is_animal": {
+      "description": "Whether this group contains only animals.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "monsters": {
+      "description": "List of monsters or sub-groups in this group.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/MonsterGroupEntry"
+      }
+    },
+    "new_monster_group": {
+      "description": "If set, creates a new monster group with this ID and copies monsters from the original.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "replace_monster_group": {
+      "description": "If set, this group replaces another monster group in the JSON inheritance system.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "MonsterGroupEntry": {
+      "description": "An entry in a monster group, either referencing a specific monster or a sub-group.",
+      "anyOf": [
+        {
+          "description": "An entry referencing a specific monster type.",
+          "type": "object",
+          "required": [
+            "monster"
+          ],
+          "properties": {
+            "conditions": {
+              "description": "Conditions required for spawning (e.g. [\"SPRING\", \"SUMMER\"]).",
+              "default": null,
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string"
+              }
+            },
+            "cost_multiplier": {
+              "description": "Cost multiplier for spawn cost calculations.",
+              "default": null,
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            "ends": {
+              "description": "Ending time (hour or time string like \"180 days\") when this monster stops spawning.",
+              "default": null
+            },
+            "monster": {
+              "description": "Monster type ID (e.g. \"mon_zombie\").",
+              "type": "string"
+            },
+            "pack_size": {
+              "description": "Pack size range [min, max] for spawning multiple at once.",
+              "default": null,
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0.0
+              }
+            },
+            "result": {
+              "description": "Result modifications applied to spawned monster (flexible JSON).",
+              "default": null,
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": true
+            },
+            "spawn_multiplier": {
+              "description": "Additional spawn multiplier configuration (flexible JSON).",
+              "default": null
+            },
+            "starts": {
+              "description": "Starting time (hour or time string like \"45 days\") when this monster can start spawning.",
+              "default": null
+            },
+            "weight": {
+              "description": "Relative weight (probability) of this monster within the group.",
+              "default": null,
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          }
+        },
+        {
+          "description": "An entry referencing a sub-group.",
+          "type": "object",
+          "required": [
+            "group"
+          ],
+          "properties": {
+            "cost_multiplier": {
+              "description": "Cost multiplier for spawn cost calculations.",
+              "default": null,
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            "group": {
+              "description": "Sub-group ID (e.g. \"GROUP_FERAL\").",
+              "type": "string"
+            },
+            "pack_size": {
+              "description": "Pack size range [min, max] for spawning multiple at once.",
+              "default": null,
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0.0
+              }
+            },
+            "weight": {
+              "description": "Relative weight (probability) of this sub-group within the group.",
+              "default": null,
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          }
+        }
+      ]
+    }
+  }
+}

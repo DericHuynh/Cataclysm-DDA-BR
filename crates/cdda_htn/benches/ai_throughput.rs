@@ -1,221 +1,162 @@
 //! Throughput benchmark for the `cdda_htn` planner, run **through Bevy ECS**.
 //!
 //! Stresses the planner the way a real CDDA frame would: a population of AI
-//! actors living as **real Bevy entities**, each carrying a multi-node mining
-//! HTN (transcribed from the canonical `bevy_htn` miner example). A Bevy system
-//! iterates the entity query every "tick" and produces a `Plan` component per
-//! entity — so the benchmark measures the exact same planner-through-ECS path
-//! the game would take, including query iteration and component writes.
+//! actors living as **real Bevy entities**, each carrying the shared miner
+//! domain (the canonical HTN miner example) as a dense [`PlanState`]
+//! scratchpad component. A Bevy system iterates the entity query every "tick"
+//! and, per entity, runs one **complete AI episode**: plan from the actor's
+//! scratchpad, then execute **every step** of the plan against it (via
+//! [`common::execute_plan`], the same execution semantics the integration
+//! tests pin), writing the plan into the actor's `PlanOutput` component.
+//! States are reset to their spawn-time seed at the start of every measured
+//! iteration, so each iteration does identical, deterministic work.
 //!
-//! This is upstream of the reference `bevy_htn` example, which drives only a
-//! handful of `Dude`s; here we scale to **200k** simultaneous entities.
+//! This is upstream of the reference examples, which drive only a handful of
+//! actors; here we scale to **200k** simultaneous entities.
 
-use bevy_ecs::component::Component;
-use bevy_ecs::prelude::*;
-use bevy_ecs::system::Res;
-use bevy_reflect::std_traits::ReflectDefault;
-use bevy_reflect::Reflect;
-use bevy_reflect::TypeRegistry;
-use cdda_htn::parse_htn;
-use cdda_htn::planner::HtnPlanner;
+mod common;
+
+use cdda_htn::planner::{HtnPlanner, Plan};
+use cdda_htn::state::PlanState;
+use cdda_htn::tasks::TaskFn;
 use cdda_htn::HtnDomain;
+use bevy_ecs::prelude::*;
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use ustr::Ustr;
 
-/// The world map location a miner can occupy — mirrors `Location` in the
-/// reference miner example.
-#[derive(Reflect, Default, Clone, Copy, Debug, PartialEq, Eq)]
-#[reflect(Default)]
-enum Location {
-    #[default]
-    Outside,
-    House,
-    Ore,
-    Smelter,
-    Mushroom,
-    Merchant,
+use common::miner_tasks::earn_gold;
+use common::{
+    execute_plan, miner_domain, miner_scratch, Energy, Gold, HasMetal, HasOre, Hunger, Location,
+};
+
+/// Plan from `root` — `F` is inferred from the function item, so the lookup
+/// uses the same `TypeId` the domain recorded at bake time.
+fn plan_root<F: TaskFn>(planner: &mut HtnPlanner, _root: F, state: &PlanState) -> Plan {
+    planner.plan(_root, state).expect("plan")
 }
 
-/// The per-actor AI plan state, stored as a Bevy [`Component`].
-#[derive(Reflect, Component, Clone, Debug, Default)]
-struct MinerState {
-    gold: i32,
-    has_ore: bool,
-    has_metal: bool,
-    energy: i32,
-    hunger: i32,
-    location: Location,
-}
+/// The per-entity planning scratchpad: a dense snapshot of the miner
+/// components the domain's closures read and write. [`PlanState`] is
+/// `Clone + Default + Send + Sync`, so it lives directly on the entity.
+#[derive(Component, Default)]
+struct Scratch(PlanState);
 
-/// The output of the planner: written back onto each entity (like the reference
-/// `bevy_bae`/`bevy_htn` `Plan` component). Carries just the (interned) task
-/// names so the benchmark forces a real component write while exercising the
-/// `ustr`-based plan path.
+/// The spawn-time scratchpad each entity replays on reset.
+#[derive(Component, Clone)]
+struct MinerSeed(PlanState);
+
+/// The output of the planner, written back onto each entity.
 #[derive(Component, Debug, Default)]
-struct Plan(Vec<Ustr>);
+struct PlanOutput(Vec<Ustr>);
 
 /// Running count of actors planned so far, written by [`run_ai`]. Using a single
 /// atomics resource keeps the `par_iter_mut` closure free of commands; the
 /// planner work per entity dominates the (rare) cross-thread contention on this
 /// counter, so a thread-local accumulation pass is not worth its setup cost.
 #[derive(Resource, Default)]
-struct AiProcessed(std::sync::atomic::AtomicUsize);
+struct AiProcessed(AtomicUsize);
 
-/// Immutable domain+registry shared by every AI system run. Both derive
-/// `Resource` and are registered once.
+/// Immutable baked domain shared by every AI system run.
 #[derive(Resource)]
 struct HtnResources {
     domain: HtnDomain,
-    registry: TypeRegistry,
 }
 
-impl HtnResources {
-    fn new() -> Self {
-        let mut registry = TypeRegistry::default();
-        registry.register::<MinerState>();
-        registry.register::<Location>();
-        let domain = parse_htn(MINER_HTN).expect("parse miner HTN");
-        Self { domain, registry }
-    }
-}
-
-/// A multi-node mining HTN, same shape as `bevy_htn`'s `assets/miner.htn`:
-/// a recursive root compound task with 4 methods, two nested compound tasks
-/// (ore→metal, metal→gold) and 7 primitives with preconditions/effects.
-const MINER_HTN: &str = r#"
-schema {
-    version: 0.1.0
-}
-
-compound_task "EarnGold" {
-    method "Got enough gold" {
-        preconditions: [gold >= 3]
-        subtasks: []
-    }
-    method "Convert metal to gold" {
-        subtasks: [TurnMetalIntoGold, EarnGold]
-    }
-    method "Convert ore to gold" {
-        subtasks: [TurnOreIntoMetal, EarnGold]
-    }
-    method "Get some ore" {
-        preconditions: [has_ore == false]
-        subtasks: [GoToOre, MineOre, EarnGold]
-    }
-}
-
-compound_task "TurnOreIntoMetal" {
-    method "Get to smelter" {
-        preconditions: [has_ore == true, location != Location::Smelter]
-        subtasks: [GoToSmelter, TurnOreIntoMetal]
-    }
-    method "Smelt" {
-        preconditions: [has_ore == true, location == Location::Smelter]
-        subtasks: [SmeltOre, GoToOutside]
-    }
-}
-
-compound_task "TurnMetalIntoGold" {
-    method "Get to merchant" {
-        preconditions: [has_metal == true, location != Location::Merchant]
-        subtasks: [GoToMerchant, TurnMetalIntoGold]
-    }
-    method "Sell" {
-        preconditions: [has_metal == true, location == Location::Merchant]
-        subtasks: [SellMetal, GoToOutside]
-    }
-}
-
-primitive_task "GoToOre" {
-    effects: [location = Location::Ore]
-    operator: GoToOreOperator
-}
-primitive_task "MineOre" {
-    preconditions: [energy > 10, hunger < 75, location == Location::Ore]
-    effects: [has_ore = true, location = Location::Outside]
-    operator: MineOreOperator
-}
-primitive_task "GoToSmelter" {
-    effects: [location = Location::Smelter]
-    operator: GoToSmelterOperator
-}
-primitive_task "SmeltOre" {
-    preconditions: [energy > 10, hunger < 75, location == Location::Smelter, has_ore == true]
-    effects: [has_ore = false, has_metal = true]
-    operator: SmeltOreOperator
-}
-primitive_task "GoToMerchant" {
-    effects: [location = Location::Merchant]
-    operator: GoToMerchantOperator
-}
-primitive_task "SellMetal" {
-    preconditions: [energy > 10, hunger < 75, location == Location::Merchant, has_metal == true]
-    effects: [gold += 1, has_metal = false]
-    operator: SellMetalOperator
-}
-primitive_task "GoToOutside" {
-    effects: [location = Location::Outside]
-    operator: GoToOutsideOperator
-}
-"#;
-
-/// The AI system: for every miner entity, plan the root task and write the
-/// result into its `Plan` component.
+/// The AI system: for every miner entity, plan over its scratchpad, execute
+/// the full plan against it, and write the plan into its `PlanOutput`
+/// component.
 ///
 /// Runs the query in **parallel** via [`Query::par_iter_mut`], the per-frame AI
-/// cost. Each closure builds its own [`HtnPlanner`] (an immutable
-/// `domain + registry` view, no shared mutable state), so the population plans
-/// concurrently; the `par_iter_mut` batch is scheduled across the
-/// multi-threaded `ComputeTaskPool`.
+/// cost. Each closure builds its own [`HtnPlanner`] (an immutable `domain`
+/// view, no shared mutable state), so the population plans concurrently; the
+/// `par_iter_mut` batch is scheduled across the multi-threaded
+/// `ComputeTaskPool`.
 fn run_ai(
     resources: Res<HtnResources>,
-    mut q: Query<(&MinerState, &mut Plan)>,
     processed: Res<AiProcessed>,
+    mut q: Query<(&mut Scratch, &mut PlanOutput)>,
 ) {
-    processed.0.store(0, std::sync::atomic::Ordering::Relaxed);
-    q.par_iter_mut().for_each(|(state, mut plan)| {
-        let mut planner = HtnPlanner::new(&resources.domain, &resources.registry);
-        let planned = planner.plan("EarnGold", state);
-        plan.0 = planned.task_names().to_vec();
-        processed
-            .0
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    processed.0.store(0, Ordering::Relaxed);
+    q.par_iter_mut().for_each(|(mut scratch, mut output)| {
+        let domain = &resources.domain;
+        let mut planner = HtnPlanner::new(domain);
+        let planned = plan_root(&mut planner, earn_gold, &scratch.0);
+        execute_plan(domain, &mut scratch.0, &planned);
+        output.0 = planned.task_names(domain).into_iter().map(Ustr::from).collect();
+        processed.0.fetch_add(1, Ordering::Relaxed);
     });
 }
 
-/// Spawn `n` miner entities with varied state, then return a `(world, schedule)`
-/// ready to run the AI system — mirroring how a production Bevy app runs it via
-/// the multi-threaded [`Schedule`] executor (which initializes the
-/// `ComputeTaskPool`).
+/// Reset every actor's scratchpad to its spawn-time seed. Runs at the head of
+/// the schedule so each measured iteration starts from identical states (the
+/// replan cycle mutates them).
+fn reset_states(mut q: Query<(&mut Scratch, &MinerSeed)>) {
+    q.par_iter_mut().for_each(|(mut scratch, seed)| {
+        scratch.0 = seed.0.clone();
+    });
+}
+
+/// The miner components as a **concrete** tuple. `common::miner_components`
+/// returns an opaque `impl Bundle`, which bevy 0.18 cannot spawn through (the
+/// opaque's `DynamicBundle::Effect` bound does not propagate), so the bench
+/// reads the same seed values back out of the fixture's `miner_scratch` — the
+/// formulas stay in `benches/common/mod.rs` as the single source of truth.
+fn miner_bundle(
+    domain: &HtnDomain,
+    state: &PlanState,
+) -> (Gold, HasOre, HasMetal, Energy, Hunger, Location) {
+    let reg = &domain.components;
+    (
+        state.get_slot::<Gold>(reg.slot_of::<Gold>().unwrap()).clone(),
+        state.get_slot::<HasOre>(reg.slot_of::<HasOre>().unwrap()).clone(),
+        state
+            .get_slot::<HasMetal>(reg.slot_of::<HasMetal>().unwrap())
+            .clone(),
+        state.get_slot::<Energy>(reg.slot_of::<Energy>().unwrap()).clone(),
+        state.get_slot::<Hunger>(reg.slot_of::<Hunger>().unwrap()).clone(),
+        state
+            .get_slot::<Location>(reg.slot_of::<Location>().unwrap())
+            .clone(),
+    )
+}
+
+/// Spawn `n` miner entities with varied components (plus their reset seeds and
+/// scratchpads), then return a `(world, schedule)` ready to run the AI system —
+/// mirroring how a production Bevy app runs it via the multi-threaded
+/// [`Schedule`] executor (which initializes the `ComputeTaskPool`).
 fn spawn_world(n: usize) -> (World, Schedule) {
+    let domain = miner_domain();
     let mut res = World::new();
-    res.insert_resource(HtnResources::new());
+    let ids: Vec<Entity> = res
+        .spawn_batch((0..n).map(|i| {
+            let seed = miner_scratch(&domain, i);
+            (miner_bundle(&domain, &seed), MinerSeed(seed))
+        }))
+        .collect();
+    for e in ids {
+        res.entity_mut(e).insert((
+            // Pre-insert the scratchpad and output components so the AI system
+            // can write into them directly in parallel (steady-state: every
+            // actor has a plan).
+            Scratch::default(),
+            PlanOutput::default(),
+        ));
+    }
+    res.insert_resource(HtnResources { domain });
     res.insert_resource(AiProcessed::default());
-    res.spawn_batch((0..n).map(|i| {
-        (
-            MinerState {
-                gold: (i % 5) as i32,
-                has_ore: i % 3 == 0,
-                has_metal: i % 7 == 0,
-                energy: 80 - (i % 40) as i32,
-                hunger: 20 + (i % 60) as i32,
-                location: Location::Outside,
-            },
-            // Pre-insert the output component so the AI system can write into it
-            // directly in parallel (steady-state: every actor already has a plan).
-            Plan(Vec::new()),
-        )
-    }))
-    .count();
 
     let mut schedule = Schedule::default();
-    schedule.add_systems(run_ai);
+    // Explicit chain: bevy_ecs 0.18 tuples no longer imply ordering, and the
+    // reset must complete before the AI system reads the scratchpads.
+    schedule.add_systems((reset_states, run_ai).chain());
     (res, schedule)
 }
 
 pub fn miner_planner(c: &mut Criterion) {
-    let single_state = MinerState::default();
+    let domain = miner_domain();
+    let single_state = miner_scratch(&domain, 0);
 
     let mut group = c.benchmark_group("cdda_htn_bevy_ecs");
 
@@ -227,21 +168,26 @@ pub fn miner_planner(c: &mut Criterion) {
         group.bench_function(format!("frame_{n}_miner_entities"), |b| {
             b.iter(|| {
                 schedule.run(&mut world);
-                let processed = world
-                    .resource::<AiProcessed>()
-                    .0
-                    .load(std::sync::atomic::Ordering::Relaxed);
+                let processed = world.resource::<AiProcessed>().0.load(Ordering::Relaxed);
                 warn_if_processed(processed, n);
             });
         });
     }
 
-    // Single-actor latency done straight through the planner (no ECS overhead).
-    let resources = HtnResources::new();
-    group.bench_function("plan_one_actor_latency", |b| {
+    // Single-actor overhead done straight through the planner (no ECS
+    // overhead): the same work shape as `run_ai` — one plan, then execute the
+    // full plan — with state reset per iteration. Throughput is pinned to 1
+    // element so Criterion's (stateful, group-wide) thrpt column doesn't
+    // inherit the 200k from the frame loop above and print nonsense Gelem/s
+    // for a latency number.
+    group.throughput(criterion::Throughput::Elements(1));
+    group.bench_function("plan_one_actor_overhead", |b| {
         b.iter(|| {
-            let mut planner = HtnPlanner::new(&resources.domain, &resources.registry);
-            black_box(planner.plan("EarnGold", &single_state));
+            let mut state = single_state.clone();
+            let mut planner = HtnPlanner::new(&domain);
+            let plan = plan_root(&mut planner, earn_gold, &state);
+            execute_plan(&domain, &mut state, &plan);
+            black_box(&plan);
         });
     });
 

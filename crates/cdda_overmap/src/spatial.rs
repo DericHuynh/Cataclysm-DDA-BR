@@ -29,6 +29,7 @@
 use bevy_ecs::entity::Entity;
 use bevy_ecs::lifecycle::Remove;
 use bevy_ecs::prelude::*;
+use cdda_components::sim::WorldPosition;
 use cdda_core_types::core::coords::WorldPos;
 use std::collections::HashMap;
 
@@ -133,6 +134,11 @@ impl EntitySpatialIndex {
         result
     }
 
+    /// The cell an entity is currently indexed under (diagnostics/tests).
+    pub fn cell_of(&self, entity: Entity) -> Option<(i32, i32, i32)> {
+        self.entity_cells.get(&entity).copied()
+    }
+
     pub fn entity_count(&self) -> usize {
         self.entity_cells.len()
     }
@@ -148,24 +154,85 @@ impl EntitySpatialIndex {
 
 /// System: sync the spatial index for every entity whose position changed.
 ///
-/// Run this in `PostUpdate` so that all position mutations from game systems
-/// are captured before rendering or AI queries.
+/// Gameplay entities carry the `WorldPosition` wrapper (what movement writes);
+/// raw `WorldPos` remains supported for entities that use the bare coordinate
+/// type directly. Run this in `PostUpdate` so that all position mutations from
+/// game systems are captured before rendering or AI queries.
 pub fn sync_spatial_index(
     mut index: ResMut<EntitySpatialIndex>,
-    changed: Query<(Entity, &WorldPos), Changed<WorldPos>>,
+    changed: Query<(Entity, &WorldPosition), Changed<WorldPosition>>,
+    changed_raw: Query<(Entity, &WorldPos), (Changed<WorldPos>, Without<WorldPosition>)>,
 ) {
-    for (entity, &pos) in &changed {
+    for (entity, pos) in &changed {
+        index.update_position(entity, pos.get());
+    }
+    for (entity, &pos) in &changed_raw {
         index.update_position(entity, pos);
     }
 }
 
-/// Observer: remove an entity from the index when its `WorldPos` is dropped.
+/// Observer: remove an entity from the index when its position component is
+/// dropped (either position flavor).
 ///
 /// `Remove` fires before the component is gone, but we only need the entity
 /// ID here, so the timing doesn't matter.
 pub fn remove_from_spatial_index(
+    trigger: On<Remove, WorldPosition>,
+    mut index: ResMut<EntitySpatialIndex>,
+) {
+    index.remove_entity(trigger.entity);
+}
+
+/// Observer twin for entities that used the raw `WorldPos` component.
+pub fn remove_raw_pos_from_spatial_index(
     trigger: On<Remove, WorldPos>,
     mut index: ResMut<EntitySpatialIndex>,
 ) {
     index.remove_entity(trigger.entity);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cdda_core_types::core::coords::ZLevel;
+
+    /// The sync system must track the **gameplay** position component
+    /// (`WorldPosition`, what movement writes), not only the raw `WorldPos`.
+    #[test]
+    fn sync_tracks_world_position_and_raw_pos_alike() {
+        let mut world = World::new();
+        world.init_resource::<EntitySpatialIndex>();
+
+        let z = ZLevel::new(0);
+        let mover = world.spawn(WorldPosition::new(WorldPos::new(1, 2, z))).id();
+        let raw = world.spawn(WorldPos::new(40, 0, z)).id();
+
+        let mut sys = IntoSystem::into_system(sync_spatial_index);
+        sys.initialize(&mut world);
+        sys.run((), &mut world);
+
+        let index = world.resource::<EntitySpatialIndex>();
+        assert_eq!(index.entity_count(), 2, "both position flavors indexed");
+        assert_eq!(
+            index.query_radius_2d(WorldPos::new(1, 2, z), 0.0),
+            vec![mover],
+            "WorldPosition entity indexed at its gameplay position"
+        );
+        assert_eq!(
+            index.query_radius_2d(WorldPos::new(40, 0, z), 0.0),
+            vec![raw],
+            "raw WorldPos entity still indexed"
+        );
+
+        // Movement writes WorldPosition → the next sync moves the entity.
+        world.get_mut::<WorldPosition>(mover).unwrap().set(WorldPos::new(30, 2, z));
+        sys.run((), &mut world);
+        let index = world.resource::<EntitySpatialIndex>();
+        assert_eq!(
+            index.cell_of(mover),
+            Some((1, 0, 0)),
+            "moved entity re-indexed into the cell of its new position"
+        );
+        assert_eq!(index.cell_of(raw), Some((2, 0, 0)), "raw entity untouched");
+    }
 }

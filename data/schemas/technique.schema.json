@@ -1,0 +1,482 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TechniqueDef",
+  "description": "A technique definition from JSON type `\"technique\"`.\n\nDefines a combat technique used in martial arts or monster attacks. Techniques can modify damage, add effects, or provide special combat maneuvers.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "abstract_": {
+      "description": "Abstract flag — if true, this definition is a template that should not be instantiated directly.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "aoe": {
+      "description": "Area of effect type (e.g. \"wide\").",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "attack_vectors": {
+      "description": "Attack vectors allowed (e.g. `[\"vector_punch\"]`).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "blocking": {
+      "description": "Whether the technique blocks hits.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "condition": {
+      "description": "Condition for technique activation (e.g. `{\"not\": {\"npc_has_effect\": \"downed\"}}`).",
+      "default": null
+    },
+    "condition_desc": {
+      "description": "Description of the condition for tooltips.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "copy_from": {
+      "description": "Base definition id to copy fields from.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "crit_ok": {
+      "description": "Whether the technique can happen on any hit (including crits).",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "crit_tec": {
+      "description": "Whether a critical hit is required for this technique.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "defensive": {
+      "description": "Whether this is a defensive technique (used when blocking/dodging).",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "description": {
+      "description": "Description text.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "disarms": {
+      "description": "Whether the technique disarms the target.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "down_dur": {
+      "description": "Down duration in turns.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "flat_bonuses": {
+      "description": "Flat bonuses applied by this technique (e.g. `[{\"stat\": \"damage\", \"type\": \"bash\", \"scale\": 1.5}]`).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/TechniqueBonus"
+      }
+    },
+    "forbidden_buffs_all": {
+      "description": "Buffs that prevent this technique. Can be a single buff ID or array.",
+      "default": "",
+      "allOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        }
+      ]
+    },
+    "grab_break": {
+      "description": "Whether this technique breaks grabs.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"tec_biojutsu_disarm\", \"FANGS_BITE\").",
+      "type": "string"
+    },
+    "knockback_dist": {
+      "description": "Knockback distance in tiles.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "knockback_fix": {
+      "description": "Knockback force.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "melee_allowed": {
+      "description": "Whether the technique works with melee weapons.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "messages": {
+      "description": "Messages shown on use: [player_message, npc_message].",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "miss_recovery": {
+      "description": "Whether this technique allows a miss recovery.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "mult_bonuses": {
+      "description": "Multiplicative bonuses applied by this technique.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/TechniqueBonus"
+      }
+    },
+    "name": {
+      "description": "Display name.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "ranged_allowed": {
+      "description": "Whether the technique works with ranged weapons.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "reach_ok": {
+      "description": "Whether the technique can be used at reach.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "repeat_max": {
+      "description": "Maximum repeat count.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "repeat_min": {
+      "description": "Minimum repeat count.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "required_buffs_all": {
+      "description": "Required buffs (all must be present). Can be a single buff ID or array.",
+      "default": "",
+      "allOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        }
+      ]
+    },
+    "required_buffs_any": {
+      "description": "Required buffs (any must be present). Can be a single buff ID or array.",
+      "default": "",
+      "allOf": [
+        {
+          "$ref": "#/definitions/StringOrArray"
+        }
+      ]
+    },
+    "skill_requirements": {
+      "description": "Skill requirements (e.g. `[{\"name\": \"unarmed\", \"level\": 1}]`).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/SkillRequirement"
+      }
+    },
+    "stun_dur": {
+      "description": "Stun duration in turns.",
+      "default": null,
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "take_downs": {
+      "description": "Whether the technique takes down the target.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "tech_effects": {
+      "description": "Tech effects applied by this technique (e.g. `[{\"id\": \"disarmed\", \"chance\": 100, ...}]`).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/TechEffect"
+      }
+    },
+    "throw_attack": {
+      "description": "Whether the technique throws the target.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "unarmed_allowed": {
+      "description": "Whether the technique works with unarmed attacks.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "wall_adjacent": {
+      "description": "Whether the technique requires being adjacent to a wall.",
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "weapon_categories_allowed": {
+      "description": "List of weapon categories allowed (e.g. \"BIONIC_WEAPONRY\").",
+      "default": null
+    },
+    "weighting": {
+      "description": "Weighting factor for technique selection.",
+      "default": null,
+      "type": [
+        "number",
+        "null"
+      ],
+      "format": "double"
+    }
+  },
+  "definitions": {
+    "SkillRequirement": {
+      "description": "A skill requirement for a technique.",
+      "type": "object",
+      "required": [
+        "level",
+        "name"
+      ],
+      "properties": {
+        "level": {
+          "description": "Required skill level.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "name": {
+          "description": "Skill name (e.g. \"unarmed\", \"melee\", \"dodge\").",
+          "type": "string"
+        }
+      }
+    },
+    "StringOrArray": {
+      "description": "A value that can be a single string or an array of strings.\n\nUsed by `connect_groups`, `connects_to`, `rotates_to`, and similar fields.\n\nExamples: - `\"wall\"` → `Single(\"wall\")` - `[\"wall\", \"fence\"]` → `Multi(vec![\"wall\", \"fence\"])`",
+      "anyOf": [
+        {
+          "description": "Single string value.",
+          "type": "string"
+        },
+        {
+          "description": "Array of strings.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "TechEffect": {
+      "description": "A tech effect applied by a technique.",
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "base_chance": {
+          "description": "Base chance (absolute).",
+          "default": null
+        },
+        "chance": {
+          "description": "Chance of effect (percentage).",
+          "default": null
+        },
+        "duration": {
+          "description": "Duration in turns.",
+          "default": null
+        },
+        "id": {
+          "description": "Effect ID.",
+          "type": "string"
+        },
+        "intensity": {
+          "description": "Intensity of the effect.",
+          "default": null
+        },
+        "message": {
+          "description": "Message displayed when the effect triggers.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "on_damage": {
+          "description": "Whether the effect applies on damage.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "save_message": {
+          "description": "Whether to save the message.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "TechniqueBonus": {
+      "description": "A bonus (flat or multiplicative) applied by a technique.",
+      "type": "object",
+      "required": [
+        "stat"
+      ],
+      "properties": {
+        "arith": {
+          "description": "Arithmetic operation.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sca": {
+          "description": "Bonus value (flat bonus).",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "scale": {
+          "description": "Scale multiplier.",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "stat": {
+          "description": "Stat affected (e.g. \"damage\", \"movecost\", \"arpen\", \"arm\").",
+          "type": "string"
+        },
+        "type": {
+          "description": "Damage type (e.g. \"bash\", \"cut\", \"stab\", \"bullet\", \"heat\").",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -16,5 +16,6 @@
 //! resolved together by highest action points — there is **no player-first
 //! guarantee** (see the `intent` module and the `higher_ap_monster...` test).
 
+pub mod htn;
 pub mod plugin;
 pub mod systems;

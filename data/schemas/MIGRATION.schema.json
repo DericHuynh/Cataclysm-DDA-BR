@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ItemMigrationDef",
+  "description": "An item migration definition from JSON type `\"MIGRATION\"`.\n\nDefines how to migrate old item IDs to new ones when the game data changes.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "content": {
+      "description": "Content items to migrate (e.g. container contents).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": true
+    },
+    "flags": {
+      "description": "Flags to apply after migration.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "id": {
+      "description": "The old item identifier(s) to migrate from (can be a single string or array of strings)."
+    },
+    "replace": {
+      "description": "The new item identifier to replace with.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "variant": {
+      "description": "Additional field used in MIGRATION definitions (e.g. variant).",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

@@ -1,25 +1,27 @@
-//! Bevy plugin for the intent resolution pipeline.
-//!
-//! Registers `collect_intents` (IntentDeclare) and `resolve_intents`
-//! (IntentResolve) with proper ordering so intents are gathered before
-//! they are resolved.
-
-use bevy_app::{App, Plugin, Update};
-use bevy_ecs::schedule::IntoScheduleConfigs;
-use cdda_components::schedule::SimSet;
-
+//! Intent systems run inside `SimulationAction`: one selected actor acts per
+//! schedule run, repeated while that actor still has budget.
 use super::systems::{collect_intents, resolve_intents};
+use bevy_app::{App, Plugin};
+use bevy_ecs::schedule::IntoScheduleConfigs;
+use cdda_components::intent::{ActionRequestCounter, IntentQueue};
+use cdda_components::schedule::{SimSet, SimulationAction};
 
 pub struct IntentPlugin;
 
 impl Plugin for IntentPlugin {
     fn build(&self, app: &mut App) {
-        // Collect intents from all entities (AI + player) into the IntentQueue.
-        app.add_systems(Update, collect_intents.in_set(SimSet::IntentDeclare));
-
-        // Resolve intents in AP order, with precondition validation.
+        app.init_resource::<ActionRequestCounter>();
+        app.init_resource::<IntentQueue>();
+        app.configure_sets(
+            SimulationAction,
+            (SimSet::IntentDeclare, SimSet::IntentResolve).chain(),
+        );
         app.add_systems(
-            Update,
+            SimulationAction,
+            collect_intents.in_set(SimSet::IntentDeclare),
+        );
+        app.add_systems(
+            SimulationAction,
             resolve_intents
                 .in_set(SimSet::IntentResolve)
                 .after(collect_intents),

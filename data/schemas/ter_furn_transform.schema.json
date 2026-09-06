@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TerFurnTransformDef",
+  "description": "A terrain/furniture transform definition from JSON type `\"ter_furn_transform\"`.\n\nDefines a transformation that changes terrain or furniture tiles based on matching conditions (e.g. turning doors to frames, walls to rubble).",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "fail_message": {
+      "description": "Message displayed when the transform fails.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "furniture": {
+      "description": "Furniture transformations to apply.",
+      "default": null
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"remove_door\", \"clearcut\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "terrain": {
+      "description": "Terrain transformations to apply.",
+      "default": null
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

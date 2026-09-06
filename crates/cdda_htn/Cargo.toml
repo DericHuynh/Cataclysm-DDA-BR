@@ -1,22 +1,41 @@
 [package]
 name = "cdda_htn"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-description = "Hierarchical Task Network planner for CDDA AI — imports .htn files, strongly-typed reflection-driven operators, forward (+MTR) and backward (goal-state) planning."
+description = "Hierarchical Task Network planner core for CDDA (Bevy-ECS based) — tasks are plain Rust functions baked into a flat inspectable graph; preconditions/effects are component closures; forward (+MTR) and backward planning. Workspace-internal (formerly the standalone `bevy_bhtn` crate; the `cdda_htn` name now belongs to this planner core). Integrated into the game via `cdda_sim::ai::htn`."
 
 [dependencies]
-bevy_reflect.workspace = true
-bevy_asset.workspace = true
-serde.workspace = true
-pest.workspace = true
-pest_derive.workspace = true
+bevy_ecs.workspace = true
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+smallvec.workspace = true
 thiserror.workspace = true
-ustr = "1.1.0"
+ustr.workspace = true
+
+[features]
+# Serialization of compiled plans (the save-game seam: an agent's AI state is
+# its `Plan` — plain data). `ustr/serde` interns the display names the plan
+# deliberately does not store.
+serde = ["dep:serde", "dep:serde_json", "ustr/serde"]
+# Hot-reload support via Dioxus Subsecond (the same engine behind Bevy's
+# `hotpatching` feature): when enabled, `HtnConfig` can carry a domain
+# rebuild closure and the driver re-records + re-bakes the domain whenever a
+# hot patch lands. See `src/ecs.rs` module docs.
+hotpatching = ["bevy_ecs/hotpatching"]
 
 [dev-dependencies]
-bevy_ecs.workspace = true
-bevy_reflect.workspace = true
-criterion = { workspace = true }
+# Minimal-feature umbrella: bevy_bae's `tasks!` macro expands to
+# `::bevy::prelude::related!`, so the `bevy` crate must be in scope. Kept
+# ad-hoc (NOT `workspace = true`) so the planner's own test/bench builds pull
+# default-features OFF instead of the game's full bevy feature stack —
+# within one `cargo test --workspace` run, feature unification unions them
+# for that build regardless.
+bevy = { version = "0.18", default-features = false }
+bevy_app.workspace = true
+bevy_bae = "0.1"
+# Bench API pin: the planner benches target the criterion 0.7 API (the
+# workspace table pins 0.8 for CDDA's own benches — two versions coexist).
+criterion = "0.7"
 
 [[bench]]
 name = "ai_throughput"
@@ -24,4 +43,16 @@ harness = false
 
 [[bench]]
 name = "deep_ai"
+harness = false
+
+[[bench]]
+name = "lookahead"
+harness = false
+
+[[bench]]
+name = "wide_sets"
+harness = false
+
+[[bench]]
+name = "competitor_comparison"
 harness = false

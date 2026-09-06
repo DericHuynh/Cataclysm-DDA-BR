@@ -1,0 +1,106 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ToolQualityDef",
+  "description": "A tool quality definition from JSON type `\"tool_quality\"`.\n\nDefines a quality that a tool can possess (e.g. cutting, welding, hammering). Tools with matching qualities can be used for specific crafting recipes. The `usages` field maps quality levels to the named actions they unlock.",
+  "type": "object",
+  "required": [
+    "id",
+    "name"
+  ],
+  "properties": {
+    "id": {
+      "description": "Unique identifier (e.g. \"CUT\", \"WELD\", \"HAMMER\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "name": {
+      "description": "Display name of the tool quality.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/LocalizedString"
+        }
+      ]
+    },
+    "usages": {
+      "description": "Usage actions unlocked at each quality level.\n\nCDDA format: `[ [level, [action_name, ...]], ... ]` Example: `[ [1, [\"salvage\", \"inscribe\"]], [2, [\"LUMBER\"]] ]` At level 1, this quality enables \"salvage\" and \"inscribe\" actions. At level 2, it additionally enables \"LUMBER\".",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/QualityUsage"
+      }
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    },
+    "LocalizedString": {
+      "description": "A localized string that may contain translations for multiple languages.\n\nIn CDDA JSON, this appears as: ```json { \"str\": \"name\", \"//~\": \"context\" } { \"str_sp\": \"name\" }           // same for singular & plural { \"str_pl\": \"names\" }          // explicit plural ``` Or as a plain string `\"name\"`.\n\nFor Stage 1 we store the raw English text. Full i18n support (extracting translations) is deferred.",
+      "anyOf": [
+        {
+          "description": "A plain, non-localized string.",
+          "type": "string"
+        },
+        {
+          "description": "A localized object with optional plural and context.",
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_pl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "str_sp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "QualityUsage": {
+      "description": "A single usage entry linking a quality level to its enabled actions.",
+      "type": "object",
+      "required": [
+        "actions",
+        "level"
+      ],
+      "properties": {
+        "actions": {
+          "description": "Action names enabled at this level (e.g. \"salvage\", \"LUMBER\", \"FISH_ROD\").",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "level": {
+          "description": "Minimum quality level required to unlock these actions.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    }
+  }
+}

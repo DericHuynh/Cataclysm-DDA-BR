@@ -1,185 +1,100 @@
 # Current Architecture — CDDA-BR
 
-> **Last updated:** This document describes the architecture as currently
-> implemented. See [TARGET_ARCHITECTURE.md](TARGET_ARCHITECTURE.md) for the
-> planned migration path.
+CDDA-BR is a Rust/Bevy 0.18 reimplementation. This document distinguishes implemented contracts from pending architecture work. Local AGENTS files own APIs and verification commands; TARGET_ARCHITECTURE.md owns the remaining roadmap.
 
-## Overview
+## Ownership
 
-CDDA-BR is a reimplementation of Cataclysm: Dark Days Ahead in Rust using
-Bevy ECS 0.18. The project is organized into 22 workspace crates under
-`crates/`, plus the root binary crate.
+The virtual Cargo workspace has 15 members:
 
-## Crate Layout
-
-### Layer 1 — Pure domain types (no Bevy ECS dependency)
-
-| Crate | Purpose |
+| Boundary | Crates / responsibility |
 |---|---|
-| `cdda_core_types` | Value objects (Volume, Weight, Energy, Time), coordinate types (WorldPos, OmPos, etc.), generic `DefId<T>` string IDs, raw JSON definition structs, damage model, error types, RNG (SeededRng, SimId) |
+| Domain values and raw data | cdda_core_types (units/coordinates/IDs/RNG), cdda_defs_raw (JSON AST) |
+| Shared ECS contracts | cdda_components (domain components, relationships, intent/results, schedule labels, current input/context vocabulary) |
+| Planner core | cdda_htn (bevy_ecs-only, no cdda dependencies) |
+| Simulation | cdda_sim (runtime, actor, AI, intents, activities, combat, crafting, equipment, inventory, items, noise) |
+| Data and world | cdda_data (resolve/project/catalog), cdda_overmap (OMT storage/terrain registry/spatial index), cdda_overmap_gen (generation) |
+| Adapters | cdda_context, cdda_input, cdda_render, cdda_replay |
+| Entry points | cdda_app, cdda_cli |
+| Cross-crate tests | cdda_integration_tests |
 
-### Layer 2 — ECS components and shared schedule definitions
+The planner core was developed standalone as bevy_bhtn, moved into this workspace, and renamed cdda_htn, replacing the old reflection-based planner. Game-specific integration lives in cdda_sim::ai::htn.
 
-| Crate | Purpose | Bevy Deps |
-|---|---|---|
-| `cdda_components` | All Bevy ECS components: actor (creature, stats, bionics, effects, skills, mutations, morale, body parts), item (containers, pockets, inventory), activity (progress, crafting, reading, weariness), def (definition template components), schedule (GameSet, SimSet), input (GameAction, BindableAction), events/messages, context (Ctx states, navigation). **Single home for all shared domain components and event/message types.** | `bevy_ecs`, `bevy_reflect` |
-| `cdda_sim` | Simulation layer: the consolidated game-logic submodules (actor, ai, activity, combat, crafting, equipment, inventory, item, noise) plus the state machine (AppState, TurnState) and test utilities (TestBed). Owns systems, not component data. | `bevy_ecs` |
+Crate layers are organizational guidance, not proof of isolation. Current sim depends on the data crate's catalog plus loader/asset surface; components also contains input-framework types. No crate may depend on application entry points.
 
-### Layer 3 — Game logic crates
+## Canonical simulation schedule
 
-The game-logic subsystems listed below were **consolidated into `cdda_sim` submodules** (the older separate crates `cdda_actor`, `cdda_item`, `cdda_activity`, `cdda_combat`, `cdda_crafting`, `cdda_equipment`, `cdda_inventory`, `cdda_ai`, `cdda_noise` no longer exist as crates). Each submodule owns one gameplay concern's systems and shares data via `cdda_components`:
+`cdda_sim::runtime::SimulationPlugin` installs the persistent `SimulationTurn` schedule and gameplay subsystem plugins/resources. The graphical app uses this same plugin; headless tests need no renderer or window.
 
-| Subsystem (`cdda_sim::`) | Purpose |
-|---|---|
-| `actor` | Creature turn scheduling (ActionPoints), movement, bionics, effects, healing, temperature, morale, vision |
-| `item` | Item type registration |
-| `activity` | Player activity ticking (crafting, aiming, reading, waiting, reloading) — drives `cdda_components::activity` |
-| `combat` | Damage, hit/miss, melee, ranged |
-| `crafting` | Recipe lookup, component consumption, progress |
-| `equipment` | Wielding, wearing, encumbrance |
-| `inventory` | Stacks, invlets, binned lookups, item movement |
-| `ai` | Monster/NPC decision-making, pathfinding |
-| `noise` | Sound propagation for AI sensory input |
+Outer `Update` is ordered:
 
-### Layer 4 — World and data crates
+1. GameSet::Input — adapters publish work.
+2. GameSet::Sim — drive_simulation invokes logical turns.
+3. GameSet::Render — presentation reads committed state.
 
-| Crate | Purpose | Bevy Deps |
-|---|---|---|
-| `cdda_data` | JSON loading (two-pass: ingest → resolve), `copy-from` inheritance (extend/delete/relative/proportional), DefRegistry (single authoritative store of all game definitions), flag population, schema generation | `bevy_ecs`, `bevy_state` |
-| `cdda_overmap` | Overmap storage, overmap terrain queries, pathfinding | `bevy_ecs` |
-| `cdda_overmap_gen` | Overmap generation: pipeline (matching C++ order), city/special/connection/mongroup placement, deterministic RNG | `bevy_ecs` |
+Inside each SimulationTurn:
 
-### Layer 5 — Input, Render, and App
+TurnTick → IntentDeclare → IntentResolve → Activity → Effects → Healing → Bionics → Morale → Temperature → Vision → Spawning → Inventory → SpatialUpdate.
 
-| Crate | Purpose | Bevy Deps |
-|---|---|---|
-| `cdda_context` | Headless context state machine (Ctx states, pop/push navigation, overlay stack, focus management, menu state) | `bevy_ecs`, `bevy_state` |
-| `cdda_input` | Input plugin: ActionState → InputAction bridging, keybinding maps, input context stacks, bindable actions | Full `bevy` |
-| `cdda_render` | Rendering plugin: UI screens (inventory, crafting, character sheet, examine, main menu, overmap, settings), ASCII viewport, tile rendering, theming. **Also hosts the screen input adapters (`render/input.rs`) — the presenter layer that translates `InputAction` (UI vocabulary) into `cdda_sim` use-case calls, so `cdda_sim` never matches `GameAction`.** | Full `bevy` |
-| `cdda_replay` | Replay system: session logging, deterministic replay, state hashing | `bevy_ecs` |
-| `cdda_app` | Binary entry point: wires all subsystems, configures Bevy DefaultPlugins, registers system ordering (Input → Sim → Render) | Full `bevy` |
-| `cdda_cli` | CLI subcommands: `run` (default), `schedule-graph`, `render-graph`, `dump` | Full `bevy` |
+Craft start precedes its tick and completion follows it. Inventory movement, invlet assignment, and bin rebuild are chained. The app extends the logical schedule with spatial synchronization; camera and overlay extraction stay in outer Update.
 
-### Hub crate: `cdda_core`
+### Time and pause
 
-`cdda_core` re-exports everything from all other crates and provides startup
-systems (`load_data_system`, `spawn_dev_world`, `worldgen_system`). It acts
-as a facade but also creates circular dependency resilience.
+- GameTime and parsed definition Time agree: one logical turn is one game second (3600/hour, 86400/day).
+- SimulationControl defaults to TurnBased: idle render updates do not grant AP, decay effects or move AI. Declared living-actor intents, ongoing activities, pending crafts and legacy item moves request work.
+- Manual mode accepts explicit request_steps; step_simulation runs one production turn with persistent system-local state.
+- Optional RealTime mode uses SimClock only as wall pacing (default 100 ms). Multiple turns can execute per frame up to a cap; elapsed backlog is retained. Pausing clears wall debt, not explicit queued requests.
+- The central gate freezes logical turns if SimulationControl.paused or an installed AppState is not InGame. Headless worlds may omit AppState. Calling raw run_schedule bypasses the driver and is not the supported stepping API.
 
-## Data Loading Pipeline
+**Remaining:** player budgets bank rather than force re-prompting; activities tick a fixed per-turn slice instead of consuming the action budget; combat verbs (MeleeAttack/UseItem/Reload) are still unsupported on the intent path.
 
-The data loading follows a two-pass approach:
+## Action execution
 
-1. **Pass 1 (Ingest):** `Loader::ingest_all()` walks `data/` directories, reads all
-   `.json` files, groups raw `serde_json::Value`s by their `"type"` field.
-2. **Pass 2 (Resolve):** `Loader::load()` → `resolve_copy_from()` deserializes each
-   raw def into typed structs, resolves `copy-from` inheritance chains
-   (extend/delete/relative/proportional), produces `DefRegistry`.
-3. **Def World Construction:** `build_def_world()` spawns Bevy entities for each
-   definition (items, monsters, terrain, furniture, recipes, body parts) with
-   typed components.
+ActionIntent is a request, not a completed action. The collector orders requests by descending AP then ascending SimId (Entity bits only as a fallback) and, under the budget scheduler, collects only the currently selected `ActingEntity`.
 
-After loading, the `DefinitionWorld` resource maps string IDs to entity IDs for
-runtime lookup.
+The exclusive resolver validates each request against the live world, synchronously commits its mutation and AP cost, then publishes ActionOutcome. Later requests see earlier commits; two actors cannot both successfully pick up one ground item.
 
-### Part-B bridge (import/export adapters)
+- Move: existing position, nonzero one-tile offset, checked coordinate arithmetic, no ECS Solid occupant.
+- Pickup/Wield/Drop/Stow: the shared transactional boundary `inventory::transfer::apply_inventory_action` validates live exclusive location, ownership-chain/cycle safety, same-z reach for ground items, hand counts and the exact-tile floor cap, then charges 100 AP once. Inventory screen and dev input adapters declare intents only — no AP or relationship bypass.
+- Wait completes and consumes AP. Rejected and unsupported Failed actions charge no AP.
 
-The **fully-resolved raw JSON** (the output of `Loader::resolve_type_raw`) is the
-lossless source of truth for every def. Typed structs and Bevy components are
-*projections*, not independent stores. A decoupled import/export `bridge`
-(`crates/cdda_data/src/bridge.rs`) is the seam a GUI JSON editor / format
-migration builds on:
+Collision currently has no local terrain model beyond ECS Solid entities. Inventory messages, UI equipment mutations, stack merging and pending-craft dispatch still need to use shared validating operations.
 
-- **Import:** resolved JSON → `DefRecord<T>` (a Bevy `Component` carrying both
-  the raw `Value` and the typed parse), so unmodeled keys are never dropped.
-- **Export:** `compute_overrides` + `apply_delta` + `export_override_def`
-  rebuild the *minimal* `copy-from` override delta against a def's parent —
-  inherited (unchanged) fields are omitted, new fields added, removed inherited
-  fields become `delete`. Re-applying the delta to the parent reproduces the
-  child (verified across `data/core` by the `bridge` CLI / `bridge_all_types`).
+Relationships maintain reverse links, not gameplay capacity/ownership/resource invariants. Explicit operations and phase ordering remain necessary. Events are notifications/bounded reactions, not a replacement scheduler.
 
-Import and export are fully independent (no shared state), so a new wire format
-(v2, a mod-pack delta, a different storage layout) needs only a new adapter.
+## Data and definition projection
 
-## Simulation Tick
+Loader ingests core/mod JSON then resolves copy-from/patches into typed DefRegistry. ModManager layers mods into the retained loader; recipe composite keys survive resolution. The raw resolved JSON is retained through bridge import/export adapters for lossless tooling.
 
-The simulation runs in `GameSet::Sim` with phases ordered via `SimSet`:
-1. `TurnTick` — grant action points
-2. `Activity` — process ongoing activities
-3. `Ai` — AI decision-making (monsters, NPCs)
-4. `Movement` — resolve movement
-5. `Combat` — resolve combat
-6. `Effects` — tick status effects
-7. `Healing` — natural healing
-8. `Bionics` — bionic power drain
-9. `Morale` — morale decay
-10. `Temperature` — body temperature
-11. `Vision` — sight range updates
-12. `Spawning` — creature/item spawning
-13. `Inventory` — item movement events, bin building
-14. `SpatialUpdate` — spatial index maintenance
+build_def_world has per-category builders and spawns IsDef entities into the **main ECS World**. DefinitionWorld is an index resource, not a separate World. Runtime queries must filter definitions where appropriate.
 
-## Key Design Decisions
+**Remaining:** the shared string-only index loses category identity; recipe projection discards its stable key; destructive definition rebuild invalidates retained Entity references. General validated definition-generation publication and migration are not yet complete.
 
-### Relationships over components
-Bevy ECS relationships (`#[relationship]` / `#[relationship_target]`) model
-all entity-to-entity connections: inside-container, wielded-by, worn-on,
-skill-of, mutation-of, bionic-of, effect-on. Mutate by reinserting via
-`commands.insert()`, never via `&mut` access.
+## Terrain identities and persistence
 
-### Tag components over bool fields
-Boolean properties use tag components for archetype-level filtering:
-`With<Visible>`, `With<Active>`, `With<Sealed>`, `With<Rigid>`, etc.
+TerrainHandle indices are runtime-only. Registration upserts a stable ID in place; new IDs append slots. TerrainRegistry::rebuild_from preserves existing terrain/family slots and remaps rotation links. Removed old IDs or invalid links reject the rebuild atomically rather than reinterpreting existing chunks.
 
-### Messages vs Events
-- **Messages** (buffered, processed next frame): `ItemMoveEvent`, `SoundEvent`,
-  `SightEvent`, `SpawnEvent`. Used for bulk/batched operations.
-- **Events / EntityEvent** (immediate, observer-based): `DamageEvent`,
-  `DeathEvent`, `EquipEvent`, `UnequipEvent`, `UseItemEvent`. Used for
-  entity-to-entity reactions.
+App reload validates the terrain candidate before destructive definition rebuilding. A rejected candidate preserves the previous runtime and is not logged as successful. This protection is specific to terrain; it is not a general definition migration solution.
 
-### DefId<T> pattern
-String-based type-safe identifiers via `DefId<T>`. Each definition category
-has a marker type (ItemDef, MonsterDef, TerrainDef, etc.) for type-level
-distinction.
+Binary chunk format v1 uses magic/version, coordinates, a palette of stable UTF-8 terrain IDs, and cells containing palette index plus rotation. Read/write APIs require a TerrainRegistry. Loading against a differently ordered registry preserves terrain meaning. Unknown IDs, malformed data, unsupported versions and the old raw-index format are rejected. See cdda_overmap/AGENTS.md for framing and limits.
 
-### Fair turn ordering (no player priority)
-Player input and AI decisions both declare an `ActionIntent` into a single
-buffered `IntentQueue` that is sorted by **action points descending** and
-resolved first-highest-AP-wins. This deliberately differs from CDDA-Master's
-blocking player loop (where the player acts for their whole budget before `monmove()`):
-in the rewrite a fast monster can act before a slow player. Validated by the
-`higher_ap_monster_goes_before_lower_ap_player` test.
+Overmap chunks store 30×30 **OMT** handles, not local submap tile content. The dev viewport is an OMT preview; normal walking now moves one world tile rather than teleporting 24 tiles for one action cost.
 
-### Pluggable AI planners
-Each AI mob carries one planner marker component
-(`PlannerBehaviourTree` / `PlannerGoap` / `PlannerHtn` / inert `PlannerNone`)
-that selects its decision algorithm. A per-marker system (`drive_<planner>`,
-`.run_if` on the marker) produces an `AiGoal` which is translated into an
-`ActionIntent` feeding the shared queue. So a dumb zombie can use a behaviour
-tree, a feral zombie GOAP, and a survivor / high-level zombie an HTN — all
-planners share one dispatch seam and one AP-sort.
+## HTN integration
 
-The HTN planner itself lives in the **headless `cdda_htn` crate** (a leaf with
-no ECS / `Component` / `cdda_sim` dependency), so it can be adopted by any AI
-layer. It imports `.htn` files (the `htn.pest` DSL), drives strongly-typed
-operators via `bevy_reflect`, and supports both **forward** planning (MTR
-backtracking over method decomposition) and **backward / goal-state** planning
-given a `goal_task`. The marker/`cdda_sim` integration (wiring `PlannerHtn` to
-produce `ActionIntent`s) is the seam the sim exposes; the full HTN hookup is a
-follow-up.
+Mods author htn_compound definitions; Rust kernels define predicate/operator meaning; simulation determines whether operations happen. The compiler uses explicit graph handles, specializes parameterized calls, supports recursive graph edges and rejects unknown kernels/references with located errors.
 
-## Known Technical Debt
+Actor observations cover needs, recursive inventory and nearby/navigation facts. Planning effects stay in scratch models. HtnRuntime holds domain/catalog together; the execution adapter consumes correlated outcomes instead of assuming submitted actions succeeded.
 
-See the root `AGENTS.md` and the priority list below. Key issues:
+The graph/compiler/adapter are tested headlessly. Complete startup/reload publication, generation invalidation and shared action-budget integration remain pending; BT/GOAP drivers are still placeholders.
 
-- **Missing architecture docs** (this file was just created — previously absent)
-- **build_def_world** is a ~900-line function mixing parsing, registry building,
-  and entity spawning
-- **DefRegistry** has ~100+ fields as a single global registry struct
-  (the per-field `total_count` / `category_count` / `resolve_all` / skipped-type
-  list are now macro-generated from the `for_each_raw_def_kind!` table, but the
-  struct fields themselves and `DefRegistry::empty` are still hand-maintained)
-- **Some bool fields** in Bionic and MutationEntry still exist (partially migrated
-  to tag components)
-- **Hardcoded magic constants** (world seed, tile sizes, stat bounds)
+## Verification and remaining work
+
+Implemented regression suites:
+- simulation_schedule_test: production schedule, idle frames, central pause/lifecycle gates, persistent local state, frame partition and bounded catch-up, calendar units.
+- intent_transaction_test: competing pickup, position/range/ownership/cycle validation, committed spatial/AP visibility, stable tie order.
+- terrain_persistence_tests: reordered registries, rotation preservation, malformed/unknown data rejection, append-only rebuild and rollback.
+- Existing HTN, data-loader and inventory traversal tests remain relevant.
+
+The isolated TestBed recreates systems per call and is not proof of production schedule behavior. The migrated actor/combat/inventory suites are restored to Cargo discovery via `migrated_{actor,combat,inventory}.rs` aggregators (302 tests; 83 remain `#[ignore]`d stubs). Replay hashing now digests committed gameplay state — per-entity position, AP, health, stack count and containment/wield/wear ownership resolved through stable `SimId`s, sorted so spawn order cannot change the digest — and runs after the simulation driver in `GameSet::Render`. Replay mode never mutates the expected log it is compared against; divergence fires `SimulationDiverged` per turn. Remaining replay debt: `InputAction`-level recording with turn-at-drain stamps instead of semantic commands, no RNG/definition-version in the digest, and replay-speed handling of missed turns.
+
+Next foundations: definition generations; local submap/active-region lifecycle and catch-up; replay integration; combat verbs and legacy message-path consolidation. Missing combat/physiology/world features are not presented as completed architecture.

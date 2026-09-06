@@ -1,0 +1,146 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RegionSettingsDef",
+  "description": "A region settings definition from JSON type `\"region_settings\"`.\n\nDefines regional map generation settings for a game region.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "cities": {
+      "description": "City settings reference.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "connections": {
+      "description": "Connection types for roads, sewers, etc.",
+      "default": null
+    },
+    "default_groundcover": {
+      "description": "Default ground cover.",
+      "default": [],
+      "type": "array",
+      "items": true
+    },
+    "default_oter": {
+      "description": "Default overmap terrain IDs for each Z-level.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "feature_flag_settings": {
+      "description": "Feature flag settings.",
+      "default": null
+    },
+    "forest_composition": {
+      "description": "Forest composition settings reference.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "forest_trails": {
+      "description": "Forest trail settings reference.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "forests": {
+      "description": "Forest settings reference.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "highways": {
+      "description": "Highway settings reference.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"default\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "lakes": {
+      "description": "Lake settings reference.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "map_extras": {
+      "description": "Map extras settings reference.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "ocean": {
+      "description": "Ocean settings reference.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "ravines": {
+      "description": "Ravine settings reference.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "rivers": {
+      "description": "River settings reference.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "terrain_furniture": {
+      "description": "Terrain furniture settings reference.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "urbanity_increase": {
+      "description": "Urbanity increase curve.",
+      "default": null
+    },
+    "weather": {
+      "description": "Weather settings reference.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "definitions": {
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

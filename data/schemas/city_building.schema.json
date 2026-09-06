@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CityBuildingDef",
+  "description": "A city building definition from JSON type `\"city_building\"`.\n\nDefines a building that can be placed in a city during overmap generation, specifying its location type and overmap tiles.",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "flags": {
+      "description": "Flags for this city building (e.g. \"GLOBALLY_UNIQUE\", \"SAFE_AT_WORLDGEN\").",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "id": {
+      "description": "Unique identifier (e.g. \"2storyModern01\", \"bungalow01\", \"magic_shop\").",
+      "allOf": [
+        {
+          "$ref": "#/definitions/DefId"
+        }
+      ]
+    },
+    "locations": {
+      "description": "Location types where this building can be placed (e.g. [\"land\"]).",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "overmaps": {
+      "description": "Overmap tile placements for this building.",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/CityBuildingOvermap"
+      }
+    }
+  },
+  "definitions": {
+    "CityBuildingOvermap": {
+      "description": "A single overmap tile placement within a city building.",
+      "type": "object",
+      "required": [
+        "overmap",
+        "point"
+      ],
+      "properties": {
+        "overmap": {
+          "description": "Overmap terrain ID to place at this position (e.g. \"bungalow01_1_north\").",
+          "type": "string"
+        },
+        "point": {
+          "description": "Grid position [x, y, z] relative to the building's origin.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      }
+    },
+    "DefId": {
+      "type": "string"
+    }
+  }
+}

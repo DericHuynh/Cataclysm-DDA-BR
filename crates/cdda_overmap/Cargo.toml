@@ -10,3 +10,4 @@ bevy_app.workspace = true
 serde.workspace = true
 bytemuck = "1"
 cdda_core_types = { path = "../cdda_core_types" }
+cdda_components = { path = "../cdda_components" }
