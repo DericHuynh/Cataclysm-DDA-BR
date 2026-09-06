@@ -61,6 +61,8 @@ pub enum Ctx {
     /// Title screen / main menu.
     #[default]
     MainMenu,
+    /// Modal startup progress; navigation is owned by the operation controls.
+    Loading,
     /// Free-roam gameplay with the world viewport.
     Gameplay,
     /// Hub screen after clicking "New Game".

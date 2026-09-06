@@ -914,7 +914,7 @@ pub fn spawn_registry_viewer(world: &mut World) {
                 overflow: Overflow::clip(),
                 ..default()
             },
-            BackgroundColor(theme::BG),
+            theme::SurfacePaint(theme::Role::Canvas),
         ))
         .with_children(|root| {
             root.spawn((
@@ -927,7 +927,7 @@ pub fn spawn_registry_viewer(world: &mut World) {
                     align_items: AlignItems::Center,
                     ..default()
                 },
-                BackgroundColor(theme::HEADER_BG),
+                theme::SurfacePaint(theme::Role::Raised),
             ))
             .with_children(|header| {
                 header.spawn((
@@ -937,7 +937,7 @@ pub fn spawn_registry_viewer(world: &mut World) {
                         font_size: 20.0,
                         ..default()
                     },
-                    TextColor(theme::TEXT_BRIGHT),
+                    theme::TextPaint(theme::Role::Text),
                 ));
                 header.spawn((
                     RegistryCounter,
@@ -946,7 +946,7 @@ pub fn spawn_registry_viewer(world: &mut World) {
                         font_size: 13.0,
                         ..default()
                     },
-                    TextColor(theme::TEXT_DIM),
+                    theme::TextPaint(theme::Role::Muted),
                 ));
             });
 
@@ -982,8 +982,8 @@ pub fn spawn_registry_viewer(world: &mut World) {
                             border: UiRect::right(Val::Px(1.0)),
                             ..default()
                         },
-                        BackgroundColor(theme::PANEL_BG),
-                        BorderColor::all(theme::DIVIDER),
+                        theme::SurfacePaint(theme::Role::Surface),
+                        theme::BorderPaint(theme::Role::Border),
                     ));
                     // MIDDLE: Entry list
                     body.spawn((
@@ -1008,8 +1008,8 @@ pub fn spawn_registry_viewer(world: &mut World) {
                             border: UiRect::right(Val::Px(1.0)),
                             ..default()
                         },
-                        BackgroundColor(theme::PANEL_BG),
-                        BorderColor::all(theme::DIVIDER),
+                        theme::SurfacePaint(theme::Role::Surface),
+                        theme::BorderPaint(theme::Role::Border),
                     ));
                     // RIGHT: Detail panel (split into raw JSON + parsed fields)
                     body.spawn((
@@ -1021,7 +1021,7 @@ pub fn spawn_registry_viewer(world: &mut World) {
                             overflow: Overflow::clip(),
                             ..default()
                         },
-                        BackgroundColor(theme::PANEL_BG),
+                        theme::SurfacePaint(theme::Role::Surface),
                     ))
                     .with_children(|detail| {
                         spawn_detail_pane(detail, RegistryViewerState::PANE_RAW);
@@ -1036,8 +1036,8 @@ pub fn spawn_registry_viewer(world: &mut World) {
                     border: UiRect::top(Val::Px(1.0)),
                     ..default()
                 },
-                BackgroundColor(theme::HEADER_BG),
-                BorderColor::all(theme::DIVIDER),
+                theme::SurfacePaint(theme::Role::Raised),
+                theme::BorderPaint(theme::Role::Border),
             ))
             .with_child((
                 Text::new(
@@ -1047,7 +1047,7 @@ pub fn spawn_registry_viewer(world: &mut World) {
                     font_size: 12.0,
                     ..default()
                 },
-                TextColor(theme::TEXT_DIM),
+                theme::TextPaint(theme::Role::Muted),
                 crate::render::FooterHint,
             ));
         });
@@ -1067,8 +1067,8 @@ fn spawn_detail_pane(parent: &mut ChildSpawnerCommands, pane: usize) {
                 border: UiRect::right(Val::Px(1.0)),
                 ..default()
             },
-            BackgroundColor(theme::BG),
-            BorderColor::all(theme::DIVIDER),
+            theme::SurfacePaint(theme::Role::Canvas),
+            theme::BorderPaint(theme::Role::Border),
         ))
         .with_children(|column| {
             column.spawn((
@@ -1082,7 +1082,7 @@ fn spawn_detail_pane(parent: &mut ChildSpawnerCommands, pane: usize) {
                     font_size: 14.0,
                     ..default()
                 },
-                TextColor(theme::TEXT_BRIGHT),
+                theme::TextPaint(theme::Role::Text),
                 Node {
                     padding: UiRect::all(Val::Px(8.0)),
                     flex_shrink: 0.0,
@@ -1101,7 +1101,7 @@ fn spawn_detail_pane(parent: &mut ChildSpawnerCommands, pane: usize) {
                     overflow: Overflow::scroll_y(),
                     ..default()
                 },
-                BackgroundColor(theme::BG),
+                theme::SurfacePaint(theme::Role::Canvas),
             ));
             if pane == RegistryViewerState::PANE_RAW {
                 body.insert(RegRawJsonPanel);
@@ -1330,7 +1330,7 @@ pub struct RegistryPanels<'w, 's> {
         (
             Entity,
             &'static RegistryPane,
-            &'static mut BackgroundColor,
+            &'static mut theme::SurfacePaint,
             Option<&'static InactiveScrollPane>,
         ),
     >,
@@ -1339,7 +1339,7 @@ pub struct RegistryPanels<'w, 's> {
         's,
         (
             &'static mut Text,
-            &'static mut TextColor,
+            &'static mut theme::TextPaint,
             Option<&'static RegistryHeading>,
             Option<&'static RegistryDetailHeading>,
         ),
@@ -1434,13 +1434,11 @@ pub fn update_registry_viewer(
                             ..list.row_node()
                         },
                         background: if i == selected {
-                            theme
-                                .accent()
-                                .with_alpha(if is_category { 0.3 } else { 0.25 })
+                            theme.item_focus_bg()
                         } else if i % 2 == 0 {
-                            theme::PANEL_BG
+                            theme.color(theme::Role::Surface)
                         } else {
-                            theme::ROW_ALT_BG
+                            theme.color(theme::Role::Alternate)
                         },
                         border: Color::NONE,
                         cells: vec![RowCell::new(
@@ -1449,9 +1447,9 @@ pub fn update_registry_viewer(
                             if is_category && i == selected {
                                 theme.accent()
                             } else if is_category || i == selected {
-                                theme::TEXT_BRIGHT
+                                theme.color(theme::Role::Text)
                             } else {
-                                theme::TEXT_DIM
+                                theme.color(theme::Role::Muted)
                             },
                         )],
                     },
@@ -1463,9 +1461,13 @@ pub fn update_registry_viewer(
                 (source.to_string(), None),
                 TextRow {
                     node: list.row_node(),
-                    background: theme::PANEL_BG,
+                    background: theme.color(theme::Role::Surface),
                     border: Color::NONE,
-                    cells: vec![RowCell::new("No entries", 14.0, theme::TEXT_DIM)],
+                    cells: vec![RowCell::new(
+                        "No entries",
+                        14.0,
+                        theme.color(theme::Role::Muted),
+                    )],
                 },
             )]
         } else {
@@ -1475,10 +1477,10 @@ pub fn update_registry_viewer(
     }
     for (entity, pane, mut bg, inactive) in &mut panels.tint {
         let active = pane.0 == state.pane;
-        bg.set_if_neq(BackgroundColor(if active {
-            theme.accent().with_alpha(0.10)
+        bg.set_if_neq(theme::SurfacePaint(if active {
+            theme::Role::Raised
         } else {
-            Color::NONE
+            theme::Role::Surface
         }));
         if active && inactive.is_some() {
             commands.entity(entity).remove::<InactiveScrollPane>();
@@ -1496,14 +1498,14 @@ pub fn update_registry_viewer(
                     "PARSED STRUCT FIELDS"
                 })
                 .into(),
-                theme.accent2(),
+                theme::Role::Accent,
             )
         } else if heading.is_some() {
             (
                 category
                     .map(|c| format!("DEBUG: REGISTRY VIEWER — {} ({})", c.name, c.count))
                     .unwrap_or_else(|| "DEBUG: REGISTRY VIEWER".into()),
-                theme.accent(),
+                theme::Role::Accent,
             )
         } else {
             (
@@ -1517,11 +1519,11 @@ pub fn update_registry_viewer(
                     catalog.categories.len(),
                     pane_name(state.pane)
                 ),
-                theme::TEXT_DIM,
+                theme::Role::Muted,
             )
         };
         text.set_if_neq(Text::new(label));
-        color.set_if_neq(TextColor(tint));
+        color.set_if_neq(theme::TextPaint(tint));
     }
     for (panel, pane, rendered, mut scroll) in &mut panels.details {
         let key = RenderedDetail(
@@ -1559,7 +1561,7 @@ pub fn update_registry_viewer(
                             } else if entry.status.contains("round-trip ok") {
                                 theme::TEXT_GREEN
                             } else {
-                                theme::TEXT_DIM
+                                theme.color(theme::Role::Muted)
                             }),
                         ));
                     }
@@ -1580,7 +1582,7 @@ pub fn update_registry_viewer(
                         ..default()
                     },
                     TextColor(if raw {
-                        theme::TEXT_BRIGHT
+                        theme.color(theme::Role::Text)
                     } else {
                         theme.label_color()
                     }),

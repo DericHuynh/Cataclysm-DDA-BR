@@ -132,7 +132,7 @@ pub struct RecipeHeading;
 
 /// Spawn the persistent root wrapper for the crafting menu.
 /// Content is retained until its data, selection, theme, or visible window changes.
-pub fn spawn_crafting_ui(mut commands: Commands, theme: &UiTheme) {
+pub fn spawn_crafting_ui(mut commands: Commands, _theme: &UiTheme) {
     commands
         .spawn((
             DespawnOnExit(Ctx::CraftingMenu),
@@ -143,7 +143,7 @@ pub fn spawn_crafting_ui(mut commands: Commands, theme: &UiTheme) {
                 flex_direction: FlexDirection::Column,
                 ..default()
             },
-            BackgroundColor(theme::BG),
+            theme::SurfacePaint(theme::Role::Canvas),
         ))
         .with_children(|root| {
             // ── 1. Header ─────────────────────────────────────────────────
@@ -155,7 +155,7 @@ pub fn spawn_crafting_ui(mut commands: Commands, theme: &UiTheme) {
                     padding: UiRect::axes(Val::Px(16.0), Val::Px(8.0)),
                     ..default()
                 },
-                BackgroundColor(theme::HEADER_BG),
+                theme::SurfacePaint(theme::Role::Raised),
             ))
             .with_children(|header| {
                 header.spawn((
@@ -165,7 +165,7 @@ pub fn spawn_crafting_ui(mut commands: Commands, theme: &UiTheme) {
                         font_size: 22.0,
                         ..default()
                     },
-                    TextColor(theme.accent()),
+                    theme::TextPaint(theme::Role::Accent),
                 ));
                 header.spawn((
                     RecipeCounter,
@@ -174,7 +174,7 @@ pub fn spawn_crafting_ui(mut commands: Commands, theme: &UiTheme) {
                         font_size: 13.0,
                         ..default()
                     },
-                    TextColor(theme::TEXT_DIM),
+                    theme::TextPaint(theme::Role::Muted),
                 ));
             });
 
@@ -189,7 +189,7 @@ pub fn spawn_crafting_ui(mut commands: Commands, theme: &UiTheme) {
                     overflow: Overflow::clip_x(),
                     ..default()
                 },
-                BackgroundColor(theme::TAB_BG),
+                theme::SurfacePaint(theme::Role::Surface),
             ));
 
             // ── 3. Subcategory tabs ───────────────────────────────────────
@@ -203,7 +203,7 @@ pub fn spawn_crafting_ui(mut commands: Commands, theme: &UiTheme) {
                     overflow: Overflow::clip_x(),
                     ..default()
                 },
-                BackgroundColor(theme::SUBTAB_BG),
+                theme::SurfacePaint(theme::Role::Surface),
             ));
 
             // ── 4. Body: recipe list + detail panel ───────────────────────
@@ -237,7 +237,7 @@ pub fn spawn_crafting_ui(mut commands: Commands, theme: &UiTheme) {
                             overflow: Overflow::scroll_y(),
                             ..default()
                         },
-                        BackgroundColor(theme::ITEM_BG),
+                        theme::SurfacePaint(theme::Role::Surface),
                     ));
 
                     // Middle: crafting detail panel
@@ -251,7 +251,7 @@ pub fn spawn_crafting_ui(mut commands: Commands, theme: &UiTheme) {
                             overflow: Overflow::clip(),
                             ..default()
                         },
-                        BackgroundColor(theme::ITEM_BG),
+                        theme::SurfacePaint(theme::Role::Surface),
                     ));
 
                     // Right: item detail panel
@@ -265,7 +265,7 @@ pub fn spawn_crafting_ui(mut commands: Commands, theme: &UiTheme) {
                             overflow: Overflow::clip(),
                             ..default()
                         },
-                        BackgroundColor(theme::ITEM_BG),
+                        theme::SurfacePaint(theme::Role::Surface),
                     ));
                 });
 
@@ -278,7 +278,7 @@ pub fn spawn_crafting_ui(mut commands: Commands, theme: &UiTheme) {
                     padding: UiRect::axes(Val::Px(12.0), Val::Px(6.0)),
                     ..default()
                 },
-                BackgroundColor(theme::HEADER_BG),
+                theme::SurfacePaint(theme::Role::Raised),
             ));
 
             // ── 6. Footer ─────────────────────────────────────────────────
@@ -291,8 +291,8 @@ pub fn spawn_crafting_ui(mut commands: Commands, theme: &UiTheme) {
                     border: UiRect::top(Val::Px(1.0)),
                     ..default()
                 },
-                BackgroundColor(theme::HEADER_BG),
-                BorderColor::all(theme::DIVIDER),
+                theme::SurfacePaint(theme::Role::Raised),
+                theme::BorderPaint(theme::Role::Border),
             ))
             .with_child((
                 Text::new(""),
@@ -300,7 +300,7 @@ pub fn spawn_crafting_ui(mut commands: Commands, theme: &UiTheme) {
                     font_size: 12.0,
                     ..default()
                 },
-                TextColor(theme::TEXT_DIM),
+                theme::TextPaint(theme::Role::Muted),
                 FooterHint,
             ));
         });
@@ -470,7 +470,7 @@ pub fn update_crafting_ui(
                     let is_active = i == sel_top;
                     let zone_highlight = focus_zone == 1 && is_active;
                     let tab_bg = if zone_highlight {
-                        theme::ZONE_HIGHLIGHT_BG
+                        theme.color(theme::Role::Selection)
                     } else if is_active {
                         theme.tab_active_bg()
                     } else {
@@ -479,7 +479,7 @@ pub fn update_crafting_ui(
                     let text_color = if is_active {
                         theme.accent()
                     } else {
-                        theme::TEXT_DIM
+                        theme.color(theme::Role::Muted)
                     };
                     tabs.spawn((
                         Node {
@@ -518,16 +518,16 @@ pub fn update_crafting_ui(
                     let is_active = i == sel_sub;
                     let zone_highlight = focus_zone == 2 && is_active;
                     let tab_bg = if zone_highlight {
-                        theme::ZONE_HIGHLIGHT_BG
+                        theme.color(theme::Role::Selection)
                     } else if is_active {
-                        theme::SUBTAB_ACTIVE_BG
+                        theme.color(theme::Role::Selection)
                     } else {
                         Color::NONE
                     };
                     let text_color = if is_active {
-                        theme::TEXT_BRIGHT
+                        theme.color(theme::Role::Text)
                     } else {
-                        theme::TEXT_DIM
+                        theme.color(theme::Role::Muted)
                     };
                     tabs.spawn((
                         Node {
@@ -555,12 +555,12 @@ pub fn update_crafting_ui(
             None,
             TextRow {
                 node: virtual_list.row_node(),
-                background: theme::PANEL_BG,
+                background: theme.color(theme::Role::Surface),
                 border: Color::NONE,
                 cells: vec![RowCell::new(
                     "No recipes in this category.",
                     14.0,
-                    theme::TEXT_DIM,
+                    theme.color(theme::Role::Muted),
                 )],
             },
         ));
@@ -573,7 +573,7 @@ pub fn update_crafting_ui(
         } else {
             format!("[{mark}] {}", entry.result_name)
         };
-        let mut name = RowCell::new(label, 15.0, theme::TEXT_BRIGHT);
+        let mut name = RowCell::new(label, 15.0, theme.color(theme::Role::Text));
         name.grow = 1.0;
         rows.push((
             Some(entry.recipe_key.clone()),
@@ -587,12 +587,16 @@ pub fn update_crafting_ui(
                 background: if i == focus.min(total_in_cat.saturating_sub(1)) {
                     theme.item_focus_bg()
                 } else {
-                    theme::PANEL_BG
+                    theme.color(theme::Role::Surface)
                 },
-                border: theme::DIVIDER,
+                border: theme.color(theme::Role::Border),
                 cells: vec![
                     name,
-                    RowCell::new(format!("  [{}]", entry.result_id), 13.0, theme::TEXT_ID),
+                    RowCell::new(
+                        format!("  [{}]", entry.result_id),
+                        13.0,
+                        theme.color(theme::Role::Muted),
+                    ),
                 ],
             },
         ));
@@ -624,7 +628,7 @@ pub fn update_crafting_ui(
                         font_size: 18.0,
                         ..default()
                     },
-                    TextColor(theme.accent()),
+                    theme::TextPaint(theme::Role::Accent),
                 ));
 
                 // ID
@@ -634,7 +638,7 @@ pub fn update_crafting_ui(
                         font_size: 12.0,
                         ..default()
                     },
-                    TextColor(theme::TEXT_ID),
+                    theme::TextPaint(theme::Role::Muted),
                 ));
 
                 // Craftability
@@ -645,7 +649,7 @@ pub fn update_crafting_ui(
                             font_size: 13.0,
                             ..default()
                         },
-                        TextColor(theme::TEXT_GREEN),
+                        theme::TextPaint(theme::Role::Positive),
                     ));
                 }
 
@@ -657,7 +661,7 @@ pub fn update_crafting_ui(
                             font_size: 13.0,
                             ..default()
                         },
-                        TextColor(theme::TEXT_DIM),
+                        theme::TextPaint(theme::Role::Muted),
                     ));
                 }
 
@@ -669,7 +673,7 @@ pub fn update_crafting_ui(
                         margin: UiRect::vertical(Val::Px(4.0)),
                         ..default()
                     },
-                    BackgroundColor(theme::DIVIDER),
+                    theme::SurfacePaint(theme::Role::Border),
                 ));
 
                 // Components
@@ -679,7 +683,7 @@ pub fn update_crafting_ui(
                         font_size: 13.0,
                         ..default()
                     },
-                    TextColor(theme::TEXT_DIM),
+                    theme::TextPaint(theme::Role::Muted),
                 ));
                 if entry.components_text.is_empty() {
                     det.spawn((
@@ -688,7 +692,7 @@ pub fn update_crafting_ui(
                             font_size: 12.0,
                             ..default()
                         },
-                        TextColor(theme::TEXT_DIM),
+                        theme::TextPaint(theme::Role::Muted),
                     ));
                 } else {
                     for line in &entry.components_text {
@@ -698,7 +702,7 @@ pub fn update_crafting_ui(
                                 font_size: 12.0,
                                 ..default()
                             },
-                            TextColor(theme::TEXT_BRIGHT),
+                            theme::TextPaint(theme::Role::Text),
                         ));
                     }
                 }
@@ -711,7 +715,7 @@ pub fn update_crafting_ui(
                             font_size: 13.0,
                             ..default()
                         },
-                        TextColor(theme::TEXT_DIM),
+                        theme::TextPaint(theme::Role::Muted),
                     ));
                     for line in &entry.qualities_text {
                         det.spawn((
@@ -720,7 +724,7 @@ pub fn update_crafting_ui(
                                 font_size: 12.0,
                                 ..default()
                             },
-                            TextColor(theme::TEXT_BRIGHT),
+                            theme::TextPaint(theme::Role::Text),
                         ));
                     }
                 }
@@ -737,7 +741,7 @@ pub fn update_crafting_ui(
                                 font_size: 13.0,
                                 ..default()
                             },
-                            TextColor(theme::TEXT_RED),
+                            theme::TextPaint(theme::Role::Danger),
                         ));
                 }
 
@@ -754,7 +758,7 @@ pub fn update_crafting_ui(
                                 font_size: 13.0,
                                 ..default()
                             },
-                            TextColor(theme::TEXT_GREEN),
+                            theme::TextPaint(theme::Role::Positive),
                         ));
                 }
             } else {
@@ -764,7 +768,7 @@ pub fn update_crafting_ui(
                         font_size: 14.0,
                         ..default()
                     },
-                    TextColor(theme::TEXT_DIM),
+                    theme::TextPaint(theme::Role::Muted),
                 ));
             }
         });
@@ -791,7 +795,7 @@ pub fn update_crafting_ui(
                         font_size: 14.0,
                         ..default()
                     },
-                    TextColor(theme::TEXT_DIM),
+                    theme::TextPaint(theme::Role::Muted),
                 ));
                 return;
             };
@@ -820,7 +824,7 @@ pub fn update_crafting_ui(
         .despawn_children()
         .with_children(|fb| {
             let filter_bg = if filtering {
-                theme::FILTER_ACTIVE_BG
+                theme.color(theme::Role::Selection)
             } else {
                 Color::NONE
             };
@@ -847,9 +851,9 @@ pub fn update_crafting_ui(
                     ..default()
                 },
                 TextColor(if filtering {
-                    theme::TEXT_BRIGHT
+                    theme.color(theme::Role::Text)
                 } else {
-                    theme::TEXT_DIM
+                    theme.color(theme::Role::Muted)
                 }),
             ));
         });

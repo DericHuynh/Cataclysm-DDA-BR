@@ -16,6 +16,7 @@ use cdda_components::schedule::GameSet;
 use cdda_context::ctx::Ctx as Screen;
 
 pub mod character;
+pub mod cinematic;
 pub mod crafting;
 pub mod crafting_state;
 pub mod dev_spawn;
@@ -24,6 +25,7 @@ pub mod examine;
 pub mod input;
 pub mod inventory;
 pub mod item_detail;
+pub mod loading;
 pub mod main_menu;
 pub mod overmap;
 pub mod registry;
@@ -85,17 +87,62 @@ pub fn ui_font(handle: &Option<Handle<Font>>, size: f32) -> TextFont {
     }
 }
 
+/// Resolve shared presentation after deferred screen updates, before Bevy measures text.
+/// Kept separate from screen/game setup so headless fixtures use the same ordering.
+pub struct UiPresentationPlugin;
+
+impl Plugin for UiPresentationPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<UiFontHandle>()
+            .init_resource::<theme::UiTheme>()
+            .add_systems(
+                PostUpdate,
+                (apply_ui_font, theme::apply_palette).before(bevy::ui::UiSystems::Content),
+            );
+    }
+}
+
 /// Plugin that registers all CDDA render systems and components.
 pub struct CddaRenderPlugin;
 
 impl Plugin for CddaRenderPlugin {
     fn build(&self, app: &mut App) {
+        app.init_resource::<cdda_components::progress::OperationReport>();
+        app.add_message::<cdda_components::progress::OperationCommand>();
+        app.add_systems(
+            OnEnter(cdda_sim::runtime::state::AppState::DataLoading),
+            (loading::cleanup, loading::spawn).chain(),
+        );
+        app.add_systems(
+            OnEnter(cdda_sim::runtime::state::AppState::MainMenu),
+            loading::cleanup,
+        );
+        app.add_systems(
+            OnEnter(cdda_sim::runtime::state::AppState::InGame),
+            loading::cleanup,
+        );
+        app.add_systems(
+            Update,
+            (loading::update, loading::animate_progress)
+                .chain()
+                .run_if(loading::is_loading),
+        );
+        app.add_systems(
+            Update,
+            (
+                cinematic::layout.after(settings::apply_display_options),
+                cinematic::reveal_art,
+                cinematic::animate_accents.after(main_menu::sync_focus),
+            ),
+        );
+        app.add_systems(PreUpdate, loading::input.run_if(loading::is_loading));
+        app.add_systems(Startup, loading::spawn_notice.after(render_setup));
+        app.add_systems(Update, loading::update_notice);
         app.init_resource::<settings::SettingsState>();
-        app.init_resource::<theme::UiTheme>();
+        app.add_plugins(UiPresentationPlugin);
         app.init_resource::<character::CharacterSheetState>();
         app.init_resource::<dev_spawn::DevSpawnFocus>();
         app.init_resource::<dev_spawn::DevSpawnCatalog>();
-        app.init_resource::<UiFontHandle>();
         app.init_resource::<inventory::InventoryFocus>();
         app.init_resource::<crafting_state::CraftState>();
         app.init_resource::<crafting_state::CraftModel>();
@@ -138,9 +185,15 @@ impl Plugin for CddaRenderPlugin {
 
         // ── Main menu ─────────────────────────────────────────────────────
         app.add_systems(OnEnter(Screen::MainMenu), main_menu::spawn);
+        for &screen in main_menu::COMMAND_MENUS {
+            app.add_systems(OnEnter(screen), main_menu::spawn);
+        }
+        app.add_systems(Update, settings::apply_display_options);
         app.add_systems(
             Update,
-            main_menu::sync_focus.run_if(in_state(Screen::MainMenu)),
+            main_menu::sync_focus
+                .after(settings::apply_display_options)
+                .run_if(main_menu::is_command_menu),
         );
 
         // ── Settings menu ─────────────────────────────────────────────────
@@ -166,6 +219,7 @@ impl Plugin for CddaRenderPlugin {
                 settings::sync_tab_highlight,
             )
                 .chain()
+                .after(settings::apply_display_options)
                 .run_if(in_state(Screen::SettingsMenu)),
         );
 
@@ -252,11 +306,6 @@ impl Plugin for CddaRenderPlugin {
         );
 
         // ── Dev worldgen ───────────────────────────────────────────────────
-        app.add_systems(OnEnter(Screen::DevWorldgen), dev_worldgen::spawn_dev_menu);
-        app.add_systems(
-            Update,
-            dev_worldgen::sync_dev_menu_focus.run_if(in_state(Screen::DevWorldgen)),
-        );
         app.add_systems(OnEnter(Screen::Gameplay), dev_worldgen::spawn_ascii_view);
         app.add_systems(
             Update,
@@ -279,4 +328,19 @@ fn render_setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         },
         Transform::from_xyz(0.0, 0.0, 999.9),
     ));
+}
+
+/// Resolve new and restyled UI text before measurement, without idle writes.
+/// Presenters may replace TextFont on retained rows, so Changed (not only Added)
+/// must be handled. Running in Update lets deferred text render with a fallback
+/// for one frame and can miss replacements made later in that same schedule.
+pub fn apply_ui_font(handle: Res<UiFontHandle>, mut text_fonts: Query<&mut TextFont, With<Text>>) {
+    let Some(font) = &handle.0 else {
+        return;
+    };
+    for mut text_font in &mut text_fonts {
+        if (handle.is_changed() || text_font.is_changed()) && text_font.font != *font {
+            text_font.font = font.clone();
+        }
+    }
 }

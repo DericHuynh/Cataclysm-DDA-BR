@@ -4,12 +4,11 @@ use bevy_ecs::prelude::*;
 use bevy_state::state::{NextState, State};
 
 use cdda_data::def_world::{build_def_world, DefinitionWorld};
-use cdda_data::loader::Loader;
 
 use cdda_core_types::core::coords::{WorldPos, ZLevel, TILES_PER_OMT};
 use cdda_core_types::core::id::DefId;
 use cdda_defs_raw::raw_defs::city_building::CityBuildingDef;
-use cdda_sim::runtime::state::{AppState, GameTime, LoadingStatus, StartupConfig};
+use cdda_sim::runtime::state::{AppState, GameTime};
 
 use cdda_overmap::registry::{CoreTerrains, TerrainFlags, TerrainHandle, TerrainRegistry};
 use cdda_overmap_gen::pipeline::{OvermapGenConfig, OvermapGenPhase, DEFAULT_NOISE_SEED};
@@ -28,60 +27,9 @@ pub struct CityBuildings(
 // Startup system — load JSON data and build DefinitionWorld
 // ===========================================================================
 
+/// Compatibility entry point; production uses begin_loading/poll_loading.
 pub fn load_data_system(world: &mut World) {
-    use tracing::info;
-
-    info!("Data loading deferred until player starts game");
-
-    let data_dirs = world.resource::<StartupConfig>().data_dirs.clone();
-    info!("Loading data from {:?}", data_dirs);
-
-    world.resource_mut::<LoadingStatus>().current_phase = "Scanning JSON files...".into();
-
-    let mut loader = Loader::new(data_dirs);
-
-    world.resource_mut::<LoadingStatus>().current_phase = "Ingesting raw definitions...".into();
-    let raw_map = loader.ingest_all();
-    let total_raw: usize = raw_map.values().map(|v| v.len()).sum();
-    world.resource_mut::<LoadingStatus>().total_defs = total_raw;
-    info!("Ingested {} raw definitions", total_raw);
-
-    // Save raw JSON values for registry viewer comparison
-    {
-        let mut raw_values = cdda_data::raw_values::RawDefinitionValues::new();
-        for (type_name, defs) in &raw_map {
-            let entries = defs
-                .iter()
-                .filter_map(|raw| raw.id.as_ref().map(|id| (id.clone(), raw.value.clone())))
-                .collect::<std::collections::HashMap<_, _>>();
-            if !entries.is_empty() {
-                raw_values.values.insert(type_name.clone(), entries);
-            }
-        }
-        world.insert_resource(raw_values);
-    }
-
-    world.resource_mut::<LoadingStatus>().current_phase =
-        "Resolving copy-from inheritance...".into();
-    match loader.load() {
-        Ok(registry) => {
-            let count = registry.total_count();
-            info!("Data loading complete: {} resolved definitions", count);
-            apply_registry_to_world(world, &registry, count);
-        }
-        Err(errors) => {
-            for err in &errors {
-                tracing::warn!("Data loading error: {:?}", err);
-            }
-            info!(
-                "Data loading finished with {} non-fatal errors, continuing...",
-                errors.len()
-            );
-            world
-                .resource_mut::<NextState<AppState>>()
-                .set(AppState::WorldGen);
-        }
-    }
+    crate::loading::poll_loading(world);
 }
 
 // ===========================================================================
@@ -106,8 +54,6 @@ pub(crate) fn apply_registry_to_world(
     registry: &cdda_data::DefRegistry,
     count: usize,
 ) -> bool {
-    use tracing::info;
-
     // Validate the terrain reload before mutating any definition-dependent world
     // state. Existing chunks hold process-local slots which must not be reused.
     let terrain_registry = match build_terrain_registry(
@@ -117,14 +63,38 @@ pub(crate) fn apply_registry_to_world(
         Ok(terrain_registry) => terrain_registry,
         Err(error) => {
             tracing::error!(%error, "Definition reload rejected; existing terrain IDs must remain available");
-            world.resource_mut::<LoadingStatus>().current_phase =
-                format!("Reload rejected: {error}");
+            crate::loading::publish_report(
+                world,
+                cdda_components::progress::ReportEvent::progress(
+                    "Reload rejected",
+                    error.to_string(),
+                )
+                .level(cdda_components::progress::ReportLevel::Error),
+            );
             return false;
         }
     };
 
-    world.resource_mut::<LoadingStatus>().current_phase = "Building definition entities...".into();
+    crate::loading::publish_report(
+        world,
+        cdda_components::progress::ReportEvent::progress(
+            "Building definition entities",
+            "Publishing reloaded content",
+        ),
+    );
     let def_world = build_def_world(world, registry, true);
+    finish_registry_publication(world, registry, count, terrain_registry, def_world);
+    true
+}
+
+pub(crate) fn finish_registry_publication(
+    world: &mut World,
+    registry: &cdda_data::DefRegistry,
+    count: usize,
+    terrain_registry: TerrainRegistry,
+    def_world: DefinitionWorld,
+) {
+    use tracing::info;
     world.insert_resource(cdda_data::def_registry_resource::DefRegistryResource(
         std::sync::Arc::new(registry.clone()),
     ));
@@ -162,8 +132,13 @@ pub(crate) fn apply_registry_to_world(
     };
     world.insert_resource(gen_config);
 
-    world.resource_mut::<LoadingStatus>().current_phase = "Complete".into();
-    world.resource_mut::<LoadingStatus>().total_defs = count;
+    crate::loading::publish_report(
+        world,
+        cdda_components::progress::ReportEvent::progress(
+            "Registries ready",
+            format!("{count} definitions published"),
+        ),
+    );
 
     // Transition to worldgen only on the initial load; a hot reload must not
     // yank the player out of an in-progress game.
@@ -175,14 +150,13 @@ pub(crate) fn apply_registry_to_world(
             .resource_mut::<NextState<AppState>>()
             .set(AppState::WorldGen);
     }
-    true
 }
 
 // ===========================================================================
 // Terrain registry builder
 // ===========================================================================
 
-fn build_terrain_registry(
+pub(crate) fn build_terrain_registry(
     registry: &cdda_data::DefRegistry,
     existing: Option<&TerrainRegistry>,
 ) -> Result<TerrainRegistry, cdda_overmap::registry::TerrainRegistryReloadError> {
@@ -416,24 +390,39 @@ fn build_region_settings(
 // ===========================================================================
 
 pub fn worldgen_system(world: &mut World) {
-    use tracing::info;
-
+    if world
+        .resource::<cdda_components::progress::OperationReport>()
+        .failed()
+        || world
+            .resource::<cdda_components::progress::OperationReport>()
+            .cancelled
+    {
+        return;
+    }
     let has_defs = world.get_resource::<DefinitionWorld>().is_some();
     if !has_defs {
-        info!("Worldgen: no definitions loaded, skipping to InGame");
-        world
-            .resource_mut::<NextState<AppState>>()
-            .set(AppState::InGame);
+        crate::loading::publish_report(
+            world,
+            cdda_components::progress::ReportEvent::progress(
+                "World generation failed",
+                "No definitions were published",
+            )
+            .level(cdda_components::progress::ReportLevel::Error),
+        );
         return;
     }
 
     // Check if TerrainRegistry exists.
     let has_registry = world.get_resource::<TerrainRegistry>().is_some();
     if !has_registry {
-        info!("Worldgen: no terrain registry, skipping to InGame");
-        world
-            .resource_mut::<NextState<AppState>>()
-            .set(AppState::InGame);
+        crate::loading::publish_report(
+            world,
+            cdda_components::progress::ReportEvent::progress(
+                "World generation failed",
+                "Terrain registry is missing",
+            )
+            .level(cdda_components::progress::ReportLevel::Error),
+        );
         return;
     }
 
@@ -441,7 +430,13 @@ pub fn worldgen_system(world: &mut World) {
     // The OvermapGenPlugin's chained system sets will execute in order.
     let phase = world.resource::<State<OvermapGenPhase>>().get().clone();
     if phase == OvermapGenPhase::Idle {
-        info!("Worldgen: starting overmap generation pipeline");
+        crate::loading::publish_report(
+            world,
+            cdda_components::progress::ReportEvent::progress(
+                "Generating world",
+                "Terrain, rivers, forests, roads and settlements",
+            ),
+        );
         world
             .resource_mut::<NextState<OvermapGenPhase>>()
             .set(OvermapGenPhase::Generating);
@@ -451,7 +446,11 @@ pub fn worldgen_system(world: &mut World) {
     // This is polled each frame until Complete.
     let phase = world.resource::<State<OvermapGenPhase>>().get().clone();
     if phase == OvermapGenPhase::Complete {
-        info!("Worldgen: overmap generation complete, transitioning to InGame");
+        crate::loading::publish_report(
+            world,
+            cdda_components::progress::ReportEvent::progress("Ready", "World generation complete")
+                .level(cdda_components::progress::ReportLevel::Complete),
+        );
         world
             .resource_mut::<NextState<AppState>>()
             .set(AppState::InGame);

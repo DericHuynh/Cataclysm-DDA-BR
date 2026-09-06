@@ -1,71 +1,22 @@
-//! Shared UI theme / colour palette.
-//!
-//! Every render module reads `Res<UiTheme>` instead of hard-coding colours.
-//! Three built-in presets (Blue, Green, Amber) are switchable via Settings.
-
+//! One semantic palette for all UI views. Source artwork and terrain keep their own colors.
 use bevy::prelude::*;
 
-// ---------------------------------------------------------------------------
-// Fixed colours (same across all presets)
-// ---------------------------------------------------------------------------
-
-pub const BG: Color = Color::srgb(0.025, 0.065, 0.070);
-pub const PANEL_BG: Color = Color::srgb(0.045, 0.095, 0.100);
-pub const HEADER_BG: Color = Color::srgb(0.075, 0.140, 0.145);
-pub const ITEM_BG: Color = Color::srgb(0.040, 0.085, 0.090);
-pub const DIVIDER: Color = Color::srgb(0.23, 0.36, 0.34);
-pub const TEXT_BRIGHT: Color = Color::srgb(0.88, 0.88, 0.75);
-pub const TEXT_DIM: Color = Color::srgb(0.57, 0.68, 0.63);
+// Signals retain their meaning across themes.
 pub const TEXT_GREEN: Color = Color::srgb(0.35, 0.85, 0.40);
 pub const TEXT_YELLOW: Color = Color::srgb(0.90, 0.80, 0.20);
 pub const TEXT_RED: Color = Color::srgb(0.90, 0.30, 0.30);
 pub const TEXT_ORANGE: Color = Color::srgb(0.95, 0.55, 0.15);
-pub const TEXT_ID: Color = Color::srgb(0.50, 0.65, 0.50);
-
-// Menu / button palette (main_menu, dev_worldgen)
-pub const MENU_BG: Color = Color::srgb(0.025, 0.065, 0.070);
-pub const BUTTON_BG: Color = Color::srgb(0.055, 0.115, 0.120);
-pub const BUTTON_FOCUS_BG: Color = Color::srgb(0.15, 0.32, 0.28);
-
-// Panel variants
-pub const SIDE_PANEL_BG: Color = Color::srgb(0.035, 0.080, 0.085);
-pub const PANEL_HEADER_BG: Color = Color::srgb(0.075, 0.140, 0.145);
-pub const SECTION_HEADER_BG: Color = Color::srgb(0.060, 0.120, 0.125);
-
-// Tabs
-pub const TAB_BG: Color = Color::srgb(0.045, 0.095, 0.100);
-pub const TAB_TEXT_ACTIVE: Color = Color::srgb(0.83, 0.73, 0.44);
-pub const SUBTAB_BG: Color = Color::srgb(0.035, 0.080, 0.085);
-pub const SUBTAB_ACTIVE_BG: Color = Color::srgb(0.12, 0.25, 0.23);
-pub const ZONE_HIGHLIGHT_BG: Color = Color::srgb(0.15, 0.30, 0.27);
-
-// Rows
-pub const ROW_ALT_BG: Color = Color::srgb(0.055, 0.110, 0.110);
-
-// Filters
-pub const FILTER_ACTIVE_BG: Color = Color::srgb(0.10, 0.23, 0.22);
-
-// Inventory-specific
-pub const ITEM_CRAFT_BG: Color = Color::srgb(0.18, 0.12, 0.05);
-pub const TEXT_CRAFT: Color = Color::srgb(0.85, 0.65, 0.20);
-pub const ICON_BG: Color = Color::srgb(0.12, 0.12, 0.16);
-pub const ICON_TEXT: Color = Color::srgb(0.90, 0.85, 0.25);
-
-// ---------------------------------------------------------------------------
-// Theme preset
-// ---------------------------------------------------------------------------
 
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug, Reflect)]
 pub enum ThemePreset {
-    #[default]
     Blue,
+    #[default]
     Green,
     Amber,
 }
-
 impl ThemePreset {
-    pub const ALL: [ThemePreset; 3] = [ThemePreset::Blue, ThemePreset::Green, ThemePreset::Amber];
-
+    // Preserve persisted indices.
+    pub const ALL: [Self; 3] = [Self::Blue, Self::Green, Self::Amber];
     pub fn label(self) -> &'static str {
         match self {
             Self::Blue => "Blue",
@@ -73,84 +24,113 @@ impl ThemePreset {
             Self::Amber => "Amber",
         }
     }
-
-    /// Primary accent — titles, header text.
-    pub fn accent(self) -> Color {
-        match self {
-            Self::Blue => Color::srgb(0.30, 0.70, 1.00),
-            Self::Green => Color::srgb(0.45, 0.80, 0.70),
-            Self::Amber => Color::srgb(0.90, 0.70, 0.20),
-        }
-    }
-
-    /// Secondary accent — section labels, panel headers.
-    pub fn accent2(self) -> Color {
-        match self {
-            Self::Blue => Color::srgb(0.85, 0.60, 0.15),
-            Self::Green => Color::srgb(0.83, 0.73, 0.44),
-            Self::Amber => Color::srgb(0.60, 0.80, 0.90),
-        }
-    }
-
-    /// Background of the focused/selected item row.
-    pub fn item_focus_bg(self) -> Color {
-        match self {
-            Self::Blue => Color::srgb(0.12, 0.35, 0.55),
-            Self::Green => Color::srgb(0.12, 0.30, 0.27),
-            Self::Amber => Color::srgb(0.35, 0.25, 0.08),
-        }
-    }
-
-    /// Active tab background.
-    pub fn tab_active_bg(self) -> Color {
-        match self {
-            Self::Blue => Color::srgb(0.14, 0.24, 0.38),
-            Self::Green => Color::srgb(0.09, 0.23, 0.22),
-            Self::Amber => Color::srgb(0.28, 0.20, 0.06),
-        }
-    }
-
-    /// Label / field-name colour.
-    pub fn label_color(self) -> Color {
-        match self {
-            Self::Blue => Color::srgb(0.50, 0.75, 0.90),
-            Self::Green => Color::srgb(0.55, 0.80, 0.55),
-            Self::Amber => Color::srgb(0.80, 0.65, 0.40),
-        }
-    }
 }
-
-// ---------------------------------------------------------------------------
-// UiTheme resource
-// ---------------------------------------------------------------------------
-
-#[derive(Resource, Clone, Debug)]
+#[derive(Resource, Clone, Debug, Default)]
 pub struct UiTheme {
     pub preset: ThemePreset,
 }
+impl UiTheme {
+    pub fn accent(&self) -> Color {
+        self.color(Role::Accent)
+    }
+    pub fn accent2(&self) -> Color {
+        self.color(Role::Accent)
+    }
+    pub fn item_focus_bg(&self) -> Color {
+        self.color(Role::Selection)
+    }
+    pub fn tab_active_bg(&self) -> Color {
+        self.color(Role::Selection)
+    }
+    pub fn label_color(&self) -> Color {
+        self.color(Role::Accent)
+    }
+}
 
-impl Default for UiTheme {
-    fn default() -> Self {
-        Self {
-            preset: ThemePreset::Green,
+/// Semantic roles shared by every view. Map/terrain colors are domain data, not UI roles.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Role {
+    Canvas,
+    Surface,
+    Raised,
+    Alternate,
+    Selection,
+    Border,
+    Text,
+    Muted,
+    Accent,
+    Positive,
+    Warning,
+    Danger,
+    Hot,
+    Transparent,
+}
+impl UiTheme {
+    pub fn color(&self, role: Role) -> Color {
+        let accent = match self.preset {
+            ThemePreset::Blue => Color::srgb(0.55, 0.73, 0.86),
+            ThemePreset::Green => Color::srgb(0.62, 0.76, 0.55),
+            ThemePreset::Amber => Color::srgb(0.82, 0.66, 0.39),
+        };
+        let text = match self.preset {
+            ThemePreset::Blue => Color::srgb(0.82, 0.87, 0.90),
+            ThemePreset::Green => Color::srgb(0.85, 0.88, 0.77),
+            ThemePreset::Amber => Color::srgb(0.86, 0.83, 0.75),
+        };
+        // Mix UI surfaces in sRGB; mixing from linear black lifts dark surfaces excessively.
+        let canvas = Color::srgb(0., 0., 0.);
+        match role {
+            // Original artwork has a baked black backdrop; keep one canvas across all views.
+            Role::Canvas => canvas,
+            Role::Surface => canvas.mix(&accent, 0.065),
+            Role::Raised => canvas.mix(&accent, 0.12),
+            Role::Alternate => canvas.mix(&accent, 0.09),
+            Role::Selection => canvas.mix(&accent, 0.24),
+            Role::Border => canvas.mix(&accent, 0.32),
+            Role::Text => text,
+            Role::Muted => canvas.mix(&text, 0.65),
+            Role::Accent => accent,
+            Role::Positive => TEXT_GREEN,
+            Role::Warning => TEXT_YELLOW,
+            Role::Danger => TEXT_RED,
+            Role::Hot => TEXT_ORANGE,
+            Role::Transparent => Color::NONE,
         }
     }
 }
 
-impl UiTheme {
-    pub fn accent(&self) -> Color {
-        self.preset.accent()
+/// Persistent style intent, separate from Bevy's resolved presentation components.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+#[require(TextColor)]
+pub struct TextPaint(pub Role);
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+#[require(BackgroundColor)]
+pub struct SurfacePaint(pub Role);
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+#[require(BorderColor)]
+pub struct BorderPaint(pub Role);
+
+/// Refresh retained chrome on theme changes and paint newly spawned/reassigned roles.
+/// Presenters resolve virtual-row colors from the same palette; no catalog rebuild is needed.
+pub fn apply_palette(
+    theme: Res<UiTheme>,
+    mut texts: Query<(Ref<TextPaint>, &mut TextColor)>,
+    mut surfaces: Query<(Ref<SurfacePaint>, &mut BackgroundColor)>,
+    mut borders: Query<(Ref<BorderPaint>, &mut BorderColor)>,
+) {
+    for (paint, mut color) in &mut texts {
+        if theme.is_changed() || paint.is_changed() {
+            color.set_if_neq(TextColor(theme.color(paint.0)));
+        }
     }
-    pub fn accent2(&self) -> Color {
-        self.preset.accent2()
+    for (paint, mut color) in &mut surfaces {
+        if theme.is_changed() || paint.is_changed() {
+            color.set_if_neq(BackgroundColor(theme.color(paint.0)));
+        }
     }
-    pub fn item_focus_bg(&self) -> Color {
-        self.preset.item_focus_bg()
-    }
-    pub fn tab_active_bg(&self) -> Color {
-        self.preset.tab_active_bg()
-    }
-    pub fn label_color(&self) -> Color {
-        self.preset.label_color()
+    for (paint, mut color) in &mut borders {
+        if theme.is_changed() || paint.is_changed() {
+            color.set_if_neq(BorderColor::all(theme.color(paint.0)));
+        }
     }
 }

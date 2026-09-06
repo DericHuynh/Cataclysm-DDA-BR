@@ -220,7 +220,7 @@ pub fn spawn_dev_spawn_panel(
                 overflow: Overflow::clip(),
                 ..default()
             },
-            BackgroundColor(theme::BG),
+            theme::SurfacePaint(theme::Role::Canvas),
         ))
         .with_children(|root| {
             // Fixed title and count, updated in place
@@ -234,7 +234,7 @@ pub fn spawn_dev_spawn_panel(
                     align_items: AlignItems::Center,
                     ..default()
                 },
-                BackgroundColor(theme::HEADER_BG),
+                theme::SurfacePaint(theme::Role::Raised),
             ))
             .with_children(|header| {
                 header.spawn((
@@ -244,7 +244,7 @@ pub fn spawn_dev_spawn_panel(
                         font_size: 22.0,
                         ..default()
                     },
-                    TextColor(theme::TEXT_BRIGHT),
+                    theme::TextPaint(theme::Role::Text),
                 ));
                 header.spawn((
                     SpawnCount,
@@ -253,7 +253,7 @@ pub fn spawn_dev_spawn_panel(
                         font_size: 13.0,
                         ..default()
                     },
-                    TextColor(theme::TEXT_DIM),
+                    theme::TextPaint(theme::Role::Muted),
                 ));
             });
 
@@ -290,8 +290,8 @@ pub fn spawn_dev_spawn_panel(
                             border: UiRect::right(Val::Px(1.0)),
                             ..default()
                         },
-                        BackgroundColor(theme::PANEL_BG),
-                        BorderColor::all(theme::DIVIDER),
+                        theme::SurfacePaint(theme::Role::Surface),
+                        theme::BorderPaint(theme::Role::Border),
                     ));
 
                     // Right: detail panel — children rebuilt each frame
@@ -306,7 +306,7 @@ pub fn spawn_dev_spawn_panel(
                             overflow: Overflow::clip(),
                             ..default()
                         },
-                        BackgroundColor(theme::PANEL_BG),
+                        theme::SurfacePaint(theme::Role::Surface),
                     ));
                 });
 
@@ -320,7 +320,7 @@ pub fn spawn_dev_spawn_panel(
                     ..default()
                 },
                 BackgroundColor(Color::NONE),
-                BorderColor::all(theme::DIVIDER),
+                theme::BorderPaint(theme::Role::Border),
             ))
             .with_child((
                 SpawnFilterText,
@@ -329,7 +329,7 @@ pub fn spawn_dev_spawn_panel(
                     font_size: 13.0,
                     ..default()
                 },
-                TextColor(theme::TEXT_DIM),
+                theme::TextPaint(theme::Role::Muted),
             ));
 
             // Footer — static, built once
@@ -346,13 +346,13 @@ pub fn spawn_dev_spawn_panel(
                     border: UiRect::top(Val::Px(1.0)),
                     ..default()
                 },
-                BackgroundColor(theme::HEADER_BG),
-                BorderColor::all(theme::DIVIDER),
+                theme::SurfacePaint(theme::Role::Raised),
+                theme::BorderPaint(theme::Role::Border),
             ))
             .with_child((
                 Text::new(hints),
                 super::ui_font(&ui_font_handle.0, 12.0),
-                TextColor(theme::TEXT_DIM),
+                theme::TextPaint(theme::Role::Muted),
                 FooterHint,
             ));
         });
@@ -391,7 +391,7 @@ pub struct SpawnPanels<'w, 's> {
         's,
         (
             &'static mut Text,
-            &'static mut TextColor,
+            &'static mut theme::TextPaint,
             Option<&'static SpawnHeading>,
             Option<&'static SpawnCount>,
         ),
@@ -473,12 +473,12 @@ pub fn update_dev_spawn_panel(
                     background: if i == selected.0 {
                         theme.item_focus_bg()
                     } else {
-                        theme::ITEM_BG
+                        theme.color(theme::Role::Surface)
                     },
-                    border: theme::DIVIDER,
+                    border: theme.color(theme::Role::Border),
                     cells: vec![
-                        RowCell::new(&entry.name, 15.0, theme::TEXT_BRIGHT),
-                        RowCell::new(&entry.def_id, 11.0, theme::TEXT_ID),
+                        RowCell::new(&entry.name, 15.0, theme.color(theme::Role::Text)),
+                        RowCell::new(&entry.def_id, 11.0, theme.color(theme::Role::Muted)),
                     ],
                 },
             )
@@ -489,8 +489,8 @@ pub fn update_dev_spawn_panel(
             None,
             TextRow {
                 node: list.row_node(),
-                background: theme::ITEM_BG,
-                border: theme::DIVIDER,
+                background: theme.color(theme::Role::Surface),
+                border: theme.color(theme::Role::Border),
                 cells: vec![RowCell::new(
                     if catalog.entries.is_empty() {
                         "No item definitions"
@@ -498,7 +498,7 @@ pub fn update_dev_spawn_panel(
                         "No matches"
                     },
                     16.0,
-                    theme::TEXT_DIM,
+                    theme.color(theme::Role::Muted),
                 )],
             },
         )]
@@ -509,7 +509,7 @@ pub fn update_dev_spawn_panel(
 
     for (mut text, mut color, heading, count) in &mut panels.text {
         let (label, tint) = if heading.is_some() {
-            ("DEBUG: SPAWN ITEM".into(), theme.accent())
+            ("DEBUG: SPAWN ITEM".into(), theme::Role::Accent)
         } else if count.is_some() {
             (
                 if focus.filter.is_empty() {
@@ -517,7 +517,7 @@ pub fn update_dev_spawn_panel(
                 } else {
                     format!("{} / {} items", total, catalog.entries.len())
                 },
-                theme::TEXT_DIM,
+                theme::Role::Muted,
             )
         } else {
             (
@@ -529,18 +529,18 @@ pub fn update_dev_spawn_panel(
                     format!("Filter: {}  (Enter=close  Esc=clear)", focus.filter)
                 },
                 if focus.filtering {
-                    theme::TEXT_BRIGHT
+                    theme::Role::Text
                 } else {
-                    theme::TEXT_DIM
+                    theme::Role::Muted
                 },
             )
         };
         text.set_if_neq(Text::new(label));
-        color.set_if_neq(TextColor(tint));
+        color.set_if_neq(theme::TextPaint(tint));
     }
     if let Ok(mut bg) = panels.filter.single_mut() {
         bg.set_if_neq(BackgroundColor(if focus.filtering {
-            theme::FILTER_ACTIVE_BG
+            theme.color(theme::Role::Selection)
         } else {
             Color::NONE
         }));
@@ -587,7 +587,7 @@ pub fn update_dev_spawn_panel(
                         font_size: 16.0,
                         ..default()
                     },
-                    TextColor(theme::TEXT_DIM),
+                    theme::TextPaint(theme::Role::Muted),
                 ));
             }
         });

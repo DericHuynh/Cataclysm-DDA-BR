@@ -30,6 +30,10 @@ It also hosts the **screen input adapters** (`render/input.rs`) — the
   `ActiveKeybindings`. They never write sim or navigation state directly.
 
 ## Local Contracts
+
+- `cinematic` owns responsive illustrated-screen regions, aspect containment, finite artwork fades and interpolated selection/hover accents. Controls stay stationary: do not reintroduce translation/slide entrance animations. MenuFooter has one writer, separate from gameplay FooterHint. Loading diagnostics scroll above fixed controls and a 2px stage track; unknown totals sweep without inventing a percentage, and fatal errors stop the sweep.
+- `main_menu` supplies the common illustrated command-menu frame, including explicit unavailable-workflow descriptions. `loading` presents OperationReport with real stage units, retained diagnostics, retry/return controls and general error notices. Original art is loaded from gfx/loading_screens.
+- Settings offers real scale/fullscreen/artwork/theme controls; DisplayPreferences excludes transient selection/rebind state. Disk persistence belongs to the app. Unsupported settings are labelled unavailable. Headless coverage is in tests/menus_startup_headless.rs.
 - All UI uses Bevy `Node` / `Button` / `Text` — no `bevy_fast_tilemap`, no
   custom shader pipeline. Tile sprites are `bevy_sprite` with
   `Sprite::custom_size` sized from `TileInfo::sprite_size()`.
@@ -46,16 +50,15 @@ It also hosts the **screen input adapters** (`render/input.rs`) — the
   detection require persistent system instances. UI trees are tagged `DespawnOnExit(Self::CTX)` for atomic cleanup.
 - Renderers read state only. State changes go through `cdda_input` actions
   (`Confirm`, `UseItem`, `NavigateUp`, `Drop`, …) and `cdda_context` nav.
-- Theming is hand-coded, not JSON. `theme::UiTheme` (Resource) wraps a
-  `ThemePreset` (`Blue`, `Green` default, `Amber`) plus a fixed-colour
-  constants block (`BG`, `PANEL_BG`, `TEXT_BRIGHT`, `BUTTON_FOCUS_BG`, …).
-  Switch presets via `SettingsScreen`; every screen reads `Res<UiTheme>`
-  instead of hard-coding colour.
+- One `UiTheme` palette covers every UI view. `ThemePreset::ALL` retains persisted indices Blue=0, Green=1 (default), Amber=2. Settings → Interface → Theme is the first row; `apply_display_options` is the sole scheduled writer of UiTheme from SettingsState.
+- Static chrome declares semantic `TextPaint`, `SurfacePaint`, and `BorderPaint` components. `UiPresentationPlugin` resolves shared fonts and palette in PostUpdate before `UiSystems::Content`, after Update presenters' deferred commands. `apply_palette` resolves changed roles/new nodes/theme changes with equality guards. Dynamic presenters must change paint roles or own resolved colors exclusively, never compete with a fixed paint binding. Virtual rows resolve colors through `UiTheme::color` while retaining membership and label entities; CharacterPresentation caches roles rather than stale resolved colors.
+- Artwork and terrain/signal colors retain their source/game meaning. All themes share a black canvas to join baked artwork backgrounds, with coordinated themed surfaces, text, borders and selection. Do not add a separate screen-specific palette.
 - Fonts: `UiFontHandle(Option<Handle<Font>>)` is loaded in `Startup` for
   `assets/fonts/ShareTechMono-Regular.ttf` (all `bevy_ui` `Text`). The ASCII
   viewport (`dev_worldgen`) loads `assets/fonts/ShareTechMono-Regular.ttf`
   separately for `Text2d`. Both assets live under `crates/cdda_app/assets/`
   and resolve through Bevy `AssetServer` by relative path.
+- `apply_ui_font` handles changed TextFont (including retained-row style replacements) and late shared-font initialization before Bevy detects/measures text. Never move it into Update or after text measurement: that permits fallback/blank frames during tab/detail rebuilding. Equality guards preserve idle font/layout ticks. Offscreen fixtures install the same `UiPresentationPlugin` as production.
 - Tileset base path is hard-coded via
   `concat!(env!("CARGO_MANIFEST_DIR"), "/../../gfx/UltimateCataclysm")`
   (i.e. the repo-root `gfx/UltimateCataclysm/`). Tiles are loaded with
@@ -125,7 +128,7 @@ It also hosts the **screen input adapters** (`render/input.rs`) — the
   UI entities and unchanged component ticks across the virtualized screens.
 - Wheel input resolves the nearest scrollable ancestor and respects line/pixel
   units. `InactiveScrollPane` blocks keyboard input without disabling the mouse.
-- The shared palette uses dark teal surfaces, parchment text, and brass accents.
+- Developer worldgen command menus use the same main_menu frame and navigation/mouse controls; dev_worldgen.rs owns only the gameplay viewport.
 
 ## Work Guidance
 - Add a new screen by (1) creating a unit struct in its own module,
@@ -134,7 +137,7 @@ It also hosts the **screen input adapters** (`render/input.rs`) — the
   root entity with `DespawnOnExit(Self::CTX)`. If the screen needs a focused
   resource, declare it in the per-screen file and `init_resource` it in
   `CddaRenderPlugin::build`.
-- New colours belong in `theme.rs` (constants or `ThemePreset` method). Never
+- New UI colors belong in `theme.rs` (semantic role palette). Never
   inline `Color::srgb(...)` in a screen module.
 - New tile assets go under `gfx/UltimateCataclysm/`; update
   `tile_info.json` if introducing a new sheet size. The `load_tiles` walker
@@ -158,6 +161,7 @@ It also hosts the **screen input adapters** (`render/input.rs`) — the
   Registry tests in src/render/registry_tests.rs cover 40,000 entries, retained
   row/text identities, same-frame reveal, source refresh and fixed detail headings.
 - `cargo run -p cdda_app` for visual smoke validation after render changes.
+- `cargo nextest run -p cdda_render --test text_headless --test menu_lists_headless --offline` checks first-frame glyphs with the bundled font, actual Settings tab/crafting detail changes, retained-row restyling, late initialization and idle layout ticks. `tests/support/mod.rs` supplies native Bevy measurement/layout/rasterization without a GPU; `cdda_app`'s `menu_capture settings-tabs` checks consecutive GPU frames.
 - `cargo run -p cdda_cli -- schedule-graph` to confirm screen systems land in
   the expected `GameSet` (`Input`, `Sim`, `Render`).
 
@@ -165,7 +169,10 @@ It also hosts the **screen input adapters** (`render/input.rs`) — the
 
 Per-screen files in `src/render/`:
 
-- `mod.rs` — `CddaRenderPlugin`, `UiFontHandle`, `refresh_all_footer_hints`,
+- `cinematic.rs` — Shared responsive screen regions, aspect-preserving artwork geometry, artwork reveal and stationary hover/focus animation components and systems.
+- `loading.rs` — Loading artwork, retained report/progress/error presentation, operation controls and general warning/error notices.
+
+- `mod.rs` — `CddaRenderPlugin`, `UiPresentationPlugin`, `UiFontHandle`, `refresh_all_footer_hints`,
   `render_setup` (camera + ShareTechMono font), `FooterHint` marker, and the shared
   scroll systems (`scroll::scroll_with_keyboard`/`scroll_with_wheel`/
   `scroll_to_focused_row`). **Wiring file —
@@ -176,7 +183,7 @@ Per-screen files in `src/render/`:
   Bevy's `ScrollPosition + Overflow::scroll_y()`; attach to any scrollable pane
   instead of hand-rolling clip/window logic.
 - `theme.rs` — `UiTheme` resource, `ThemePreset` enum (Blue/Green/Amber),
-  fixed colour constants. Single source of truth for palette.
+  semantic paint components, role palette, and live repaint system. Single source of truth for UI colors.
 - `tiles.rs` — `TileRegistry`, `TileInfo`, `load_tiles` startup system,
   `tile_info.json` parser, OMT-suffix stripping, sprite manifest ingestion.
 - `registry.rs` — `RegistryScreen` (`Ctx::RegistryViewer`); debug viewer over
@@ -193,7 +200,7 @@ Per-screen files in `src/render/`:
   and the source-refresh → input → presentation chain.
 - `registry_tests.rs` — Headless registry presentation, source-lifecycle and native
   layout fixtures; compiled as registry::presentation_tests.
-- `main_menu.rs` — `main_menu::spawn` / `sync_focus` for `Ctx::MainMenu`;
+- `main_menu.rs` — `main_menu::spawn` / `sync_focus` for the shared command contexts, including MainMenu and DevWorldgen;
   bevy_ui `Node` flex column of `CommandButton`s. Command buttons observe
   `On<Pointer<Click>>` (mouse) and set the focused command + emit a `Confirm`
   `InputAction`, so mouse and keyboard share the single `handle_navigation_input`
@@ -227,7 +234,7 @@ Per-screen files in `src/render/`:
   the item list uses retained keyed rows within a native
   `KeyboardScroll` + `VirtualList` pane. Input (navigate/filter/confirm) lives in
   `render/input.rs` (`dev_spawn_input`).
-- `dev_worldgen.rs` — `Ctx::DevWorldgen` menu + `Ctx::Gameplay` ASCII
+- `dev_worldgen.rs` — `Ctx::Gameplay` ASCII
   `Text2d` viewport. Loads `ShareTechMono-Regular.ttf`, drives
   `DevCamera`/`DevPlayer`/`HandCount` for the dev showcase.
 - `input.rs` — **Screen adapters (presenter layer):**

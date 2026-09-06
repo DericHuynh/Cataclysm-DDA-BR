@@ -35,3 +35,5 @@ pub use tokens::BodyPartId;
 pub use tokens::ComestibleId;
 pub use tokens::ItemTypeId;
 pub use tokens::SkillId;
+
+pub mod progress;

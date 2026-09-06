@@ -8,6 +8,7 @@
 //!
 //! Provides a `SystemParam` bundle and a function to spawn the detail tree.
 
+use super::theme;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
@@ -79,7 +80,7 @@ pub fn spawn_item_detail(
             font_size: 22.0,
             ..default()
         },
-        TextColor(Color::srgb(0.85, 0.60, 0.15)),
+        theme::TextPaint(theme::Role::Accent),
     ));
     parent.spawn((
         Text::new(format!("id: {}", id)),
@@ -87,7 +88,7 @@ pub fn spawn_item_detail(
             font_size: 12.0,
             ..default()
         },
-        TextColor(Color::srgb(0.50, 0.65, 0.50)),
+        theme::TextPaint(theme::Role::Muted),
     ));
 
     divider(parent);
@@ -101,7 +102,7 @@ pub fn spawn_item_detail(
                     font_size: 13.0,
                     ..default()
                 },
-                TextColor(Color::srgb(0.95, 0.95, 0.95)),
+                theme::TextPaint(theme::Role::Text),
             ));
             divider(parent);
         }
@@ -773,7 +774,7 @@ impl ItemDetailSnapshot {
                         font_size: 13.0,
                         ..default()
                     },
-                    TextColor(Color::srgb(0.95, 0.95, 0.95)),
+                    theme::TextPaint(theme::Role::Text),
                 ));
                 divider(parent);
             }
@@ -1066,7 +1067,7 @@ pub(crate) fn divider(parent: &mut ChildSpawnerCommands) {
             margin: UiRect::vertical(Val::Px(4.0)),
             ..default()
         },
-        BackgroundColor(Color::srgb(0.20, 0.20, 0.25)),
+        theme::SurfacePaint(theme::Role::Raised),
     ));
 }
 
@@ -1078,7 +1079,7 @@ pub(crate) fn section_header(parent: &mut ChildSpawnerCommands, title: &str) {
             font_size: 11.0,
             ..default()
         },
-        TextColor(Color::srgb(0.50, 0.75, 0.90)),
+        theme::TextPaint(theme::Role::Accent),
     ));
 }
 
@@ -1099,7 +1100,7 @@ pub(crate) fn stat_row(parent: &mut ChildSpawnerCommands, label: &str, value: &s
                     font_size: 13.0,
                     ..default()
                 },
-                TextColor(Color::srgb(0.55, 0.55, 0.55)),
+                theme::TextPaint(theme::Role::Muted),
                 Node {
                     min_width: Val::Px(110.0),
                     ..default()
@@ -1111,7 +1112,7 @@ pub(crate) fn stat_row(parent: &mut ChildSpawnerCommands, label: &str, value: &s
                     font_size: 13.0,
                     ..default()
                 },
-                TextColor(Color::srgb(0.95, 0.95, 0.95)),
+                theme::TextPaint(theme::Role::Text),
             ));
         });
 }

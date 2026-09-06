@@ -57,39 +57,6 @@ pub enum TurnState {
 pub use cdda_components::sim::GameTime;
 
 // ---------------------------------------------------------------------------
-// LoadingStatus
-// ---------------------------------------------------------------------------
-
-#[derive(Resource, Debug, Clone)]
-pub struct LoadingStatus {
-    pub total_files: usize,
-    pub loaded_files: usize,
-    pub total_defs: usize,
-    pub current_phase: String,
-}
-
-impl Default for LoadingStatus {
-    fn default() -> Self {
-        Self {
-            total_files: 0,
-            loaded_files: 0,
-            total_defs: 0,
-            current_phase: "Initialising".into(),
-        }
-    }
-}
-
-impl LoadingStatus {
-    pub fn progress_pct(&self) -> f32 {
-        if self.total_files == 0 {
-            0.0
-        } else {
-            self.loaded_files as f32 / self.total_files as f32
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
 // StartupConfig — built during pre-game UI, consumed by data loading
 // ---------------------------------------------------------------------------
 

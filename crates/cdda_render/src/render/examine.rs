@@ -5,7 +5,7 @@
 //! looking up the def entity from the runtime item's type ID.
 
 use crate::render::item_detail::ItemDetailSnapshot;
-use crate::render::theme::{self, UiTheme};
+use crate::render::theme;
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
 use cdda_components::item::{ItemType, StackCount};
@@ -38,7 +38,6 @@ impl CddaScreen for ExamineScreen {
 
 fn spawn_examine_from_world(world: &mut World) {
     // ── Phase 1: extract data from world ────────────────────────────────
-    let theme = world.resource::<UiTheme>().clone();
     let examined_opt = world.resource::<ExaminedItem>().0;
     let Some(item_entity) = examined_opt else {
         return;
@@ -89,7 +88,7 @@ fn spawn_examine_from_world(world: &mut World) {
             padding: UiRect::all(Val::Px(24.0)),
             ..default()
         },
-        BackgroundColor(theme::BG),
+        theme::SurfacePaint(theme::Role::Canvas),
     ))
     .with_children(|root| {
         // ── Title ─────────────────────────────────────────────────────
@@ -99,7 +98,7 @@ fn spawn_examine_from_world(world: &mut World) {
                 padding: UiRect::axes(Val::Px(16.0), Val::Px(10.0)),
                 ..default()
             },
-            BackgroundColor(theme::TAB_BG),
+            theme::SurfacePaint(theme::Role::Surface),
         ))
         .with_child((
             Text::new(format!("{} — DETAILS", type_id_ref)),
@@ -107,7 +106,7 @@ fn spawn_examine_from_world(world: &mut World) {
                 font_size: 28.0,
                 ..default()
             },
-            TextColor(theme.accent2()),
+            theme::TextPaint(theme::Role::Accent),
         ));
 
         // ── Runtime info ──────────────────────────────────────────────
@@ -123,7 +122,7 @@ fn spawn_examine_from_world(world: &mut World) {
                         font_size: 16.0,
                         ..default()
                     },
-                    TextColor(theme::TEXT_BRIGHT),
+                    theme::TextPaint(theme::Role::Text),
                 ));
         }
 
@@ -135,7 +134,7 @@ fn spawn_examine_from_world(world: &mut World) {
                 margin: UiRect::vertical(Val::Px(4.0)),
                 ..default()
             },
-            BackgroundColor(theme::DIVIDER),
+            theme::SurfacePaint(theme::Role::Border),
         ));
 
         // ── Item details from def entity ──────────────────────────────
@@ -157,7 +156,7 @@ fn spawn_examine_from_world(world: &mut World) {
                     font_size: 16.0,
                     ..default()
                 },
-                TextColor(theme::TEXT_DIM),
+                theme::TextPaint(theme::Role::Muted),
             ));
         }
 
@@ -177,7 +176,7 @@ fn spawn_examine_from_world(world: &mut World) {
             .with_child((
                 Text::new(hints),
                 super::ui_font(&font_handle, 15.0),
-                TextColor(theme::TEXT_DIM),
+                theme::TextPaint(theme::Role::Muted),
             ));
     });
 }

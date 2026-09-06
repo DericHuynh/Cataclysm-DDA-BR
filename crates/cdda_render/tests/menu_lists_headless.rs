@@ -1,4 +1,5 @@
 //! Production screen systems running without a window or GPU.
+mod support;
 use bevy::prelude::*;
 use bevy_state::prelude::{NextState, State};
 use cdda_components::{actor::*, dev::DevPlayer, SkillId};
@@ -134,6 +135,26 @@ fn crafting_retains_idle_entities_and_keeps_counter_and_details_outside_scrollin
     assert_eq!(children(app.world(), header), header_children);
     assert_eq!(children(app.world(), detail), detail_children);
     assert_eq!(app.world().get::<ScrollPosition>(pane).unwrap().y, 20_000.0);
+}
+
+#[test]
+fn crafting_details_and_tabs_shape_in_the_selection_frame() {
+    let (mut app, _) = crafting();
+    support::add_text_pipeline(&mut app);
+    for focus in [0, 1, 42, 2000, 2999, 0] {
+        app.world_mut().resource_mut::<CraftState>().focus = focus;
+        app.update();
+        support::assert_shaped(app.world_mut());
+        let detail = entity::<DetailPanelContainer>(app.world_mut());
+        assert!(texts(app.world(), detail)
+            .iter()
+            .any(|text| text.contains(&format!("Recipe {focus}"))));
+    }
+    for category in [1, 0, 1, 0] {
+        app.world_mut().resource_mut::<CategoryIndex>().selected_top = category;
+        app.update();
+        support::assert_shaped(app.world_mut());
+    }
 }
 
 #[test]
@@ -991,4 +1012,52 @@ fn examine_adapter_submits_one_command_without_mutating_items_or_draining_input(
         Some(ActionIntent::Wait)
     ));
     assert_eq!(app.world().resource::<ExaminedItem>().0, Some(item));
+}
+
+#[test]
+fn theme_switch_recolors_retained_crafting_and_spawn_rows_without_rewriting_labels() {
+    use cdda_render::render::theme::{self, Role, ThemePreset};
+    for (mut app, pane) in [crafting(), spawn_menu()] {
+        app.add_systems(PostUpdate, theme::apply_palette);
+        app.update();
+        let world = app.world_mut();
+        let text_ticks: Vec<_> = children(world, pane)
+            .into_iter()
+            .flat_map(|e| children(world, e))
+            .filter_map(|e| {
+                world
+                    .entity(e)
+                    .get_ref::<Text>()
+                    .map(|t| (e, t.last_changed()))
+            })
+            .collect();
+        assert!(!text_ticks.is_empty());
+        for preset in ThemePreset::ALL {
+            app.world_mut().resource_mut::<UiTheme>().preset = preset;
+            app.update();
+            let world = app.world_mut();
+            let palette = world.resource::<UiTheme>().clone();
+            for &(entity, tick) in &text_ticks {
+                assert_eq!(
+                    world
+                        .entity(entity)
+                        .get_ref::<Text>()
+                        .unwrap()
+                        .last_changed(),
+                    tick
+                );
+                let color = world.get::<TextColor>(entity).unwrap().0;
+                assert!(color == palette.color(Role::Text) || color == palette.color(Role::Muted));
+            }
+            for (paint, color) in world.query::<(&theme::TextPaint, &TextColor)>().iter(world) {
+                assert_eq!(color.0, palette.color(paint.0));
+            }
+            for (paint, color) in world
+                .query::<(&theme::SurfacePaint, &BackgroundColor)>()
+                .iter(world)
+            {
+                assert_eq!(color.0, palette.color(paint.0));
+            }
+        }
+    }
 }

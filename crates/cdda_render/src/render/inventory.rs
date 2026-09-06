@@ -76,7 +76,6 @@ impl CddaScreen for InventoryScreen {
 // ---------------------------------------------------------------------------
 
 pub fn spawn_inventory_screen(world: &mut World) {
-    let theme = world.resource::<UiTheme>().clone();
     let active_keys = world.resource::<ActiveKeybindings>();
     let cancel_key_str = active_keys.key_for(BindableAction::Cancel);
     let mut hints = format!("[{}] close", cancel_key_str);
@@ -86,15 +85,10 @@ pub fn spawn_inventory_screen(world: &mut World) {
     }
     let font_handle = world.resource::<super::UiFontHandle>().0.clone();
     let mut cmds = world.commands();
-    spawn_inventory_ui(&mut cmds, &hints, &font_handle, &theme);
+    spawn_inventory_ui(&mut cmds, &hints, &font_handle);
 }
 
-fn spawn_inventory_ui(
-    commands: &mut Commands,
-    hints: &str,
-    ui_font: &Option<Handle<Font>>,
-    theme: &UiTheme,
-) {
+fn spawn_inventory_ui(commands: &mut Commands, hints: &str, ui_font: &Option<Handle<Font>>) {
     commands
         .spawn((
             DespawnOnExit(Ctx::Inventory),
@@ -104,7 +98,7 @@ fn spawn_inventory_ui(
                 flex_direction: FlexDirection::Column,
                 ..default()
             },
-            BackgroundColor(theme::BG),
+            theme::SurfacePaint(theme::Role::Canvas),
         ))
         .with_children(|root| {
             // ── Title bar ─────────────────────────────────────────────────
@@ -122,7 +116,7 @@ fn spawn_inventory_ui(
                     align_items: AlignItems::Center,
                     ..default()
                 },
-                BackgroundColor(theme::HEADER_BG),
+                theme::SurfacePaint(theme::Role::Raised),
             ))
             .with_children(|h| {
                 h.spawn((
@@ -131,7 +125,7 @@ fn spawn_inventory_ui(
                         font_size: 22.0,
                         ..default()
                     },
-                    TextColor(theme.accent()),
+                    theme::TextPaint(theme::Role::Accent),
                 ));
             });
 
@@ -155,7 +149,7 @@ fn spawn_inventory_ui(
                             overflow: Overflow::clip(),
                             ..default()
                         },
-                        BorderColor::all(theme::DIVIDER),
+                        theme::BorderPaint(theme::Role::Border),
                     ))
                     .with_children(|left| {
                         // Column header
@@ -171,8 +165,8 @@ fn spawn_inventory_ui(
                                 border: UiRect::bottom(Val::Px(1.0)),
                                 ..default()
                             },
-                            BackgroundColor(theme::PANEL_HEADER_BG),
-                            BorderColor::all(theme::DIVIDER),
+                            theme::SurfacePaint(theme::Role::Raised),
+                            theme::BorderPaint(theme::Role::Border),
                         ))
                         .with_child((
                             Text::new("ITEMS"),
@@ -180,7 +174,7 @@ fn spawn_inventory_ui(
                                 font_size: 13.0,
                                 ..default()
                             },
-                            TextColor(theme::TEXT_DIM),
+                            theme::TextPaint(theme::Role::Muted),
                         ));
 
                         left.spawn((
@@ -220,8 +214,8 @@ fn spawn_inventory_ui(
                                         border: UiRect::bottom(Val::Px(1.0)),
                                         ..default()
                                     },
-                                    BorderColor::all(theme::DIVIDER),
-                                    BackgroundColor(theme::PANEL_BG),
+                                    theme::BorderPaint(theme::Role::Border),
+                                    theme::SurfacePaint(theme::Role::Surface),
                                 ))
                                 .with_children(|wp| {
                                     wp.spawn((
@@ -236,8 +230,8 @@ fn spawn_inventory_ui(
                                             border: UiRect::bottom(Val::Px(1.0)),
                                             ..default()
                                         },
-                                        BackgroundColor(theme::PANEL_HEADER_BG),
-                                        BorderColor::all(theme::DIVIDER),
+                                        theme::SurfacePaint(theme::Role::Raised),
+                                        theme::BorderPaint(theme::Role::Border),
                                     ))
                                     .with_child((
                                         Text::new("WIELDED"),
@@ -245,7 +239,7 @@ fn spawn_inventory_ui(
                                             font_size: 13.0,
                                             ..default()
                                         },
-                                        TextColor(theme.accent2()),
+                                        theme::TextPaint(theme::Role::Accent),
                                     ));
 
                                     wp.spawn((
@@ -270,7 +264,7 @@ fn spawn_inventory_ui(
                                         flex_grow: 1.0,
                                         ..default()
                                     },
-                                    BackgroundColor(theme::PANEL_BG),
+                                    theme::SurfacePaint(theme::Role::Surface),
                                 ))
                                 .with_children(|worn| {
                                     worn.spawn((
@@ -285,8 +279,8 @@ fn spawn_inventory_ui(
                                             border: UiRect::bottom(Val::Px(1.0)),
                                             ..default()
                                         },
-                                        BackgroundColor(theme::PANEL_HEADER_BG),
-                                        BorderColor::all(theme::DIVIDER),
+                                        theme::SurfacePaint(theme::Role::Raised),
+                                        theme::BorderPaint(theme::Role::Border),
                                     ))
                                     .with_child((
                                         Text::new("WORN"),
@@ -294,7 +288,7 @@ fn spawn_inventory_ui(
                                             font_size: 13.0,
                                             ..default()
                                         },
-                                        TextColor(theme.accent2()),
+                                        theme::TextPaint(theme::Role::Accent),
                                     ));
 
                                     worn.spawn((
@@ -321,13 +315,13 @@ fn spawn_inventory_ui(
                     border: UiRect::top(Val::Px(1.0)),
                     ..default()
                 },
-                BackgroundColor(theme::HEADER_BG),
-                BorderColor::all(theme::DIVIDER),
+                theme::SurfacePaint(theme::Role::Raised),
+                theme::BorderPaint(theme::Role::Border),
             ))
             .with_child((
                 Text::new(hints),
                 super::ui_font(ui_font, 13.0),
-                TextColor(theme::TEXT_DIM),
+                theme::TextPaint(theme::Role::Muted),
                 FooterHint,
             ));
         });
@@ -479,14 +473,14 @@ fn build_item_panel_from_data(
         let row_bg = if is_focused {
             theme.item_focus_bg()
         } else if is_crafting {
-            theme::ITEM_CRAFT_BG
+            theme.color(theme::Role::Raised)
         } else {
-            theme::ITEM_BG
+            theme.color(theme::Role::Surface)
         };
         let text_color = if is_crafting {
-            theme::TEXT_CRAFT
+            theme.color(theme::Role::Accent)
         } else {
-            theme::TEXT_BRIGHT
+            theme.color(theme::Role::Text)
         };
 
         let has_sprite = !data.cdda_id.is_empty() && registry.has_tile(&data.cdda_id);
@@ -512,7 +506,7 @@ fn build_item_panel_from_data(
                     ..default()
                 },
                 BackgroundColor(row_bg),
-                BorderColor::all(theme::DIVIDER),
+                theme::BorderPaint(theme::Role::Border),
             ))
             .with_children(|row| {
                 if has_sprite {
@@ -541,7 +535,7 @@ fn build_item_panel_from_data(
                             justify_content: JustifyContent::Center,
                             ..default()
                         },
-                        BackgroundColor(theme::ICON_BG),
+                        theme::SurfacePaint(theme::Role::Raised),
                     ))
                     .with_child((
                         Text::new(data.sym.to_string()),
@@ -549,7 +543,7 @@ fn build_item_panel_from_data(
                             font_size: font_size - 2.0,
                             ..default()
                         },
-                        TextColor(theme::ICON_TEXT),
+                        theme::TextPaint(theme::Role::Accent),
                     ));
                 }
 
@@ -774,7 +768,7 @@ pub(crate) fn update_inventory_screen(world: &mut World) {
                         font_size: 15.0,
                         ..default()
                     },
-                    TextColor(theme::TEXT_DIM),
+                    theme::TextPaint(theme::Role::Muted),
                 ));
         });
     }
@@ -792,7 +786,7 @@ pub(crate) fn update_inventory_screen(world: &mut World) {
                         font_size: 14.0,
                         ..default()
                     },
-                    TextColor(theme::TEXT_DIM),
+                    theme::TextPaint(theme::Role::Muted),
                 ));
         });
     } else {
@@ -822,7 +816,7 @@ pub(crate) fn update_inventory_screen(world: &mut World) {
                         font_size: 14.0,
                         ..default()
                     },
-                    TextColor(theme::TEXT_DIM),
+                    theme::TextPaint(theme::Role::Muted),
                 ));
         });
     } else {

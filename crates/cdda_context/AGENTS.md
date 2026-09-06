@@ -21,6 +21,9 @@ components, and the `CddaScreen` registration trait. Has no dependency on
   All are flat, no durable sub-folders.
 
 ## Local Contracts
+- Quit emits Bevy AppExit through deferred commands, allowing normal shutdown cleanup and headless verification; never terminate the process from menu navigation.
+
+- Ctx::Loading is a modal startup context. Normal navigation drains and ignores input there; the loading presenter translates Confirm/Cancel into OperationCommand, and the app owns lifecycle transitions.
 - **`ContextStack` (not `NavStack`)** — `Resource<Vec<Ctx>>` from
   `cdda_context::state`. `push_ctx` / `pop_ctx` are the only mutators;
   they save/restore focus via `FocusedCommandIndex` and set `NextState<Ctx>`.

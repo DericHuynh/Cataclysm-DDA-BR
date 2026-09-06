@@ -153,8 +153,10 @@ impl Plugin for CddaPlugin {
         app.init_resource::<StartupConfig>();
         app.init_resource::<cdda_sim::inventory::examine_resource::ExaminedItem>();
         app.init_resource::<DevCamera>();
-        app.init_resource::<cdda_sim::runtime::state::LoadingStatus>();
         app.init_resource::<CddaDataFiles>();
+        app.init_resource::<cdda_components::progress::OperationReport>();
+        app.add_message::<cdda_components::progress::OperationCommand>();
+        app.add_systems(Update, loading::loading_commands.before(load_data_system));
 
         // ── Screen transitions ─────────────────────────────────────────
         app.add_systems(
@@ -164,13 +166,14 @@ impl Plugin for CddaPlugin {
         app.add_systems(
             OnEnter(AppState::DataLoading),
             (
-                |mut next: ResMut<NextState<Screen>>| next.set(Screen::DevWorldgen),
+                |mut next: ResMut<NextState<Screen>>| next.set(Screen::Loading),
+                loading::begin_loading,
                 request_data_files,
             ),
         );
         app.add_systems(
             OnEnter(AppState::WorldGen),
-            |mut next: ResMut<NextState<Screen>>| next.set(Screen::DevWorldgen),
+            |mut next: ResMut<NextState<Screen>>| next.set(Screen::Loading),
         );
         app.add_systems(
             OnEnter(AppState::InGame),
@@ -191,8 +194,15 @@ impl Plugin for CddaPlugin {
         app.add_plugins(ScreenPlugin::<cdda_render::render::registry::RegistryScreen>::default());
 
         app.add_plugins(cdda_render::render::CddaRenderPlugin);
+        app.add_systems(Startup, preferences::load_preferences);
+        app.add_systems(Update, preferences::save_preferences);
         app.add_plugins(cdda_input::CddaInputPlugin);
         app.add_plugins(cdda_context::ContextPlugin);
+        app.add_systems(OnEnter(Screen::PauseMenu), menu_pause::enter);
+        app.add_systems(
+            bevy_state::prelude::OnExit(Screen::PauseMenu),
+            menu_pause::exit,
+        );
 
         // ── Replay ─────────────────────────────────────────────────────
         let config = app
@@ -365,9 +375,15 @@ pub fn run() {
     );
     app.add_plugins((
         bevy_egui::EguiPlugin::default(),
-        WorldInspectorPlugin::new(),
+        WorldInspectorPlugin::new().run_if(in_state(Screen::Gameplay)),
     ));
 
     app.add_plugins(CddaPlugin);
     app.run();
 }
+
+pub mod loading;
+
+pub mod preferences;
+
+mod menu_pause;

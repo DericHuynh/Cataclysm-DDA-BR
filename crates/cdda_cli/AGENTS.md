@@ -8,6 +8,8 @@
 - All data loading goes through `cdda_data::loader::Loader`; overmap generation through `cdda_overmap_gen::pipeline::OvermapGenPlugin`; schema writing through `cdda_data::schema` and `cdda_data::schema_gen`. This crate contains no parsing or generation logic of its own.
 
 ## Local Contracts
+
+- Loader-backed commands use load_reported and the shared ReportEvent stderr format, matching graphical startup stages and diagnostics.
 - Subcommands (declared in the `Command` enum — must stay in sync):
   - `schema` — static JSON Schema files for all definition types, no dynamic enums. Calls `cdda_data::schema::write_all_schemas`.
   - `gen-schemas --core <dir> [--mod NAME=PATH]...` — dynamic per-mod schemas with autocomplete enums; writes to `schemas/<name>/` for each mod.

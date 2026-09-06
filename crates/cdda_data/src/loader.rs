@@ -26,6 +26,13 @@ pub enum LoaderError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
+    #[error("Cannot read {path}: {source}")]
+    Read {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
     #[error("JSON parse error in {path}: {detail}")]
     JsonParse { path: PathBuf, detail: String },
 
@@ -173,6 +180,104 @@ impl Loader {
         self.resolve()
     }
 
+    /// Load once with a shared progress protocol. Parsing stays off the ECS/UI
+    /// thread when the caller runs this operation in a worker.
+    pub fn load_reported(
+        &mut self,
+        mut report: impl FnMut(cdda_core_types::progress::ReportEvent),
+    ) -> Result<DefRegistry, Vec<LoaderError>> {
+        use cdda_core_types::progress::{ReportEvent, ReportLevel};
+        fn discover(dir: &Path, files: &mut Vec<PathBuf>, errors: &mut Vec<LoaderError>) {
+            match std::fs::read_dir(dir) {
+                Err(e) => errors.push(LoaderError::Read {
+                    path: dir.into(),
+                    source: e,
+                }),
+                Ok(entries) => {
+                    let mut paths = Vec::new();
+                    for entry in entries {
+                        match entry {
+                            Ok(e) => paths.push(e.path()),
+                            Err(e) => errors.push(e.into()),
+                        }
+                    }
+                    paths.sort();
+                    for path in paths {
+                        if path.is_dir() {
+                            discover(&path, files, errors);
+                        } else if path.extension().is_some_and(|e| e == "json")
+                            && !matches!(
+                                path.file_name().and_then(|n| n.to_str()),
+                                Some("modinfo.json" | "mod_tileset.json")
+                            )
+                        {
+                            files.push(path);
+                        }
+                    }
+                }
+            }
+        }
+        report(ReportEvent::progress(
+            "Discovering files",
+            "Scanning configured data directories",
+        ));
+        let mut files = Vec::new();
+        let mut errors = Vec::new();
+        for dir in &self.data_dirs {
+            discover(dir, &mut files, &mut errors);
+        }
+        if files.is_empty() && errors.is_empty() {
+            errors.push(LoaderError::JsonParse {
+                path: PathBuf::from("data directories"),
+                detail: "No JSON files found".into(),
+            });
+        }
+        self.raw_by_type.clear();
+        for (index, path) in files.iter().enumerate() {
+            report(
+                ReportEvent::progress("Reading and parsing JSON", path.display().to_string())
+                    .units(index, files.len()),
+            );
+            self.ingest_file(path, &mut errors);
+        }
+        report(
+            ReportEvent::progress(
+                "Ingesting definitions",
+                format!(
+                    "{} raw definitions",
+                    self.raw_by_type.values().map(Vec::len).sum::<usize>()
+                ),
+            )
+            .units(files.len(), files.len()),
+        );
+        if !errors.is_empty() {
+            for error in &errors {
+                report(
+                    ReportEvent::progress("Loading failed", error.to_string())
+                        .level(ReportLevel::Error),
+                );
+            }
+            return Err(errors);
+        }
+        self.canonicalize_types();
+        let registry = self.resolve_all_reported(&mut errors, &mut report);
+        for error in errors {
+            report(
+                ReportEvent::progress("Definition omitted", error.to_string())
+                    .level(ReportLevel::Warning),
+            );
+        }
+        report(ReportEvent::progress(
+            "Definitions resolved",
+            format!(
+                "{} definitions in {} categories",
+                registry.total_count(),
+                registry.category_count()
+            ),
+        ));
+        Ok(registry)
+    }
+
     /// Ingest already-parsed JSON values (one entry per file) instead of
     /// reading `.json` from disk. This is the hot-reload seam: callers that
     /// source bytes through Bevy's asset reader (see `CddaDataPackLoader`)
@@ -299,7 +404,10 @@ impl Loader {
         let content = match std::fs::read_to_string(path) {
             Ok(c) => c,
             Err(e) => {
-                errors.push(LoaderError::Io(e));
+                errors.push(LoaderError::Read {
+                    path: path.into(),
+                    source: e,
+                });
                 return;
             }
         };
@@ -740,6 +848,14 @@ impl Loader {
 
     /// Pass 2: resolve all raw definitions into typed structs.
     fn resolve_all(&self, errors: &mut Vec<LoaderError>) -> DefRegistry {
+        self.resolve_all_reported(errors, &mut |_| {})
+    }
+
+    fn resolve_all_reported(
+        &self,
+        errors: &mut Vec<LoaderError>,
+        report: &mut impl FnMut(cdda_core_types::progress::ReportEvent),
+    ) -> DefRegistry {
         let mut registry = DefRegistry::empty();
 
         // Drive every standard category from the single `for_each_raw_def_kind!`
@@ -747,6 +863,10 @@ impl Loader {
         //   resolve_type_with_pipeline::<DefType>(json_type, &mut registry.field, errors)
         macro_rules! resolve_one {
             ($name:ident, $def_ty:ty, $json:expr, $field:ident, $strategy:ident) => {
+                report(cdda_core_types::progress::ReportEvent::progress(
+                    "Resolving and converting definitions",
+                    $json,
+                ));
                 self.resolve_type_with_pipeline::<$def_ty>($json, &mut registry.$field, errors);
             };
         }
@@ -756,7 +876,7 @@ impl Loader {
         self.resolve_mapgen(&mut registry, errors);
 
         // ---- Log skipped types ----
-        self.log_skipped_types();
+        self.log_skipped_types(report);
 
         info!(
             "Pass 2 complete: {} total definitions across {} categories",
@@ -772,7 +892,7 @@ impl Loader {
     /// The handled-type set is derived from the `for_each_raw_def_kind!` table
     /// (one `json_type` string per category) rather than re-listed by hand, so
     /// adding a category can never silently desync the skip log.
-    fn log_skipped_types(&self) {
+    fn log_skipped_types(&self, report: &mut impl FnMut(cdda_core_types::progress::ReportEvent)) {
         let mut handled_types: std::collections::HashSet<&str> = std::collections::HashSet::new();
         macro_rules! collect_type {
             ($name:ident, $def_ty:ty, $json:expr, $field:ident, $strategy:ident) => {
@@ -786,6 +906,15 @@ impl Loader {
         for type_name in self.raw_by_type.keys() {
             if !handled_types.contains(type_name.as_str()) {
                 let count = self.raw_by_type[type_name].len();
+                report(
+                    cdda_core_types::progress::ReportEvent::progress(
+                        "Unsupported category",
+                        format!(
+                            "{type_name}: {count} definitions skipped; no converter registered"
+                        ),
+                    )
+                    .level(cdda_core_types::progress::ReportLevel::Warning),
+                );
                 debug!(
                     "Skipped type '{}' ({} defs) — no registered handler",
                     type_name, count

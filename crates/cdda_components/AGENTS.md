@@ -8,6 +8,8 @@ Owns shared ECS data contracts, schedule labels, messages/events, interned token
 - `lib.rs` declares the module index and re-exports core value types, DefId, WorldPos and token IDs.
 
 ## Local Contracts
+
+- `progress` owns OperationReport (bounded history, aggregate counts and lifecycle flags) and OperationCommand (retry/return). Reporting producers/presenters live above this data contract.
 - **Simulation schedule:** `SimulationTurn` (one-second phases: TurnTick → Effects → … → Spawning), `SimulationIngress` (pending craft/item requests without advancing time), `SimulationRefresh` (post-commit Inventory → SpatialUpdate), `SimulationAction` (IntentDeclare → IntentResolve) and `SimulationActivity` (typed work/completion for one selected actor) are the logical schedules; `cdda_sim::runtime::SimulationPlugin` owns dispatch, the `ActingEntity` selection resource, and outer `Update` ordering (GameSet Input → Sim driver → Render). SimSet labels on Update do not imply logical-turn execution.
 - **Time:** `GameTime.turn` counts one-second game turns, matching parsed definition Time. `TURNS_PER_HOUR=3600`, `TURNS_PER_DAY=86400`. Wall-clock pacing belongs to the simulation adapter, not this value.
 - **Combat ownership:** MeleeCapability owns base attack skill/dice; DodgeDefense owns base dodge; IntrinsicArmor owns natural protection. CombatStats is a plain legacy construction record with into_bundle(), not a Component or runtime mirror. Derived equipment/effect protection remains separate pending work.
@@ -35,6 +37,7 @@ Owns shared ECS data contracts, schedule labels, messages/events, interned token
 
 ## Child DOX Index
 Flat `src/` modules (no nested child DOX):
+- `progress` — Retained operation reports and retry/return commands.
 - `actor`, `stats` — creature/player/NPC identity, stats/AP/health, independent attack/dodge/natural protection, status tags and skill/mutation/proficiency/bionic/morale/effect/body-part relationships.
 - `activity` — progress/phase/type, Crafting/Aiming/Reading/Waiting/Reloading/Interacting and exertion tracking.
 - `ai` — planner markers and shared goals; HTN executor state is local to cdda_sim.

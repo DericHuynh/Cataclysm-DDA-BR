@@ -11,6 +11,7 @@
 //!   for the tile under the cursor.
 //! - **Z-level**: `<` / `>` keys change the viewed z-level.
 
+use super::theme;
 use bevy::prelude::*;
 use bevy_ecs::message::MessageReader;
 use bevy_state::state_scoped::DespawnOnExit;
@@ -74,7 +75,7 @@ pub fn spawn_overmap_viewer(
                 flex_direction: FlexDirection::Row,
                 ..default()
             },
-            BackgroundColor(Color::BLACK),
+            theme::SurfacePaint(theme::Role::Canvas),
         ))
         .with_children(|root| {
             // ── Tile grid (left side) ───────────────────────────────────
@@ -86,7 +87,7 @@ pub fn spawn_overmap_viewer(
                     margin: UiRect::all(Val::Px(8.0)),
                     ..default()
                 },
-                BackgroundColor(Color::srgb(0.05, 0.05, 0.08)),
+                theme::SurfacePaint(theme::Role::Surface),
             ))
             .with_children(|grid| {
                 for row in 0..GRID_ROWS {
@@ -113,7 +114,7 @@ pub fn spawn_overmap_viewer(
                                 font_size: TILE_SIZE_PX - 2.0,
                                 ..default()
                             },
-                            TextColor(Color::srgb(0.4, 0.45, 0.3)),
+                            theme::TextPaint(theme::Role::Muted),
                         ));
                     }
                 }
@@ -129,7 +130,7 @@ pub fn spawn_overmap_viewer(
                     padding: UiRect::all(Val::Px(12.0)),
                     ..default()
                 },
-                BackgroundColor(Color::srgb(0.08, 0.08, 0.10)),
+                theme::SurfacePaint(theme::Role::Raised),
             ))
             .with_children(|sidebar| {
                 sidebar.spawn((
@@ -138,7 +139,7 @@ pub fn spawn_overmap_viewer(
                         font_size: 22.0,
                         ..default()
                     },
-                    TextColor(Color::srgb(0.8, 0.8, 0.8)),
+                    theme::TextPaint(theme::Role::Text),
                     Node {
                         margin: UiRect::bottom(Val::Px(16.0)),
                         ..default()
@@ -152,7 +153,7 @@ pub fn spawn_overmap_viewer(
                         font_size: 14.0,
                         ..default()
                     },
-                    TextColor(Color::srgb(0.6, 0.6, 0.6)),
+                    theme::TextPaint(theme::Role::Muted),
                     Node { ..default() },
                 ));
 
@@ -162,7 +163,7 @@ pub fn spawn_overmap_viewer(
                         font_size: 11.0,
                         ..default()
                     },
-                    TextColor(Color::srgb(0.4, 0.4, 0.4)),
+                    theme::TextPaint(theme::Role::Muted),
                     Node { ..default() },
                 ));
             });

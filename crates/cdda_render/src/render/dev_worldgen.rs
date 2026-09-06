@@ -4,7 +4,7 @@
 //! pattern as the Bevy 0.18 Text2d example. Spawned on OnEnter(Gameplay),
 //! updated on move.
 
-use crate::render::theme::{self, UiTheme};
+use crate::render::theme;
 use crate::render::tiles::TileRegistry;
 use bevy::prelude::*;
 use bevy::text::LineBreak;
@@ -18,7 +18,6 @@ use cdda_components::item::{
 };
 use cdda_components::sim::WorldPosition;
 use cdda_context::ctx::Ctx as Screen;
-use cdda_context::nav::{ctx_def, FocusedCommandIndex};
 use cdda_core_types::core::coords::TILES_PER_OMT;
 use cdda_data::interner::ItemTypeRegistry;
 use std::collections::HashMap;
@@ -31,112 +30,11 @@ use tracing::info;
 // ---------------------------------------------------------------------------
 
 #[derive(Component)]
-pub(crate) struct DevCmdButton(usize);
-
-#[derive(Component)]
 pub(crate) struct DevStatusBar;
 
 pub const VIEW_COLS: usize = 40;
 pub const VIEW_ROWS: usize = 24;
 
-// ---------------------------------------------------------------------------
-// DevWorldgen menu screen
-// ---------------------------------------------------------------------------
-
-pub fn spawn_dev_menu(
-    mut commands: Commands,
-    focused: Res<FocusedCommandIndex>,
-    theme: Res<UiTheme>,
-) {
-    let def = ctx_def(Screen::DevWorldgen);
-
-    commands
-        .spawn((
-            DespawnOnExit(Screen::DevWorldgen),
-            Node {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                display: Display::Flex,
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                padding: UiRect::all(Val::Px(32.0)),
-                ..default()
-            },
-            BackgroundColor(theme::MENU_BG),
-        ))
-        .with_children(|parent| {
-            parent.spawn((
-                Text::new(def.title),
-                TextFont { font_size: 34.0, ..default() },
-                TextColor(theme.accent2()),
-                TextLayout::new_with_justify(Justify::Center),
-                Node { margin: UiRect::bottom(Val::Px(48.0)), ..default() },
-            ));
-
-            parent.spawn((
-                Text::new("Generates a showcase world with one of every city building.\nArrow keys navigate, Enter to start."),
-                TextFont { font_size: 18.0, ..default() },
-                TextColor(theme::TEXT_DIM),
-                TextLayout::new_with_justify(Justify::Center),
-                Node { margin: UiRect::bottom(Val::Px(32.0)), ..default() },
-            ));
-
-            for (i, cmd) in def.commands.iter().enumerate() {
-                let display = match cmd.hotkey {
-                    Some(ch) => format!("{}) {}", ch, cmd.label),
-                    None => format!("   {}", cmd.label),
-                };
-                let is_focused = i == focused.current();
-
-                parent.spawn((
-                    DevCmdButton(i),
-                    Button,
-                    Node {
-                        width: Val::Percent(50.0),
-                        height: Val::Px(54.0),
-                        display: Display::Flex,
-                        align_items: AlignItems::Center,
-                        padding: UiRect::horizontal(Val::Px(24.0)),
-                        margin: UiRect::vertical(Val::Px(4.0)),
-                        border: UiRect::all(Val::Px(2.0)),
-                        ..default()
-                    },
-                    BackgroundColor(if is_focused { theme::BUTTON_FOCUS_BG } else { theme::BUTTON_BG }),
-                    BorderColor::all(if is_focused { theme::TEXT_BRIGHT } else { Color::NONE }),
-                ))
-                .with_child((
-                    Text::new(display),
-                    TextFont { font_size: 28.0, ..default() },
-                    TextColor(theme::TEXT_BRIGHT),
-                ));
-            }
-        });
-}
-
-pub(crate) fn sync_dev_menu_focus(
-    focused: Res<FocusedCommandIndex>,
-    _theme: Res<UiTheme>,
-    mut buttons: Query<(&DevCmdButton, &mut BackgroundColor, &mut BorderColor)>,
-) {
-    let current = focused.current();
-    for (btn, mut bg, mut border) in &mut buttons {
-        if btn.0 == current {
-            bg.0 = theme::BUTTON_FOCUS_BG;
-            let c = theme::TEXT_BRIGHT;
-            border.top = c;
-            border.right = c;
-            border.bottom = c;
-            border.left = c;
-        } else {
-            bg.0 = theme::BUTTON_BG;
-            border.top = Color::NONE;
-            border.right = Color::NONE;
-            border.bottom = Color::NONE;
-            border.left = Color::NONE;
-        }
-    }
-}
 // ---------------------------------------------------------------------------
 // Tilemap viewport — individual Sprites using real tileset images
 // ---------------------------------------------------------------------------
@@ -178,6 +76,7 @@ pub fn spawn_ascii_view(
         },
         TextLayout::new(Justify::Left, LineBreak::NoWrap),
         TextBackgroundColor(Color::BLACK.with_alpha(0.7)),
+        theme::TextPaint(theme::Role::Text),
         Transform::from_translation(Vec3::new(-400.0, -340.0, 10.0)),
     ));
 }

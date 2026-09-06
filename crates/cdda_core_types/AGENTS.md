@@ -9,6 +9,8 @@ Pure value types for CDDA: coords, units, IDs, damage, flags, RNG, and the simul
 - Bevy deps used: `bevy_ecs` (for `Resource`/`Component` derives only — no system code), `bevy_reflect`, plus `serde`, `schemars`, `rand`, `thiserror`.
 
 ## Local Contracts
+
+- `progress.rs` owns the renderer-independent ReportEvent/ReportLevel protocol and terminal Display formatting; no UI or I/O dependency.
 - New value types that get used in more than one crate belong here. Crate-local types stay in their crate.
 - Coordinates live under `core/coords/`. Each coordinate has a docstring explaining what space (world, submap, overmap) and scale (tile, OMT) it represents.
 - `DefId<T>` wraps a `String` plus a phantom marker type. The marker types (`ItemDef`, `MonsterDef`, etc.) are declared in `cdda_components::def_markers` to avoid a circular dep.
@@ -28,6 +30,7 @@ Pure value types for CDDA: coords, units, IDs, damage, flags, RNG, and the simul
 - Changes to `DefId<T>` are reflected in `cdda_components` and `cdda_data` — run `cargo check --workspace` after edits.
 
 ## Child DOX Index
+- `src/progress.rs` — Operation records, severity, known work units and terminal formatting.
 - `src/core/coords/` — Coordinate types and direction helpers. No further durable sub-boundaries; each file owns one coordinate family.
 - `src/core/units/` — Typed units (energy, length, time, volume, weight). No further durable sub-boundaries.
 - `src/rng.rs`, `src/sim_id.rs` — RNG (SeededRng) and SimId helpers. No further durable sub-boundaries.

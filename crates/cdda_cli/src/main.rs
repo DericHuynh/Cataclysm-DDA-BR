@@ -243,7 +243,7 @@ fn cmd_stats(path: &PathBuf) {
     eprintln!("  {:20} {}", "TOTAL", total);
     eprintln!();
 
-    match loader.load() {
+    match loader.load_reported(|event| eprintln!("{event}")) {
         Ok(registry) => {
             eprintln!("Resolved definitions: {}", registry.total_count());
             eprintln!("Categories with data: {}", registry.category_count());
@@ -281,7 +281,7 @@ fn cmd_validate(path: &PathBuf) {
         raw_map.len()
     );
 
-    match loader.load() {
+    match loader.load_reported(|event| eprintln!("{event}")) {
         Ok(_registry) => {
             eprintln!("  All definitions loaded without errors.");
             eprintln!("  Schema validation: PASSED");
@@ -311,7 +311,7 @@ fn cmd_check(path: &PathBuf) {
     eprint!("Loading data from {:?} ... ", path);
     let mut loader = cdda_data::loader::Loader::new(vec![path.clone()]);
 
-    match loader.load() {
+    match loader.load_reported(|event| eprintln!("{event}")) {
         Ok(registry) => {
             let total = registry.total_count();
             let categories = registry.category_count();
@@ -354,7 +354,7 @@ fn cmd_ablation(baseline: &PathBuf, mod_dirs: &[PathBuf]) {
     }
 
     let mut loader = cdda_data::loader::Loader::new(dirs.clone());
-    match loader.load() {
+    match loader.load_reported(|event| eprintln!("{event}")) {
         Ok(registry) => {
             eprintln!("{} definitions", registry.total_count());
         }
@@ -377,7 +377,7 @@ fn cmd_ablation(baseline: &PathBuf, mod_dirs: &[PathBuf]) {
                 mod_dir.file_name().unwrap_or_default()
             );
             let mut l = cdda_data::loader::Loader::new(without);
-            match l.load() {
+            match l.load_reported(|event| eprintln!("{event}")) {
                 Ok(registry) => {
                     eprintln!("{} definitions", registry.total_count());
                 }
@@ -401,7 +401,7 @@ fn cmd_ablation(baseline: &PathBuf, mod_dirs: &[PathBuf]) {
         for mod_dir in mod_dirs {
             eprint!("  {:?} ... ", mod_dir.file_name().unwrap_or_default());
             let mut l = cdda_data::loader::Loader::new(vec![baseline.clone(), mod_dir.clone()]);
-            match l.load() {
+            match l.load_reported(|event| eprintln!("{event}")) {
                 Ok(registry) => {
                     eprintln!("{} definitions", registry.total_count());
                 }
@@ -553,7 +553,7 @@ fn cmd_city_view(data_dir: &PathBuf, city_size: i32, seed: u64) {
     }
     let mut loader = Loader::new(vec![data_dir.clone()]);
     loader.ingest_all();
-    let registry = match loader.load() {
+    let registry = match loader.load_reported(|event| eprintln!("{event}")) {
         Ok(r) => r,
         Err(e) => {
             eprintln!("Load errors: {}", e.len());

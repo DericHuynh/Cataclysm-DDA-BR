@@ -12,9 +12,9 @@
 //! explicitly on change).
 
 use crate::render::scroll::{sync_virtual_pane, FocusedRow, KeyboardScroll, VirtualList};
-use crate::render::theme::{ThemePreset, UiTheme};
+use crate::render::theme::{self, ThemePreset, UiTheme};
 use bevy::prelude::*;
-use bevy_state::prelude::{in_state, DespawnOnExit, OnEnter, State as BevyState};
+use bevy_state::prelude::{DespawnOnExit, State as BevyState};
 use bevy_state::state::NextState;
 use cdda_context::ctx::Ctx;
 use cdda_context::substate::SettingsTab;
@@ -37,12 +37,18 @@ pub struct SettingsState {
     pub rebinding_action: Option<(InputContextId, BindableAction)>,
     /// Index into `ThemePreset::ALL` for the Interface tab color scheme setting.
     pub interface_theme: usize,
+    pub ui_scale_percent: u16,
+    pub fullscreen: bool,
+    pub menu_art: bool,
 }
 
 impl Default for SettingsState {
     fn default() -> Self {
         Self {
             focused_row: 0,
+            ui_scale_percent: 100,
+            fullscreen: false,
+            menu_art: true,
             rebinding_action: None,
             interface_theme: ThemePreset::ALL
                 .iter()
@@ -60,17 +66,9 @@ pub struct ContentPanel;
 #[derive(Component)]
 pub struct SettingsItem;
 
-// Colours.
-const BG: Color = Color::srgb(0.05, 0.05, 0.07);
-const PANEL: Color = Color::srgb(0.08, 0.08, 0.10);
-const TAB_ACTIVE: Color = Color::srgb(0.25, 0.55, 0.15);
-const TAB_INACTIVE: Color = Color::srgb(0.08, 0.08, 0.10);
-const ITEM_BG: Color = Color::srgb(0.08, 0.08, 0.10);
-const ITEM_FOCUS_BG: Color = Color::srgb(0.25, 0.55, 0.15);
-const ACCENT: Color = Color::srgb(0.85, 0.6, 0.15);
-const TEXT_BRIGHT: Color = Color::srgb(0.95, 0.95, 0.95);
-const HIGHLIGHT: Color = Color::srgb(0.95, 0.95, 0.95);
-const REBIND_PROMPT: Color = Color::srgb(0.9, 0.7, 0.1);
+const COLOR_SCHEME_ROW: usize = 0;
+
+// Shared theme roles.
 
 // ---------------------------------------------------------------------------
 // Spawn — frame (title + tab bar + content panel)
@@ -93,7 +91,7 @@ pub fn spawn(mut commands: Commands) {
                 padding: UiRect::all(Val::Px(24.0)),
                 ..default()
             },
-            BackgroundColor(BG),
+            theme::SurfacePaint(theme::Role::Canvas),
         ))
         .with_children(|parent| {
             parent.spawn((
@@ -102,7 +100,7 @@ pub fn spawn(mut commands: Commands) {
                     font_size: 36.0,
                     ..default()
                 },
-                TextColor(ACCENT),
+                theme::TextPaint(theme::Role::Accent),
                 TextLayout::new_with_justify(Justify::Center),
                 Node {
                     margin: UiRect::bottom(Val::Px(16.0)),
@@ -130,7 +128,7 @@ pub fn spawn(mut commands: Commands) {
                                 border: UiRect::all(Val::Px(1.0)),
                                 ..default()
                             },
-                            BackgroundColor(TAB_INACTIVE),
+                            BackgroundColor::default(),
                         ))
                         .observe(
                             move |mut click: On<Pointer<Click>>,
@@ -145,7 +143,7 @@ pub fn spawn(mut commands: Commands) {
                                 font_size: 20.0,
                                 ..default()
                             },
-                            TextColor(TEXT_BRIGHT),
+                            theme::TextPaint(theme::Role::Text),
                         ));
                     }
                 });
@@ -162,7 +160,8 @@ pub fn spawn(mut commands: Commands) {
                     },
                     ScrollPosition::default(),
                     Node {
-                        width: Val::Percent(80.0),
+                        width: Val::Percent(90.0),
+                        max_width: px(960),
                         flex_grow: 1.0,
                         min_height: Val::Px(0.0),
                         flex_direction: FlexDirection::Column,
@@ -170,9 +169,37 @@ pub fn spawn(mut commands: Commands) {
                         overflow: Overflow::scroll_y(),
                         ..default()
                     },
-                    BackgroundColor(PANEL),
+                    theme::SurfacePaint(theme::Role::Surface),
+                    theme::BorderPaint(theme::Role::Border),
                 ))
                 .id();
+            parent
+                .spawn((
+                    Button,
+                    Node {
+                        padding: UiRect::axes(px(18), px(9)),
+                        margin: UiRect::top(px(12)),
+                        ..default()
+                    },
+                    super::cinematic::AccentMotion::default(),
+                ))
+                .observe(
+                    |mut click: On<Pointer<Click>>, mut writer: MessageWriter<InputAction>| {
+                        writer.write(InputAction::new(
+                            GameAction::Cancel,
+                            cdda_input::ActionSource::Mouse,
+                        ));
+                        click.propagate(false);
+                    },
+                )
+                .with_child((
+                    Text::new("Back"),
+                    TextFont {
+                        font_size: 18.,
+                        ..default()
+                    },
+                    theme::TextPaint(theme::Role::Text),
+                ));
         });
 
     let _ = content_entity;
@@ -186,7 +213,13 @@ pub fn spawn(mut commands: Commands) {
 pub struct SettingsPresentation {
     panel: Option<Entity>,
     rows: Vec<(String, bool)>,
-    options: Option<(usize, Option<(InputContextId, BindableAction)>)>,
+    options: Option<(
+        usize,
+        Option<(InputContextId, BindableAction)>,
+        u16,
+        bool,
+        bool,
+    )>,
 }
 
 /// Retain tab contents and virtualize the keybinding editor like other lists.
@@ -195,7 +228,7 @@ pub fn rebuild_content_panel(
     tab_state: Res<BevyState<SettingsTab>>,
     state: Res<SettingsState>,
     bindings: Res<ContextInputMaps>,
-    mut ui_theme: ResMut<UiTheme>,
+    theme: Res<UiTheme>,
     ui_font_handle: Res<super::UiFontHandle>,
     mut panel: Query<
         (
@@ -216,9 +249,16 @@ pub fn rebuild_content_panel(
         return;
     };
     let reset = cache.panel != Some(entity) || tab_state.is_changed();
-    let options = (state.interface_theme, state.rebinding_action.clone());
+    let options = (
+        state.interface_theme,
+        state.rebinding_action.clone(),
+        state.ui_scale_percent,
+        state.fullscreen,
+        state.menu_art,
+    );
     let model_changed = reset || bindings.is_changed() || cache.options.as_ref() != Some(&options);
-    let dirty = model_changed || state.is_changed() || ui_font_handle.is_changed();
+    let dirty =
+        model_changed || state.is_changed() || theme.is_changed() || ui_font_handle.is_changed();
     if !dirty && !list.is_changed() {
         return;
     }
@@ -226,28 +266,37 @@ pub fn rebuild_content_panel(
     if model_changed {
         cache.options = Some(options);
         let preset = ThemePreset::ALL[state.interface_theme % ThemePreset::ALL.len()];
-        if ui_theme.preset != preset {
-            ui_theme.preset = preset;
-        }
         cache.rows.clear();
         let labels: Vec<String> = match *tab_state.get() {
             SettingsTab::General => vec![
-                "Auto-save: Enabled (every 5 min)".into(),
-                "Auto-notes: Yes".into(),
-                "Circular distance: No".into(),
+                "Auto-save: Not implemented".into(),
+                "Auto-notes: Not implemented".into(),
+                "Distance rules: Not configurable yet".into(),
             ],
             SettingsTab::Graphics => vec![
-                "Terminal size: 80×25".into(),
-                "Font size: 16".into(),
-                "Fullscreen: No".into(),
+                format!("Interface scale: {}% (Left/Right)", state.ui_scale_percent),
+                format!(
+                    "Fullscreen: {} (Left/Right)",
+                    if state.fullscreen { "Yes" } else { "No" }
+                ),
+                format!(
+                    "Menu artwork: {} (Left/Right)",
+                    if state.menu_art { "Yes" } else { "No" }
+                ),
             ],
-            SettingsTab::Sound => vec!["Music volume: 80%".into(), "SFX volume: 100%".into()],
+            SettingsTab::Sound => vec![
+                "Music: Audio playback not implemented".into(),
+                "Sound effects: Audio playback not implemented".into(),
+            ],
             SettingsTab::Interface => vec![
-                "Sidebar style: classic".into(),
-                "Show compass: Yes".into(),
-                "Minimap height: 100".into(),
-                "Force capital Y/N: Yes".into(),
-                format!("Color Scheme: {} (←/→ to cycle)", preset.label()),
+                format!(
+                    "Theme: {} (all views · Left/Right to cycle)",
+                    preset.label()
+                ),
+                "Sidebar style: Not configurable yet".into(),
+                "Compass: Not implemented".into(),
+                "Minimap: Not implemented".into(),
+                "Confirmation style: Not configurable yet".into(),
             ],
             SettingsTab::Keybindings => Vec::new(),
         };
@@ -272,7 +321,7 @@ pub fn rebuild_content_panel(
                         key
                     };
                     cache.rows.push((
-                        format!("{} · {}  ⟶  {}", ctx_label(&ctx), action.label(), key),
+                        format!("{} · {}  ->  {}", ctx_label(&ctx), action.label(), key),
                         rebinding,
                     ));
                 }
@@ -300,24 +349,45 @@ pub fn rebuild_content_panel(
                     ..list.row_node()
                 },
                 background: if *rebinding {
-                    REBIND_PROMPT
+                    theme::TEXT_YELLOW
                 } else if focused {
-                    ITEM_FOCUS_BG
+                    theme.color(theme::Role::Selection)
                 } else {
-                    ITEM_BG
+                    theme.color(theme::Role::Surface)
                 },
-                border: if focused { HIGHLIGHT } else { Color::NONE },
+                border: if focused {
+                    theme.color(theme::Role::Accent)
+                } else {
+                    Color::NONE
+                },
                 cells: vec![RowCell {
                     text: label.clone(),
                     font: super::ui_font(&ui_font_handle.0, 18.0),
-                    color: TEXT_BRIGHT,
+                    color: theme.color(theme::Role::Text),
                     grow: 0.0,
                 }],
             },
         )
     });
     for entity in retained.sync(&mut commands, entity, &list, rows) {
-        commands.entity(entity).insert((SettingsItem, Button));
+        commands
+            .entity(entity)
+            .insert((SettingsItem, Button))
+            .observe(
+                |mut click: On<Pointer<Click>>,
+                 keys: Query<&cdda_ui::RowKey<usize>>,
+                 mut state: ResMut<SettingsState>,
+                 mut writer: MessageWriter<InputAction>| {
+                    if let Ok(key) = keys.get(click.entity) {
+                        state.focused_row = key.0;
+                        writer.write(InputAction::new(
+                            GameAction::Confirm,
+                            cdda_input::ActionSource::Mouse,
+                        ));
+                    }
+                    click.propagate(false);
+                },
+            );
     }
 }
 
@@ -332,8 +402,6 @@ pub fn navigate(
     mut tab_next: ResMut<NextState<SettingsTab>>,
     bindings: Res<ContextInputMaps>,
 ) {
-    const COLOR_SCHEME_ROW: usize = 4;
-
     for event in action_reader.read() {
         match &event.action {
             GameAction::NavigatePrevTab => {
@@ -345,6 +413,10 @@ pub fn navigate(
                 state.focused_row = 0;
             }
             GameAction::NavigateLeft => {
+                if *tab_state.get() == SettingsTab::Graphics {
+                    adjust_graphics(&mut state, -1);
+                    continue;
+                }
                 if *tab_state.get() == SettingsTab::Interface
                     && state.focused_row == COLOR_SCHEME_ROW
                 {
@@ -360,6 +432,10 @@ pub fn navigate(
                 }
             }
             GameAction::NavigateRight => {
+                if *tab_state.get() == SettingsTab::Graphics {
+                    adjust_graphics(&mut state, 1);
+                    continue;
+                }
                 if *tab_state.get() == SettingsTab::Interface
                     && state.focused_row == COLOR_SCHEME_ROW
                 {
@@ -402,6 +478,12 @@ pub fn handle_confirm(
 ) {
     for event in action_reader.read() {
         if event.action == GameAction::Confirm {
+            if *tab_state.get() == SettingsTab::Graphics {
+                adjust_graphics(&mut state, 1);
+            }
+            if *tab_state.get() == SettingsTab::Interface && state.focused_row == COLOR_SCHEME_ROW {
+                state.interface_theme = (state.interface_theme + 1) % ThemePreset::ALL.len();
+            }
             if *tab_state.get() == SettingsTab::Keybindings {
                 if let Some((ctx, action)) = find_binding_at_row(&state, &bindings) {
                     state.rebinding_action = Some((ctx, action.clone()));
@@ -431,16 +513,17 @@ pub fn detect_rebind_complete(mut state: ResMut<SettingsState>, rebind: Res<Rebi
 // ---------------------------------------------------------------------------
 
 pub fn sync_tab_highlight(
+    theme: Res<UiTheme>,
     tab_state: Res<BevyState<SettingsTab>>,
     mut tabs: Query<(&TabButton, &mut BackgroundColor, &mut BorderColor)>,
 ) {
     for (tab, mut bg, mut border) in &mut tabs {
         if tab.0 == *tab_state.get() {
-            bg.set_if_neq(BackgroundColor(TAB_ACTIVE));
-            *border = BorderColor::all(HIGHLIGHT);
+            bg.set_if_neq(BackgroundColor(theme.color(theme::Role::Selection)));
+            border.set_if_neq(BorderColor::all(theme.color(theme::Role::Accent)));
         } else {
-            bg.set_if_neq(BackgroundColor(TAB_INACTIVE));
-            *border = BorderColor::all(Color::NONE);
+            bg.set_if_neq(BackgroundColor(theme.color(theme::Role::Surface)));
+            border.set_if_neq(BorderColor::all(Color::NONE));
         }
     }
 }
@@ -521,4 +604,81 @@ fn find_binding_at_row(
         }
     }
     None
+}
+
+fn adjust_graphics(state: &mut SettingsState, direction: i32) {
+    match state.focused_row {
+        0 => {
+            state.ui_scale_percent =
+                (i32::from(state.ui_scale_percent) + direction * 10).clamp(70, 150) as u16
+        }
+        1 => state.fullscreen = !state.fullscreen,
+        2 => state.menu_art = !state.menu_art,
+        _ => {}
+    }
+}
+
+/// Apply functional presentation controls independently of the Settings screen.
+pub fn apply_display_options(
+    state: Res<SettingsState>,
+    mut scale: Option<ResMut<UiScale>>,
+    mut windows: Query<&mut Window, With<bevy::window::PrimaryWindow>>,
+    mut theme: ResMut<UiTheme>,
+) {
+    if !state.is_changed() {
+        return;
+    }
+    let preset = ThemePreset::ALL[state.interface_theme % ThemePreset::ALL.len()];
+    if theme.preset != preset {
+        theme.preset = preset;
+    }
+    if let Some(ref mut scale) = scale {
+        let value = f32::from(state.ui_scale_percent) / 100.;
+        if scale.0 != value {
+            scale.0 = value;
+        }
+    }
+    for mut window in &mut windows {
+        let mode = if state.fullscreen {
+            bevy::window::WindowMode::BorderlessFullscreen(bevy::window::MonitorSelection::Current)
+        } else {
+            bevy::window::WindowMode::Windowed
+        };
+        if window.mode != mode {
+            window.mode = mode;
+        }
+    }
+}
+
+/// Persisted display values, separate from transient selection/rebind state.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct DisplayPreferences {
+    pub theme: usize,
+    pub scale_percent: u16,
+    pub fullscreen: bool,
+    pub menu_art: bool,
+}
+impl Default for DisplayPreferences {
+    fn default() -> Self {
+        Self::from(&SettingsState::default())
+    }
+}
+impl From<&SettingsState> for DisplayPreferences {
+    fn from(state: &SettingsState) -> Self {
+        Self {
+            theme: state.interface_theme,
+            scale_percent: state.ui_scale_percent,
+            fullscreen: state.fullscreen,
+            menu_art: state.menu_art,
+        }
+    }
+}
+impl DisplayPreferences {
+    pub fn apply(self, state: &mut SettingsState) {
+        state.interface_theme = self.theme % ThemePreset::ALL.len();
+        state.ui_scale_percent = self.scale_percent.clamp(70, 150);
+        state.fullscreen = self.fullscreen;
+        state.menu_art = self.menu_art;
+    }
 }

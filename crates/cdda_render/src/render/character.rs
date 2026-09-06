@@ -117,7 +117,6 @@ impl CddaScreen for CharacterScreen {
 
 pub fn spawn_character_sheet_screen(world: &mut World) {
     // Reset state on every open
-    let theme = world.resource::<UiTheme>().clone();
     *world.resource_mut::<CharacterSheetState>() = CharacterSheetState::default();
 
     let ctx_actions = world.resource::<ContextActions>().clone();
@@ -140,7 +139,7 @@ pub fn spawn_character_sheet_screen(world: &mut World) {
             flex_direction: FlexDirection::Column,
             ..default()
         },
-        BackgroundColor(theme::BG),
+        theme::SurfacePaint(theme::Role::Canvas),
     ))
     .with_children(|root| {
         // ── Title bar ─────────────────────────────────────────────────
@@ -150,7 +149,7 @@ pub fn spawn_character_sheet_screen(world: &mut World) {
                 padding: UiRect::axes(Val::Px(24.0), Val::Px(12.0)),
                 ..default()
             },
-            BackgroundColor(theme::HEADER_BG),
+            theme::SurfacePaint(theme::Role::Raised),
         ))
         .with_child((
             Text::new("CHARACTER SHEET"),
@@ -158,7 +157,7 @@ pub fn spawn_character_sheet_screen(world: &mut World) {
                 font_size: 26.0,
                 ..default()
             },
-            TextColor(theme.accent2()),
+            theme::TextPaint(theme::Role::Accent),
         ));
 
         // ── Main body ─────────────────────────────────────────────────
@@ -180,8 +179,8 @@ pub fn spawn_character_sheet_screen(world: &mut World) {
                         overflow: Overflow::clip_y(),
                         ..default()
                     },
-                    BackgroundColor(theme::SIDE_PANEL_BG),
-                    BorderColor::all(theme::DIVIDER),
+                    theme::SurfacePaint(theme::Role::Surface),
+                    theme::BorderPaint(theme::Role::Border),
                 ))
                 .with_children(|left| {
                     left.spawn((
@@ -242,13 +241,13 @@ pub fn spawn_character_sheet_screen(world: &mut World) {
                 border: UiRect::top(Val::Px(1.0)),
                 ..default()
             },
-            BackgroundColor(theme::HEADER_BG),
-            BorderColor::all(theme::DIVIDER),
+            theme::SurfacePaint(theme::Role::Raised),
+            theme::BorderPaint(theme::Role::Border),
         ))
         .with_child((
             Text::new(hints),
             super::ui_font(&font_handle, 13.0),
-            TextColor(theme::TEXT_DIM),
+            theme::TextPaint(theme::Role::Muted),
             FooterHint,
         ));
     });
@@ -359,33 +358,57 @@ pub fn update_character_sheet_screen(
             // ── Identity section ───────────────────────────────────────────────
             spawn_section_header(left, "IDENTITY");
             if let Some(pd) = pdata {
-                spawn_info_row(left, "Name", &pd.name, theme::TEXT_BRIGHT, 0);
+                spawn_info_row(left, "Name", &pd.name, theme.color(theme::Role::Text), 0);
                 let gender_str = match &pd.gender {
                     cdda_components::actor::Gender::Male => "male",
                     cdda_components::actor::Gender::Female => "female",
                     cdda_components::actor::Gender::NonBinary => "non-binary",
                     cdda_components::actor::Gender::Custom(s) => s.as_str(),
                 };
-                spawn_info_row(left, "Gender", gender_str, theme::TEXT_BRIGHT, 1);
-                spawn_info_row(left, "Age", &format!("{}", pd.age), theme::TEXT_BRIGHT, 0);
+                spawn_info_row(
+                    left,
+                    "Gender",
+                    gender_str,
+                    theme.color(theme::Role::Text),
+                    1,
+                );
+                spawn_info_row(
+                    left,
+                    "Age",
+                    &format!("{}", pd.age),
+                    theme.color(theme::Role::Text),
+                    0,
+                );
                 spawn_info_row(
                     left,
                     "Height",
                     &format!("{} cm", pd.height),
-                    theme::TEXT_BRIGHT,
+                    theme.color(theme::Role::Text),
                     1,
                 );
-                spawn_info_row(left, "Blood", &pd.blood_type, theme::TEXT_BRIGHT, 0);
+                spawn_info_row(
+                    left,
+                    "Blood",
+                    &pd.blood_type,
+                    theme.color(theme::Role::Text),
+                    0,
+                );
             } else {
-                spawn_info_row(left, "Name", "Dev Player", theme::TEXT_BRIGHT, 0);
+                spawn_info_row(
+                    left,
+                    "Name",
+                    "Dev Player",
+                    theme.color(theme::Role::Text),
+                    0,
+                );
             }
 
             // ── Attributes section ─────────────────────────────────────────────
             spawn_section_header(left, "ATTRIBUTES");
-            spawn_stat_row(left, "STR", stats.strength, 0);
-            spawn_stat_row(left, "DEX", stats.dexterity, 1);
-            spawn_stat_row(left, "INT", stats.intelligence, 0);
-            spawn_stat_row(left, "PER", stats.perception, 1);
+            spawn_stat_row(&theme, left, "STR", stats.strength, 0);
+            spawn_stat_row(&theme, left, "DEX", stats.dexterity, 1);
+            spawn_stat_row(&theme, left, "INT", stats.intelligence, 0);
+            spawn_stat_row(&theme, left, "PER", stats.perception, 1);
 
             // ── Vitals section ─────────────────────────────────────────────────
             spawn_section_header(left, "VITALS");
@@ -406,7 +429,7 @@ pub fn update_character_sheet_screen(
             } else if speed > 100 {
                 theme::TEXT_GREEN
             } else {
-                theme::TEXT_BRIGHT
+                theme.color(theme::Role::Text)
             };
             spawn_info_row(left, "Speed", &format!("{}", speed), speed_color, 1);
 
@@ -421,26 +444,32 @@ pub fn update_character_sheet_screen(
                 } else {
                     format!("skill {}", cs.melee_skill)
                 };
-                spawn_info_row(left, "Melee", &melee_str, theme::TEXT_BRIGHT, 0);
+                spawn_info_row(left, "Melee", &melee_str, theme.color(theme::Role::Text), 0);
             } else {
-                spawn_info_row(left, "Melee", "—", theme::TEXT_DIM, 0);
+                spawn_info_row(left, "Melee", "—", theme.color(theme::Role::Muted), 0);
             }
             let dodge_str = dodge.map(|d| d.0.to_string()).unwrap_or_else(|| "—".into());
-            spawn_info_row(left, "Dodge", &dodge_str, theme::TEXT_BRIGHT, 1);
+            spawn_info_row(left, "Dodge", &dodge_str, theme.color(theme::Role::Text), 1);
             if let Some(armor) = armor {
                 let armor = &armor.0;
                 let armor_str = format!(
                     "bash {} / cut {} / pierce {}",
                     armor.bash, armor.cut, armor.pierce
                 );
-                spawn_info_row(left, "Natural armor", &armor_str, theme::TEXT_DIM, 0);
+                spawn_info_row(
+                    left,
+                    "Natural armor",
+                    &armor_str,
+                    theme.color(theme::Role::Muted),
+                    0,
+                );
             }
             if let Some(vis) = vision {
                 spawn_info_row(
                     left,
                     "Vision",
                     &format!("{} / {} tiles", vis.day_range, vis.night_range),
-                    theme::TEXT_BRIGHT,
+                    theme.color(theme::Role::Text),
                     if combat.is_some() { 1 } else { 0 },
                 );
             }
@@ -448,7 +477,7 @@ pub fn update_character_sheet_screen(
             // ── Status section ─────────────────────────────────────────────────
             spawn_section_header(left, "STATUS");
             if let Some(t) = temp {
-                let (temp_str, temp_color) = temp_display(t.0);
+                let (temp_str, temp_color) = temp_display(&theme, t.0);
                 spawn_info_row(left, "Temp", &temp_str, temp_color, 0);
             }
             if let Some(w) = wet {
@@ -458,10 +487,10 @@ pub fn update_character_sheet_screen(
                     4..=7 => "wet",
                     _ => "soaked",
                 };
-                spawn_info_row(left, "Wetness", wet_str, theme::TEXT_BRIGHT, 1);
+                spawn_info_row(left, "Wetness", wet_str, theme.color(theme::Role::Text), 1);
             }
             if let Some(m) = morale {
-                let (morale_str, morale_color) = morale_display(m.0);
+                let (morale_str, morale_color) = morale_display(&theme, m.0);
                 spawn_info_row(left, "Morale", &morale_str, morale_color, 0);
             }
 
@@ -487,9 +516,9 @@ pub fn update_character_sheet_screen(
                             ..default()
                         },
                         BackgroundColor(if i % 2 == 0 {
-                            theme::PANEL_BG
+                            theme.color(theme::Role::Surface)
                         } else {
-                            theme::ROW_ALT_BG
+                            theme.color(theme::Role::Alternate)
                         }),
                     ))
                     .with_child((
@@ -532,7 +561,7 @@ pub fn update_character_sheet_screen(
                             entry.level,
                             entry.exercise,
                         );
-                        cache.rows.push((row_str, theme::TEXT_BRIGHT));
+                        cache.rows.push((row_str, theme::Role::Text));
                     }
                 }
             }
@@ -557,7 +586,7 @@ pub fn update_character_sheet_screen(
                             format!("mutation #{}", entry.id.as_str()),
                             if is_visible { "yes" } else { "no" },
                         );
-                        cache.rows.push((row_str, theme::TEXT_BRIGHT));
+                        cache.rows.push((row_str, theme::Role::Text));
                     }
                 }
             }
@@ -585,11 +614,11 @@ pub fn update_character_sheet_screen(
                             duration_str,
                         );
                         let color = if entry.intensity > 3 {
-                            theme::TEXT_RED
+                            theme::Role::Danger
                         } else if entry.intensity > 1 {
-                            theme::TEXT_YELLOW
+                            theme::Role::Warning
                         } else {
-                            theme::TEXT_BRIGHT
+                            theme::Role::Text
                         };
                         cache.rows.push((row_str, color));
                     }
@@ -618,9 +647,9 @@ pub fn update_character_sheet_screen(
                             if is_active { "yes" } else { "no" },
                         );
                         let color = if is_active {
-                            theme::TEXT_GREEN
+                            theme::Role::Positive
                         } else {
-                            theme::TEXT_BRIGHT
+                            theme::Role::Text
                         };
                         cache.rows.push((row_str, color));
                     }
@@ -643,7 +672,7 @@ pub fn update_character_sheet_screen(
                     cache.header = "Proficiency".to_string();
                     for entry in &profs {
                         let row_str = format!("proficiency #{}", entry.id.as_str());
-                        cache.rows.push((row_str, theme::TEXT_BRIGHT));
+                        cache.rows.push((row_str, theme::Role::Text));
                     }
                 }
             }
@@ -664,8 +693,8 @@ pub fn update_character_sheet_screen(
                             border: UiRect::bottom(Val::Px(1.0)),
                             ..default()
                         },
-                        BackgroundColor(theme::HEADER_BG),
-                        BorderColor::all(theme::DIVIDER),
+                        theme::SurfacePaint(theme::Role::Raised),
+                        theme::BorderPaint(theme::Role::Border),
                     ))
                     .with_children(|tabs| {
                         for tab in CharacterTab::ALL {
@@ -679,9 +708,9 @@ pub fn update_character_sheet_screen(
                                 BackgroundColor(if active {
                                     theme.tab_active_bg()
                                 } else {
-                                    theme::TAB_BG
+                                    theme.color(theme::Role::Surface)
                                 }),
-                                BorderColor::all(theme::DIVIDER),
+                                theme::BorderPaint(theme::Role::Border),
                             ))
                             .with_child((
                                 Text::new(tab.label()),
@@ -690,9 +719,9 @@ pub fn update_character_sheet_screen(
                                     ..default()
                                 },
                                 TextColor(if active {
-                                    theme::TAB_TEXT_ACTIVE
+                                    theme.color(theme::Role::Accent)
                                 } else {
-                                    theme::TEXT_DIM
+                                    theme.color(theme::Role::Muted)
                                 }),
                             ));
                         }
@@ -718,9 +747,13 @@ pub fn update_character_sheet_screen(
             usize::MAX,
             TextRow {
                 node: list.row_node(),
-                background: theme::PANEL_BG,
+                background: theme.color(theme::Role::Surface),
                 border: Color::NONE,
-                cells: vec![RowCell::new(cache.empty.clone(), 15.0, theme::TEXT_DIM)],
+                cells: vec![RowCell::new(
+                    cache.empty.clone(),
+                    15.0,
+                    theme.color(theme::Role::Muted),
+                )],
             },
         ));
     }
@@ -735,12 +768,12 @@ pub fn update_character_sheet_screen(
                     ..list.row_node()
                 },
                 background: if index % 2 == 0 {
-                    theme::PANEL_BG
+                    theme.color(theme::Role::Surface)
                 } else {
-                    theme::ROW_ALT_BG
+                    theme.color(theme::Role::Alternate)
                 },
-                border: theme::DIVIDER,
-                cells: vec![RowCell::new(text.clone(), 15.0, *color)],
+                border: theme.color(theme::Role::Border),
+                cells: vec![RowCell::new(text.clone(), 15.0, theme.color(*color))],
             },
         ));
     }
@@ -811,8 +844,8 @@ fn spawn_section_header(parent: &mut ChildSpawnerCommands, title: &str) {
                 border: UiRect::top(Val::Px(1.0)),
                 ..default()
             },
-            BackgroundColor(theme::SECTION_HEADER_BG),
-            BorderColor::all(theme::DIVIDER),
+            theme::SurfacePaint(theme::Role::Raised),
+            theme::BorderPaint(theme::Role::Border),
         ))
         .with_child((
             Text::new(title),
@@ -820,7 +853,7 @@ fn spawn_section_header(parent: &mut ChildSpawnerCommands, title: &str) {
                 font_size: 13.0,
                 ..default()
             },
-            TextColor(theme::TEXT_DIM),
+            theme::TextPaint(theme::Role::Muted),
         ));
 }
 
@@ -839,10 +872,10 @@ fn spawn_info_row(
                 justify_content: JustifyContent::SpaceBetween,
                 ..default()
             },
-            BackgroundColor(if alt == 0 {
-                theme::PANEL_BG
+            theme::SurfacePaint(if alt == 0 {
+                theme::Role::Surface
             } else {
-                theme::ROW_ALT_BG
+                theme::Role::Alternate
             }),
         ))
         .with_children(|row| {
@@ -852,7 +885,7 @@ fn spawn_info_row(
                     font_size: 15.0,
                     ..default()
                 },
-                TextColor(theme::TEXT_DIM),
+                theme::TextPaint(theme::Role::Muted),
             ));
             row.spawn((
                 Text::new(value.to_string()),
@@ -865,9 +898,15 @@ fn spawn_info_row(
         });
 }
 
-fn spawn_stat_row(parent: &mut ChildSpawnerCommands, name: &str, value: u32, alt: usize) {
+fn spawn_stat_row(
+    theme: &UiTheme,
+    parent: &mut ChildSpawnerCommands,
+    name: &str,
+    value: u32,
+    alt: usize,
+) {
     let bar = stat_bar(value);
-    let color = stat_color(value);
+    let color = stat_color(theme, value);
     parent
         .spawn((
             Node {
@@ -877,10 +916,10 @@ fn spawn_stat_row(parent: &mut ChildSpawnerCommands, name: &str, value: u32, alt
                 align_items: AlignItems::Center,
                 ..default()
             },
-            BackgroundColor(if alt == 0 {
-                theme::PANEL_BG
+            theme::SurfacePaint(if alt == 0 {
+                theme::Role::Surface
             } else {
-                theme::ROW_ALT_BG
+                theme::Role::Alternate
             }),
         ))
         .with_children(|row| {
@@ -897,7 +936,7 @@ fn spawn_stat_row(parent: &mut ChildSpawnerCommands, name: &str, value: u32, alt
                     font_size: 15.0,
                     ..default()
                 },
-                TextColor(theme::TEXT_DIM),
+                theme::TextPaint(theme::Role::Muted),
             ));
             row.spawn((Node {
                 width: Val::Px(30.0),
@@ -931,8 +970,8 @@ fn spawn_list_header(parent: &mut ChildSpawnerCommands, label: &str) {
                 border: UiRect::bottom(Val::Px(1.0)),
                 ..default()
             },
-            BackgroundColor(theme::HEADER_BG),
-            BorderColor::all(theme::DIVIDER),
+            theme::SurfacePaint(theme::Role::Raised),
+            theme::BorderPaint(theme::Role::Border),
         ))
         .with_child((
             Text::new(label.to_string()),
@@ -940,7 +979,7 @@ fn spawn_list_header(parent: &mut ChildSpawnerCommands, label: &str) {
                 font_size: 13.0,
                 ..default()
             },
-            TextColor(theme::TEXT_DIM),
+            theme::TextPaint(theme::Role::Muted),
         ));
 }
 
@@ -954,13 +993,13 @@ fn stat_bar(value: u32) -> String {
     "█".repeat(filled) + &"░".repeat(empty)
 }
 
-fn stat_color(value: u32) -> Color {
+fn stat_color(theme: &UiTheme, value: u32) -> Color {
     if value >= 14 {
         theme::TEXT_GREEN
     } else if value >= 10 {
-        theme::TAB_TEXT_ACTIVE
+        theme.color(theme::Role::Accent)
     } else if value >= 8 {
-        theme::TEXT_BRIGHT
+        theme.color(theme::Role::Text)
     } else if value >= 6 {
         theme::TEXT_YELLOW
     } else {
@@ -968,21 +1007,21 @@ fn stat_color(value: u32) -> Color {
     }
 }
 
-fn temp_display(celsius: f64) -> (String, Color) {
+fn temp_display(theme: &UiTheme, celsius: f64) -> (String, Color) {
     let s = format!("{:.1}°C", celsius);
     let color = if celsius >= 40.0 {
         theme::TEXT_RED
     } else if celsius >= 38.5 {
         theme::TEXT_ORANGE
     } else if celsius < 35.0 {
-        theme::TAB_TEXT_ACTIVE
+        theme.color(theme::Role::Accent)
     } else {
         theme::TEXT_GREEN
     };
     (s, color)
 }
 
-fn morale_display(m: i32) -> (String, Color) {
+fn morale_display(theme: &UiTheme, m: i32) -> (String, Color) {
     let label = if m >= 10 {
         "happy"
     } else if m >= 1 {
@@ -997,9 +1036,9 @@ fn morale_display(m: i32) -> (String, Color) {
     let color = if m >= 10 {
         theme::TEXT_GREEN
     } else if m > 0 {
-        theme::TAB_TEXT_ACTIVE
+        theme.color(theme::Role::Accent)
     } else if m == 0 {
-        theme::TEXT_BRIGHT
+        theme.color(theme::Role::Text)
     } else if m >= -10 {
         theme::TEXT_YELLOW
     } else {
@@ -1012,7 +1051,7 @@ fn morale_display(m: i32) -> (String, Color) {
 pub struct CharacterPresentation {
     root: Option<Entity>,
     tab: CharacterTab,
-    rows: Vec<(String, Color)>,
+    rows: Vec<(String, theme::Role)>,
     header: String,
     empty: String,
 }

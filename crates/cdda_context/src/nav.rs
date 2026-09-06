@@ -189,7 +189,7 @@ pub fn ctx_def(screen: Ctx) -> ScreenDefinition {
             ],
         },
 
-        Custom(_) => ScreenDefinition {
+        Loading | Custom(_) => ScreenDefinition {
             title: "",
             commands: Vec::new(),
         },
@@ -213,7 +213,9 @@ fn dispatch(
         TransitionTarget::Push(s) => push_ctx(current, *s, stack, next, focused),
         TransitionTarget::Replace(s) => next.set(*s),
         TransitionTarget::Pop => pop_ctx(stack, next, focused),
-        TransitionTarget::Quit => std::process::exit(0),
+        TransitionTarget::Quit => {
+            commands.write_message(bevy_app::AppExit::Success);
+        }
         TransitionTarget::Event(e) => match e {
             GameEvent::StartNewGame => {
                 tracing::info!("dispatching StartNewGame → DataLoading");
@@ -247,6 +249,10 @@ pub fn handle_navigation_input(
     list_items: Query<(), (With<ScreenListItem>,)>,
 ) {
     let current = *state.get();
+    if current == Ctx::Loading {
+        reader.clear();
+        return;
+    }
 
     // If an overlay is active, only process Cancel (to dismiss it).
     // The actual pop happens via commands in the next frame.
@@ -447,7 +453,7 @@ pub fn sync_input_context(
     let ctx = match *screen.get() {
         MainMenu | NewGameHub | HelpScreen | CreditsScreen | WorldMenu | WorldSettings
         | DevWorldgen | ScenarioSelect | ProfessionSelect | CharacterCreation
-        | CharacterConfirm | Custom(_) => InputContextId::MainMenu,
+        | CharacterConfirm | Loading | Custom(_) => InputContextId::MainMenu,
         DevSpawnPanel => InputContextId::Inventory,
         RegistryViewer => InputContextId::Inventory,
         SettingsMenu => InputContextId::Settings,
@@ -465,4 +471,33 @@ pub fn sync_input_context(
         Gameplay => InputContextId::Gameplay,
     };
     stack.replace_top(ctx);
+}
+
+#[cfg(test)]
+mod shutdown_tests {
+    use super::*;
+    #[test]
+    fn quit_requests_app_shutdown_without_exiting_the_test_process() {
+        let mut app = bevy_app::App::new();
+        app.add_message::<bevy_app::AppExit>();
+        app.add_systems(bevy_app::Update, |mut commands: Commands| {
+            dispatch(
+                &TransitionTarget::Quit,
+                Ctx::MainMenu,
+                &mut ContextStack::default(),
+                &mut NextState::default(),
+                &mut FocusedCommandIndex::default(),
+                &mut commands,
+                &mut NextState::default(),
+            );
+        });
+        app.update();
+        let mut reader = bevy_ecs::message::MessageCursor::<bevy_app::AppExit>::default();
+        assert_eq!(
+            reader
+                .read(app.world().resource::<Messages<bevy_app::AppExit>>())
+                .count(),
+            1
+        );
+    }
 }
