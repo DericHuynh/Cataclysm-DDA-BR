@@ -3,13 +3,9 @@
 //! Each activity type gets its own component (e.g. `Crafting`, `Aiming`).
 //! `ActivityProgress` tracks common progress fields for any activity.
 //!
-//! ## Multi-activity architecture
-//!
-//! Each activity component carries its own progress tracking so that a
-//! character can hold multiple activities simultaneously in the future
-//! (e.g. dual-wield crafting with a trait).  Currently the simulation only
-//! creates one activity at a time, but the component design does not
-//! prevent multiple.
+//! One actor owns one progress/type pair. The simulation validates this invariant
+//! before dispatch; multiple type tags do not create independent work budgets.
+//! Interruption removes the pair, retaining the craft item for validated resume.
 //!
 //! ## Why these live in `cdda_components`
 //!
@@ -51,7 +47,7 @@ pub enum ActivityPhase {
     /// `start()` has not yet been called.
     #[default]
     Pending,
-    /// Activity is in progress (ticked each frame).
+    /// Activity is in progress (advanced by the simulation budget).
     Active,
     /// Activity has been suspended (can be resumed later).
     Suspended,

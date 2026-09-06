@@ -17,6 +17,7 @@ use cdda_context::ctx::Ctx as Screen;
 
 pub mod character;
 pub mod crafting;
+pub mod crafting_state;
 pub mod dev_spawn;
 pub mod dev_worldgen;
 pub mod examine;
@@ -45,7 +46,7 @@ pub struct FooterHint;
 /// `ActiveKeybindings`.  Registered once in `CddaRenderPlugin` — no
 /// per-screen footer update systems needed.
 pub fn refresh_all_footer_hints(
-    ctx_actions: Res<cdda_components::context::ContextActions>,
+    ctx_actions: Res<cdda_context::state::ContextActions>,
     active_keys: Res<cdda_input::ActiveKeybindings>,
     mut footer_q: Query<&mut Text, With<FooterHint>>,
 ) {
@@ -93,7 +94,24 @@ impl Plugin for CddaRenderPlugin {
         app.init_resource::<theme::UiTheme>();
         app.init_resource::<character::CharacterSheetState>();
         app.init_resource::<dev_spawn::DevSpawnFocus>();
+        app.init_resource::<dev_spawn::DevSpawnCatalog>();
         app.init_resource::<UiFontHandle>();
+        app.init_resource::<inventory::InventoryFocus>();
+        app.init_resource::<crafting_state::CraftState>();
+        app.init_resource::<crafting_state::CraftModel>();
+        app.init_resource::<crafting_state::CategoryIndex>();
+        app.add_systems(
+            OnEnter(Screen::CraftingMenu),
+            crafting_state::build_craft_state,
+        );
+        app.add_systems(
+            Update,
+            crafting_state::refresh_craft_state
+                .run_if(in_state(Screen::CraftingMenu))
+                .run_if(crafting_state::craft_model_changed)
+                .in_set(GameSet::Render)
+                .before(crafting::update_crafting_ui),
+        );
 
         app.add_systems(Startup, (render_setup, tiles::load_tiles));
 
@@ -146,7 +164,6 @@ impl Plugin for CddaRenderPlugin {
             (
                 settings::rebuild_content_panel,
                 settings::sync_tab_highlight,
-                settings::sync_item_highlight,
             )
                 .chain()
                 .run_if(in_state(Screen::SettingsMenu)),
@@ -155,11 +172,27 @@ impl Plugin for CddaRenderPlugin {
         // ── Crafting menu spawn via CddaScreen; Update still here ────
         app.add_systems(
             Update,
-            crafting::update_crafting_ui.run_if(in_state(Screen::CraftingMenu)),
+            crafting::update_crafting_ui
+                .after(input::crafting_menu_input)
+                .run_if(in_state(Screen::CraftingMenu)),
         );
         app.add_systems(
             Update,
             input::crafting_menu_input.run_if(in_state(Screen::CraftingMenu)),
+        );
+
+        // Registry extraction is isolated from bounded input/presentation systems.
+        app.init_resource::<registry::RegistryCatalog>();
+        app.init_resource::<registry::RegistryViewerState>();
+        app.add_systems(
+            Update,
+            (
+                registry::refresh_registry_catalog.run_if(registry::registry_sources_changed),
+                registry::registry_input,
+                registry::update_registry_viewer,
+            )
+                .chain()
+                .run_if(in_state(Screen::RegistryViewer)),
         );
 
         // ── Debug spawn panel ─────────────────────────────────────────────
@@ -173,11 +206,13 @@ impl Plugin for CddaRenderPlugin {
         );
         app.add_systems(
             Update,
-            dev_spawn::update_dev_spawn_panel.run_if(in_state(Screen::DevSpawnPanel)),
-        );
-        app.add_systems(
-            Update,
-            input::dev_spawn_input.run_if(in_state(Screen::DevSpawnPanel)),
+            (
+                dev_spawn::dev_spawn_populate.run_if(dev_spawn::dev_spawn_catalog_changed),
+                input::dev_spawn_input,
+                dev_spawn::update_dev_spawn_panel,
+            )
+                .chain()
+                .run_if(in_state(Screen::DevSpawnPanel)),
         );
 
         // ── Inventory screen — spawn and update handled by CddaScreen trait ──
@@ -186,10 +221,10 @@ impl Plugin for CddaRenderPlugin {
         app.add_systems(
             Update,
             (
-                character::update_character_sheet_screen,
                 character::character_sheet_input,
-                character::sync_character_scroll,
+                character::update_character_sheet_screen,
             )
+                .chain()
                 .run_if(in_state(Screen::CharacterSheet)),
         );
 

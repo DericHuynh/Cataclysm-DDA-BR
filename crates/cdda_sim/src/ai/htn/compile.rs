@@ -21,11 +21,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use cdda_catalog::htn::HtnSource;
+use cdda_catalog::htn::{Compound as HtnCompoundDef, Step as HtnStepDef};
+use cdda_components::intent::ActionIntent;
 use cdda_htn::graph::{BakedGraph, GraphBuilder, TaskHandle};
 use cdda_htn::state::PlanState;
-use cdda_components::intent::ActionIntent;
-use cdda_data::registry::DefRegistry;
-use cdda_defs_raw::raw_defs::{HtnCompoundDef, HtnStepDef};
 use serde_json::Value;
 
 use super::kernel::{CompileCtx, CompileError, KernelRegistry, PredSink};
@@ -70,19 +70,12 @@ pub const MAX_COMPILED_NODES: usize = 1024;
 /// All defs are compiled (roots or not) so a mod's overrides are validated;
 /// `roots` maps every def id to its baked index.
 pub fn compile_domain(
-    registry: &DefRegistry,
+    source: &impl HtnSource,
     kernels: &KernelRegistry,
 ) -> Result<CompiledHtnDomain, Vec<CompileError>> {
-    let item_exists = |id: &str| {
-        registry
-            .items
-            .contains_key(&cdda_core_types::core::id::DefId::from(id.to_string()))
-    };
-    let category_exists = |id: &str| {
-        registry
-            .item_categories
-            .contains_key(&cdda_core_types::core::id::DefId::from(id.to_string()))
-    };
+    let registry = source.htn_program();
+    let item_exists = |id: &str| registry.items.contains(id);
+    let category_exists = |id: &str| registry.item_categories.contains(id);
     let ctx = CompileCtx {
         item_exists: &item_exists,
         category_exists: &category_exists,
@@ -121,12 +114,12 @@ pub fn compile_domain(
 
     // The nominal root is the first compiled def (alphabetically); agents
     // address roots through `roots`, never through the domain root field.
-    let nominal_root = c
-        .handles
-        .values()
-        .copied()
-        .next()
-        .ok_or_else(|| vec![CompileError::at_def("<none>", "no htn_compound definitions")])?;
+    let nominal_root = c.handles.values().copied().next().ok_or_else(|| {
+        vec![CompileError::at_def(
+            "<none>",
+            "no htn_compound definitions",
+        )]
+    })?;
 
     let graph = c
         .graph
@@ -162,7 +155,7 @@ struct Compiler<'a> {
     errors: Vec<CompileError>,
     kernels: &'a KernelRegistry,
     ctx: &'a CompileCtx<'a>,
-    defs: &'a HashMap<cdda_core_types::core::id::DefId<HtnCompoundDef>, Arc<HtnCompoundDef>>,
+    defs: &'a HashMap<String, Arc<HtnCompoundDef>>,
     node_budget: usize,
 }
 
@@ -260,8 +253,7 @@ impl<'a> Compiler<'a> {
         let ctx = **ctx;
         graph.define_compound(handle, |c| {
             for (method_idx, method) in def.methods.iter().enumerate() {
-                let method_name =
-                    method.id.clone().unwrap_or_else(|| format!("{method_idx}"));
+                let method_name = method.id.clone().unwrap_or_else(|| format!("{method_idx}"));
                 let mut mb = c.method();
                 mb.named(method_name.clone());
 
@@ -383,8 +375,7 @@ impl<'a> Compiler<'a> {
                 for param in &target.parameters {
                     if let Some(raw_args) = raw {
                         if let Some(v) = raw_args.get(param.as_str()) {
-                            child_binding
-                                .insert(param.clone(), substitute(v, binding));
+                            child_binding.insert(param.clone(), substitute(v, binding));
                             continue;
                         }
                     }
@@ -549,7 +540,11 @@ fn sub(v: &Value, binding: &Value) -> Value {
                     return Value::Object(out);
                 }
             }
-            Value::Object(map.iter().map(|(k, val)| (k.clone(), sub(val, binding))).collect())
+            Value::Object(
+                map.iter()
+                    .map(|(k, val)| (k.clone(), sub(val, binding)))
+                    .collect(),
+            )
         }
         Value::Array(items) => Value::Array(items.iter().map(|i| sub(i, binding)).collect()),
         other => other.clone(),
@@ -557,6 +552,6 @@ fn sub(v: &Value, binding: &Value) -> Value {
 }
 
 /// Parse a def id string into the registry key type.
-fn def_id_from(id: &str) -> cdda_core_types::core::id::DefId<HtnCompoundDef> {
-    cdda_core_types::core::id::DefId::from(id.to_string())
+fn def_id_from(id: &str) -> String {
+    id.to_string()
 }

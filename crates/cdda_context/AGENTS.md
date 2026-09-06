@@ -11,20 +11,20 @@ components, and the `CddaScreen` registration trait. Has no dependency on
 ## Ownership
 - Bevy deps: `bevy_ecs`, `bevy_app`, `bevy_state` (plus workspace `tracing`).
   No full `bevy` — kept headless so the suite runs without a renderer.
-- Crate deps: `cdda_core_types`, `cdda_components`, `cdda_events`,
+- Crate deps: `cdda_core_types`, `cdda_components`, `cdda_input`,
   `cdda_sim`. `Ctx`, `ContextStack`, `FocusedCommandIndex`, `push_ctx`,
-  `pop_ctx` are defined in `cdda_components::context` and re-exported from
+  `pop_ctx` are defined in `cdda_context::state` and re-exported from
   this crate's `ctx.rs` / `nav.rs`.
 - Current layering note: `cdda_context` depends on `cdda_sim::runtime::state::AppState` for state transitions. This is a layering debt; future work should move the shared app-state enum into a lower-level crate or `cdda_components`.
-- Modules: `actions.rs`, `config.rs`, `ctx.rs`, `cursor.rs`, `focus.rs`,
+- Modules: `state.rs` (canonical navigation vocabulary), `actions.rs`, `config.rs`, `ctx.rs`, `cursor.rs`, `focus.rs`,
   `menu.rs`, `nav.rs`, `overlay.rs`, `screen.rs`, `substate.rs`, `systems.rs`.
   All are flat, no durable sub-folders.
 
 ## Local Contracts
 - **`ContextStack` (not `NavStack`)** — `Resource<Vec<Ctx>>` from
-  `cdda_components::context`. `push_ctx` / `pop_ctx` are the only mutators;
+  `cdda_context::state`. `push_ctx` / `pop_ctx` are the only mutators;
   they save/restore focus via `FocusedCommandIndex` and set `NextState<Ctx>`.
-- **`Ctx` States enum** — defined in `cdda_components::context`, default
+- **`Ctx` States enum** — defined in `cdda_context::state`, default
   `MainMenu`. Covers menu, character/world creation, gameplay, in-game panels
   (`Inventory`, `CraftingMenu`, `CharacterSheet`, `PauseMenu`, `ExamineLook`,
   `Overmap`, …), input prompts (`TextInput`, `QuantityInput`,
@@ -37,12 +37,12 @@ components, and the `CddaScreen` registration trait. Has no dependency on
   UI rows are tagged `DespawnOnExit(SettingsTab)` for scoped cleanup. This is
   the idiomatic replacement for hand-rolled tab resources; keep new tabbed
   screens' tab enums here (headless) and drive their content from the state.
-- **Focus is split across two crates**:
+- **Focus has two independent scopes**:
   - `InputFocus` (this crate, `focus.rs`) — `Resource<Option<Entity>>` for
     entity-level keyboard focus across `KeyboardFocusable` components.
     Hand-rolled to avoid `bevy_input_focus` which may pull in `bevy_window`/
     `bevy_render` and would break the headless invariant.
-  - `FocusedCommandIndex` (`cdda_components::context`, re-exported) — per-
+  - `FocusedCommandIndex` (`cdda_context::state`, re-exported) — per-
     screen `usize` cursor with `HashMap<Ctx, usize>` history; `on_push` saves
     the old screen's focus, `on_pop` restores the parent's saved focus.
 - **`CddaScreen` trait** (`screen.rs`) — implementors declare

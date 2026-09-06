@@ -165,10 +165,23 @@ fn unknown_kernel_symbols_and_references_are_compile_errors() {
         Ok(_) => panic!("bad defs must not compile"),
     };
 
-    let all = errors.iter().map(|e| e.to_string()).collect::<Vec<_>>().join("\n");
-    assert!(all.contains("unknown operator kernel `cdda:teleport`"), "{all}");
-    assert!(all.contains("unknown predicate kernel `cdda:levitating`"), "{all}");
-    assert!(all.contains("unknown htn_compound task reference `core:never_defined`"), "{all}");
+    let all = errors
+        .iter()
+        .map(|e| e.to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        all.contains("unknown operator kernel `cdda:teleport`"),
+        "{all}"
+    );
+    assert!(
+        all.contains("unknown predicate kernel `cdda:levitating`"),
+        "{all}"
+    );
+    assert!(
+        all.contains("unknown htn_compound task reference `core:never_defined`"),
+        "{all}"
+    );
     assert!(all.contains("unknown item category `weapons`"), "{all}");
     // Diagnostics carry the def and method location.
     assert!(all.contains("core:bad"), "{all}");
@@ -213,7 +226,10 @@ fn parameterized_calls_specialize_into_distinct_nodes() {
     assert_eq!(compiled.graph.domain().tasks.len(), 7);
     // Compiled def ids resolve to baked indexes; templates do not.
     assert!(compiled.root_index("core:both").is_some());
-    assert!(compiled.root_index("core:grab").is_none(), "parameterized defs have no unbound root");
+    assert!(
+        compiled.root_index("core:grab").is_none(),
+        "parameterized defs have no unbound root"
+    );
     // And the execution table covers exactly the four operator nodes.
     assert_eq!(compiled.exec_table.len(), 4);
 
@@ -247,9 +263,16 @@ fn htn_agent_fetches_a_nearby_tool_through_correlated_requests() {
             .unwrap_or(false);
         let pos = test.world().get::<WorldPosition>(agent).unwrap().get();
         let st = test.world().get::<HtnAgentState>(agent).unwrap();
-        eprintln!("round {i}: pos=({},{}) carried={carried} cursor={} plan={:?} outcome={:?}",
-            pos.x, pos.y, st.cursor, st.plan.as_ref().map(|p| p.len()),
-            test.world().get::<ActionOutcome>(agent).map(|o| (o.request.0, format!("{:?}", o.state))));
+        eprintln!(
+            "round {i}: pos=({},{}) carried={carried} cursor={} plan={:?} outcome={:?}",
+            pos.x,
+            pos.y,
+            st.cursor,
+            st.plan.as_ref().map(|p| p.len()),
+            test.world()
+                .get::<ActionOutcome>(agent)
+                .map(|o| (o.request.0, format!("{:?}", o.state)))
+        );
         if carried {
             break;
         }
@@ -294,9 +317,11 @@ fn rejected_and_failed_outcomes_trigger_replanning_not_wedging() {
     drive_htn_system(test.world_mut());
     // Replace the submitted approach with an unsupported intent to force a
     // Failed verdict.
-    test.world_mut().entity_mut(agent).insert(ActionIntent::UseItem {
-        item: Entity::PLACEHOLDER,
-    });
+    test.world_mut()
+        .entity_mut(agent)
+        .insert(ActionIntent::UseItem {
+            item: Entity::PLACEHOLDER,
+        });
     test.run_system(collect_intents);
     test.run_system(resolve_intents);
 
@@ -335,7 +360,10 @@ fn rejected_and_failed_outcomes_trigger_replanning_not_wedging() {
             break;
         }
     }
-    assert!(carried, "agent recovers after a failure and completes the goal");
+    assert!(
+        carried,
+        "agent recovers after a failure and completes the goal"
+    );
 }
 
 #[test]
@@ -394,4 +422,60 @@ fn wait_plans_complete_through_the_correlation_path() {
     assert!(state.plan.is_none(), "single-step plan completed");
 
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn planner_drivers_preserve_submitted_activity_controls() {
+    use cdda_components::{
+        activity::{ActivityProgress, Waiting},
+        ai::{PlannerBehaviourTree, PlannerGoap},
+    };
+    use cdda_sim::runtime::{step_simulation, SimulationPlugin};
+    let mut loader = Loader::new(vec![]);
+    loader.ingest_values(vec![(
+        "control-fixture.json".into(),
+        serde_json::from_str(HTN_DATA).unwrap(),
+    )]);
+    let registry = loader.resolve().unwrap();
+    let mut app = bevy_app::App::new();
+    app.add_plugins(SimulationPlugin)
+        .insert_resource(compiled_runtime(&registry));
+    let w = app.world_mut();
+    let actors: Vec<_> = (0..3)
+        .map(|i| {
+            w.spawn((
+                ActionPoints {
+                    current: 0,
+                    speed: 100,
+                },
+                WorldPosition(WorldPos::new(i * 10, 0, ZLevel::new(0))),
+                ActivityProgress::new(200),
+                Waiting { turns: 2 },
+                ActionIntent::InterruptActivity,
+            ))
+            .id()
+        })
+        .collect();
+    w.entity_mut(actors[0]).insert(PlannerBehaviourTree);
+    w.entity_mut(actors[1]).insert(PlannerGoap);
+    w.entity_mut(actors[2]).insert((
+        PlannerHtn,
+        HtnBrain {
+            root: "core:idle".into(),
+            view_radius: 10,
+        },
+        HtnAgentState::default(),
+    ));
+    step_simulation(w);
+    for actor in actors {
+        assert!(
+            w.get::<Waiting>(actor).is_none(),
+            "planner must not overwrite interruption"
+        );
+        assert!(w.get::<ActivityProgress>(actor).is_none());
+        assert_eq!(
+            w.get::<ActionOutcome>(actor).unwrap().state,
+            ActionOutcomeState::Completed
+        );
+    }
 }

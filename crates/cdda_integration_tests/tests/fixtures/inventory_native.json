@@ -1,0 +1,8 @@
+[
+  { "type": "GENERIC", "id": "fiber", "name": { "str": "plant fiber" }, "volume": "10 ml", "weight": "2 g" },
+  { "type": "GENERIC", "id": "cord", "name": "cord", "volume": "25 ml", "weight": "4 g" },
+  { "type": "GENERIC", "id": "knife", "name": "knife", "qualities": [["CUT", 1]], "volume": "100 ml", "weight": "120 g" },
+  { "type": "GENERIC", "id": "bag", "name": "bag", "pocket_data": [{ "pocket_type": "CONTAINER", "max_contains_volume": "2 L", "max_contains_weight": "5 kg" }] },
+  { "type": "recipe", "result": "cord", "id_suffix": "from_fiber", "time": "2 s", "components": [[["fiber", 2]]], "qualities": [{ "id": "CUT", "level": 1 }] },
+  { "type": "recipe", "result": "cord", "id_suffix": "woven", "time": "3 s", "components": [[["fiber", 3]]] }
+]

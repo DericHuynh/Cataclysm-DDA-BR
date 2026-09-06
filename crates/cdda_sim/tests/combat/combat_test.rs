@@ -1,6 +1,6 @@
 //! Combat mechanics tests — damage calculations, hit/miss probability, armor mitigation.
 //!
-//! Tests `CombatStats`, `DamageReduction`, `Vision`, and `Creature` components,
+//! Tests legacy combat conversion, native capabilities, protection and vision,
 //! along with combat formula helpers derived from CDDA rules.
 
 use cdda_components::Damage;
@@ -39,7 +39,6 @@ fn apply_armor(raw_damage: u32, armor: u32) -> u32 {
 #[test]
 fn combat_stats_initialized() {
     let mut test = TestBed::new();
-    test.register::<cdda_components::actor::CombatStats>();
 
     let e = test.spawn((cdda_components::actor::CombatStats {
         melee_skill: 5,
@@ -56,18 +55,25 @@ fn combat_stats_initialized() {
             electric: 0,
             cold: 0,
         },
-    },));
-    let stats = test.get::<cdda_components::actor::CombatStats>(e).unwrap();
+    }
+    .into_bundle(),));
+    let stats = test
+        .get::<cdda_components::actor::MeleeCapability>(e)
+        .unwrap();
     assert_eq!(stats.melee_skill, 5);
     assert_eq!(stats.melee_dice, 2);
     assert_eq!(stats.melee_dice_sides, 6);
-    assert_eq!(stats.dodge, 2);
+    assert_eq!(
+        test.get::<cdda_components::actor::DodgeDefense>(e)
+            .unwrap()
+            .0,
+        2
+    );
 }
 
 #[test]
 fn combat_stats_zero_skill() {
     let mut test = TestBed::new();
-    test.register::<cdda_components::actor::CombatStats>();
 
     let e = test.spawn((cdda_components::actor::CombatStats {
         melee_skill: 0,
@@ -84,10 +90,18 @@ fn combat_stats_zero_skill() {
             electric: 0,
             cold: 0,
         },
-    },));
-    let stats = test.get::<cdda_components::actor::CombatStats>(e).unwrap();
+    }
+    .into_bundle(),));
+    let stats = test
+        .get::<cdda_components::actor::MeleeCapability>(e)
+        .unwrap();
     assert_eq!(stats.melee_skill, 0);
-    assert_eq!(stats.dodge, 0);
+    assert_eq!(
+        test.get::<cdda_components::actor::DodgeDefense>(e)
+            .unwrap()
+            .0,
+        0
+    );
 }
 
 // ---------------------------------------------------------------------------

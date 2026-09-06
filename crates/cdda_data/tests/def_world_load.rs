@@ -11,9 +11,6 @@ use bevy_ecs::world::World;
 use cdda_components::actor::Health;
 use cdda_components::def::*;
 use cdda_core_types::core::id::DefId;
-use cdda_defs_raw::raw_defs::{
-    FurnitureDef, ItemDef, MonsterDef, StringOrArray, TerrainDef,
-};
 use cdda_data::def_world::build_def_world;
 use cdda_data::flags::ItemFlagList;
 use cdda_data::interner::{
@@ -21,6 +18,7 @@ use cdda_data::interner::{
     SkillRegistry,
 };
 use cdda_data::loader::Loader;
+use cdda_defs_raw::raw_defs::{FurnitureDef, ItemDef, MonsterDef, StringOrArray, TerrainDef};
 use std::sync::Arc;
 
 /// Helper: create a World, get Commands, call build_def_world, return (World, DefinitionWorld).
@@ -515,6 +513,29 @@ fn test_integration_component_isolation() {
         assert!(
             world.get::<Health>(entity).is_none(),
             "Def entities should not have gameplay components"
+        );
+    }
+}
+
+#[test]
+fn monster_dodge_projection_is_independent_of_melee_dice() {
+    let reg = registry_from_monster_json(vec![
+        ("mon_dodge", r#""name":"Dodger", "melee_dice":9, "dodge":3"#),
+        ("mon_default", r#""name":"Default", "melee_dice":7"#),
+    ]);
+    let (world, index) = build_def_world_in_world(&reg);
+    for (key, dodge, dice) in [("mon_dodge", 3, 9), ("mon_default", 0, 7)] {
+        let definition = index
+            .entity_in(cdda_data::def_world::DefCategory::Monster, key)
+            .unwrap();
+        let stats = world.get::<MonsterStats>(definition).unwrap();
+        assert_eq!(stats.dodge, dodge);
+        assert_eq!(stats.melee_dice, dice);
+        assert!(
+            world
+                .get::<cdda_components::actor::DodgeDefense>(definition)
+                .is_none(),
+            "definition projections remain separate from runtime capabilities"
         );
     }
 }

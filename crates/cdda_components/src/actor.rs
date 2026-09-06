@@ -111,7 +111,7 @@ pub struct Wetness(pub u32);
 // ===========================================================================
 
 /// Damage reduction (applied before health loss is calculated).
-#[derive(Debug, Clone, Copy, Reflect)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Reflect)]
 pub struct DamageReduction {
     pub bash: u32,
     pub cut: u32,
@@ -123,14 +123,45 @@ pub struct DamageReduction {
     pub cold: u32,
 }
 
-/// Combat statistics.
-#[derive(Component, Debug, Clone, Reflect)]
+/// Independently queried attack capability. Does not own defense or protection.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Reflect)]
+pub struct MeleeCapability {
+    pub melee_skill: i32,
+    pub melee_dice: i32,
+    pub melee_dice_sides: i32,
+}
+
+/// Base dodge capability; derived equipment/effect penalties are separate work.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Reflect)]
+pub struct DodgeDefense(pub i32);
+
+/// Intrinsic protection, independent of equipment. This is not an equipment cache.
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, Reflect)]
+pub struct IntrinsicArmor(pub DamageReduction);
+
+/// Legacy aggregate input for adapters and fixtures, never runtime ECS state.
+/// Convert explicitly at creation; later edits target the native components.
+#[derive(Debug, Clone, Reflect)]
 pub struct CombatStats {
     pub melee_skill: i32,
     pub melee_dice: i32,
     pub melee_dice_sides: i32,
     pub dodge: i32,
     pub armor: DamageReduction,
+}
+
+impl CombatStats {
+    pub fn into_bundle(self) -> (MeleeCapability, DodgeDefense, IntrinsicArmor) {
+        (
+            MeleeCapability {
+                melee_skill: self.melee_skill,
+                melee_dice: self.melee_dice,
+                melee_dice_sides: self.melee_dice_sides,
+            },
+            DodgeDefense(self.dodge),
+            IntrinsicArmor(self.armor),
+        )
+    }
 }
 
 /// Vision range (day/night).

@@ -11,8 +11,8 @@ use bevy_state::state::OnEnter;
 use std::marker::PhantomData;
 
 use crate::ctx::Ctx;
-use cdda_components::context::ContextActions;
-use cdda_components::input::BindableAction;
+use crate::state::ContextActions;
+use cdda_input::vocabulary::BindableAction;
 
 // ---------------------------------------------------------------------------
 // CddaScreen trait

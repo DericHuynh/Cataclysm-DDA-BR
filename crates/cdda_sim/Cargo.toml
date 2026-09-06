@@ -5,23 +5,22 @@ edition = "2021"
 description = "Game simulation: state machine, test harness, and the consolidated actor/AI/activity/combat/crafting/equipment/inventory/item/noise submodules."
 
 [dependencies]
+cdda_catalog.workspace = true
 bevy_ecs.workspace = true
 bevy_reflect.workspace = true
 bevy_app.workspace = true
 bevy_state.workspace = true
-bevy_input = { workspace = true, features = ["keyboard"] }
 bevy_time.workspace = true
 cdda_htn.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-cdda_defs_raw = { path = "../cdda_defs_raw" }
 cdda_core_types = { path = "../cdda_core_types" }
 cdda_components = { path = "../cdda_components" }
-cdda_data = { path = "../cdda_data" }
 tracing.workspace = true
 
 [dev-dependencies]
+cdda_defs_raw.workspace = true
+cdda_data.workspace = true
 cdda_components.workspace = true
 cdda_core_types.workspace = true
-cdda_data.workspace = true
 bevy_ecs.workspace = true

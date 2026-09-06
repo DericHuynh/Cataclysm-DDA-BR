@@ -11,12 +11,12 @@ detect simulation drift between runs.
   replay state machine, and the state hash + divergence systems all live here.
 - `SimId` (deterministic entity tag) is owned by `cdda_core_types::sim_id`.
 - `InputAction` / `GameAction` / `ActionSource` are owned by
-  `cdda_components::input`; `GameTime` is owned by `cdda_components::sim` (not
+  `cdda_input::vocabulary`; `GameTime` is owned by `cdda_components::sim` (not
   `cdda_sim`).
-- Does not depend on `cdda_input`, `cdda_render`, or any other Layer 5 crate.
+- Input recording is an adapter: it depends on cdda_input vocabulary, but never cdda_render.
 
 ## Local Contracts
-- Runtime deps: `bevy_ecs`, `bevy_app`, `cdda_core_types`, `cdda_components`,
+- Runtime deps: `bevy_ecs`, `bevy_app`, `cdda_core_types`, `cdda_components`, `cdda_input`,
   `serde`, `postcard`, `tracing`. Dev-dep: `tempfile` (file round-trip tests).
 - Single `devtools` feature flag (no deps). When enabled it adds the
   `StateHashLog` resource, the `hash_simulation_state` and `check_divergence`

@@ -15,12 +15,12 @@
 //! component onto the acting entity with the terminal verdict for **that
 //! request id**:
 //!
-//! - `Completed` — Move / Wait / Pickup / Wield / Drop / Stow was committed.
+//! - `Completed` — Move / Wait / item transfer / craft start was committed.
 //! - `Rejected` — refused before execution (dead actor, negative/missing AP,
 //!   absent position, invalid/blocked move, missing/out-of-range/owned pickup
 //!   target). No AP charged.
 //! - `Failed` — accepted but not implemented on the intent path (UseItem,
-//!   Reload, StartRead, Interact, MeleeAttack, StartCraft). **Nothing
+//!   Reload, StartRead, Interact, MeleeAttack). **Nothing
 //!   is performed and no AP is charged** — an unsupported action must never
 //!   report success.
 //!
@@ -30,10 +30,9 @@
 //!
 //! ## Relationship to activities
 //!
-//! Multi-turn activities (crafting, reading, …) are started through their
-//! authoritative use-case paths, not through stub intent resolvers; until an
-//! intent type has a real simulation operation behind it, resolving it is a
-//! `Failed` outcome, never a silent AP burn.
+//! StartCraft validates and consumes ingredients through `start_craft`; Completed
+//! means the activity started. Work and final output follow through the shared
+//! activity budget and CraftRevision. Other activity-start verbs remain unsupported.
 
 use bevy_ecs::prelude::*;
 
@@ -49,6 +48,7 @@ use cdda_core_types::core::coords::WorldPos;
 use cdda_core_types::sim_id::SimId;
 
 use crate::actor::turn::MOVE_COST_WALK;
+use crate::crafting::systems::publish_craft_outcome;
 use tracing::info;
 
 // ---------------------------------------------------------------------------
@@ -115,6 +115,10 @@ pub fn resolve_intents(world: &mut World) {
         // Starting at zero AP may enter debt; negative AP cannot act. Recheck
         // the live balance, not the collection-time priority snapshot.
         let can_act = world.get::<IsAlive>(pending.entity).is_some()
+            && (pending.intent.is_activity_control()
+                || world
+                    .get::<cdda_components::activity::ActivityProgress>(pending.entity)
+                    .is_none())
             && world
                 .get::<ActionPoints>(pending.entity)
                 .is_some_and(|ap| ap.current >= 0);
@@ -135,6 +139,64 @@ pub fn resolve_intents(world: &mut World) {
                 ActionIntent::Stow { item } => {
                     resolve_inventory(world, pending.entity, *item, InventoryAction::Stow)
                 }
+                ActionIntent::Transfer { item, container } => resolve_inventory(
+                    world,
+                    pending.entity,
+                    *item,
+                    InventoryAction::Transfer {
+                        container: *container,
+                    },
+                ),
+                ActionIntent::StartCraft { recipe } => {
+                    use crate::crafting::systems::{start_craft, CraftOutcome};
+                    let (state, outcome) = match start_craft(world, pending.entity, *recipe) {
+                        Ok(craft) => (
+                            ActionOutcomeState::Completed,
+                            CraftOutcome::Started { craft },
+                        ),
+                        Err(reason) => (
+                            ActionOutcomeState::Rejected,
+                            CraftOutcome::Failed { reason },
+                        ),
+                    };
+                    publish_craft_outcome(world, outcome);
+                    state
+                }
+                ActionIntent::ResumeCraft { craft } => {
+                    match crate::crafting::systems::resume_craft_with_outcome(
+                        world,
+                        pending.entity,
+                        *craft,
+                    ) {
+                        Ok(outcome) => {
+                            publish_craft_outcome(world, outcome);
+                            ActionOutcomeState::Completed
+                        }
+                        Err(reason) => {
+                            publish_craft_outcome(
+                                world,
+                                crate::crafting::systems::CraftOutcome::Failed { reason },
+                            );
+                            ActionOutcomeState::Rejected
+                        }
+                    }
+                }
+                ActionIntent::InterruptActivity => {
+                    let craft = world
+                        .get::<cdda_components::activity::Crafting>(pending.entity)
+                        .map(|c| c.craft_entity);
+                    if crate::activity::lifecycle::interrupt_activity(world, pending.entity) {
+                        if let Some(craft) = craft {
+                            publish_craft_outcome(
+                                world,
+                                crate::crafting::systems::CraftOutcome::Interrupted { craft },
+                            );
+                        }
+                        ActionOutcomeState::Completed
+                    } else {
+                        ActionOutcomeState::Rejected
+                    }
+                }
                 ActionIntent::Wait => {
                     spend_ap(world, pending.entity, 100);
                     ActionOutcomeState::Completed
@@ -143,8 +205,7 @@ pub fn resolve_intents(world: &mut World) {
                 | ActionIntent::UseItem { .. }
                 | ActionIntent::Reload { .. }
                 | ActionIntent::StartRead { .. }
-                | ActionIntent::Interact { .. }
-                | ActionIntent::StartCraft { .. } => {
+                | ActionIntent::Interact { .. } => {
                     // Unsupported is not success, and never burns AP.
                     info!(
                         "action request {:?} for entity {:?} failed: {:?} is not implemented on the intent path",

@@ -24,7 +24,7 @@ use leafwing_input_manager::user_input::Buttonlike;
 
 use crate::actions::{ActionSource, BindableAction, GameAction, InputAction};
 use crate::bindings::{format_wrapper, ActiveKeybindings, ContextInputMaps};
-use cdda_components::input::{InputContextId, InputContextStack};
+use crate::vocabulary::{InputContextId, InputContextStack};
 
 // ---------------------------------------------------------------------------
 // RebindCapture

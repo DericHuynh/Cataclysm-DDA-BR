@@ -4,19 +4,19 @@
 //! Shows full item details using the shared `spawn_item_detail` widget,
 //! looking up the def entity from the runtime item's type ID.
 
-use cdda_context::ctx::Ctx;
-use cdda_context::screen::CddaScreen;
-use cdda_components::context::ContextActions;
-use cdda_data::def_world::DefinitionWorld;
-use cdda_data::interner::ItemTypeRegistry;
-use cdda_data::interner::QualityRegistry;
-use cdda_input::{ActiveKeybindings, BindableAction};
-use cdda_sim::inventory::examine_resource::ExaminedItem;
 use crate::render::item_detail::ItemDetailSnapshot;
 use crate::render::theme::{self, UiTheme};
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
 use cdda_components::item::{ItemType, StackCount};
+use cdda_context::ctx::Ctx;
+use cdda_context::screen::CddaScreen;
+use cdda_context::state::ContextActions;
+use cdda_data::def_world::DefinitionWorld;
+use cdda_data::interner::ItemTypeRegistry;
+use cdda_data::interner::QualityRegistry;
+use cdda_input::{ActiveKeybindings, BindableAction};
+use cdda_sim::inventory::examine_resource::ExaminedItem;
 
 // ---------------------------------------------------------------------------
 // CddaScreen trait impl

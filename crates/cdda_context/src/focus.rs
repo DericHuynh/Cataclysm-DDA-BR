@@ -14,7 +14,7 @@
 
 use bevy_ecs::prelude::{Component, Entity, Resource};
 
-use cdda_components::input::GameAction;
+use cdda_input::vocabulary::GameAction;
 
 // ---------------------------------------------------------------------------
 // KeyboardFocusable

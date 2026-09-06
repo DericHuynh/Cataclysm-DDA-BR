@@ -27,3 +27,5 @@ cdda_replay.workspace = true
 cdda_context.workspace = true
 cdda_data.workspace = true
 cdda_input.workspace = true
+
+cdda_catalog.workspace = true

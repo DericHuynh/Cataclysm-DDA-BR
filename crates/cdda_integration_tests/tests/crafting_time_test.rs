@@ -10,18 +10,18 @@
 //!
 //! Our mapping:
 //!   `start_craft(world, player, recipe)` → spawns InProgressCraft entity
-//!   `tick_crafting` → spends AP_COST_CRAFT_TICK per turn, emits CraftCompleted
+//!   `tick_crafting` → spends all available AP (100 in these fixtures), emits CraftCompleted
 //!   InProgressCraft.is_complete() → true when ap_spent >= ap_total
 //!   ap_total = RecipeTime (turns) * 100
 
 use bevy_ecs::prelude::*;
+use cdda_components::activity::{ActivityProgress, Crafting};
 use cdda_components::actor::{ActionPoints, HandCount, IsAlive};
 use cdda_components::def::{ItemName, RecipeResult, RecipeResultCount, RecipeTime};
 use cdda_components::dev::DevPlayer;
 use cdda_components::item::{ContainerContents, InProgressCraft, InsideContainer};
 use cdda_components::messages::CraftCompleted;
 use cdda_data::interner::{ItemTypeRegistry, QualityRegistry};
-use cdda_components::activity::{ActivityProgress, Crafting};
 use cdda_sim::activity::systems::tick_crafting;
 use cdda_sim::actor::turn::AP_COST_CRAFT_TICK;
 use cdda_sim::crafting::systems::{complete_craft, start_craft};
@@ -61,15 +61,30 @@ fn spawn_player(test: &mut TestBed) -> Entity {
         DevPlayer,
         IsAlive,
         ActionPoints {
-            current: 10_000,
+            current: 100,
             speed: 100,
-        }, // plenty of AP
+        },
         HandCount(2),
     ))
 }
 
 /// Spawn a minimal recipe entity (no required components, just time + result).
 fn spawn_recipe(test: &mut TestBed, time_turns: u32, result_id: &str) -> Entity {
+    // A playable recipe must resolve a real output before consuming inputs.
+    let definition = test.spawn((
+        cdda_components::def::IsDef,
+        cdda_components::def::DefStrId(result_id.into()),
+        ItemName(result_id.into()),
+    ));
+    test.world_mut()
+        .init_resource::<cdda_data::def_world::DefinitionWorld>();
+    test.world_mut()
+        .resource_mut::<cdda_data::def_world::DefinitionWorld>()
+        .register(
+            cdda_data::def_world::DefCategory::Item,
+            result_id.into(),
+            definition,
+        );
     test.spawn((
         RecipeTime(time_turns),
         RecipeResult(result_id.to_string()),
@@ -79,6 +94,15 @@ fn spawn_recipe(test: &mut TestBed, time_turns: u32, result_id: &str) -> Entity 
 
 /// Run one tick of the crafting system, then process any CraftCompleted messages.
 fn tick_craft(test: &mut TestBed) {
+    // Like the master crafting fixture's set_moves(100) before do_turn: each
+    // isolated tick receives one second's budget, not a bank of future turns.
+    let world = test.world_mut();
+    for mut ap in world
+        .query_filtered::<&mut ActionPoints, With<Crafting>>()
+        .iter_mut(world)
+    {
+        ap.current = 100;
+    }
     test.run_system(tick_crafting);
 
     // Process craft completion messages from the message buffer.
@@ -92,7 +116,7 @@ fn tick_craft(test: &mut TestBed) {
         .map(|c| (c.crafter, c.craft_entity))
         .collect();
     for (player, craft_e) in &completed {
-        complete_craft(test.world_mut(), *player, *craft_e);
+        complete_craft(test.world_mut(), *player, *craft_e).unwrap();
     }
 }
 
@@ -199,7 +223,7 @@ fn in_progress_craft_stores_result_id() {
 // ---------------------------------------------------------------------------
 
 /// CDDA: each call to `do_turn` consumes move points from the player.
-/// Our: `tick_crafting` spends `AP_COST_CRAFT_TICK` from the player's AP.
+/// At speed 100 with no banked moves, `tick_crafting` spends 100 AP.
 #[test]
 fn continue_crafts_spends_player_ap() {
     let mut test = TestBed::new();

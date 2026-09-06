@@ -1,0 +1,12 @@
+[package]
+name = "cdda_ui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy_ecs.workspace = true
+bevy_ui.workspace = true
+bevy_picking.workspace = true
+bevy_input.workspace = true
+bevy_text.workspace = true
+bevy_color.workspace = true

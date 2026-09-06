@@ -14,12 +14,15 @@
 use bevy::prelude::*;
 use bevy_ecs::world::World;
 use bevy_state::state_scoped::DespawnOnExit;
-use cdda_components::input::BindableAction;
 use cdda_context::ctx::Ctx;
 use cdda_context::screen::CddaScreen;
 use cdda_data::def_registry_resource::DefRegistryResource;
 use cdda_data::def_world::DefinitionWorld;
 use cdda_data::raw_values::RawDefinitionValues;
+use cdda_input::vocabulary::BindableAction;
+use cdda_ui::{
+    sync_virtual_pane, FocusedRow, InactiveScrollPane, RetainedRows, RowCell, TextRow, VirtualList,
+};
 use serde_json::Value;
 
 use crate::render::theme::{self, UiTheme};
@@ -29,8 +32,8 @@ use crate::render::theme::{self, UiTheme};
 // ===========================================================================
 
 /// A single entry in a registry.
-#[derive(Debug, Clone)]
-struct RegistryEntry {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RegistryEntry {
     id: String,
     /// Raw JSON text (from original file data).
     raw_json: String,
@@ -92,7 +95,7 @@ fn check_consistency(parsed: &Value, raw: &Value) -> String {
 }
 
 /// One registry category in the left panel.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RegistryCategoryData {
     name: String,
     count: usize,
@@ -671,7 +674,14 @@ fn collect_def_world_entries(world: &World) -> (RegistryCategoryData, Vec<Regist
         .map(|(category, id, entity)| {
             let id = format!("{category:?}::{id}");
 
-            let entity_ref = world.entity(entity);
+            let Ok(entity_ref) = world.get_entity(entity) else {
+                return RegistryEntry {
+                    id,
+                    raw_json: String::new(),
+                    parsed_fields: "Definition entity is no longer available".into(),
+                    status: "stale definition index".into(),
+                };
+            };
             let type_info = if entity_ref.contains::<WeaponData>() {
                 "weapon"
             } else if entity_ref.contains::<AmmoData>() {
@@ -755,12 +765,10 @@ fn refresh_categories(world: &World) -> (Vec<RegistryCategoryData>, Vec<Vec<Regi
 // State
 // ===========================================================================
 
-#[derive(Resource, Default, Clone)]
-pub(crate) struct RegistryViewerState {
+#[derive(Resource, Default, Clone, Copy, PartialEq, Eq)]
+pub struct RegistryViewerState {
     pub category_index: usize,
     pub entry_index: usize,
-    pub categories: Vec<RegistryCategoryData>,
-    pub all_entries: Vec<Vec<RegistryEntry>>,
     /// Which pane has keyboard focus: 0 = categories (left),
     /// 1 = entries (middle), 2 = raw JSON (detail left), 3 = parsed fields
     /// (detail right). Tab cycles; arrows navigate *within* the focused pane.
@@ -773,24 +781,76 @@ impl RegistryViewerState {
     pub const PANE_RAW: usize = 2;
     pub const PANE_PARSED: usize = 3;
     pub const PANE_COUNT: usize = 4;
+}
 
-    fn refresh(&mut self, world: &World) {
-        let (cats, all_entries) = refresh_categories(world);
-        self.categories = cats;
-        self.all_entries = all_entries;
+/// Source projection; selection and pane focus never invalidate this resource.
+#[derive(Resource, Default, PartialEq, Eq)]
+pub struct RegistryCatalog {
+    categories: Vec<RegistryCategoryData>,
+    all_entries: Vec<Vec<RegistryEntry>>,
+}
 
-        // Clamp indices
-        if !self.categories.is_empty() {
-            self.category_index = self.category_index.min(self.categories.len() - 1);
-        } else {
-            self.category_index = 0;
-        }
-        let entries = self
-            .all_entries
-            .get(self.category_index)
-            .map(|e| e.len())
-            .unwrap_or(0);
-        self.entry_index = self.entry_index.min(entries.saturating_sub(1));
+/// Exclusive access is limited to projecting the heterogeneous import registries.
+/// Active UI input/render systems consume the resulting typed resource.
+pub fn refresh_registry_catalog(world: &mut World) {
+    let state = world
+        .get_resource::<RegistryViewerState>()
+        .copied()
+        .unwrap_or_default();
+    let selected = world
+        .get_resource::<RegistryCatalog>()
+        .map(|model| {
+            (
+                model
+                    .categories
+                    .get(state.category_index)
+                    .map(|c| c.name.clone()),
+                model
+                    .all_entries
+                    .get(state.category_index)
+                    .and_then(|v| v.get(state.entry_index))
+                    .map(|e| e.id.clone()),
+            )
+        })
+        .unwrap_or_default();
+    let (categories, all_entries) = refresh_categories(world);
+    let catalog = RegistryCatalog {
+        categories,
+        all_entries,
+    };
+    let category_index = selected
+        .0
+        .as_ref()
+        .and_then(|name| catalog.categories.iter().position(|c| &c.name == name))
+        .unwrap_or_else(|| {
+            state
+                .category_index
+                .min(catalog.categories.len().saturating_sub(1))
+        });
+    let entries = catalog
+        .all_entries
+        .get(category_index)
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    let entry_index = selected
+        .1
+        .as_ref()
+        .and_then(|id| entries.iter().position(|e| &e.id == id))
+        .unwrap_or_else(|| state.entry_index.min(entries.len().saturating_sub(1)));
+    let next = RegistryViewerState {
+        category_index,
+        entry_index,
+        ..state
+    };
+    if let Some(mut current) = world.get_resource_mut::<RegistryCatalog>() {
+        current.set_if_neq(catalog);
+    } else {
+        world.insert_resource(catalog);
+    }
+    if let Some(mut current) = world.get_resource_mut::<RegistryViewerState>() {
+        current.set_if_neq(next);
+    } else {
+        world.insert_resource(next);
     }
 }
 
@@ -833,9 +893,7 @@ impl CddaScreen for RegistryScreen {
         spawn_registry_viewer(world);
     }
 
-    fn update(world: &mut World) {
-        update_registry_viewer(world);
-    }
+    // Typed Update systems are registered by CddaRenderPlugin.
 }
 
 // ===========================================================================
@@ -843,9 +901,7 @@ impl CddaScreen for RegistryScreen {
 // ===========================================================================
 
 pub fn spawn_registry_viewer(world: &mut World) {
-    let mut state = RegistryViewerState::default();
-    state.refresh(world);
-    world.insert_resource(state);
+    refresh_registry_catalog(world);
 
     world
         .commands()
@@ -872,7 +928,27 @@ pub fn spawn_registry_viewer(world: &mut World) {
                     ..default()
                 },
                 BackgroundColor(theme::HEADER_BG),
-            ));
+            ))
+            .with_children(|header| {
+                header.spawn((
+                    RegistryHeading,
+                    Text::default(),
+                    TextFont {
+                        font_size: 20.0,
+                        ..default()
+                    },
+                    TextColor(theme::TEXT_BRIGHT),
+                ));
+                header.spawn((
+                    RegistryCounter,
+                    Text::default(),
+                    TextFont {
+                        font_size: 13.0,
+                        ..default()
+                    },
+                    TextColor(theme::TEXT_DIM),
+                ));
+            });
 
             root.spawn((Node {
                 width: Val::Percent(100.0),
@@ -886,6 +962,9 @@ pub fn spawn_registry_viewer(world: &mut World) {
                     // LEFT: Category panel
                     body.spawn((
                         RegCategoryPanel,
+                        RegistryPane(RegistryViewerState::PANE_CATEGORY),
+                        RetainedRows::<RegistryRowKey>::default(),
+                        RegistryListState::default(),
                         crate::render::scroll::KeyboardScroll,
                         crate::render::scroll::VirtualList {
                             row_height: 30.0,
@@ -909,6 +988,9 @@ pub fn spawn_registry_viewer(world: &mut World) {
                     // MIDDLE: Entry list
                     body.spawn((
                         RegEntryListPanel,
+                        RegistryPane(RegistryViewerState::PANE_ENTRY),
+                        RetainedRows::<RegistryRowKey>::default(),
+                        RegistryListState::default(),
                         crate::render::scroll::KeyboardScroll,
                         crate::render::scroll::VirtualList {
                             row_height: 26.0,
@@ -942,40 +1024,8 @@ pub fn spawn_registry_viewer(world: &mut World) {
                         BackgroundColor(theme::PANEL_BG),
                     ))
                     .with_children(|detail| {
-                        // LEFT HALF: Raw JSON
-                        detail.spawn((
-                            RegRawJsonPanel,
-                            crate::render::scroll::KeyboardScroll,
-                            ScrollPosition::default(),
-                            Node {
-                                width: Val::Percent(50.0),
-                                min_width: Val::Px(200.0),
-                                flex_grow: 0.0,
-                                flex_shrink: 0.0,
-                                flex_direction: FlexDirection::Column,
-                                padding: UiRect::all(Val::Px(8.0)),
-                                overflow: Overflow::scroll_y(),
-                                border: UiRect::right(Val::Px(1.0)),
-                                ..default()
-                            },
-                            BackgroundColor(theme::BG),
-                            BorderColor::all(theme::DIVIDER),
-                        ));
-                        // RIGHT HALF: Parsed fields
-                        detail.spawn((
-                            RegParsedFieldsPanel,
-                            crate::render::scroll::KeyboardScroll,
-                            ScrollPosition::default(),
-                            Node {
-                                flex_grow: 1.0,
-                                min_width: Val::Px(200.0),
-                                flex_direction: FlexDirection::Column,
-                                padding: UiRect::all(Val::Px(8.0)),
-                                overflow: Overflow::scroll_y(),
-                                ..default()
-                            },
-                            BackgroundColor(theme::BG),
-                        ));
+                        spawn_detail_pane(detail, RegistryViewerState::PANE_RAW);
+                        spawn_detail_pane(detail, RegistryViewerState::PANE_PARSED);
                     });
                 });
 
@@ -991,7 +1041,7 @@ pub fn spawn_registry_viewer(world: &mut World) {
             ))
             .with_child((
                 Text::new(
-                    "Tab: switch pane | → focus panes w/ PgUp/Dn/arrows | ←→: navigate | Esc close",
+                    "Tab / Shift+Tab: pane | Arrows: navigate | PgUp/PgDn: page | Home/End: first/last | Esc: close",
                 ),
                 TextFont {
                     font_size: 12.0,
@@ -1000,6 +1050,64 @@ pub fn spawn_registry_viewer(world: &mut World) {
                 TextColor(theme::TEXT_DIM),
                 crate::render::FooterHint,
             ));
+        });
+}
+
+/// Detail labels are fixed siblings above their native scrolling content.
+fn spawn_detail_pane(parent: &mut ChildSpawnerCommands, pane: usize) {
+    parent
+        .spawn((
+            Node {
+                width: Val::Percent(50.0),
+                min_width: Val::Px(200.0),
+                min_height: Val::Px(0.0),
+                flex_direction: FlexDirection::Column,
+                flex_grow: 1.0,
+                flex_basis: Val::Px(0.0),
+                border: UiRect::right(Val::Px(1.0)),
+                ..default()
+            },
+            BackgroundColor(theme::BG),
+            BorderColor::all(theme::DIVIDER),
+        ))
+        .with_children(|column| {
+            column.spawn((
+                RegistryDetailHeading(pane),
+                Text::new(if pane == RegistryViewerState::PANE_RAW {
+                    "RAW JSON"
+                } else {
+                    "PARSED STRUCT FIELDS"
+                }),
+                TextFont {
+                    font_size: 14.0,
+                    ..default()
+                },
+                TextColor(theme::TEXT_BRIGHT),
+                Node {
+                    padding: UiRect::all(Val::Px(8.0)),
+                    flex_shrink: 0.0,
+                    ..default()
+                },
+            ));
+            let mut body = column.spawn((
+                RegistryPane(pane),
+                crate::render::scroll::KeyboardScroll,
+                ScrollPosition::default(),
+                Node {
+                    flex_direction: FlexDirection::Column,
+                    flex_grow: 1.0,
+                    min_height: Val::Px(0.0),
+                    padding: UiRect::all(Val::Px(8.0)),
+                    overflow: Overflow::scroll_y(),
+                    ..default()
+                },
+                BackgroundColor(theme::BG),
+            ));
+            if pane == RegistryViewerState::PANE_RAW {
+                body.insert(RegRawJsonPanel);
+            } else {
+                body.insert(RegParsedFieldsPanel);
+            }
         });
 }
 
@@ -1062,58 +1170,131 @@ fn scroll_window(text: &str, scroll: usize) -> String {
     lines[start..].join("\n")
 }
 
-/// Apply a pane-focus tint to each of the four panel containers. Collects IDs
-/// first so it can mutate the world while querying.
-fn apply_pane_tint(world: &mut World, tint: &impl Fn(bool) -> Color) {
-    let pane = world.resource::<RegistryViewerState>().pane;
-    let jobs: [(fn(&mut World) -> Vec<Entity>, bool); 4] = [
-        (
-            |w| {
-                w.query_filtered::<Entity, With<RegCategoryPanel>>()
-                    .iter(w)
-                    .collect()
-            },
-            pane == RegistryViewerState::PANE_CATEGORY,
-        ),
-        (
-            |w| {
-                w.query_filtered::<Entity, With<RegEntryListPanel>>()
-                    .iter(w)
-                    .collect()
-            },
-            pane == RegistryViewerState::PANE_ENTRY,
-        ),
-        (
-            |w| {
-                w.query_filtered::<Entity, With<RegRawJsonPanel>>()
-                    .iter(w)
-                    .collect()
-            },
-            pane == RegistryViewerState::PANE_RAW,
-        ),
-        (
-            |w| {
-                w.query_filtered::<Entity, With<RegParsedFieldsPanel>>()
-                    .iter(w)
-                    .collect()
-            },
-            pane == RegistryViewerState::PANE_PARSED,
-        ),
+/// Each pane owns its widget state. Input and presentation never acquire the World.
+#[derive(Component)]
+struct RegistryPane(usize);
+#[derive(Component)]
+struct RegistryHeading;
+#[derive(Component)]
+struct RegistryCounter;
+#[derive(Component)]
+struct RegistryDetailHeading(usize);
+#[derive(Component, Default)]
+struct RegistryListState {
+    category: Option<String>,
+}
+#[derive(Component, PartialEq, Eq)]
+struct RenderedDetail(u32, usize, usize, theme::ThemePreset);
+type RegistryRowKey = (String, Option<String>);
+
+/// Read-model refresh gate, including addition/removal of optional source resources.
+#[derive(bevy_ecs::system::SystemParam)]
+pub struct RegistrySources<'w> {
+    defs: Option<Res<'w, DefRegistryResource>>,
+    raw: Option<Res<'w, RawDefinitionValues>>,
+    world: Option<Res<'w, DefinitionWorld>>,
+    skills: Option<Res<'w, cdda_data::interner::SkillRegistry>>,
+    ammo: Option<Res<'w, cdda_data::interner::AmmoTypeRegistry>>,
+    body: Option<Res<'w, cdda_data::interner::BodyPartRegistry>>,
+    food: Option<Res<'w, cdda_data::interner::ComestibleRegistry>>,
+    qualities: Option<Res<'w, cdda_data::interner::QualityRegistry>>,
+    items: Option<Res<'w, cdda_data::interner::ItemTypeRegistry>>,
+}
+pub fn registry_sources_changed(
+    s: RegistrySources,
+    mut seen: Local<Option<[Option<u32>; 9]>>,
+) -> bool {
+    let versions = [
+        s.defs.as_ref().map(|r| r.last_changed().get()),
+        s.raw.as_ref().map(|r| r.last_changed().get()),
+        s.world.as_ref().map(|r| r.last_changed().get()),
+        s.skills.as_ref().map(|r| r.last_changed().get()),
+        s.ammo.as_ref().map(|r| r.last_changed().get()),
+        s.body.as_ref().map(|r| r.last_changed().get()),
+        s.food.as_ref().map(|r| r.last_changed().get()),
+        s.qualities.as_ref().map(|r| r.last_changed().get()),
+        s.items.as_ref().map(|r| r.last_changed().get()),
     ];
-    for (collect, active) in jobs {
-        for e in collect(world) {
-            world.entity_mut(e).insert(BackgroundColor(tint(active)));
-            if active {
-                world
-                    .entity_mut(e)
-                    .remove::<super::scroll::InactiveScrollPane>();
-            } else {
-                world
-                    .entity_mut(e)
-                    .insert(super::scroll::InactiveScrollPane);
-            }
-        }
+    if *seen == Some(versions) {
+        return false;
     }
+    *seen = Some(versions);
+    true
+}
+
+pub fn registry_input(
+    keys: Res<ButtonInput<KeyCode>>,
+    catalog: Res<RegistryCatalog>,
+    mut state: ResMut<RegistryViewerState>,
+) {
+    let mut next = *state;
+    if keys.just_pressed(KeyCode::Tab) {
+        let backwards = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
+        next.pane = (next.pane
+            + if backwards {
+                RegistryViewerState::PANE_COUNT - 1
+            } else {
+                1
+            })
+            % RegistryViewerState::PANE_COUNT;
+    }
+    let up = keys.just_pressed(KeyCode::ArrowUp);
+    let down = keys.just_pressed(KeyCode::ArrowDown);
+    let left = keys.just_pressed(KeyCode::ArrowLeft);
+    let right = keys.just_pressed(KeyCode::ArrowRight);
+    let page_up = keys.just_pressed(KeyCode::PageUp);
+    let page_down = keys.just_pressed(KeyCode::PageDown);
+    let home = keys.just_pressed(KeyCode::Home);
+    let end = keys.just_pressed(KeyCode::End);
+    let category_move = next.pane == RegistryViewerState::PANE_CATEGORY
+        && (up || down || left || right || page_up || page_down || home || end)
+        || next.pane == RegistryViewerState::PANE_ENTRY && (left || right);
+    if category_move && !catalog.categories.is_empty() {
+        let count = catalog.categories.len();
+        next.category_index = if home {
+            0
+        } else if end {
+            count - 1
+        } else if page_up {
+            next.category_index.saturating_sub(10)
+        } else if page_down {
+            next.category_index.saturating_add(10).min(count - 1)
+        } else if up || left {
+            (next.category_index + count - 1) % count
+        } else {
+            (next.category_index + 1) % count
+        };
+        next.entry_index = 0;
+    } else if next.pane == RegistryViewerState::PANE_ENTRY {
+        let len = catalog
+            .all_entries
+            .get(next.category_index)
+            .map_or(0, Vec::len);
+        let step = if page_up || page_down { 30 } else { 1 };
+        next.entry_index = if home {
+            0
+        } else if end {
+            len.saturating_sub(1)
+        } else if up || page_up {
+            next.entry_index.saturating_sub(step)
+        } else if down || page_down {
+            next.entry_index
+                .saturating_add(step)
+                .min(len.saturating_sub(1))
+        } else {
+            next.entry_index
+        };
+    } else if (next.pane == RegistryViewerState::PANE_RAW
+        || next.pane == RegistryViewerState::PANE_PARSED)
+        && (left || right)
+    {
+        next.pane = if next.pane == RegistryViewerState::PANE_RAW {
+            RegistryViewerState::PANE_PARSED
+        } else {
+            RegistryViewerState::PANE_RAW
+        };
+    }
+    state.set_if_neq(next);
 }
 
 /// Human-readable label for a pane id (for the title-bar indicator).
@@ -1127,596 +1308,291 @@ fn pane_name(pane: usize) -> &'static str {
     }
 }
 
-/// For an index-navigated list pane: sync its `VirtualList` size + `FocusedRow`
-/// to the focused index and return the visible row window `[start, end)`. The
-/// pane's window is recomputed from its `ScrollPosition` each PostUpdate by
-/// `scroll::update_virtual_windows`; this only feeds `total_rows` and sets the
-/// focused row so the shared keep-visible scroll shows it.
-fn virtual_list_for_panel(
-    world: &mut World,
-    panel: Entity,
-    total_rows: usize,
-    focused: usize,
-) -> (usize, usize) {
-    let mut q = world.query::<(
-        &mut crate::render::scroll::VirtualList,
-        &mut crate::render::scroll::FocusedRow,
-    )>();
-    let Ok((mut vl, mut fr)) = q.get_mut(world, panel) else {
-        return (0, total_rows);
-    };
-    if vl.total_rows != total_rows {
-        vl.total_rows = total_rows;
-    }
-    let window = vl.window;
-    if fr.0 != focused {
-        fr.0 = focused;
-    }
-    (
-        window.0.min(total_rows),
-        window.1.min(total_rows).max(window.0),
-    )
+#[derive(bevy_ecs::system::SystemParam)]
+pub struct RegistryPanels<'w, 's> {
+    lists: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static RegistryPane,
+            &'static mut VirtualList,
+            &'static mut FocusedRow,
+            &'static mut ScrollPosition,
+            &'static ComputedNode,
+            &'static mut RetainedRows<RegistryRowKey>,
+            &'static mut RegistryListState,
+        ),
+    >,
+    tint: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static RegistryPane,
+            &'static mut BackgroundColor,
+            Option<&'static InactiveScrollPane>,
+        ),
+    >,
+    title: Query<
+        'w,
+        's,
+        (
+            &'static mut Text,
+            &'static mut TextColor,
+            Option<&'static RegistryHeading>,
+            Option<&'static RegistryDetailHeading>,
+        ),
+        Or<(
+            With<RegistryHeading>,
+            With<RegistryCounter>,
+            With<RegistryDetailHeading>,
+        )>,
+    >,
+    details: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static RegistryPane,
+            Option<&'static RenderedDetail>,
+            &'static mut ScrollPosition,
+        ),
+        Without<VirtualList>,
+    >,
 }
 
-/// Spawn a top/bottom spacer pair within a list pane so native scroll position
-/// maps to the item index while only the window's rows are rendered.
-fn spawn_virtual_spacers(
-    cmd: &mut EntityWorldMut,
-    start: usize,
-    _end: usize,
-    _total: usize,
-    row_px: f32,
+pub fn update_registry_viewer(
+    mut commands: Commands,
+    catalog: Res<RegistryCatalog>,
+    state: Res<RegistryViewerState>,
+    theme: Res<UiTheme>,
+    mut panels: RegistryPanels,
 ) {
-    if start > 0 {
-        cmd.with_children(|p| {
-            p.spawn(Node {
-                height: Val::Px(start as f32 * row_px),
-                flex_shrink: 0.0,
-                ..default()
-            });
-        });
-    }
-}
-
-#[derive(Component, PartialEq)]
-struct RenderedDetail(usize, usize, theme::ThemePreset);
-
-pub fn update_registry_viewer(world: &mut World) {
-    let theme = world.resource::<UiTheme>().clone();
-
-    // Phase 1: Handle input
-    let (up, down, left, right, tab, page_up, page_down) = {
-        let keys = world.resource::<ButtonInput<KeyCode>>();
-        (
-            keys.just_pressed(KeyCode::ArrowUp),
-            keys.just_pressed(KeyCode::ArrowDown),
-            keys.just_pressed(KeyCode::ArrowLeft),
-            keys.just_pressed(KeyCode::ArrowRight),
-            keys.just_pressed(KeyCode::Tab),
-            keys.just_pressed(KeyCode::PageUp),
-            keys.just_pressed(KeyCode::PageDown),
-        )
-    };
-
-    let mut changed = false;
-
-    let shift_tab = {
-        let keys = world.resource::<ButtonInput<KeyCode>>();
-        keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight)
-    };
-
-    // --- Tab / Shift+Tab: cycle the focused pane -------------------------
-    if tab {
-        let mut state = world.resource_mut::<RegistryViewerState>();
-        state.pane = if shift_tab {
-            (state.pane + RegistryViewerState::PANE_COUNT - 1) % RegistryViewerState::PANE_COUNT
+    let category = catalog.categories.get(state.category_index);
+    let category_name = category.map(|c| c.name.as_str()).unwrap_or("");
+    let entries = catalog
+        .all_entries
+        .get(state.category_index)
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    for (entity, pane, mut list, mut focus, mut position, computed, mut rows, mut shown) in
+        &mut panels.lists
+    {
+        let is_category = pane.0 == RegistryViewerState::PANE_CATEGORY;
+        let source = if is_category { "" } else { category_name };
+        let reset = shown.category.as_deref() != Some(source);
+        if !reset
+            && !state.is_changed()
+            && !catalog.is_changed()
+            && !theme.is_changed()
+            && !list.is_changed()
+        {
+            continue;
+        }
+        if reset {
+            shown.category = Some(source.to_string());
+        }
+        let total = if is_category {
+            catalog.categories.len()
         } else {
-            (state.pane + 1) % RegistryViewerState::PANE_COUNT
+            entries.len()
         };
-        changed = true;
-    }
-
-    // Read current focus once so arrows route to the active pane.
-    let active_pane = world.resource::<RegistryViewerState>().pane;
-
-    match active_pane {
-        // ── Categories pane: ← / → / ↑ / ↓ move category ────────────
-        RegistryViewerState::PANE_CATEGORY => {
-            if left || right || up || down {
-                let dir: i32 = if left || up { -1 } else { 1 };
-                let num_cats = world.resource::<RegistryViewerState>().categories.len();
-                if num_cats > 0 {
-                    let mut state = world.resource_mut::<RegistryViewerState>();
-                    let new_cat =
-                        ((state.category_index as i32 + dir).rem_euclid(num_cats as i32)) as usize;
-                    state.category_index = new_cat;
-                    state.entry_index = 0;
-                    changed = true;
-                }
-            }
-        }
-        // ── Entries pane: ↑/↓/PgUp/PgDn move entry; ←/→ switch category ──
-        RegistryViewerState::PANE_ENTRY => {
-            if left || right {
-                // Change category without leaving the entries pane.
-                let dir: i32 = if left { -1 } else { 1 };
-                let num_cats = world.resource::<RegistryViewerState>().categories.len();
-                if num_cats > 0 {
-                    let mut state = world.resource_mut::<RegistryViewerState>();
-                    let new_cat =
-                        ((state.category_index as i32 + dir).rem_euclid(num_cats as i32)) as usize;
-                    state.category_index = new_cat;
-                    state.entry_index = 0;
-                    changed = true;
-                }
-            } else if up || down || page_up || page_down {
-                let page = if page_up || page_down { 30 } else { 1 };
-                let dir: i32 = if up || page_up { -1 } else { 1 };
-                let mut state = world.resource_mut::<RegistryViewerState>();
-                let entries_len = state
-                    .all_entries
-                    .get(state.category_index)
-                    .map(|e| e.len())
-                    .unwrap_or(0);
-                if entries_len > 0 {
-                    let delta = dir * page as i32;
-                    let new_ent = (state.entry_index as i32 + delta)
-                        .max(0)
-                        .min((entries_len - 1) as i32) as usize;
-                    if new_ent != state.entry_index {
-                        state.entry_index = new_ent;
-                        changed = true;
-                    }
-                }
-            }
-        }
-        // ── Raw / parsed detail panes: ↑/↓/PgUp/PgDn scroll; ←/→ swap ──
-        RegistryViewerState::PANE_RAW | RegistryViewerState::PANE_PARSED => {
-            if left || right {
-                let mut state = world.resource_mut::<RegistryViewerState>();
-                state.pane = if state.pane == RegistryViewerState::PANE_RAW {
-                    RegistryViewerState::PANE_PARSED
+        let selected = if is_category {
+            state.category_index
+        } else {
+            state.entry_index
+        };
+        sync_virtual_pane(
+            &mut list,
+            &mut focus,
+            &mut position,
+            computed,
+            total,
+            selected,
+            reset,
+        );
+        let values = (list.window.0..list.window.1)
+            .map(|i| {
+                let (key, label) = if is_category {
+                    let cat = &catalog.categories[i];
+                    (
+                        (cat.name.clone(), None),
+                        format!("{}  ({})", cat.name, cat.count),
+                    )
                 } else {
-                    RegistryViewerState::PANE_RAW
+                    (
+                        (category_name.to_string(), Some(entries[i].id.clone())),
+                        entries[i].id.clone(),
+                    )
                 };
-                changed = true;
-            }
-        }
-        _ => {}
+                (
+                    key,
+                    TextRow {
+                        node: Node {
+                            padding: UiRect::horizontal(Val::Px(10.0)),
+                            ..list.row_node()
+                        },
+                        background: if i == selected {
+                            theme
+                                .accent()
+                                .with_alpha(if is_category { 0.3 } else { 0.25 })
+                        } else if i % 2 == 0 {
+                            theme::PANEL_BG
+                        } else {
+                            theme::ROW_ALT_BG
+                        },
+                        border: Color::NONE,
+                        cells: vec![RowCell::new(
+                            label,
+                            if is_category { 13.0 } else { 12.0 },
+                            if is_category && i == selected {
+                                theme.accent()
+                            } else if is_category || i == selected {
+                                theme::TEXT_BRIGHT
+                            } else {
+                                theme::TEXT_DIM
+                            },
+                        )],
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+        let values = if total == 0 {
+            vec![(
+                (source.to_string(), None),
+                TextRow {
+                    node: list.row_node(),
+                    background: theme::PANEL_BG,
+                    border: Color::NONE,
+                    cells: vec![RowCell::new("No entries", 14.0, theme::TEXT_DIM)],
+                },
+            )]
+        } else {
+            values
+        };
+        rows.sync(&mut commands, entity, &list, values);
     }
-
-    // Refresh entries if category changed
-    if changed {
-        let _state = world.resource::<RegistryViewerState>();
-    }
-
-    let dirty = changed
-        || world.is_resource_changed::<RegistryViewerState>()
-        || world.is_resource_changed::<UiTheme>()
-        || world
-            .query_filtered::<Entity, Changed<crate::render::scroll::VirtualList>>()
-            .iter(world)
-            .next()
-            .is_some();
-    if !dirty {
-        return;
-    }
-
-    // Copy only visible labels and the selected detail, never the whole catalog.
-    let window = world
-        .query_filtered::<&super::scroll::VirtualList, With<RegEntryListPanel>>()
-        .iter(world)
-        .next()
-        .map_or((0, 0), |list| list.window);
-    let (cat_idx, ent_idx, cats, current_entries, total_entries, selected_entry, active_pane) = {
-        let s = world.resource::<RegistryViewerState>();
-        let entries = s
-            .all_entries
-            .get(s.category_index)
-            .map(Vec::as_slice)
-            .unwrap_or(&[]);
-        let labels: Vec<_> = entries
-            .iter()
-            .enumerate()
-            .skip(window.0)
-            .take(window.1.saturating_sub(window.0))
-            .map(|(i, e)| (i, e.id.clone()))
-            .collect();
-        (
-            s.category_index,
-            s.entry_index,
-            s.categories.clone(),
-            labels,
-            entries.len(),
-            entries.get(s.entry_index).cloned(),
-            s.pane,
-        )
-    };
-
-    // Pane-focus highlight: tint each panel container when it is the active
-    // pane so the user can see where keyboard focus is. IDs are collected
-    // first to avoid double-borrowing `world`.
-    let tint = |active: bool| -> Color {
-        if active {
+    for (entity, pane, mut bg, inactive) in &mut panels.tint {
+        let active = pane.0 == state.pane;
+        bg.set_if_neq(BackgroundColor(if active {
             theme.accent().with_alpha(0.10)
         } else {
             Color::NONE
+        }));
+        if active && inactive.is_some() {
+            commands.entity(entity).remove::<InactiveScrollPane>();
         }
-    };
-    apply_pane_tint(world, &tint);
-
-    // ── Title ──────────────────────────────────────────────────────────────
-    if let Some(title_e) = world
-        .query_filtered::<Entity, With<RegTitleBar>>()
-        .iter(world)
-        .next()
-    {
-        let label = cats
-            .get(cat_idx)
-            .map(|c| format!("DEBUG: REGISTRY VIEWER — {} ({})", c.name, c.count))
-            .unwrap_or_else(|| "DEBUG: REGISTRY VIEWER".to_string());
-        world
-            .entity_mut(title_e)
-            .despawn_children()
-            .with_children(|h| {
-                h.spawn((
-                    Text::new(label),
-                    TextFont {
-                        font_size: 20.0,
-                        ..default()
-                    },
-                    TextColor(theme.accent()),
-                ));
-                h.spawn((
-                    Text::new(format!(
-                        "cat {}/{} · pane: {}",
-                        cat_idx + 1,
-                        cats.len(),
-                        pane_name(active_pane)
-                    )),
-                    TextFont {
-                        font_size: 13.0,
-                        ..default()
-                    },
-                    TextColor(theme::TEXT_DIM),
-                ));
-            });
-    }
-
-    // ── Category list (left) ──────────────────────────────────────────────
-    if let Some(list_e) = world
-        .query_filtered::<Entity, With<RegCategoryPanel>>()
-        .iter(world)
-        .next()
-    {
-        let total = cats.len();
-        let (start, end) = virtual_list_for_panel(world, list_e, total, cat_idx);
-        let mut list_cmd = world.entity_mut(list_e);
-        list_cmd.despawn_children();
-        spawn_virtual_spacers(&mut list_cmd, start, end, total, 30.0);
-        list_cmd.with_children(|list| {
-            for (i, cat) in cats.iter().enumerate().skip(start).take(end - start) {
-                let selected = i == cat_idx;
-                list.spawn((
-                    Node {
-                        width: Val::Percent(100.0),
-                        height: Val::Px(30.0),
-                        flex_shrink: 0.0,
-                        overflow: Overflow::clip(),
-                        padding: UiRect::horizontal(Val::Px(10.0)),
-                        ..default()
-                    },
-                    BackgroundColor(if selected {
-                        theme.accent().with_alpha(0.3)
-                    } else if i % 2 == 0 {
-                        theme::PANEL_BG
-                    } else {
-                        theme::ROW_ALT_BG
-                    }),
-                ))
-                .with_child((
-                    Text::new(format!("{}  ({})", cat.name, cat.count)),
-                    TextFont {
-                        font_size: 13.0,
-                        ..default()
-                    },
-                    TextColor(if selected {
-                        theme.accent()
-                    } else {
-                        theme::TEXT_BRIGHT
-                    }),
-                ));
-            }
-        });
-        let remaining = total.saturating_sub(end);
-        if remaining > 0 {
-            list_cmd.with_children(|p| {
-                p.spawn(Node {
-                    height: Val::Px(remaining as f32 * 30.0),
-                    flex_shrink: 0.0,
-                    ..default()
-                });
-            });
+        if !active && inactive.is_none() {
+            commands.entity(entity).insert(InactiveScrollPane);
         }
     }
-
-    // ── Entry list (middle) ──────────────────────────────────────────────
-    if let Some(list_e) = world
-        .query_filtered::<Entity, With<RegEntryListPanel>>()
-        .iter(world)
-        .next()
-    {
-        let total = total_entries;
-        let (start, end) = virtual_list_for_panel(world, list_e, total, ent_idx);
-        let mut list_cmd = world.entity_mut(list_e);
-        list_cmd.despawn_children();
-        spawn_virtual_spacers(&mut list_cmd, start, end, total, 26.0);
-        list_cmd.with_children(|list| {
-            if total_entries == 0 {
-                list.spawn(Node {
-                    padding: UiRect::axes(Val::Px(12.0), Val::Px(10.0)),
-                    ..default()
+    for (mut text, mut color, heading, detail_heading) in &mut panels.title {
+        let (label, tint) = if let Some(detail_heading) = detail_heading {
+            (
+                (if detail_heading.0 == RegistryViewerState::PANE_RAW {
+                    "RAW JSON"
+                } else {
+                    "PARSED STRUCT FIELDS"
                 })
-                .with_child((
-                    Text::new("No entries"),
-                    TextFont {
-                        font_size: 14.0,
-                        ..default()
-                    },
-                    TextColor(theme::TEXT_DIM),
-                ));
-                return;
-            }
-            for (i, label) in &current_entries {
-                let i = *i;
-                list.spawn((
-                    Node {
-                        width: Val::Percent(100.0),
-                        height: Val::Px(26.0),
-                        flex_shrink: 0.0,
-                        overflow: Overflow::clip(),
-                        padding: UiRect::horizontal(Val::Px(10.0)),
-                        ..default()
-                    },
-                    BackgroundColor(if i == ent_idx {
-                        theme.accent().with_alpha(0.25)
-                    } else if i % 2 == 0 {
-                        theme::PANEL_BG
+                .into(),
+                theme.accent2(),
+            )
+        } else if heading.is_some() {
+            (
+                category
+                    .map(|c| format!("DEBUG: REGISTRY VIEWER — {} ({})", c.name, c.count))
+                    .unwrap_or_else(|| "DEBUG: REGISTRY VIEWER".into()),
+                theme.accent(),
+            )
+        } else {
+            (
+                format!(
+                    "cat {}/{} · pane: {}",
+                    if catalog.categories.is_empty() {
+                        0
                     } else {
-                        theme::ROW_ALT_BG
-                    }),
-                ))
-                .with_child((
-                    Text::new(label.clone()),
+                        state.category_index + 1
+                    },
+                    catalog.categories.len(),
+                    pane_name(state.pane)
+                ),
+                theme::TEXT_DIM,
+            )
+        };
+        text.set_if_neq(Text::new(label));
+        color.set_if_neq(TextColor(tint));
+    }
+    for (panel, pane, rendered, mut scroll) in &mut panels.details {
+        let key = RenderedDetail(
+            catalog.last_changed().get(),
+            state.category_index,
+            state.entry_index,
+            theme.preset,
+        );
+        if rendered == Some(&key) {
+            continue;
+        }
+        // Reset detail scroll only when the selected record changes, not for theme/source refresh.
+        if rendered.is_some_and(|old| old.1 != key.1 || old.2 != key.2) {
+            if scroll.0 != Vec2::ZERO {
+                scroll.0 = Vec2::ZERO;
+            }
+        }
+        commands
+            .entity(panel)
+            .insert(key)
+            .despawn_children()
+            .with_children(|parent| {
+                let raw = pane.0 == RegistryViewerState::PANE_RAW;
+                let entry = entries.get(state.entry_index);
+                if !raw {
+                    if let Some(entry) = entry {
+                        parent.spawn((
+                            Text::new(format!("STATUS: {}", entry.status)),
+                            TextFont {
+                                font_size: 11.0,
+                                ..default()
+                            },
+                            TextColor(if entry.status.contains("DROPPED") {
+                                theme::TEXT_RED
+                            } else if entry.status.contains("round-trip ok") {
+                                theme::TEXT_GREEN
+                            } else {
+                                theme::TEXT_DIM
+                            }),
+                        ));
+                    }
+                }
+                let text = match entry {
+                    None => "Select an entry",
+                    Some(e) if raw && e.raw_json.is_empty() => {
+                        "No raw JSON available\n(possibly saved with a different type key)"
+                    }
+                    Some(e) if raw => &e.raw_json,
+                    Some(e) if e.parsed_fields.is_empty() => "No parsed fields available",
+                    Some(e) => &e.parsed_fields,
+                };
+                parent.spawn((
+                    Text::new(text),
                     TextFont {
-                        font_size: 12.0,
+                        font_size: 11.0,
                         ..default()
                     },
-                    TextColor(if i == ent_idx {
+                    TextColor(if raw {
                         theme::TEXT_BRIGHT
                     } else {
-                        theme::TEXT_DIM
+                        theme.label_color()
                     }),
-                ));
-            }
-        });
-        let remaining = total.saturating_sub(end);
-        if remaining > 0 {
-            list_cmd.with_children(|p| {
-                p.spawn(Node {
-                    height: Val::Px(remaining as f32 * 26.0),
-                    flex_shrink: 0.0,
-                    ..default()
-                });
-            });
-        }
-    }
-
-    // ── Detail panel (right) — two sub-panels ────────────────────────────
-    let Some(entry) = selected_entry.as_ref() else {
-        return;
-    };
-
-    let detail_key = RenderedDetail(cat_idx, ent_idx, theme.preset);
-    if let Some(panel) = world
-        .query_filtered::<Entity, With<RegRawJsonPanel>>()
-        .iter(world)
-        .next()
-    {
-        if world.get::<RenderedDetail>(panel) == Some(&detail_key)
-            && !world.is_resource_changed::<RegistryViewerState>()
-        {
-            return;
-        }
-        world.entity_mut(panel).insert(detail_key);
-    }
-
-    // ── Raw JSON sub-panel (left half) ────────────────────────────────────
-    if let Some(raw_e) = world
-        .query_filtered::<Entity, With<RegRawJsonPanel>>()
-        .iter(world)
-        .next()
-    {
-        world
-            .entity_mut(raw_e)
-            .despawn_children()
-            .with_children(|p| {
-                // Header
-                p.spawn((
-                    Text::new("RAW JSON"),
-                    TextFont {
-                        font_size: 14.0,
-                        ..default()
-                    },
-                    TextColor(theme.accent2()),
-                ));
-                p.spawn((
                     Node {
-                        width: Val::Percent(100.0),
-                        height: Val::Px(1.0),
-                        margin: UiRect::vertical(Val::Px(4.0)),
+                        flex_shrink: 0.0,
                         ..default()
                     },
-                    BackgroundColor(theme::TEXT_DIM.with_alpha(0.3)),
-                ));
-                // Raw JSON content — native scroll handles windowing now.
-                let raw_text = if entry.raw_json.is_empty() {
-                    "No raw JSON available\n(possibly saved with a different type key)".to_string()
-                } else {
-                    entry.raw_json.clone()
-                };
-                p.spawn(Node {
-                    width: Val::Percent(100.0),
-                    flex_grow: 1.0,
-                    flex_direction: FlexDirection::Column,
-                    overflow: Overflow::scroll_y(),
-                    ..default()
-                })
-                .with_child((
-                    Text::new(raw_text),
-                    TextFont {
-                        font_size: 11.0,
-                        ..default()
-                    },
-                    TextColor(theme::TEXT_BRIGHT),
-                ));
-            });
-    }
-
-    // ── Parsed fields sub-panel (right half) ──────────────────────────────
-    if let Some(fields_e) = world
-        .query_filtered::<Entity, With<RegParsedFieldsPanel>>()
-        .iter(world)
-        .next()
-    {
-        world
-            .entity_mut(fields_e)
-            .despawn_children()
-            .with_children(|p| {
-                // Header
-                p.spawn((
-                    Text::new("PARSED STRUCT FIELDS"),
-                    TextFont {
-                        font_size: 14.0,
-                        ..default()
-                    },
-                    TextColor(theme.accent2()),
-                ));
-                p.spawn((
-                    Node {
-                        width: Val::Percent(100.0),
-                        height: Val::Px(1.0),
-                        margin: UiRect::vertical(Val::Px(4.0)),
-                        ..default()
-                    },
-                    BackgroundColor(theme::TEXT_DIM.with_alpha(0.3)),
-                ));
-                // Round-trip / coverage status line
-                p.spawn((
-                    Text::new(format!("STATUS: {}", entry.status)),
-                    TextFont {
-                        font_size: 11.0,
-                        ..default()
-                    },
-                    TextColor(if entry.status.contains("DROPPED") {
-                        Color::srgb(1.0, 0.4, 0.3)
-                    } else if entry.status.contains("round-trip ok") {
-                        Color::srgb(0.4, 0.9, 0.4)
-                    } else {
-                        theme::TEXT_DIM
-                    }),
-                ));
-                // Parsed fields content — native scroll handles windowing now.
-                let fields_text = if entry.parsed_fields.is_empty() {
-                    "No parsed fields available".to_string()
-                } else {
-                    entry.parsed_fields.clone()
-                };
-                p.spawn(Node {
-                    width: Val::Percent(100.0),
-                    flex_grow: 1.0,
-                    flex_direction: FlexDirection::Column,
-                    overflow: Overflow::scroll_y(),
-                    ..default()
-                })
-                .with_child((
-                    Text::new(fields_text),
-                    TextFont {
-                        font_size: 11.0,
-                        ..default()
-                    },
-                    TextColor(theme.label_color()),
                 ));
             });
     }
 }
 
 #[cfg(test)]
-mod presentation_tests {
-    use super::super::scroll::*;
-    use super::*;
-
-    #[test]
-    fn headless_registry_preserves_idle_entities_and_orders_spacers() {
-        let mut app = App::new();
-        app.init_resource::<UiTheme>()
-            .init_resource::<ButtonInput<KeyCode>>();
-        app.insert_resource(RegistryViewerState {
-            all_entries: vec![(0..40_000)
-                .map(|i| RegistryEntry {
-                    id: format!("item_{i}"),
-                    raw_json: "{}".into(),
-                    parsed_fields: "fields".into(),
-                    status: "ok".into(),
-                })
-                .collect()],
-            ..default()
-        });
-        let panel = app
-            .world_mut()
-            .spawn((
-                RegEntryListPanel,
-                Node::default(),
-                KeyboardScroll,
-                FocusedRow(0),
-                ScrollPosition::default(),
-                VirtualList {
-                    row_height: 26.0,
-                    ..default()
-                },
-            ))
-            .id();
-        app.add_systems(Update, update_registry_viewer);
-        app.add_systems(
-            PostUpdate,
-            (scroll_to_focused_row, update_virtual_windows).chain(),
-        );
-        for _ in 0..4 {
-            app.update();
-        }
-        let children = app.world().get::<Children>(panel).unwrap().to_vec();
-        for _ in 0..10 {
-            app.update();
-        }
-        assert_eq!(
-            app.world().get::<Children>(panel).unwrap().to_vec(),
-            children
-        );
-        assert!(children.len() < 40);
-        let last = *children.last().unwrap();
-        assert_eq!(app.world().get::<Node>(last).unwrap().flex_shrink, 0.0);
-        assert!(
-            app.world().get::<Children>(last).is_none(),
-            "bottom spacer must follow rows"
-        );
-        app.world_mut()
-            .resource_mut::<RegistryViewerState>()
-            .entry_index = 20_000;
-        for _ in 0..3 {
-            app.update();
-        }
-        let list = app.world().get::<VirtualList>(panel).unwrap();
-        assert!(list.window.0 <= 20_000 && list.window.1 > 20_000);
-        assert!(app.world().get::<Children>(panel).unwrap().len() < 40);
-    }
-}
+#[path = "registry_tests.rs"]
+mod presentation_tests;

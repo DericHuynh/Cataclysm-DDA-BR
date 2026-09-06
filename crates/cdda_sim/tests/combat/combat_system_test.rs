@@ -25,7 +25,6 @@ use cdda_sim::runtime::test_utils::TestBed;
 #[ignore = "combat system not yet implemented"]
 fn hit_chance_unskilled_vs_unarmored() {
     let mut test = TestBed::new();
-    test.register::<CombatStats>();
     test.register::<Health>();
     test.register::<IsAlive>();
 
@@ -45,7 +44,8 @@ fn hit_chance_unskilled_vs_unarmored() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -68,7 +68,8 @@ fn hit_chance_unskilled_vs_unarmored() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -92,7 +93,6 @@ fn hit_chance_unskilled_vs_unarmored() {
 #[ignore = "combat system not yet implemented"]
 fn hit_chance_skilled_vs_unskilled() {
     let mut test = TestBed::new();
-    test.register::<CombatStats>();
     test.register::<Health>();
     test.register::<IsAlive>();
 
@@ -112,7 +112,8 @@ fn hit_chance_skilled_vs_unskilled() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -135,7 +136,8 @@ fn hit_chance_skilled_vs_unskilled() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -158,7 +160,6 @@ fn hit_chance_skilled_vs_unskilled() {
 #[ignore = "combat system not yet implemented"]
 fn hit_chance_dodge_reduces() {
     let mut test = TestBed::new();
-    test.register::<CombatStats>();
     test.register::<Health>();
     test.register::<IsAlive>();
 
@@ -178,7 +179,8 @@ fn hit_chance_dodge_reduces() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -201,7 +203,8 @@ fn hit_chance_dodge_reduces() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -224,7 +227,6 @@ fn hit_chance_dodge_reduces() {
 #[ignore = "combat system not yet implemented"]
 fn hit_chance_weapon_bonus() {
     let mut test = TestBed::new();
-    test.register::<CombatStats>();
     test.register::<WeaponData>();
     test.register::<Health>();
     test.register::<IsAlive>();
@@ -257,7 +259,8 @@ fn hit_chance_weapon_bonus() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -280,7 +283,8 @@ fn hit_chance_weapon_bonus() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -309,7 +313,6 @@ fn melee_damage_bare_hands() {
     let mut test = TestBed::new();
     test.register::<Health>();
     test.register::<IsAlive>();
-    test.register::<CombatStats>();
 
     let _attacker = test.spawn((
         Stats::new(8, 8, 8, 8),
@@ -328,7 +331,8 @@ fn melee_damage_bare_hands() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -351,7 +355,8 @@ fn melee_damage_bare_hands() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -377,7 +382,6 @@ fn melee_damage_with_weapon() {
     test.register::<WeaponData>();
     test.register::<Health>();
     test.register::<IsAlive>();
-    test.register::<CombatStats>();
 
     let _weapon = test.spawn(WeaponData {
         damage_bash: 10,
@@ -408,7 +412,8 @@ fn melee_damage_with_weapon() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -431,7 +436,8 @@ fn melee_damage_with_weapon() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -456,7 +462,6 @@ fn melee_damage_skill_bonus() {
     let mut test = TestBed::new();
     test.register::<Health>();
     test.register::<IsAlive>();
-    test.register::<CombatStats>();
 
     let _high_skill = test.spawn((
         Stats::new(8, 8, 8, 8),
@@ -475,7 +480,8 @@ fn melee_damage_skill_bonus() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -499,7 +505,8 @@ fn melee_damage_skill_bonus() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -522,7 +529,8 @@ fn melee_damage_skill_bonus() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -574,7 +582,6 @@ fn apply_damage_reduces_health() {
 #[ignore = "combat system not yet implemented"]
 fn apply_damage_armor_reduces() {
     let mut test = TestBed::new();
-    test.register::<CombatStats>();
     test.register::<Health>();
     test.register::<IsAlive>();
 
@@ -594,7 +601,8 @@ fn apply_damage_armor_reduces() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -617,7 +625,8 @@ fn apply_damage_armor_reduces() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -693,7 +702,6 @@ fn death_removes_IsAlive() {
 #[ignore = "combat system not yet implemented"]
 fn ranged_hit_short_range() {
     let mut test = TestBed::new();
-    test.register::<CombatStats>();
     test.register::<GunData>();
     test.register::<AmmoData>();
     test.register::<Health>();
@@ -737,7 +745,8 @@ fn ranged_hit_short_range() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -760,7 +769,8 @@ fn ranged_hit_short_range() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -783,7 +793,6 @@ fn ranged_hit_short_range() {
 #[ignore = "combat system not yet implemented"]
 fn ranged_hit_long_range() {
     let mut test = TestBed::new();
-    test.register::<CombatStats>();
     test.register::<GunData>();
     test.register::<AmmoData>();
     test.register::<Health>();
@@ -827,7 +836,8 @@ fn ranged_hit_long_range() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -850,7 +860,8 @@ fn ranged_hit_long_range() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -873,7 +884,6 @@ fn ranged_hit_long_range() {
 #[ignore = "combat system not yet implemented"]
 fn ranged_hit_high_dispersion() {
     let mut test = TestBed::new();
-    test.register::<CombatStats>();
     test.register::<GunData>();
     test.register::<AmmoData>();
     test.register::<Health>();
@@ -917,7 +927,8 @@ fn ranged_hit_high_dispersion() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -940,7 +951,8 @@ fn ranged_hit_high_dispersion() {
                 electric: 0,
                 cold: 0,
             },
-        },
+        }
+        .into_bundle(),
         Health {
             current: 100,
             max: 100,
@@ -967,7 +979,6 @@ fn ranged_hit_high_dispersion() {
 #[ignore = "combat system not yet implemented"]
 fn melee_combat_phase_processes_all() {
     let mut test = TestBed::new();
-    test.register::<CombatStats>();
     test.register::<Health>();
     test.register::<IsAlive>();
 
@@ -989,7 +1000,8 @@ fn melee_combat_phase_processes_all() {
                     electric: 0,
                     cold: 0,
                 },
-            },
+            }
+            .into_bundle(),
             Health {
                 current: 100,
                 max: 100,

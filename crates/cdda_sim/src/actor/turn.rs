@@ -5,9 +5,9 @@
 //!
 //! ## Per-turn flow
 //! 1. `tick_move_points`: all actors gain `speed` AP (clamped to -2×speed debt floor)
-//! 2. Actors act in AP order (highest first via `TurnQueue`)
-//! 3. Each action costs AP (walk=100, pickup=100, wield=100, craft tick=100, …)
-//! 4. When all actors fall below `MP_MIN_FLOOR`, the next turn begins
+//! 2. The runtime selects actors by live AP; turn-based player input runs first.
+//! 3. Each action costs AP; craft ticks consume all available AP.
+//! 4. Turn-based input reuses positive player AP before another world tick.
 
 use bevy_ecs::message::MessageWriter;
 use bevy_ecs::prelude::*;
@@ -31,7 +31,8 @@ pub const MOVE_COST_DOWNED_MULTIPLIER: i32 = 3;
 pub const MOVE_COST_ATTACK_BASE: i32 = 100;
 pub const AP_COST_PICKUP: i32 = 100;
 pub const AP_COST_WIELD: i32 = 100;
-/// AP deducted per craft-tick (one unit of crafting progress).
+/// Legacy 100-move work unit. Actual crafting ticks consume the actor's entire
+/// available budget; this constant is not a per-tick cost or cap.
 pub const AP_COST_CRAFT_TICK: i32 = 100;
 pub const MOVE_COST_RELOAD_BASE: i32 = 100;
 pub const MP_MIN_FLOOR: i32 = 25; // below this, actor stops acting

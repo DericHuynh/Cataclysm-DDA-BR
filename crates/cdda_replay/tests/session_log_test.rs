@@ -1,4 +1,4 @@
-use cdda_components::input::{ActionSource, GameAction};
+use cdda_input::vocabulary::{ActionSource, GameAction};
 use cdda_replay::session_log::{ActionRecord, SessionLog};
 
 // ---------------------------------------------------------------------------
@@ -200,7 +200,10 @@ fn compressed_file_is_smaller_than_uncompressed_for_large_log() {
 
     let raw_size = std::fs::metadata(&raw_path).unwrap().len();
     let zst_size = std::fs::metadata(&zst_path).unwrap().len();
-    assert!(zst_size < raw_size, "compressed ({zst_size}B) should be smaller than raw ({raw_size}B)");
+    assert!(
+        zst_size < raw_size,
+        "compressed ({zst_size}B) should be smaller than raw ({raw_size}B)"
+    );
 }
 
 // ---------------------------------------------------------------------------

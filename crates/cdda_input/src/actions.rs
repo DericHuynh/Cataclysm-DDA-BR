@@ -9,7 +9,7 @@
 //! `BindableAction::to_game_action()` converts between layers.
 //!
 //! `Direction`, `GameAction`, `ActionSource`, `InputAction`, and `BindableAction` are
-//! defined in `cdda_components::input` so that downstream crates can use them
+//! defined in `crate::vocabulary` so that downstream crates can use them
 //! without depending on `cdda_core`.
 
-pub use cdda_components::input::{ActionSource, BindableAction, Direction, GameAction, InputAction};
+pub use crate::vocabulary::{ActionSource, BindableAction, Direction, GameAction, InputAction};

@@ -77,7 +77,9 @@ Default section order:
 ## User Preferences
 
 - **Test runner:** use `cargo nextest run` for running tests (per the project's own Cargo note in the prior version of this doc). Fall back to `cargo test` only when `nextest` is unavailable.
+- **Master equivalence:** assess player-visible outcomes against the pinned sibling master source before continuing gameplay expansion. A matching ECS structure or passing BR-only tests does not establish semantic parity. The current gate is recorded in `docs/master-semantics-audit.md`.
 - For new durable behavior changes, record them here or in the relevant child `AGENTS.md`.
+- Prefer granular, modular ECS ownership while retaining a translation layer for original CDDA JSON. Split components by query, mutation, and lifecycle needs. The staged implementation sequence is in `docs/ecs-modularity-and-json-compatibility-plan.md`.
 
 ## Child DOX Index
 
@@ -93,7 +95,7 @@ Top-level workspaces and durable boundaries (each owns its own child index):
 
 Root-level files (not folders, no child DOX, but referenced from here):
 
-- `Cargo.toml` — **Virtual workspace manifest** (no root package, just `[workspace]` + `[workspace.dependencies]`). 15 member crates (12 source + 1 workspace-internal planner-core library `cdda_htn` + 1 raw-def AST leaf + 1 test-only); pinned Bevy 0.18 ecosystem. Profile flags in `[profile.dev]` / `[profile.release]`.
+- `Cargo.toml` — **Virtual workspace manifest** (no root package, just `[workspace]` + `[workspace.dependencies]`). 17 member crates, including native `cdda_catalog`, generic `cdda_ui`, planner core, raw AST, and test-only integration crates; pinned Bevy 0.18 ecosystem. Profile flags in `[profile.dev]` / `[profile.release]`.
 - `Cargo.lock` — Resolved dependency lockfile. Committed.
 - `README.md` — Project overview, quick start, and crate table.
 - `CURRENT_ARCHITECTURE.md` — What is implemented now (crate layers, data loading pipeline, tick phases, design decisions, known debt).

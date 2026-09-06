@@ -2,7 +2,7 @@
 //!
 //! Owns all ECS components related to creatures:
 //! identity (`Creature`, `PlayerData`, `NpcData`), stats (`Health`, `Stats`),
-//! combat (`CombatStats`, `Vision`), bionics, morale, status effects,
+//! combat (`MeleeCapability`, `DodgeDefense`, `IntrinsicArmor`, `Vision`), bionics, morale, status effects,
 //! body parts, status markers, and turn scheduling (`Speed`, `MovePoints`).
 //!
 //! Depends only on `cdda_components`, `cdda_core_types`, and `bevy_ecs`.

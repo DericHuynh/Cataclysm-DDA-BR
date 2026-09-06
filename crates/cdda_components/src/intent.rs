@@ -53,14 +53,24 @@ pub enum ActionIntent {
     /// Unwield into the actor's body pocket (or loose inventory if absent).
     Stow { item: Entity },
 
+    /// Put a whole stack into an owned or reachable unowned container.
+    Transfer { item: Entity, container: Entity },
+
     /// Use/consume an item.
     UseItem { item: Entity },
 
     /// Reload a weapon with ammo.
     Reload { weapon: Entity, ammo: Entity },
 
-    /// Start a multi-turn crafting activity.
+    /// Validate ingredients/output and start a crafting activity. Completed
+    /// acknowledges the start; work consumes the shared AP budget afterwards.
     StartCraft { recipe: Entity },
+
+    /// Interrupt the actor's current activity, retaining saved craft work.
+    InterruptActivity,
+
+    /// Resume an owned, accessible in-progress craft through activity arbitration.
+    ResumeCraft { craft: Entity },
 
     /// Start reading a book.
     StartRead { book: Entity },
@@ -70,6 +80,13 @@ pub enum ActionIntent {
 
     /// Interact with furniture/terrain at a position.
     Interact { position: WorldPos },
+}
+
+impl ActionIntent {
+    /// Lifecycle controls must resolve before the selected actor advances work.
+    pub fn is_activity_control(&self) -> bool {
+        matches!(self, Self::InterruptActivity | Self::ResumeCraft { .. })
+    }
 }
 
 // ---------------------------------------------------------------------------

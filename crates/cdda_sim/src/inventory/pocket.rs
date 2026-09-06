@@ -13,9 +13,9 @@ use cdda_core_types::core::units::{Length, Volume, Weight};
 
 /// Spawn a body-pocket entity owned by `player` and return its `Entity`.
 ///
-/// The pocket is effectively unlimited (max values / 2 to avoid overflow in
-/// arithmetic elsewhere).  Volume / weight enforcement is deferred to a later
-/// milestone.
+/// The pocket intentionally retains generous legacy body storage. Transfers
+/// enforce these limits with checked aggregate load arithmetic; constrained
+/// clothing/bag pockets use their own modeled capacities.
 pub fn spawn_body_pocket(world: &mut World, player: Entity) -> Entity {
     world
         .spawn((

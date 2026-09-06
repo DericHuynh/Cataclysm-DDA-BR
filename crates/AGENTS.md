@@ -1,7 +1,7 @@
 # Crates DOX
 
 ## Purpose
-Owns the Cargo workspace — 15 member crates (12 game/source crates + 1 workspace-internal planner-core library `cdda_htn` + 1 raw-def AST leaf `cdda_defs_raw` + 1 test-only `cdda_integration_tests`). Crate boundaries are aligned with dependency-layer separation and incremental-compile cost.
+Owns the Cargo workspace — 17 member crates, including native catalog and generic UI boundaries. Crate boundaries are aligned with dependency-layer separation and incremental-compile cost.
 
 ## Ownership
 - The workspace manifest is at the repository root: `Cargo.toml` and `Cargo.lock`.
@@ -17,7 +17,7 @@ Owns the Cargo workspace — 15 member crates (12 game/source crates + 1 workspa
 - **Layer 5 — app shell** (full Bevy, binaries): `cdda_context`, `cdda_input`, `cdda_render`, `cdda_replay`, `cdda_app`, `cdda_cli`.
 - **UI input adapters live in `cdda_render` (`render/input.rs`), never `cdda_sim`.** `cdda_sim` is the pure use-case layer and must not match the display-UI `GameAction` enum. This is the workspace's "presenter-above-sim" contract: new screen-keyboard handlers go in `cdda_render`, and `cdda_sim` exposes use-case functions for them to call.
 - **Shared domain components live in `cdda_components`; authoritative operations live in their owning simulation subsystem.** Read shared components/read models across domains. Route invariant-sensitive mutations through shared validating operations rather than duplicating validation or directly calling another domain's scheduled system. Bevy relationships alone do not enforce gameplay ownership/capacity/cost invariants.
-- **One headless simulation contract:** `cdda_sim::runtime::SimulationPlugin` owns `SimulationTurn`, gameplay plugin wiring, time and pause. The app supplies input/render/world adapters; tests use the same persistent schedule. `GameSet` orders outer Update adapters; `SimSet` orders logical simulation only. See cdda_sim/AGENTS.md for the explicit remaining AP-budget and command-routing work.
+- **One headless simulation contract:** `cdda_sim::runtime::SimulationPlugin` owns `SimulationTurn`, command ingress, action/activity dispatch, post-commit refresh, gameplay plugin wiring, time and pause. The app supplies input/render/world adapters; tests use the same persistent schedule. `GameSet` orders outer Update adapters; `SimSet` orders logical simulation only. See cdda_sim/AGENTS.md for the explicit remaining AP-budget and command-routing work.
 - **Test-only**: `cdda_integration_tests` (no library, no `cargo build`; only `cargo test --workspace` compiles it).
 - No crate may depend on `cdda_app` or `cdda_cli`. Those are leaf entry points.
 - A crate that would need a reverse-layer dep must extract the shared types into a new crate (see `TARGET_ARCHITECTURE.md` § No Circular Dependencies).
@@ -44,7 +44,8 @@ Layer 1 — pure domain types (no Bevy ECS):
 
 Layer 2 — ECS components and shared schedule:
 
-- `crates/cdda_components/AGENTS.md` — All Bevy ECS components (actor, item, activity, def, schedule, input, context, messages, events, stats, tokens), event/message types, `Ctx` states, and the cross-domain coordination contract (marker components + shared data + `States`).
+- `crates/cdda_components/AGENTS.md` — All Bevy ECS components (actor, item, activity, def, schedule, messages, events, stats, tokens), semantic event/message types, and the cross-domain coordination contract (marker components + shared data + `States`).
+- `crates/cdda_catalog/AGENTS.md` — Load-free definition indexes, normalized inventory catalog, session interners and native HTN input.
 - `crates/cdda_sim/AGENTS.md` — `AppState` + `TestBed` runtime harness **plus** every game-logic submodule (actor, ai, activity, combat, crafting, equipment, inventory, item, noise). The single source of truth for the simulation engine.
 
 Layer 3 — game logic (Bevy ECS only):
@@ -61,6 +62,7 @@ Layer 5 — app shell (full Bevy, binaries):
 
 - `crates/cdda_context/AGENTS.md` — Headless Ctx state machine, navigation, focus, overlays, menu, and Bevy `SubStates` nested-menu types (`SettingsTab`). Current layering debt: depends on `cdda_sim::runtime::state::AppState` for state transitions.
 - `crates/cdda_input/AGENTS.md` — Input plugin, action bridging, keybinding maps.
+- `crates/cdda_ui/AGENTS.md` — Generic Bevy ECS/UI scrolling, virtual-list geometry and retained keyed rows; no gameplay dependencies.
 - `crates/cdda_render/AGENTS.md` — UI rendering, ASCII viewport, tile rendering, theming, and mouse-driven menu picking (`On<Pointer<Click>>`). May read `cdda_overmap_gen` resources for overmap preview/config UI.
 - `crates/cdda_replay/AGENTS.md` — Deterministic session recording and replay.
 - `crates/cdda_app/AGENTS.md` — Binary entry point (`cdda`); wires all subsystems and Bevy `DefaultPlugins`.

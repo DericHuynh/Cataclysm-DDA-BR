@@ -47,7 +47,7 @@ pub struct MeleeIntent {
 /// ```
 /// Clamped to [0.05, 0.95] to leave room for luck/training.
 pub fn calculate_melee_hit_chance(
-    attacker_stats: &CombatStats,
+    attacker_stats: &MeleeCapability,
     weapon_to_hit: i32,
     defender_dodge: i32,
 ) -> f32 {

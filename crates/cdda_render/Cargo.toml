@@ -5,6 +5,7 @@ edition = "2021"
 description = "CDDA UI rendering — all bevy_ui, Text2d, and tile rendering."
 
 [dependencies]
+cdda_ui.workspace = true
 cdda_components = { path = "../cdda_components" }
 cdda_context = { path = "../cdda_context" }
 cdda_core_types = { path = "../cdda_core_types" }

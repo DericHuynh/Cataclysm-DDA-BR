@@ -354,6 +354,17 @@ fn same_items_merge() {
     assert_eq!(t_id.0, i_id.0);
 
     // Phase 2: mutation
+    for e in [target, incoming] {
+        test.world_mut()
+            .entity_mut(e)
+            .insert(cdda_components::sim::WorldPosition::new(
+                cdda_core_types::core::coords::WorldPos::new(
+                    0,
+                    0,
+                    cdda_core_types::core::coords::ZLevel::new(0),
+                ),
+            ));
+    }
     assert!(merge_or_stack(test.world_mut(), target, incoming));
 
     // Phase 3: verify target has StackCount(2), incoming is despawned
@@ -456,6 +467,17 @@ fn merge_accumulates_charges() {
     );
 
     // Phase 2: merge
+    for e in [target, incoming] {
+        test.world_mut()
+            .entity_mut(e)
+            .insert(cdda_components::sim::WorldPosition::new(
+                cdda_core_types::core::coords::WorldPos::new(
+                    0,
+                    0,
+                    cdda_core_types::core::coords::ZLevel::new(0),
+                ),
+            ));
+    }
     assert!(merge_or_stack(test.world_mut(), target, incoming));
 
     // Phase 3: StackCount = 2, CurrentCharges = 8
@@ -490,6 +512,17 @@ fn deforigin_merge_same_origin() {
     );
 
     // Phase 2: merge
+    for e in [target, incoming] {
+        test.world_mut()
+            .entity_mut(e)
+            .insert(cdda_components::sim::WorldPosition::new(
+                cdda_core_types::core::coords::WorldPos::new(
+                    0,
+                    0,
+                    cdda_core_types::core::coords::ZLevel::new(0),
+                ),
+            ));
+    }
     assert!(merge_or_stack(test.world_mut(), target, incoming));
 
     // Phase 3: StackCount = 5, incoming despawned

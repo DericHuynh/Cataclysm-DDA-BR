@@ -104,10 +104,7 @@ impl Loader {
     /// definitions it already ingested, a mod dir is appended on top, and a
     /// subsequent [`Self::resolve`] layers the mod over core with
     /// last-write-wins per ID (and lets mod defs `copy-from` core defs).
-    pub fn ingest_dir(
-        &mut self,
-        dir: &Path,
-    ) -> (HashMap<String, Vec<RawDef>>, Vec<LoaderError>) {
+    pub fn ingest_dir(&mut self, dir: &Path) -> (HashMap<String, Vec<RawDef>>, Vec<LoaderError>) {
         let before: HashMap<String, usize> = self
             .raw_by_type
             .iter()
@@ -270,6 +267,8 @@ impl Loader {
             }
         };
 
+        let mut entries: Vec<_> = entries.collect();
+        entries.sort_by_key(|entry| entry.as_ref().map(|entry| entry.path()).unwrap_or_default());
         for entry in entries {
             let entry = match entry {
                 Ok(e) => e,
@@ -288,7 +287,7 @@ impl Loader {
                 // Skip modinfo files (they describe mods, not game defs)
                 let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
                 if file_name == "modinfo.json" || file_name == "mod_tileset.json" {
-                    return;
+                    continue;
                 }
                 self.ingest_file(&path, errors);
             }
@@ -361,7 +360,14 @@ impl Loader {
             source: path.to_path_buf(),
         };
 
-        self.raw_by_type.entry(type_name).or_default().push(raw);
+        // Canonicalize at ingestion, preserving source/mod order even when an
+        // override changes between aliases such as GENERIC and ITEM.
+        let family = self
+            .type_aliases
+            .get(&type_name)
+            .cloned()
+            .unwrap_or(type_name);
+        self.raw_by_type.entry(family).or_default().push(raw);
     }
 
     // ========================================================================
@@ -386,6 +392,14 @@ impl Loader {
     /// For types where the identifying key is "id", this extracts that field.
     /// For types like recipes where "result" may be the key, uses a fallback.
     fn build_raw_map(&self, type_name: &str) -> HashMap<String, Value> {
+        self.keyed_sources(type_name)
+            .into_iter()
+            .map(|(key, raw)| (key, raw.value.clone()))
+            .collect()
+    }
+
+    /// Last-writer provenance using exactly the same identity rules as resolution.
+    pub fn keyed_sources(&self, type_name: &str) -> HashMap<String, &RawDef> {
         let mut map = HashMap::new();
 
         let Some(raws) = self.raw_by_type.get(type_name) else {
@@ -426,7 +440,7 @@ impl Loader {
                         .and_then(serde_json::Value::as_str)
                         == Some(key.as_str());
                     if !self_copy || raw.value.get("variant").is_none() {
-                        map.insert(key, raw.value.clone());
+                        map.insert(key, raw);
                     }
                     continue;
                 }
@@ -440,17 +454,17 @@ impl Loader {
             if let Some(idv) = raw.value.get("id") {
                 if let Some(ids) = all_ids_from_value(idv) {
                     for id in ids {
-                        map.insert(id, raw.value.clone());
+                        map.insert(id, raw);
                     }
                 }
             } else if let Some(result) = raw.value.get("result").and_then(|v| v.as_str()) {
                 // Fallback for recipes and similar types
-                map.insert(result.to_string(), raw.value.clone());
+                map.insert(result.to_string(), raw);
             } else if let Some(abstract_id) = raw.value.get("abstract").and_then(|v| v.as_str()) {
                 // Some defs use "abstract" as the ID for abstract base defs
-                map.insert(abstract_id.to_string(), raw.value.clone());
+                map.insert(abstract_id.to_string(), raw);
             } else if let Some(raw_id) = &raw.id {
-                map.insert(raw_id.clone(), raw.value.clone());
+                map.insert(raw_id.clone(), raw);
             }
         }
 
@@ -681,9 +695,7 @@ impl Loader {
                 resolved_value
             };
 
-            let id = Self::extract_def_id(&normalized)
-                .or_else(|| Some(def_key.to_string()))
-                .unwrap_or_default();
+            let id = def_key.to_string();
             resolved.push((id, normalized));
         }
 
@@ -1123,9 +1135,15 @@ mod tests {
             3,
             "three distinct recipe identities survive (base + suffix + variant)"
         );
-        assert!(registry.recipes.contains_key(&"meat_cooked".to_string().into()));
-        assert!(registry.recipes.contains_key(&"meat_cooked_boil".to_string().into()));
-        assert!(registry.recipes.contains_key(&"meat_cooked_smoke".to_string().into()));
+        assert!(registry
+            .recipes
+            .contains_key(&"meat_cooked".to_string().into()));
+        assert!(registry
+            .recipes
+            .contains_key(&"meat_cooked_boil".to_string().into()));
+        assert!(registry
+            .recipes
+            .contains_key(&"meat_cooked_smoke".to_string().into()));
 
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -1,46 +1,36 @@
-//! Crafting execution — the use-case executor for starting a craft.
-//!
-//! `process_pending_craft` drains the `PendingCraft` queue and invokes
-//! `start_craft`. The keyboard navigation of the crafting menu has moved up
-//! to `cdda_render::render::input::crafting_menu_input` (the presenter layer);
-//! this module keeps only the simulation-side craft execution.
-
+//! Legacy menu ingress: translate a pending selection into a native intent.
+//! Validation and ingredient consumption occur only when the actor is selected.
+use super::systems::{find_dev_player, CraftOutcome, CraftRevision, PendingCraft};
 use bevy_ecs::prelude::*;
+use cdda_components::intent::ActionIntent;
 
-use super::systems::{build_craft_state, find_dev_player, start_craft, CraftState, PendingCraft};
-
-/// Drain `PendingCraft`, execute the craft, and rebuild `CraftState`.
 pub fn process_pending_craft(world: &mut World) {
-    let recipe_entity = {
-        let mut pending = world.resource_mut::<PendingCraft>();
-        pending.0.take()
-    };
-    let Some(recipe_entity) = recipe_entity else {
+    let Some(recipe) = world.resource_mut::<PendingCraft>().0.take() else {
         return;
     };
-
-    let Some(player) = find_dev_player(world) else {
-        return;
+    let failure = match find_dev_player(world) {
+        Some(player)
+            if world
+                .get::<cdda_components::actor::IsAlive>(player)
+                .is_none()
+                || world
+                    .get::<cdda_components::actor::ActionPoints>(player)
+                    .is_none() =>
+        {
+            "Crafter cannot act"
+        }
+        Some(player) if world.get::<ActionIntent>(player).is_none() => {
+            world
+                .entity_mut(player)
+                .insert(ActionIntent::StartCraft { recipe });
+            return;
+        }
+        Some(_) => "Crafter already has a pending action",
+        None => "Crafter no longer exists",
     };
-
-    match start_craft(world, player, recipe_entity) {
-        Ok(craft_e) => {
-            let result_name = world
-                .get::<cdda_components::item::InProgressCraft>(craft_e)
-                .map(|c| c.result_name.clone())
-                .unwrap_or_else(|| "item".to_string());
-            tracing::info!("Started crafting: {}", result_name);
-            if let Some(mut state) = world.get_resource_mut::<CraftState>() {
-                state.last_message = Some(format!("Crafting: {}", result_name));
-            }
-        }
-        Err(e) => {
-            tracing::warn!("Craft failed: {}", e);
-            if let Some(mut state) = world.get_resource_mut::<CraftState>() {
-                state.last_message = Some(format!("Failed: {}", e));
-            }
-        }
-    }
-
-    build_craft_state(world);
+    let mut revision = world.resource_mut::<CraftRevision>();
+    revision.last_result = Some(CraftOutcome::Failed {
+        reason: failure.into(),
+    });
+    revision.revision += 1;
 }

@@ -7,8 +7,8 @@
 use crate::session_log::SessionLog;
 use bevy_ecs::message::MessageWriter;
 use bevy_ecs::prelude::*;
-use cdda_components::input::{ActionSource, InputAction};
 use cdda_components::sim::GameTime;
+use cdda_input::vocabulary::{ActionSource, InputAction};
 
 // ---------------------------------------------------------------------------
 // ReplayState

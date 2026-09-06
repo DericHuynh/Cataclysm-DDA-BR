@@ -6,8 +6,8 @@
 use crate::session_log::{ActionRecord, SessionLog};
 use bevy_ecs::message::MessageReader;
 use bevy_ecs::prelude::*;
-use cdda_components::input::InputAction;
 use cdda_components::sim::GameTime;
+use cdda_input::vocabulary::InputAction;
 
 /// Records `InputAction` messages into the `SessionLog`, stamped with
 /// the current turn from `GameTime`.

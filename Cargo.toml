@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/cdda_ui",
+    "crates/cdda_catalog",
     "crates/cdda_cli",
     "crates/cdda_app",
     "crates/cdda_render",
@@ -20,6 +22,10 @@ members = [
 
 [workspace.dependencies]
 # Bevy 0.18
+bevy_ui = "0.18"
+bevy_text = "0.18"
+bevy_color = "0.18"
+bevy_picking = "0.18"
 bevy_ecs        = { version = "0.18", features = ["multi_threaded"] }
 bevy_reflect    = "0.18"
 bevy_app        = "0.18"
@@ -55,6 +61,8 @@ bevy-inspector-egui       = "0.36"
 leafwing-input-manager    = "0.20"
 
 # Internal workspace crates
+cdda_ui = { path = "crates/cdda_ui" }
+cdda_catalog = { path = "crates/cdda_catalog" }
 cdda_cli = { path = "crates/cdda_cli" }
 cdda_app     = { path = "crates/cdda_app" }
 cdda_render  = { path = "crates/cdda_render" }

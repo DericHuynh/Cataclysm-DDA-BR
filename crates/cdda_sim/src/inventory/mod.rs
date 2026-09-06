@@ -5,7 +5,10 @@
 //!
 //! Extracted from `cdda_core::inventory` to avoid circular dependencies.
 
+pub mod capacity;
 pub mod examine_resource;
 pub mod pocket;
 pub mod systems;
 pub mod transfer;
+
+pub mod merge;

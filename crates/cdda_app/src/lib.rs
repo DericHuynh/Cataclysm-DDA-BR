@@ -17,17 +17,16 @@ use bevy_state::prelude::OnEnter;
 use bevy_state::state::{NextState, State};
 
 use cdda_components::intent::ActionIntent;
-use cdda_components::schedule::{GameSet, SimSet, SimulationTurn};
+use cdda_components::schedule::{GameSet, SimSet, SimulationRefresh};
 use cdda_context::ctx::Ctx as Screen;
 use cdda_context::screen::Screen as ScreenPlugin;
 use cdda_context::ContextStack;
 
 use crate::data_assets::{reload_modified_data, request_data_files, CddaDataFiles};
 use crate::startup::load_data_system;
-use crate::startup::{examine_item_input, spawn_dev_world};
+use crate::startup::spawn_dev_world;
 use cdda_components::actor::IsAlive;
 use cdda_components::dev::{DevCamera, DevPlayer};
-use cdda_components::item::InventoryFocus;
 use cdda_components::sim::WorldPosition;
 use cdda_context::overlay::{
     cleanup_activity_overlay, handle_overlay_cancel, sync_activity_overlay,
@@ -37,7 +36,8 @@ use cdda_data::assets::CddaAssetsPlugin;
 use cdda_overmap::spatial::EntitySpatialIndex;
 use cdda_overmap::OvermapCamera;
 use cdda_overmap_gen::pipeline::OvermapGenPlugin;
-use cdda_sim::crafting::systems::on_examine_item_changed;
+use cdda_render::render::crafting_state::on_examine_item_changed;
+use cdda_render::render::input::examine_item_input;
 use cdda_sim::runtime::state::{AppState, StartupConfig};
 use cdda_sim::runtime::SimulationPlugin;
 
@@ -139,7 +139,7 @@ impl Plugin for CddaPlugin {
         // Spatial index maintenance: gameplay positions are `WorldPosition`
         // (movement writes it); raw `WorldPos` entities stay supported.
         app.add_systems(
-            SimulationTurn,
+            SimulationRefresh,
             cdda_overmap::sync_spatial_index
                 .in_set(SimSet::SpatialUpdate)
                 .run_if(in_state(AppState::InGame)),
@@ -152,7 +152,6 @@ impl Plugin for CddaPlugin {
         app.init_state::<AppState>();
         app.init_resource::<StartupConfig>();
         app.init_resource::<cdda_sim::inventory::examine_resource::ExaminedItem>();
-        app.init_resource::<InventoryFocus>();
         app.init_resource::<DevCamera>();
         app.init_resource::<cdda_sim::runtime::state::LoadingStatus>();
         app.init_resource::<CddaDataFiles>();

@@ -16,12 +16,12 @@ use std::collections::HashMap;
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::world::World;
+use cdda_catalog::definition::DefinitionWorld;
+use cdda_catalog::interner::ItemTypeRegistry;
 use cdda_components::def::{IsDef, ItemCategory};
 use cdda_components::item::{DefOrigin, InsideContainer, StackCount, WieldedBy};
 use cdda_components::sim::WorldPosition;
 use cdda_core_types::core::coords::WorldPos;
-use cdda_data::def_world::DefinitionWorld;
-use cdda_data::interner::ItemTypeRegistry;
 
 use super::model::{InventoryModel, NavigationModel, NearbyModel, NeedsModel, ObservedItem};
 
@@ -56,7 +56,7 @@ impl ItemCatalog {
             let pairs: Vec<(String, String)> = def_world
                 .iter()
                 .filter_map(|(category, id, entity)| {
-                    if category != cdda_data::def_world::DefCategory::Item {
+                    if category != cdda_catalog::definition::DefCategory::Item {
                         return None; // ItemCategory only exists on item defs
                     }
                     world

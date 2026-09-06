@@ -5,6 +5,7 @@ edition = "2021"
 description = "JSON loading, def registry, ACL translation for CDDA"
 
 [dependencies]
+cdda_catalog.workspace = true
 bevy_ecs.workspace = true
 bevy_app.workspace = true
 bevy_asset.workspace = true

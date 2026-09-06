@@ -85,7 +85,12 @@ pub fn drive_behaviour_tree(
     acting: Option<Res<ActingEntity>>,
     q: Query<
         (Entity, &WorldPosition, &ActionPoints),
-        (With<PlannerBehaviourTree>, With<IsAlive>, Without<IsDef>),
+        (
+            With<PlannerBehaviourTree>,
+            With<IsAlive>,
+            Without<IsDef>,
+            Without<ActionIntent>,
+        ),
     >,
 ) {
     for (e, p, a) in &q {
@@ -102,7 +107,12 @@ pub fn drive_goap(
     acting: Option<Res<ActingEntity>>,
     q: Query<
         (Entity, &WorldPosition, &ActionPoints),
-        (With<PlannerGoap>, With<IsAlive>, Without<IsDef>),
+        (
+            With<PlannerGoap>,
+            With<IsAlive>,
+            Without<IsDef>,
+            Without<ActionIntent>,
+        ),
     >,
 ) {
     for (e, p, a) in &q {

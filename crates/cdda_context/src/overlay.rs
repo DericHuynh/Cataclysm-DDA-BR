@@ -144,7 +144,7 @@ pub fn pop_overlay(world: &mut World) {
 /// `pop_overlay` with `&mut World` access.
 pub fn handle_overlay_cancel(world: &mut World) {
     use bevy_ecs::message::Messages;
-    use cdda_components::input::{GameAction, InputAction};
+    use cdda_input::vocabulary::{GameAction, InputAction};
 
     if !world.resource::<OverlayStack>().input_blocked {
         return;

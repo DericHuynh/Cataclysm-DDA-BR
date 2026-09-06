@@ -50,8 +50,8 @@ pub fn tick_morale_decay() {
 ///
 /// High morale grants combat bonuses (e.g. +damage, +accuracy).
 /// Low morale (especially < -50) applies penalties.
-/// Modifiers are applied to `CombatStats` directly.
+/// Derived modifiers must remain separate from base attack/defense capabilities.
 pub fn apply_morale_effects(world: &mut World, entity: Entity) {
     let _ = (world, entity);
-    todo!("apply morale modifiers to CombatStats: damage/accuracy multipliers")
+    todo!("derive morale damage/accuracy modifiers without changing base capabilities")
 }

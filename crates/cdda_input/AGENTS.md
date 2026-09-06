@@ -12,7 +12,7 @@ context-keyed `InputMap`s, and supports runtime rebinding.
   UI crates read for dynamic key hints.
 - Canonical action enums (`Direction`, `GameAction`, `ActionSource`, `InputAction`,
   `BindableAction`, `InputContextId`, `InputContextStack`) live in
-  `cdda_components::input`; this crate re-exports them from `actions.rs` and
+  `cdda_input::vocabulary`; this crate re-exports them from `actions.rs` and
   `context.rs` so downstream crates do not need a direct `cdda_components` import.
 
 ## Local Contracts
@@ -22,7 +22,7 @@ context-keyed `InputMap`s, and supports runtime rebinding.
 - **Two-layer action model.** `BindableAction` (flat, unit-only, `Actionlike`) is the
   leafwing `InputMap`/`ActionState` key. `GameAction` is the rich, data-carrying
   message type. Conversion happens in `BindableAction::to_game_action()` in
-  `cdda_components::input` and is invoked by `bridge_actionstate`.
+  `cdda_input::vocabulary` and is invoked by `bridge_actionstate`.
 - **Single decoupling point: `InputAction` messages.** Downstream systems must read
   `MessageReader<InputAction>` and never `ButtonInput<KeyCode>` directly. Two
   producers feed this stream: `bridge_actionstate` (Update, leafwing) and
@@ -55,7 +55,7 @@ context-keyed `InputMap`s, and supports runtime rebinding.
 - Add or change bindings in `default_bindings()` in `src/bindings.rs`. The same map
   must be re-registered for every new `InputContextId` (the 15 contexts currently
   used are listed in `default_bindings`).
-- To add a new bindable action: extend `BindableAction` in `cdda_components::input`
+- To add a new bindable action: extend `BindableAction` in `cdda_input::vocabulary`
   with a variant + label + `to_game_action` arm, then bind keys in the relevant
   context(s). Data-carrying `GameAction` variants (e.g. `TextChar`, `Move(Direction)`)
   must NOT appear in `BindableAction` or in an `InputMap`.
@@ -72,8 +72,9 @@ context-keyed `InputMap`s, and supports runtime rebinding.
 ## Child DOX Index
 
 - `src/lib.rs` — `CddaInputPlugin` and the system-ordering contract.
+- `src/vocabulary.rs` — Canonical adapter-owned action and input-context types.
 - `src/actions.rs` — Re-exports of `Direction`, `GameAction`, `ActionSource`,
-  `InputAction`, `BindableAction` from `cdda_components::input`; two-layer model.
+  `InputAction`, `BindableAction` from `cdda_input::vocabulary`; two-layer model.
 - `src/bindings.rs` — `ContextInputMaps` (per-context + global `InputMap`),
   `ActiveKeybindings`, `default_bindings()`, `format_wrapper`.
 - `src/context.rs` — Re-exports of `InputContextId` and `InputContextStack`.

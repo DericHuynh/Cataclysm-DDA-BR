@@ -1,0 +1,11 @@
+[package]
+name = "cdda_catalog"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy_ecs.workspace = true
+cdda_components.workspace = true
+serde_json.workspace = true
+bidimap = "0.7.0"
+serde = { workspace = true, features = ["rc"] }

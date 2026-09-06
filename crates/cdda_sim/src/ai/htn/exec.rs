@@ -125,6 +125,15 @@ pub fn drive_htn_system(world: &mut World) {
     }
 
     for entity in agents.drain(..) {
+        // An externally submitted command owns this pass. Discard the old plan
+        // so its cursor cannot advance on that command's terminal outcome.
+        if world
+            .get::<cdda_components::intent::ActionIntent>(entity)
+            .is_some()
+        {
+            world.entity_mut(entity).remove::<HtnAgentState>();
+            continue;
+        }
         let Some(brain) = world.get::<HtnBrain>(entity).cloned() else {
             continue;
         };

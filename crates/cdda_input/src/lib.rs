@@ -13,6 +13,7 @@ pub mod actions;
 pub mod bindings;
 pub mod context;
 pub mod systems;
+pub mod vocabulary;
 
 // ----- Re-exports ---------------------------------------------------------
 

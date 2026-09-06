@@ -3,7 +3,7 @@
 //! Uses `GameAction` from `cdda_input`. Binary format is `postcard`,
 
 use bevy_ecs::prelude::Resource;
-use cdda_components::input::{ActionSource, GameAction};
+use cdda_input::vocabulary::{ActionSource, GameAction};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

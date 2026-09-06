@@ -93,6 +93,163 @@ fn one_declared_action_advances_once_and_commits_before_returning() {
     assert_eq!(app.world().resource::<GameTime>().turn, 1);
 }
 
+/// Master do_turn.cpp accepts further avatar input while moves remain, before
+/// processing other creatures and advancing the next world second.
+#[test]
+fn master_player_commands_share_a_turn_and_hold_ai_until_budget_is_spent() {
+    for dev_marker in [false, true] {
+        let mut app = app(SimulationMode::TurnBased);
+        let player = actor(&mut app);
+        if dev_marker {
+            app.world_mut()
+                .entity_mut(player)
+                .insert(cdda_components::dev::DevPlayer);
+        } else {
+            app.world_mut()
+                .entity_mut(player)
+                .insert(cdda_components::actor::PlayerData {
+                    name: "survivor".into(),
+                    gender: Default::default(),
+                    age: 25,
+                    height: 170,
+                    blood_type: "O+".into(),
+                    profession: None,
+                    scenario: None,
+                });
+        }
+        app.world_mut()
+            .get_mut::<ActionPoints>(player)
+            .unwrap()
+            .speed = 200;
+        let npc = actor(&mut app);
+        app.world_mut()
+            .entity_mut(npc)
+            .insert(cdda_components::ai::PlannerBehaviourTree);
+        let effect = effect(&mut app);
+        for (action, expected_x, expected_ap) in [
+            (ActionIntent::Move { dx: 1, dy: 0 }, 1, 100),
+            (ActionIntent::Move { dx: 0, dy: 0 }, 1, 100), // rejected input
+            (ActionIntent::Move { dx: 1, dy: 0 }, 2, 0),
+        ] {
+            app.world_mut().entity_mut(player).insert(action);
+            app.update();
+            assert_eq!(app.world().resource::<GameTime>().turn, 1);
+            assert_eq!(
+                app.world().get::<WorldPosition>(player).unwrap().get().x,
+                expected_x
+            );
+            assert_eq!(
+                app.world().get::<ActionPoints>(player).unwrap().current,
+                expected_ap
+            );
+            assert_eq!(
+                app.world()
+                    .get::<StatusEffect>(effect)
+                    .unwrap()
+                    .remaining
+                    .as_turns(),
+                9
+            );
+            assert_eq!(
+                app.world().get::<WorldPosition>(npc).unwrap().get().x,
+                if expected_ap == 0 { 1 } else { 0 }
+            );
+            for _ in 0..3 {
+                app.update();
+            }
+            assert_eq!(app.world().resource::<GameTime>().turn, 1);
+        }
+        app.world_mut()
+            .entity_mut(player)
+            .insert(ActionIntent::Wait);
+        app.update();
+        assert_eq!(app.world().resource::<GameTime>().turn, 2);
+        assert_eq!(
+            app.world().get::<ActionPoints>(player).unwrap().current,
+            100
+        );
+    }
+}
+
+#[test]
+fn player_remainder_survives_pause_and_is_usable_without_a_world_tick() {
+    let mut app = app(SimulationMode::TurnBased);
+    let player = actor(&mut app);
+    app.world_mut()
+        .entity_mut(player)
+        .insert(cdda_components::dev::DevPlayer);
+    app.world_mut()
+        .get_mut::<ActionPoints>(player)
+        .unwrap()
+        .current = 150;
+    app.world_mut()
+        .entity_mut(player)
+        .insert(ActionIntent::Wait);
+    app.world_mut().resource_mut::<SimulationControl>().paused = true;
+    app.update();
+    assert!(app.world().get::<ActionIntent>(player).is_some());
+    app.world_mut().resource_mut::<SimulationControl>().paused = false;
+    app.update();
+    assert_eq!(app.world().resource::<GameTime>().turn, 0);
+    assert_eq!(app.world().get::<ActionPoints>(player).unwrap().current, 50);
+    app.world_mut()
+        .entity_mut(player)
+        .insert(ActionIntent::Wait);
+    app.update();
+    assert_eq!(app.world().resource::<GameTime>().turn, 0);
+    assert_eq!(
+        app.world().get::<ActionPoints>(player).unwrap().current,
+        -50
+    );
+    app.world_mut()
+        .entity_mut(player)
+        .insert(ActionIntent::Wait);
+    app.update();
+    assert_eq!(app.world().resource::<GameTime>().turn, 1);
+    assert_eq!(
+        app.world().get::<ActionPoints>(player).unwrap().current,
+        -50
+    );
+}
+
+#[test]
+fn spatial_refresh_observes_each_player_commit_in_the_same_turn() {
+    use cdda_components::{dev::DevPlayer, schedule::SimulationRefresh};
+    #[derive(Resource, Default)]
+    struct Positions(Vec<i32>);
+    fn observe(query: Query<&WorldPosition, With<DevPlayer>>, mut positions: ResMut<Positions>) {
+        positions.0.push(query.single().unwrap().get().x);
+    }
+    let mut app = app(SimulationMode::TurnBased);
+    app.init_resource::<Positions>();
+    app.add_systems(SimulationRefresh, observe.in_set(SimSet::SpatialUpdate));
+    let player = actor(&mut app);
+    let npc = actor(&mut app);
+    app.world_mut()
+        .entity_mut(npc)
+        .insert((Waiting { turns: 2 }, ActivityProgress::default()));
+    app.world_mut().entity_mut(player).insert(DevPlayer);
+    app.world_mut()
+        .get_mut::<ActionPoints>(player)
+        .unwrap()
+        .speed = 200;
+    for step in 0..2 {
+        app.world_mut()
+            .entity_mut(player)
+            .insert(ActionIntent::Move { dx: 1, dy: 0 });
+        app.update();
+        if step == 0 {
+            // NPC work cannot wake world or derived-state updates while the
+            // avatar is waiting for input with moves remaining.
+            for _ in 0..5 {
+                app.update();
+            }
+        }
+    }
+    assert_eq!(app.world().resource::<GameTime>().turn, 1);
+    assert_eq!(app.world().resource::<Positions>().0, vec![1, 2]);
+}
+
 #[test]
 fn manual_steps_use_persistent_system_state_and_run_no_extra_frame_turns() {
     #[derive(Resource, Default)]
@@ -311,7 +468,7 @@ fn rejected_actions_do_not_replay_within_one_turn() {
 }
 
 #[test]
-fn crafters_act_through_their_activity_not_the_action_budget() {
+fn untyped_activity_is_parked_without_consuming_a_queued_action() {
     use cdda_components::activity::ActivityPhase;
     let mut app = app(SimulationMode::Manual);
     let crafter = walker(&mut app, 100);
@@ -329,8 +486,8 @@ fn crafters_act_through_their_activity_not_the_action_budget() {
         .resource_mut::<SimulationControl>()
         .request_steps(1);
     app.update();
-    // Activity actors are excluded from budget selection: their intent waits
-    // and their AP grant is untouched by action resolution this turn.
+    // No activity type describes this progress. Validation parks the actor
+    // without consuming either the queued intent or its AP grant.
     assert!(app.world().get::<ActionIntent>(crafter).is_some());
     assert_eq!(
         app.world().get::<ActionPoints>(crafter).unwrap().current,

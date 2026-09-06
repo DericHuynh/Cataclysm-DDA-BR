@@ -18,20 +18,21 @@ use bevy::prelude::*;
 use bevy_ecs::message::MessageReader;
 use bevy_state::prelude::NextState;
 
-use crate::render::dev_spawn::DevSpawnFocus;
-use cdda_components::context::{push_ctx, ContextStack, Ctx, FocusedCommandIndex};
+use crate::render::crafting_state::{CategoryIndex, CraftModel, CraftState, RecipeFilter};
+use crate::render::dev_spawn::{DevSpawnCatalog, DevSpawnFocus, SpawnFilter};
 use cdda_components::def::ItemName;
 use cdda_components::dev::{DevGroundItemName, DevPlayer};
-use cdda_components::input::{GameAction, InputAction, InputContextId, InputContextStack};
 use cdda_components::intent::ActionIntent;
 use cdda_components::item::{
-    ContainerContents, InsideContainer, InventoryFocus, Invlet, ItemType, MountedOn,
-    MountedPockets, WieldedBy, WieldedItems, WornBy, WornOn,
+    ContainerContents, InsideContainer, Invlet, ItemType, MountedOn, MountedPockets, WieldedBy,
+    WieldedItems, WornBy, WornOn,
 };
 use cdda_components::sim::WorldPosition;
+use cdda_context::state::{push_ctx, ContextStack, Ctx, FocusedCommandIndex};
 use cdda_core_types::sim_id::SimId;
 use cdda_data::interner::ItemTypeRegistry;
-use cdda_sim::crafting::systems::{CategoryIndex, CraftEntry, CraftState, PendingCraft};
+use cdda_input::vocabulary::{GameAction, InputAction, InputContextId, InputContextStack};
+use cdda_sim::crafting::systems::PendingCraft;
 use cdda_sim::inventory::examine_resource::ExaminedItem;
 use cdda_sim::inventory::systems::all_items_for_creature_q;
 use cdda_sim::inventory::transfer::within_reach;
@@ -48,6 +49,8 @@ pub fn crafting_menu_input(
     mut reader: MessageReader<InputAction>,
     mut keyboard: MessageReader<KeyboardInput>,
     mut craft_state: ResMut<CraftState>,
+    model: Res<CraftModel>,
+    mut view: Local<RecipeFilter>,
     mut cat_index: ResMut<CategoryIndex>,
     mut pending: ResMut<PendingCraft>,
     mut input_ctx: ResMut<InputContextStack>,
@@ -178,27 +181,13 @@ pub fn crafting_menu_input(
             }
             GameAction::NavigateUp => {
                 if cat_index.focus_zone == 0 {
-                    let current_top = cat_index
-                        .top_categories
-                        .get(cat_index.selected_top)
-                        .cloned()
-                        .unwrap_or_default();
-                    let subcats: Vec<String> = cat_index
-                        .sub_recipes
-                        .keys()
-                        .filter(|(top, _)| top == &current_top)
-                        .map(|(_, sub)| sub.clone())
-                        .collect();
-                    let sel_sub = cat_index.selected_sub.min(subcats.len().saturating_sub(1));
-                    let current_sub = subcats.get(sel_sub).cloned().unwrap_or_default();
-                    let key = (current_top, current_sub);
-                    let cat_recipes: Vec<Entity> =
-                        cat_index.sub_recipes.get(&key).cloned().unwrap_or_default();
-                    let cat_visible: Vec<&CraftEntry> = craft_state
-                        .visible()
-                        .filter(|e| cat_recipes.contains(&e.recipe_entity))
-                        .collect();
-                    let max = cat_visible.len().saturating_sub(1);
+                    view.update(
+                        &model,
+                        &craft_state,
+                        &cat_index,
+                        (model.last_changed().get(), cat_index.last_changed().get()),
+                    );
+                    let max = view.indices.len().saturating_sub(1);
                     craft_state.focus = if craft_state.focus > max {
                         max
                     } else {
@@ -212,27 +201,13 @@ pub fn crafting_menu_input(
             }
             GameAction::NavigateDown => {
                 if cat_index.focus_zone == 0 {
-                    let current_top = cat_index
-                        .top_categories
-                        .get(cat_index.selected_top)
-                        .cloned()
-                        .unwrap_or_default();
-                    let subcats: Vec<String> = cat_index
-                        .sub_recipes
-                        .keys()
-                        .filter(|(top, _)| top == &current_top)
-                        .map(|(_, sub)| sub.clone())
-                        .collect();
-                    let sel_sub = cat_index.selected_sub.min(subcats.len().saturating_sub(1));
-                    let current_sub = subcats.get(sel_sub).cloned().unwrap_or_default();
-                    let key = (current_top, current_sub);
-                    let cat_recipes: Vec<Entity> =
-                        cat_index.sub_recipes.get(&key).cloned().unwrap_or_default();
-                    let cat_visible: Vec<&CraftEntry> = craft_state
-                        .visible()
-                        .filter(|e| cat_recipes.contains(&e.recipe_entity))
-                        .collect();
-                    let max = cat_visible.len().saturating_sub(1);
+                    view.update(
+                        &model,
+                        &craft_state,
+                        &cat_index,
+                        (model.last_changed().get(), cat_index.last_changed().get()),
+                    );
+                    let max = view.indices.len().saturating_sub(1);
                     craft_state.focus = (craft_state.focus + 1).min(max);
                 } else if cat_index.focus_zone == 1 {
                     cat_index.focus_zone = 2;
@@ -244,50 +219,22 @@ pub fn crafting_menu_input(
                 craft_state.focus = 0;
             }
             GameAction::NavigateEnd => {
-                let current_top = cat_index
-                    .top_categories
-                    .get(cat_index.selected_top)
-                    .cloned()
-                    .unwrap_or_default();
-                let subcats: Vec<String> = cat_index
-                    .sub_recipes
-                    .keys()
-                    .filter(|(top, _)| top == &current_top)
-                    .map(|(_, sub)| sub.clone())
-                    .collect();
-                let sel_sub = cat_index.selected_sub.min(subcats.len().saturating_sub(1));
-                let current_sub = subcats.get(sel_sub).cloned().unwrap_or_default();
-                let key = (current_top, current_sub);
-                let cat_recipes: Vec<Entity> =
-                    cat_index.sub_recipes.get(&key).cloned().unwrap_or_default();
-                let cat_visible: Vec<&CraftEntry> = craft_state
-                    .visible()
-                    .filter(|e| cat_recipes.contains(&e.recipe_entity))
-                    .collect();
-                craft_state.focus = cat_visible.len().saturating_sub(1);
+                view.update(
+                    &model,
+                    &craft_state,
+                    &cat_index,
+                    (model.last_changed().get(), cat_index.last_changed().get()),
+                );
+                craft_state.focus = view.indices.len().saturating_sub(1);
             }
             GameAction::NavigatePageUp => {
-                let current_top = cat_index
-                    .top_categories
-                    .get(cat_index.selected_top)
-                    .cloned()
-                    .unwrap_or_default();
-                let subcats: Vec<String> = cat_index
-                    .sub_recipes
-                    .keys()
-                    .filter(|(top, _)| top == &current_top)
-                    .map(|(_, sub)| sub.clone())
-                    .collect();
-                let sel_sub = cat_index.selected_sub.min(subcats.len().saturating_sub(1));
-                let current_sub = subcats.get(sel_sub).cloned().unwrap_or_default();
-                let key = (current_top, current_sub);
-                let cat_recipes: Vec<Entity> =
-                    cat_index.sub_recipes.get(&key).cloned().unwrap_or_default();
-                let cat_visible: Vec<&CraftEntry> = craft_state
-                    .visible()
-                    .filter(|e| cat_recipes.contains(&e.recipe_entity))
-                    .collect();
-                let max = cat_visible.len().saturating_sub(1);
+                view.update(
+                    &model,
+                    &craft_state,
+                    &cat_index,
+                    (model.last_changed().get(), cat_index.last_changed().get()),
+                );
+                let max = view.indices.len().saturating_sub(1);
                 craft_state.focus = if craft_state.focus > 10 {
                     craft_state.focus.saturating_sub(10)
                 } else {
@@ -298,51 +245,27 @@ pub fn crafting_menu_input(
                 }
             }
             GameAction::NavigatePageDown => {
-                let current_top = cat_index
-                    .top_categories
-                    .get(cat_index.selected_top)
-                    .cloned()
-                    .unwrap_or_default();
-                let subcats: Vec<String> = cat_index
-                    .sub_recipes
-                    .keys()
-                    .filter(|(top, _)| top == &current_top)
-                    .map(|(_, sub)| sub.clone())
-                    .collect();
-                let sel_sub = cat_index.selected_sub.min(subcats.len().saturating_sub(1));
-                let current_sub = subcats.get(sel_sub).cloned().unwrap_or_default();
-                let key = (current_top, current_sub);
-                let cat_recipes: Vec<Entity> =
-                    cat_index.sub_recipes.get(&key).cloned().unwrap_or_default();
-                let cat_visible: Vec<&CraftEntry> = craft_state
-                    .visible()
-                    .filter(|e| cat_recipes.contains(&e.recipe_entity))
-                    .collect();
-                let max = cat_visible.len().saturating_sub(1);
+                view.update(
+                    &model,
+                    &craft_state,
+                    &cat_index,
+                    (model.last_changed().get(), cat_index.last_changed().get()),
+                );
+                let max = view.indices.len().saturating_sub(1);
                 craft_state.focus = (craft_state.focus + 10).min(max);
             }
             GameAction::Confirm => {
-                let current_top = cat_index
-                    .top_categories
-                    .get(cat_index.selected_top)
-                    .cloned()
-                    .unwrap_or_default();
-                let subcats: Vec<String> = cat_index
-                    .sub_recipes
-                    .keys()
-                    .filter(|(top, _)| top == &current_top)
-                    .map(|(_, sub)| sub.clone())
-                    .collect();
-                let sel_sub = cat_index.selected_sub.min(subcats.len().saturating_sub(1));
-                let current_sub = subcats.get(sel_sub).cloned().unwrap_or_default();
-                let key = (current_top, current_sub);
-                let cat_recipes: Vec<Entity> =
-                    cat_index.sub_recipes.get(&key).cloned().unwrap_or_default();
-                let cat_visible: Vec<&CraftEntry> = craft_state
-                    .visible()
-                    .filter(|e| cat_recipes.contains(&e.recipe_entity))
-                    .collect();
-                if let Some(entry) = cat_visible.get(craft_state.focus) {
+                view.update(
+                    &model,
+                    &craft_state,
+                    &cat_index,
+                    (model.last_changed().get(), cat_index.last_changed().get()),
+                );
+                if let Some(entry) = view
+                    .indices
+                    .get(craft_state.focus.min(view.indices.len().saturating_sub(1)))
+                    .map(|&i| &model.entries[i])
+                {
                     if entry.craftable {
                         pending.0 = Some(entry.recipe_entity);
                     }
@@ -350,7 +273,13 @@ pub fn crafting_menu_input(
             }
             GameAction::HotkeyPress('a') => {
                 craft_state.show_all = !craft_state.show_all;
-                let max = craft_state.visible_count().saturating_sub(1);
+                view.update(
+                    &model,
+                    &craft_state,
+                    &cat_index,
+                    (model.last_changed().get(), cat_index.last_changed().get()),
+                );
+                let max = view.indices.len().saturating_sub(1);
                 if craft_state.focus > max {
                     craft_state.focus = max;
                 }
@@ -599,6 +528,8 @@ pub fn dev_spawn_input(
     mut reader: MessageReader<InputAction>,
     mut keyboard: MessageReader<KeyboardInput>,
     mut focus: ResMut<DevSpawnFocus>,
+    catalog: Res<DevSpawnCatalog>,
+    mut view: Local<SpawnFilter>,
     mut input_ctx: ResMut<InputContextStack>,
     mut commands: Commands,
     mut type_registry: ResMut<ItemTypeRegistry>,
@@ -643,7 +574,8 @@ pub fn dev_spawn_input(
         return;
     }
 
-    let total = focus.filtered_entries().len();
+    view.update(&catalog, &focus.filter, catalog.last_changed().get());
+    let total = view.indices.len();
     let clamp = |i: usize| -> usize {
         if total == 0 {
             0
@@ -660,6 +592,8 @@ pub fn dev_spawn_input(
             GameAction::NavigateDown | GameAction::NavigateRight => {
                 focus.index = clamp(focus.index + 1);
             }
+            GameAction::NavigatePageUp => focus.index = clamp(focus.index.saturating_sub(10)),
+            GameAction::NavigatePageDown => focus.index = clamp(focus.index.saturating_add(10)),
             GameAction::NavigateHome => focus.index = 0,
             GameAction::NavigateEnd => focus.index = clamp(total),
             GameAction::Filter => {
@@ -674,8 +608,8 @@ pub fn dev_spawn_input(
                 };
                 // Fetch the selected entry fresh (avoid holding a borrow of
                 // `focus` across the loop where `focus.index` is mutated).
-                let filtered = focus.filtered_entries();
-                let Some(entry) = filtered.get(focus.index) else {
+                let Some(entry) = view.indices.get(focus.index).map(|&i| &catalog.entries[i])
+                else {
                     continue;
                 };
                 let token = type_registry.intern(&entry.def_id);
@@ -858,5 +792,50 @@ mod action_routing_tests {
             100
         );
         assert!(app.world().resource::<Messages<ItemMoveEvent>>().is_empty());
+    }
+}
+
+use super::inventory::InventoryFocus;
+
+/// Item-examine commands only submit intent; live simulation owns all mutations.
+/// A persistent reader leaves the input stream intact for other adapters.
+pub fn examine_item_input(
+    mut reader: MessageReader<InputAction>,
+    mut examined: ResMut<ExaminedItem>,
+    players: Query<(Entity, Option<&ActionIntent>), With<DevPlayer>>,
+    wielded: Query<&WieldedBy>,
+    mut commands: Commands,
+    mut stack: ResMut<ContextStack>,
+    mut next: ResMut<NextState<Ctx>>,
+    mut focused: ResMut<FocusedCommandIndex>,
+) {
+    let actions: Vec<_> = reader.read().map(|e| e.action.clone()).collect();
+    let Some(item) = examined.0 else {
+        return;
+    };
+    let Ok((player, pending)) = players.single() else {
+        return;
+    };
+    for action in actions {
+        let intent = match action {
+            GameAction::Cancel => None,
+            GameAction::Drop => Some(ActionIntent::Drop { item }),
+            GameAction::UseItem => Some(if wielded.get(item).is_ok_and(|w| w.0 == player) {
+                ActionIntent::Stow { item }
+            } else {
+                ActionIntent::Wield { item }
+            }),
+            GameAction::HotkeyPress('r') => Some(ActionIntent::ResumeCraft { craft: item }),
+            _ => continue,
+        };
+        if let Some(intent) = intent {
+            if pending.is_some() {
+                continue;
+            }
+            commands.entity(player).insert(intent);
+        }
+        examined.0 = None;
+        cdda_context::state::pop_ctx(&mut stack, &mut next, &mut focused);
+        break;
     }
 }

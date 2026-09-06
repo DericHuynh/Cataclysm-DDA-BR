@@ -5,6 +5,7 @@ edition = "2021"
 description = "Headless context state machine — Ctx, navigation, focus, overlays, and menu components."
 
 [dependencies]
+cdda_input.workspace = true
 bevy_ecs.workspace = true
 bevy_app.workspace = true
 bevy_state.workspace = true

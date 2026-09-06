@@ -21,7 +21,9 @@ impl Plugin for ActorPlugin {
 
         // Combat
         app.register_type::<DamageReduction>();
-        app.register_type::<CombatStats>();
+        app.register_type::<MeleeCapability>();
+        app.register_type::<DodgeDefense>();
+        app.register_type::<IntrinsicArmor>();
         app.register_type::<Vision>();
 
         // Skills

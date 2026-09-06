@@ -1,9 +1,9 @@
 //! # Activity system — multi-turn player activities
 //!
 //! Implements the activity system from Cataclysm-DDA, translated to Bevy ECS.
-//! Each character can have one activity of each type active simultaneously
-//! (future: multiple via traits/mutations). Every simulation tick, per-activity
-//! systems advance progress.
+//! Each actor has one progress/type pair. The shared budget scheduler selects
+//! either activity work or an action; lifecycle operations own interruption
+//! and reject ambiguous combinations before any work is spent.
 //!
 //! ## Architecture
 //!
@@ -26,3 +26,5 @@ pub use cdda_components::activity::{
     ActivityPhase, ActivityProgress, ActivityTracker, ActivityTypeId, Aiming, Crafting,
     Interacting, Reading, Reloading, Waiting,
 };
+
+pub mod lifecycle;

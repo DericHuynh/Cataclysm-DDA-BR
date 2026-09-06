@@ -16,9 +16,10 @@
 
 use bevy_ecs::message::MessageWriter;
 use bevy_ecs::prelude::*;
-use cdda_components::actor::ActionPoints;
+use cdda_components::actor::{ActionPoints, IsAlive};
 use cdda_components::item::InProgressCraft;
 use cdda_components::messages::CraftCompleted;
+use cdda_components::schedule::ActingEntity;
 
 use crate::actor::turn::AP_COST_CRAFT_TICK;
 use cdda_components::activity::{
@@ -33,17 +34,26 @@ use cdda_components::activity::{
 /// Tick all crafting activities: start, progress, finish.
 pub fn tick_crafting(
     mut commands: Commands,
-    mut query: Query<(
-        Entity,
-        &mut ActivityProgress,
-        &Crafting,
-        Option<&mut ActionPoints>,
-        Option<&mut ActivityTracker>,
-    )>,
+    acting: Option<Res<ActingEntity>>,
+    mut query: Query<
+        (
+            Entity,
+            &mut ActivityProgress,
+            &Crafting,
+            &mut ActionPoints,
+            Option<&mut ActivityTracker>,
+        ),
+        With<IsAlive>,
+    >,
     mut craft_query: Query<&mut InProgressCraft>,
     mut craft_done: MessageWriter<CraftCompleted>,
 ) {
-    for (entity, mut progress, crafting, ap, tracker) in &mut query {
+    let entities = match acting.as_ref() {
+        Some(acting) => vec![acting.0],
+        None => query.iter().map(|row| row.0).collect(),
+    };
+    let mut selected = query.iter_many_mut(entities);
+    while let Some((entity, mut progress, crafting, mut ap, tracker)) = selected.fetch_next() {
         // ── Pending → Active transition ────────────────────────────
         if progress.phase == ActivityPhase::Pending {
             let ap_total = craft_query
@@ -57,25 +67,28 @@ pub fn tick_crafting(
 
         // ── Active: tick ───────────────────────────────────────────
         if progress.phase == ActivityPhase::Active {
-            // Guard: craft entity may have been despawned externally.
-            if craft_query.get(crafting.craft_entity).is_err() {
+            let Ok(mut craft) = craft_query.get_mut(crafting.craft_entity) else {
                 progress.phase = ActivityPhase::Done;
                 progress.moves_left = 0;
                 continue;
+            };
+            // Saved craft work is authoritative, including after interruption.
+            progress.moves_left = craft.ap_total.saturating_sub(craft.ap_spent).max(0);
+            // Master craft_activity_actor::do_turn spends the whole available
+            // budget, including overshoot on completion. Neutral speed only;
+            // crafting/exertion modifiers are a separate compatibility slice.
+            let budget = ap.current.max(0);
+            let work = budget.min(progress.moves_left);
+            ap.spend(budget);
+            if work == 0 && progress.moves_left > 0 {
+                continue;
             }
-
-            // Spend AP and advance craft progress.
-            if let Some(mut ap) = ap {
-                ap.spend(AP_COST_CRAFT_TICK);
-            }
+            craft.ap_spent = craft.ap_spent.saturating_add(work).min(craft.ap_total);
             if let Some(mut tracker) = tracker {
                 tracker.log_activity(BRISK_EXERCISE);
             }
 
-            if let Ok(mut craft) = craft_query.get_mut(crafting.craft_entity) {
-                craft.ap_spent += AP_COST_CRAFT_TICK;
-            }
-            progress.moves_left -= AP_COST_CRAFT_TICK;
+            progress.moves_left -= work;
             if progress.moves_left <= 0 {
                 progress.phase = ActivityPhase::Done;
             }
@@ -100,18 +113,31 @@ pub fn tick_crafting(
 /// Tick all aiming activities: start, progress, finish.
 pub fn tick_aiming(
     mut commands: Commands,
-    mut query: Query<(
-        Entity,
-        &mut ActivityProgress,
-        &mut Aiming,
-        Option<&mut ActivityTracker>,
-    )>,
+    acting: Option<Res<ActingEntity>>,
+    mut query: Query<
+        (
+            Entity,
+            &mut ActivityProgress,
+            &mut Aiming,
+            &mut ActionPoints,
+            Option<&mut ActivityTracker>,
+        ),
+        With<IsAlive>,
+    >,
 ) {
-    for (entity, mut progress, mut aiming, tracker) in &mut query {
+    let entities = match acting.as_ref() {
+        Some(acting) => vec![acting.0],
+        None => query.iter().map(|row| row.0).collect(),
+    };
+    let mut selected = query.iter_many_mut(entities);
+    while let Some((entity, mut progress, mut aiming, mut ap, tracker)) = selected.fetch_next() {
         if progress.phase == ActivityPhase::Pending {
-            // Aim is NEITHER-based; tick drives it.
-            progress.moves_total = -1;
-            progress.moves_left = 1;
+            // Native approximation: 20 AP per percentage point of aim.
+            progress.moves_total =
+                i32::try_from(aiming.target_aim_percent.saturating_sub(aiming.cur_aim))
+                    .unwrap_or(i32::MAX)
+                    .saturating_mul(20);
+            progress.moves_left = progress.moves_total;
             progress.phase = ActivityPhase::Active;
         }
 
@@ -119,7 +145,14 @@ pub fn tick_aiming(
             if let Some(mut t) = tracker {
                 t.log_activity(LIGHT_EXERCISE);
             }
-            aiming.cur_aim = (aiming.cur_aim + 5).min(aiming.target_aim_percent);
+            let work = spend_work(&mut ap, progress.moves_left);
+            if work == 0 && progress.moves_left > 0 {
+                continue;
+            }
+            progress.moves_left -= work;
+            aiming.cur_aim = aiming
+                .target_aim_percent
+                .saturating_sub(((i64::from(progress.moves_left) + 19) / 20) as u32);
             if aiming.cur_aim >= aiming.target_aim_percent {
                 progress.phase = ActivityPhase::Done;
             }
@@ -140,17 +173,27 @@ pub fn tick_aiming(
 /// Tick all reading activities: start, progress, finish.
 pub fn tick_reading(
     mut commands: Commands,
-    mut query: Query<(
-        Entity,
-        &mut ActivityProgress,
-        &mut Reading,
-        Option<&mut ActivityTracker>,
-    )>,
+    acting: Option<Res<ActingEntity>>,
+    mut query: Query<
+        (
+            Entity,
+            &mut ActivityProgress,
+            &mut Reading,
+            &mut ActionPoints,
+            Option<&mut ActivityTracker>,
+        ),
+        With<IsAlive>,
+    >,
 ) {
-    for (entity, mut progress, mut reading, tracker) in &mut query {
+    let entities = match acting.as_ref() {
+        Some(acting) => vec![acting.0],
+        None => query.iter().map(|row| row.0).collect(),
+    };
+    let mut selected = query.iter_many_mut(entities);
+    while let Some((entity, mut progress, mut reading, mut ap, tracker)) = selected.fetch_next() {
         if progress.phase == ActivityPhase::Pending {
-            progress.moves_total = reading.turns_total * 100;
-            progress.moves_left = reading.turns_total * 100;
+            progress.moves_total = reading.turns_total.max(0).saturating_mul(100);
+            progress.moves_left = reading.turns_total.max(0).saturating_mul(100);
             progress.phase = ActivityPhase::Active;
         }
 
@@ -158,8 +201,12 @@ pub fn tick_reading(
             if let Some(mut t) = tracker {
                 t.log_activity(NO_EXERCISE);
             }
-            reading.turns_read += 1;
-            progress.moves_left -= 100;
+            let work = spend_time(&mut ap, progress.moves_left);
+            if work == 0 && progress.moves_left > 0 {
+                continue;
+            }
+            progress.moves_left -= work;
+            reading.turns_read = (progress.moves_total - progress.moves_left) / 100;
             if progress.moves_left <= 0 {
                 progress.phase = ActivityPhase::Done;
             }
@@ -180,17 +227,27 @@ pub fn tick_reading(
 /// Tick all waiting activities: start, progress, finish.
 pub fn tick_waiting(
     mut commands: Commands,
-    mut query: Query<(
-        Entity,
-        &mut ActivityProgress,
-        &Waiting,
-        Option<&mut ActivityTracker>,
-    )>,
+    acting: Option<Res<ActingEntity>>,
+    mut query: Query<
+        (
+            Entity,
+            &mut ActivityProgress,
+            &Waiting,
+            &mut ActionPoints,
+            Option<&mut ActivityTracker>,
+        ),
+        With<IsAlive>,
+    >,
 ) {
-    for (entity, mut progress, waiting, tracker) in &mut query {
+    let entities = match acting.as_ref() {
+        Some(acting) => vec![acting.0],
+        None => query.iter().map(|row| row.0).collect(),
+    };
+    let mut selected = query.iter_many_mut(entities);
+    while let Some((entity, mut progress, waiting, mut ap, tracker)) = selected.fetch_next() {
         if progress.phase == ActivityPhase::Pending {
-            progress.moves_total = waiting.turns * 100;
-            progress.moves_left = waiting.turns * 100;
+            progress.moves_total = waiting.turns.max(0).saturating_mul(100);
+            progress.moves_left = waiting.turns.max(0).saturating_mul(100);
             progress.phase = ActivityPhase::Active;
         }
 
@@ -198,7 +255,11 @@ pub fn tick_waiting(
             if let Some(mut t) = tracker {
                 t.log_activity(NO_EXERCISE);
             }
-            progress.moves_left -= 100;
+            let work = spend_time(&mut ap, progress.moves_left);
+            if work == 0 && progress.moves_left > 0 {
+                continue;
+            }
+            progress.moves_left -= work;
             if progress.moves_left <= 0 {
                 progress.phase = ActivityPhase::Done;
             }
@@ -219,14 +280,24 @@ pub fn tick_waiting(
 /// Tick all reloading activities: start, progress, finish.
 pub fn tick_reloading(
     mut commands: Commands,
-    mut query: Query<(
-        Entity,
-        &mut ActivityProgress,
-        &Reloading,
-        Option<&mut ActivityTracker>,
-    )>,
+    acting: Option<Res<ActingEntity>>,
+    mut query: Query<
+        (
+            Entity,
+            &mut ActivityProgress,
+            &Reloading,
+            &mut ActionPoints,
+            Option<&mut ActivityTracker>,
+        ),
+        With<IsAlive>,
+    >,
 ) {
-    for (entity, mut progress, reloading, tracker) in &mut query {
+    let entities = match acting.as_ref() {
+        Some(acting) => vec![acting.0],
+        None => query.iter().map(|row| row.0).collect(),
+    };
+    let mut selected = query.iter_many_mut(entities);
+    while let Some((entity, mut progress, reloading, mut ap, tracker)) = selected.fetch_next() {
         if progress.phase == ActivityPhase::Pending {
             let base =
                 (reloading.quantity as f32 * 100.0 / reloading.speed_factor.max(0.01)) as i32;
@@ -239,7 +310,11 @@ pub fn tick_reloading(
             if let Some(mut t) = tracker {
                 t.log_activity(LIGHT_EXERCISE);
             }
-            progress.moves_left -= 100;
+            let work = spend_work(&mut ap, progress.moves_left);
+            if work == 0 && progress.moves_left > 0 {
+                continue;
+            }
+            progress.moves_left -= work;
             if progress.moves_left <= 0 {
                 progress.phase = ActivityPhase::Done;
             }
@@ -260,17 +335,27 @@ pub fn tick_reloading(
 /// Tick all generic interaction activities: start, progress, finish.
 pub fn tick_interacting(
     mut commands: Commands,
-    mut query: Query<(
-        Entity,
-        &mut ActivityProgress,
-        &Interacting,
-        Option<&mut ActivityTracker>,
-    )>,
+    acting: Option<Res<ActingEntity>>,
+    mut query: Query<
+        (
+            Entity,
+            &mut ActivityProgress,
+            &Interacting,
+            &mut ActionPoints,
+            Option<&mut ActivityTracker>,
+        ),
+        With<IsAlive>,
+    >,
 ) {
-    for (entity, mut progress, interacting, tracker) in &mut query {
+    let entities = match acting.as_ref() {
+        Some(acting) => vec![acting.0],
+        None => query.iter().map(|row| row.0).collect(),
+    };
+    let mut selected = query.iter_many_mut(entities);
+    while let Some((entity, mut progress, interacting, mut ap, tracker)) = selected.fetch_next() {
         if progress.phase == ActivityPhase::Pending {
-            progress.moves_total = interacting.duration * 100;
-            progress.moves_left = interacting.duration * 100;
+            progress.moves_total = interacting.duration.max(0).saturating_mul(100);
+            progress.moves_left = interacting.duration.max(0).saturating_mul(100);
             progress.phase = ActivityPhase::Active;
         }
 
@@ -278,7 +363,11 @@ pub fn tick_interacting(
             if let Some(mut t) = tracker {
                 t.log_activity(MODERATE_EXERCISE);
             }
-            progress.moves_left -= 100;
+            let work = spend_time(&mut ap, progress.moves_left);
+            if work == 0 && progress.moves_left > 0 {
+                continue;
+            }
+            progress.moves_left -= work;
             if progress.moves_left <= 0 {
                 progress.phase = ActivityPhase::Done;
             }
@@ -302,13 +391,49 @@ pub fn tick_interacting(
 /// craft entities, or activities that missed their finish step.
 pub fn cleanup_done_activities(
     mut commands: Commands,
+    acting: Option<Res<ActingEntity>>,
     q_progress: Query<(Entity, &ActivityProgress)>,
 ) {
     for (entity, progress) in &q_progress {
-        if progress.phase == ActivityPhase::Done {
-            // Remove the progress component; the type component stays
-            // and will be cleaned up by the next tick cycle or this one.
-            commands.entity(entity).remove::<ActivityProgress>();
+        if acting.as_ref().is_none_or(|a| a.0 == entity) && progress.phase == ActivityPhase::Done {
+            commands.entity(entity).remove::<(
+                ActivityProgress,
+                Crafting,
+                Aiming,
+                Reading,
+                Waiting,
+                Reloading,
+                Interacting,
+            )>();
         }
     }
+}
+
+/// Bounded speed-based work for aim and reload. No activity debt.
+fn spend_work(ap: &mut ActionPoints, remaining: i32) -> i32 {
+    let work = ap
+        .current
+        .max(0)
+        .min(remaining.max(0))
+        .min(AP_COST_CRAFT_TICK);
+    if work > 0 {
+        ap.spend(work);
+    }
+    work
+}
+
+/// Elapsed-time work advances at most one second, consuming this turn's budget.
+/// A partial final second leaves the proportional budget available for actions.
+fn spend_time(ap: &mut ActionPoints, remaining: i32) -> i32 {
+    if ap.current <= 0 {
+        return 0;
+    }
+    let work = remaining.clamp(0, 100);
+    // Match player_activity's TIME branch: integer truncation, including zero
+    // cost for a sufficiently short final fragment. Completion is still work.
+    let cost = (i64::from(ap.current) * i64::from(work) / 100) as i32;
+    if cost > 0 {
+        ap.spend(cost);
+    }
+    work
 }

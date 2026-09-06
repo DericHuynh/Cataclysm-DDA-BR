@@ -12,7 +12,7 @@ use leafwing_input_manager::prelude::{ButtonlikeChord, InputMap, ModifierKey, Us
 use leafwing_input_manager::user_input::Buttonlike;
 
 use crate::actions::BindableAction;
-use cdda_components::input::InputContextId;
+use crate::vocabulary::InputContextId;
 
 // ---------------------------------------------------------------------------
 // ContextInputMaps

@@ -147,9 +147,10 @@ pub struct UseItemEvent {
     pub item: Entity,
 }
 
-/// An item moved between locations (ground, container, wielded, worn).
+/// Legacy whole-stack move request; submission does not imply completion.
 ///
-/// Buffered message — processed in batch by `process_item_move_events`.
+/// The inventory adapter validates live source/count, actor, ownership, capacity
+/// and AP synchronously, then publishes ItemMoveResult. Prefer ActionIntent.
 #[derive(Message, Debug, Clone)]
 pub struct ItemMoveEvent {
     /// The item entity being moved.
@@ -158,8 +159,16 @@ pub struct ItemMoveEvent {
     pub from: super::events::MoveLocation,
     /// Where the item is going (entity container or WorldPos on ground).
     pub to: super::events::MoveLocation,
-    /// How many items in the stack were moved.
+    /// Expected whole-stack count; partial movement is unsupported.
     pub count: u32,
+}
+
+/// Terminal verdict for a legacy move request. Rejection has no mutation or AP cost.
+#[derive(Message, Debug, Clone)]
+pub struct ItemMoveResult {
+    pub request: ItemMoveEvent,
+    pub accepted: bool,
+    pub reason: Option<String>,
 }
 
 /// A sound was produced in the world (AI reacts to these).

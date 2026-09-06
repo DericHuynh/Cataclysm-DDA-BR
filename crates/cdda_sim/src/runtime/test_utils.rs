@@ -146,7 +146,9 @@ impl TestBed {
         world.register_component::<Fireproof>();
         world.register_component::<GasTight>();
         world.register_component::<Creature>();
-        world.register_component::<CombatStats>();
+        world.register_component::<MeleeCapability>();
+        world.register_component::<DodgeDefense>();
+        world.register_component::<IntrinsicArmor>();
         world.register_component::<Vision>();
         world.register_component::<Health>();
         world.register_component::<Faction>();

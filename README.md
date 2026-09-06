@@ -32,6 +32,8 @@ cargo run -p cdda_app
 | Crate | Purpose | Bevy Deps |
 |-------|---------|-----------|
 | `cdda_core` | Pure domain types (units, coords, IDs) | None |
+| `cdda_catalog` | Native catalog, typed indexes and session tokens | ECS |
+| `cdda_ui` | Generic virtual lists and scroll systems | Bevy UI |
 | `cdda_data` | JSON loading, copy-from resolver, ACL | None |
 | `cdda_sim` | Simulation: components, systems, tick loop | `bevy_ecs`, `bevy_reflect` |
 | `cdda_map` | Map storage, mapgen, FOV, pathfinding | None |

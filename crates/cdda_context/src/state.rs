@@ -5,7 +5,7 @@
 use bevy_ecs::prelude::*;
 use bevy_state::prelude::*;
 
-use crate::input::BindableAction;
+use cdda_input::BindableAction;
 
 // ---------------------------------------------------------------------------
 // ContextAction / ContextActions — UI action list resource

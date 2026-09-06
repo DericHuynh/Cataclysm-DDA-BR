@@ -110,15 +110,18 @@ pub(crate) fn apply_registry_to_world(
 
     // Validate the terrain reload before mutating any definition-dependent world
     // state. Existing chunks hold process-local slots which must not be reused.
-    let terrain_registry =
-        match build_terrain_registry(registry, world.get_resource::<TerrainRegistry>()) {
-            Ok(terrain_registry) => terrain_registry,
-            Err(error) => {
-                tracing::error!(%error, "Definition reload rejected; existing terrain IDs must remain available");
-                world.resource_mut::<LoadingStatus>().current_phase = format!("Reload rejected: {error}");
-                return false;
-            }
-        };
+    let terrain_registry = match build_terrain_registry(
+        registry,
+        world.get_resource::<TerrainRegistry>(),
+    ) {
+        Ok(terrain_registry) => terrain_registry,
+        Err(error) => {
+            tracing::error!(%error, "Definition reload rejected; existing terrain IDs must remain available");
+            world.resource_mut::<LoadingStatus>().current_phase =
+                format!("Reload rejected: {error}");
+            return false;
+        }
+    };
 
     world.resource_mut::<LoadingStatus>().current_phase = "Building definition entities...".into();
     let def_world = build_def_world(world, registry, true);
@@ -455,164 +458,9 @@ pub fn worldgen_system(world: &mut World) {
     }
 }
 
-// ===========================================================================
-// Constants
-// ===========================================================================
-
-const FLOOR_CAP_ML: u32 = 4_000_000;
-
-// ===========================================================================
-// Examine overlay — item actions (drop, wield, resume craft)
-// ===========================================================================
-
-use cdda_components::actor::{ActionPoints, HandCount};
-use cdda_components::def::ItemVolume;
+use cdda_components::actor::HandCount;
 use cdda_components::dev::{DevCamera, DevPlayer};
-use cdda_components::input::{GameAction, InputAction};
-use cdda_components::item::{InsideContainer, Invlet, MountedPockets, WieldedBy, WieldedItems};
 use cdda_components::sim::WorldPosition;
-use cdda_context::ctx::Ctx;
-use cdda_context::{ContextStack, FocusedCommandIndex};
-use cdda_sim::inventory::examine_resource::ExaminedItem;
-
-use cdda_sim::actor::turn::AP_COST_WIELD;
-
-pub fn examine_item_input(world: &mut World) {
-    let actions: Vec<GameAction> = {
-        let mut messages = world.resource_mut::<bevy_ecs::message::Messages<InputAction>>();
-        messages.update();
-        messages.drain().map(|e| e.action.clone()).collect()
-    };
-    if actions.is_empty() {
-        return;
-    }
-
-    let item_entity = match world.resource::<ExaminedItem>().0 {
-        Some(e) => e,
-        None => return,
-    };
-
-    let player_entity = {
-        let mut q = world.query_filtered::<Entity, With<DevPlayer>>();
-        match q.iter(world).next() {
-            Some(e) => e,
-            None => return,
-        }
-    };
-
-    let hand_limit = world
-        .get::<HandCount>(player_entity)
-        .map(|h| h.0 as usize)
-        .unwrap_or(0);
-
-    let camera = world.resource::<DevCamera>().clone();
-
-    for action in actions {
-        match action {
-            GameAction::Cancel => {
-                *world.resource_mut::<ExaminedItem>() = ExaminedItem(None);
-                let parent = world.resource_mut::<ContextStack>().0.pop();
-                if let Some(p) = parent {
-                    world.resource_mut::<FocusedCommandIndex>().on_pop(p);
-                    world.resource_mut::<NextState<Ctx>>().set(p);
-                }
-            }
-            GameAction::Drop => {
-                let item_vol = world
-                    .get::<ItemVolume>(item_entity)
-                    .map(|v| v.0)
-                    .unwrap_or(0);
-
-                let floor_volume: u32 = {
-                    let mut q = world.query::<(&WorldPosition, Option<&ItemVolume>)>();
-                    q.iter(world)
-                        .filter(|(wp, _)| {
-                            wp.0.x.div_euclid(TILES_PER_OMT) == camera.x
-                                && wp.0.y.div_euclid(TILES_PER_OMT) == camera.y
-                                && wp.0.z.0 as i32 == camera.z
-                        })
-                        .filter_map(|(_, vol)| vol.map(|v| v.0))
-                        .sum()
-                };
-                if floor_volume + item_vol > FLOOR_CAP_ML {
-                    continue;
-                }
-
-                let drop_pos = WorldPos::new(
-                    camera.x * TILES_PER_OMT,
-                    camera.y * TILES_PER_OMT,
-                    ZLevel::new(camera.z as i8),
-                );
-
-                world
-                    .entity_mut(item_entity)
-                    .remove::<InsideContainer>()
-                    .remove::<WieldedBy>()
-                    .remove::<Invlet>()
-                    .insert(WorldPosition(drop_pos));
-
-                *world.resource_mut::<ExaminedItem>() = ExaminedItem(None);
-                let parent = world.resource_mut::<ContextStack>().0.pop();
-                if let Some(p) = parent {
-                    world.resource_mut::<FocusedCommandIndex>().on_pop(p);
-                    world.resource_mut::<NextState<Ctx>>().set(p);
-                }
-            }
-            GameAction::UseItem => {
-                let is_wielded = world.get::<WieldedBy>(item_entity).is_some();
-                if is_wielded {
-                    let body_pocket = {
-                        let mp = world.get::<MountedPockets>(player_entity);
-                        mp.and_then(|mp| mp.iter().next()).unwrap_or(player_entity)
-                    };
-                    world
-                        .entity_mut(item_entity)
-                        .remove::<WieldedBy>()
-                        .insert(InsideContainer(body_pocket));
-                } else {
-                    let wielded_count = world
-                        .get::<WieldedItems>(player_entity)
-                        .map(|wi| wi.iter().count())
-                        .unwrap_or(0);
-                    if wielded_count < hand_limit {
-                        world
-                            .entity_mut(item_entity)
-                            .remove::<InsideContainer>()
-                            .insert(WieldedBy(player_entity));
-                    } else {
-                        continue;
-                    }
-                }
-                if let Some(mut ap) = world.get_mut::<ActionPoints>(player_entity) {
-                    ap.spend(AP_COST_WIELD);
-                }
-                *world.resource_mut::<ExaminedItem>() = ExaminedItem(None);
-                let parent = world.resource_mut::<ContextStack>().0.pop();
-                if let Some(p) = parent {
-                    world.resource_mut::<FocusedCommandIndex>().on_pop(p);
-                    world.resource_mut::<NextState<Ctx>>().set(p);
-                }
-            }
-            GameAction::HotkeyPress('r') => {
-                match cdda_sim::crafting::systems::resume_craft(world, player_entity, item_entity) {
-                    Ok(()) => {}
-                    Err(_e) => {}
-                }
-                *world.resource_mut::<ExaminedItem>() = ExaminedItem(None);
-                let parent = world.resource_mut::<ContextStack>().0.pop();
-                if let Some(p) = parent {
-                    world.resource_mut::<FocusedCommandIndex>().on_pop(p);
-                    world.resource_mut::<NextState<Ctx>>().set(p);
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
-// ===========================================================================
-// Dev-world — spawn player at origin
-// ===========================================================================
 
 pub fn spawn_dev_world(world: &mut World) {
     use tracing::info;

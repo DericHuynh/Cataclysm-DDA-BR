@@ -22,4 +22,9 @@ Owns project documentation, architecture notes, and durable design records.
 - No automated documentation verification is configured yet.
 
 ## Child DOX Index
-No durable sub-boundaries. This folder currently contains only the `AGENTS.md` for this subtree.
+No durable sub-boundaries.
+
+- `ecs-compatibility-baseline.md` — Source/content hashes, ownership/reference audit and native-family capability report.
+- `ecs-modularity-and-json-compatibility-plan.md` — Staged ECS ownership, catalog/import separation, reusable UI, and original-CDDA content compatibility plan; includes source evidence and acceptance gates.
+
+- `master-semantics-audit.md` — Player-visible comparison with the pinned sibling master source; confirmed mismatches, limited aligned cases and continuation gate.

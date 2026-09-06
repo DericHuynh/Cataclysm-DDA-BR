@@ -16,11 +16,11 @@ use bevy_ecs::prelude::*;
 use bevy_state::prelude::*;
 
 use cdda_core_types::core::coords::WorldPos;
-use cdda_components::input::{GameAction, InputAction};
+use cdda_input::vocabulary::{GameAction, InputAction};
 
+use crate::ctx::Ctx;
 use crate::cursor::ExamineCursor;
 use crate::menu::{MenuItem, SelectedIndex};
-use crate::ctx::Ctx;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -129,10 +129,11 @@ pub fn ctx_and_cursor(
         // ── Examine cursor movement ────────────────────────────
         if *screen.get() == Ctx::ExamineLook {
             if let Some((dx, dy)) = movement_delta(&event.action) {
-                let current =
-                    cursor
-                        .tile
-                        .unwrap_or(WorldPos::new(0, 0, cdda_core_types::core::coords::ZLevel::new(0)));
+                let current = cursor.tile.unwrap_or(WorldPos::new(
+                    0,
+                    0,
+                    cdda_core_types::core::coords::ZLevel::new(0),
+                ));
                 cursor.tile = Some(WorldPos::new(current.x + dx, current.y + dy, current.z));
             }
         }
@@ -147,14 +148,14 @@ pub fn ctx_and_cursor(
 fn movement_delta(action: &GameAction) -> Option<(i32, i32)> {
     match action {
         GameAction::Move(dir) => match dir {
-            cdda_components::input::Direction::North => Some((0, -1)),
-            cdda_components::input::Direction::South => Some((0, 1)),
-            cdda_components::input::Direction::West => Some((-1, 0)),
-            cdda_components::input::Direction::East => Some((1, 0)),
-            cdda_components::input::Direction::NorthWest => Some((-1, -1)),
-            cdda_components::input::Direction::NorthEast => Some((1, -1)),
-            cdda_components::input::Direction::SouthWest => Some((-1, 1)),
-            cdda_components::input::Direction::SouthEast => Some((1, 1)),
+            cdda_input::vocabulary::Direction::North => Some((0, -1)),
+            cdda_input::vocabulary::Direction::South => Some((0, 1)),
+            cdda_input::vocabulary::Direction::West => Some((-1, 0)),
+            cdda_input::vocabulary::Direction::East => Some((1, 0)),
+            cdda_input::vocabulary::Direction::NorthWest => Some((-1, -1)),
+            cdda_input::vocabulary::Direction::NorthEast => Some((1, -1)),
+            cdda_input::vocabulary::Direction::SouthWest => Some((-1, 1)),
+            cdda_input::vocabulary::Direction::SouthEast => Some((1, 1)),
             _ => None,
         },
         _ => None,

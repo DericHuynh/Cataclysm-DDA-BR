@@ -2,7 +2,7 @@
 //!
 //! Spawned on `OnEnter(Ctx::CraftingMenu)`, auto-despawned via `DespawnOnExit`.
 //! The layout skeleton is built once in `spawn_crafting_ui`; content is rebuilt
-//! each frame in `update_crafting_ui`.
+//! on changes in `update_crafting_ui`.
 //!
 //! Layout (top to bottom):
 //!   1. Header bar — "CRAFTING" title, recipe count / position
@@ -15,8 +15,11 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
+use cdda_ui::{RetainedRows, RowCell, TextRow};
 
+use super::scroll::{sync_virtual_pane, FocusedRow, VirtualList};
 use super::FooterHint;
+use crate::render::crafting_state::{CategoryIndex, CraftState};
 use crate::render::item_detail::{spawn_item_detail, ItemDetailQueries};
 use crate::render::theme::{self, UiTheme};
 use cdda_context::ctx::Ctx;
@@ -27,7 +30,6 @@ use cdda_data::interner::{
     SkillRegistry,
 };
 use cdda_input::BindableAction;
-use cdda_sim::crafting::systems::{CategoryIndex, CraftEntry, CraftState};
 
 // ---------------------------------------------------------------------------
 // Marker components for targeted content rebuild
@@ -98,7 +100,21 @@ pub struct CraftingContainers<'w, 's> {
     pub header: Query<'w, 's, Entity, With<HeaderContainer>>,
     pub cat_tabs: Query<'w, 's, Entity, With<CategoryTabsContainer>>,
     pub sub_tabs: Query<'w, 's, Entity, With<SubcategoryTabsContainer>>,
-    pub list: Query<'w, 's, Entity, With<RecipeListContainer>>,
+    pub counter: Query<'w, 's, &'static mut Text, With<RecipeCounter>>,
+    pub heading: Query<'w, 's, &'static mut TextColor, With<RecipeHeading>>,
+    pub list: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static mut VirtualList,
+            &'static mut FocusedRow,
+            &'static mut ScrollPosition,
+            &'static ComputedNode,
+            &'static mut RetainedRows<Option<String>>,
+        ),
+        With<RecipeListContainer>,
+    >,
     pub detail: Query<'w, 's, Entity, With<DetailPanelContainer>>,
     pub item_detail: Query<'w, 's, Entity, With<ItemDetailPanelContainer>>,
     pub filter: Query<'w, 's, Entity, With<FilterBarContainer>>,
@@ -109,9 +125,14 @@ pub struct CraftingContainers<'w, 's> {
 // spawn_crafting_ui — OnEnter system (root shell only)
 // ---------------------------------------------------------------------------
 
+#[derive(Component)]
+pub struct RecipeCounter;
+#[derive(Component)]
+pub struct RecipeHeading;
+
 /// Spawn the persistent root wrapper for the crafting menu.
-/// Content is rebuilt each frame by `update_crafting_ui`.
-pub fn spawn_crafting_ui(mut commands: Commands, _theme: &UiTheme) {
+/// Content is retained until its data, selection, theme, or visible window changes.
+pub fn spawn_crafting_ui(mut commands: Commands, theme: &UiTheme) {
     commands
         .spawn((
             DespawnOnExit(Ctx::CraftingMenu),
@@ -130,11 +151,32 @@ pub fn spawn_crafting_ui(mut commands: Commands, _theme: &UiTheme) {
                 HeaderContainer,
                 Node {
                     width: Val::Percent(100.0),
+                    flex_shrink: 0.0,
                     padding: UiRect::axes(Val::Px(16.0), Val::Px(8.0)),
                     ..default()
                 },
                 BackgroundColor(theme::HEADER_BG),
-            ));
+            ))
+            .with_children(|header| {
+                header.spawn((
+                    RecipeHeading,
+                    Text::new("CRAFTING"),
+                    TextFont {
+                        font_size: 22.0,
+                        ..default()
+                    },
+                    TextColor(theme.accent()),
+                ));
+                header.spawn((
+                    RecipeCounter,
+                    Text::new(""),
+                    TextFont {
+                        font_size: 13.0,
+                        ..default()
+                    },
+                    TextColor(theme::TEXT_DIM),
+                ));
+            });
 
             // ── 2. Top-level category tabs ────────────────────────────────
             root.spawn((
@@ -169,15 +211,21 @@ pub fn spawn_crafting_ui(mut commands: Commands, _theme: &UiTheme) {
                 width: Val::Percent(100.0),
                 flex_grow: 1.0,
                 flex_direction: FlexDirection::Row,
-                min_height: Val::Px(300.0),
+                min_height: Val::Px(0.0),
+                overflow: Overflow::clip(),
                 ..default()
             },))
                 .with_children(|body| {
                     // Left: recipe list
                     body.spawn((
                         RecipeListContainer,
+                        RetainedRows::<Option<String>>::default(),
                         crate::render::scroll::KeyboardScroll,
                         crate::render::scroll::FocusedRow::default(),
+                        VirtualList {
+                            row_height: 36.0,
+                            ..default()
+                        },
                         ScrollPosition::default(),
                         Node {
                             width: Val::Percent(45.0),
@@ -226,6 +274,7 @@ pub fn spawn_crafting_ui(mut commands: Commands, _theme: &UiTheme) {
                 FilterBarContainer,
                 Node {
                     width: Val::Percent(100.0),
+                    flex_shrink: 0.0,
                     padding: UiRect::axes(Val::Px(12.0), Val::Px(6.0)),
                     ..default()
                 },
@@ -237,6 +286,7 @@ pub fn spawn_crafting_ui(mut commands: Commands, _theme: &UiTheme) {
                 FooterContainer,
                 Node {
                     width: Val::Percent(100.0),
+                    flex_shrink: 0.0,
                     padding: UiRect::axes(Val::Px(12.0), Val::Px(5.0)),
                     border: UiRect::top(Val::Px(1.0)),
                     ..default()
@@ -264,9 +314,11 @@ pub fn spawn_crafting_ui(mut commands: Commands, _theme: &UiTheme) {
 pub fn update_crafting_ui(
     mut commands: Commands,
     state: Res<CraftState>,
+    model: Res<super::crafting_state::CraftModel>,
     cat_index: Res<CategoryIndex>,
     def_world: Res<DefinitionWorld>,
-    containers: CraftingContainers,
+    mut containers: CraftingContainers,
+    mut cache: Local<CraftingPresentation>,
     defs: ItemDetailQueries,
     quality_registry: Res<QualityRegistry>,
     skill_registry: Res<SkillRegistry>,
@@ -275,10 +327,10 @@ pub fn update_crafting_ui(
     comestible_registry: Res<ComestibleRegistry>,
     theme: Res<UiTheme>,
 ) {
-    let Ok(_root) = containers.root.single() else {
+    let Ok(root) = containers.root.single() else {
         return;
     };
-    let Ok(header) = containers.header.single() else {
+    let Ok(_header) = containers.header.single() else {
         return;
     };
     let Ok(cat_tabs) = containers.cat_tabs.single() else {
@@ -287,7 +339,9 @@ pub fn update_crafting_ui(
     let Ok(sub_tabs) = containers.sub_tabs.single() else {
         return;
     };
-    let Ok(list) = containers.list.single() else {
+    let Ok((list, mut virtual_list, mut selected_row, mut position, computed, mut retained)) =
+        containers.list.single_mut()
+    else {
         return;
     };
     let Ok(detail) = containers.detail.single() else {
@@ -303,11 +357,51 @@ pub fn update_crafting_ui(
         return;
     };
 
+    let root_changed = cache.root != Some(root);
+    let tabs_changed = root_changed || cat_index.is_changed() || theme.is_changed();
+    let content_changed = root_changed
+        || state.is_changed()
+        || model.is_changed()
+        || cat_index.is_changed()
+        || theme.is_changed()
+        || def_world.is_changed()
+        || quality_registry.is_changed()
+        || skill_registry.is_changed()
+        || ammo_registry.is_changed()
+        || body_part_registry.is_changed()
+        || comestible_registry.is_changed();
+    if !content_changed && !virtual_list.is_changed() {
+        return;
+    }
+    cache.filter.update(
+        &model,
+        &state,
+        &cat_index,
+        (model.last_changed().get(), cat_index.last_changed().get()),
+    );
+    let category = (
+        cat_index.selected_top,
+        cat_index.selected_sub,
+        state.filter.clone(),
+        state.show_all,
+    );
+    let reset = cache.root != Some(root) || cache.category != category;
+    cache.root = Some(root);
+    cache.category = category;
+    sync_virtual_pane(
+        &mut virtual_list,
+        &mut selected_row,
+        &mut position,
+        computed,
+        cache.filter.indices.len(),
+        state.focus,
+        reset,
+    );
+
     let focus = state.focus;
     let show_all = state.show_all;
     let filtering = state.filtering;
     let filter = state.filter.clone();
-    let _total_visible = state.visible_count();
     let focus_zone = cat_index.focus_zone;
     let last_message = state.last_message.clone();
 
@@ -332,260 +426,182 @@ pub fn update_crafting_ui(
     let sel_sub = cat_index
         .selected_sub
         .min(subcats_for_top.len().saturating_sub(1));
-    let current_sub = subcats_for_top.get(sel_sub).cloned().unwrap_or_default();
 
-    // Get recipes in the current (top, sub) pair
-    let current_key = (current_top.clone(), current_sub.clone());
-    let category_recipes: Vec<Entity> = cat_index
-        .sub_recipes
-        .get(&current_key)
-        .cloned()
-        .unwrap_or_default();
-
-    // Filter visible entries to the current category/subcategory
-    let category_filtered: Vec<&CraftEntry> = state
-        .visible()
-        .filter(|e| category_recipes.contains(&e.recipe_entity))
-        .collect();
-
-    let total_in_cat = category_filtered.len();
-    let focused_entry = category_filtered
+    let total_in_cat = cache.filter.indices.len();
+    let focused_entry = cache
+        .filter
+        .indices
         .get(focus.min(total_in_cat.saturating_sub(1)))
-        .cloned();
+        .map(|&i| &model.entries[i]);
 
-    // ── Header ────────────────────────────────────────────────────────────
-    commands
-        .entity(header)
-        .despawn_children()
-        .with_children(|h| {
-            h.spawn((
-                Text::new("CRAFTING"),
-                TextFont {
-                    font_size: 22.0,
-                    ..default()
+    if content_changed {
+        let status = if total_in_cat > 0 {
+            format!(
+                "Recipe {} of {}  [{}]",
+                (focus + 1).min(total_in_cat),
+                total_in_cat,
+                if show_all { "ALL" } else { "CRAFTABLE" }
+            )
+        } else {
+            format!(
+                "{}  [{}]",
+                if filter.is_empty() {
+                    "No recipes"
+                } else {
+                    "No matching recipes"
                 },
-                TextColor(theme.accent()),
-            ));
-            let status = if total_in_cat > 0 {
-                let sub_focus = if focus < total_in_cat {
-                    focus + 1
-                } else {
-                    total_in_cat
-                };
-                format!(
-                    "Recipe {} of {}  [{}]",
-                    sub_focus,
-                    total_in_cat,
-                    if show_all { "ALL" } else { "CRAFTABLE" }
-                )
-            } else if !filter.is_empty() {
-                format!(
-                    "No matching recipes  [{}]",
-                    if show_all { "ALL" } else { "CRAFTABLE" }
-                )
-            } else {
-                format!(
-                    "No recipes  [{}]",
-                    if show_all { "ALL" } else { "CRAFTABLE" }
-                )
-            };
-            h.spawn((
-                Text::new(status),
-                TextFont {
-                    font_size: 13.0,
-                    ..default()
-                },
-                TextColor(theme::TEXT_DIM),
-            ));
-        });
-
-    // ── Top-level category tabs ────────────────────────────────────────────
-    commands
-        .entity(cat_tabs)
-        .despawn_children()
-        .with_children(|tabs| {
-            for (i, cat_name) in cat_index.top_categories.iter().enumerate() {
-                let is_active = i == sel_top;
-                let zone_highlight = focus_zone == 1 && is_active;
-                let tab_bg = if zone_highlight {
-                    theme::ZONE_HIGHLIGHT_BG
-                } else if is_active {
-                    theme.tab_active_bg()
-                } else {
-                    Color::NONE
-                };
-                let text_color = if is_active {
-                    theme.accent()
-                } else {
-                    theme::TEXT_DIM
-                };
-                tabs.spawn((
-                    Node {
-                        padding: UiRect::axes(Val::Px(10.0), Val::Px(4.0)),
-                        border: UiRect::bottom(if is_active {
-                            Val::Px(2.0)
-                        } else {
-                            Val::Px(0.0)
-                        }),
-                        ..default()
-                    },
-                    BackgroundColor(tab_bg),
-                    BorderColor::all(if is_active {
-                        theme.accent()
+                if show_all { "ALL" } else { "CRAFTABLE" }
+            )
+        };
+        if let Ok(mut counter) = containers.counter.single_mut() {
+            counter.set_if_neq(Text::new(status));
+        }
+        if let Ok(mut heading) = containers.heading.single_mut() {
+            heading.set_if_neq(TextColor(theme.accent()));
+        }
+    }
+    if tabs_changed {
+        // ── Top-level category tabs ────────────────────────────────────────────
+        commands
+            .entity(cat_tabs)
+            .despawn_children()
+            .with_children(|tabs| {
+                for (i, cat_name) in cat_index.top_categories.iter().enumerate() {
+                    let is_active = i == sel_top;
+                    let zone_highlight = focus_zone == 1 && is_active;
+                    let tab_bg = if zone_highlight {
+                        theme::ZONE_HIGHLIGHT_BG
+                    } else if is_active {
+                        theme.tab_active_bg()
                     } else {
                         Color::NONE
-                    }),
-                ))
-                .with_child((
-                    Text::new(cat_name.clone()),
-                    TextFont {
-                        font_size: 14.0,
-                        ..default()
-                    },
-                    TextColor(text_color),
-                ));
-            }
-        });
-
-    // ── Subcategory tabs ───────────────────────────────────────────────────
-    commands
-        .entity(sub_tabs)
-        .despawn_children()
-        .with_children(|tabs| {
-            for (i, sub_name) in subcats_for_top.iter().enumerate() {
-                let is_active = i == sel_sub;
-                let zone_highlight = focus_zone == 2 && is_active;
-                let tab_bg = if zone_highlight {
-                    theme::ZONE_HIGHLIGHT_BG
-                } else if is_active {
-                    theme::SUBTAB_ACTIVE_BG
-                } else {
-                    Color::NONE
-                };
-                let text_color = if is_active {
-                    theme::TEXT_BRIGHT
-                } else {
-                    theme::TEXT_DIM
-                };
-                tabs.spawn((
-                    Node {
-                        padding: UiRect::axes(Val::Px(8.0), Val::Px(3.0)),
-                        ..default()
-                    },
-                    BackgroundColor(tab_bg),
-                ))
-                .with_child((
-                    Text::new(sub_name.clone()),
-                    TextFont {
-                        font_size: 13.0,
-                        ..default()
-                    },
-                    TextColor(text_color),
-                ));
-            }
-        });
-
-    // ── Recipe list ────────────────────────────────────────────────────────
-    commands
-        .entity(list)
-        .despawn_children()
-        .with_children(|list_node| {
-            if category_filtered.is_empty() {
-                list_node
-                    .spawn((Node {
-                        padding: UiRect::all(Val::Px(14.0)),
-                        ..default()
-                    },))
+                    };
+                    let text_color = if is_active {
+                        theme.accent()
+                    } else {
+                        theme::TEXT_DIM
+                    };
+                    tabs.spawn((
+                        Node {
+                            padding: UiRect::axes(Val::Px(10.0), Val::Px(4.0)),
+                            border: UiRect::bottom(if is_active {
+                                Val::Px(2.0)
+                            } else {
+                                Val::Px(0.0)
+                            }),
+                            ..default()
+                        },
+                        BackgroundColor(tab_bg),
+                        BorderColor::all(if is_active {
+                            theme.accent()
+                        } else {
+                            Color::NONE
+                        }),
+                    ))
                     .with_child((
-                        Text::new("No recipes in this category."),
+                        Text::new(cat_name.clone()),
                         TextFont {
                             font_size: 14.0,
                             ..default()
                         },
-                        TextColor(theme::TEXT_DIM),
+                        TextColor(text_color),
                     ));
-                return;
-            }
+                }
+            });
 
-            let focus_clamped = focus.min(total_in_cat.saturating_sub(1));
+        // ── Subcategory tabs ───────────────────────────────────────────────────
+        commands
+            .entity(sub_tabs)
+            .despawn_children()
+            .with_children(|tabs| {
+                for (i, sub_name) in subcats_for_top.iter().enumerate() {
+                    let is_active = i == sel_sub;
+                    let zone_highlight = focus_zone == 2 && is_active;
+                    let tab_bg = if zone_highlight {
+                        theme::ZONE_HIGHLIGHT_BG
+                    } else if is_active {
+                        theme::SUBTAB_ACTIVE_BG
+                    } else {
+                        Color::NONE
+                    };
+                    let text_color = if is_active {
+                        theme::TEXT_BRIGHT
+                    } else {
+                        theme::TEXT_DIM
+                    };
+                    tabs.spawn((
+                        Node {
+                            padding: UiRect::axes(Val::Px(8.0), Val::Px(3.0)),
+                            ..default()
+                        },
+                        BackgroundColor(tab_bg),
+                    ))
+                    .with_child((
+                        Text::new(sub_name.clone()),
+                        TextFont {
+                            font_size: 13.0,
+                            ..default()
+                        },
+                        TextColor(text_color),
+                    ));
+                }
+            });
+    }
 
-            // Position counter
-            list_node
-                .spawn((Node {
-                    padding: UiRect::new(Val::Px(12.0), Val::Px(12.0), Val::Px(4.0), Val::Px(4.0)),
-                    ..default()
-                },))
-                .with_child((
-                    Text::new(format!("Recipe {} of {}", focus_clamped + 1, total_in_cat)),
-                    TextFont {
-                        font_size: 13.0,
-                        ..default()
-                    },
-                    TextColor(theme::TEXT_DIM),
-                ));
-
-            // Recipe rows — rendered in full; the pane's `ScrollPosition` + the
-            // shared keep-focused-visible scroll handle clipping and scrolling.
-            for (i, entry) in category_filtered.iter().enumerate() {
-                let is_focused = i == focus_clamped;
-                let row_bg = if is_focused {
+    // Update only visible row cells/styles; stable recipe keys retain entities.
+    let mut rows = Vec::new();
+    if cache.filter.indices.is_empty() {
+        rows.push((
+            None,
+            TextRow {
+                node: virtual_list.row_node(),
+                background: theme::PANEL_BG,
+                border: Color::NONE,
+                cells: vec![RowCell::new(
+                    "No recipes in this category.",
+                    14.0,
+                    theme::TEXT_DIM,
+                )],
+            },
+        ));
+    }
+    for i in virtual_list.window.0..virtual_list.window.1 {
+        let entry = &model.entries[cache.filter.indices[i]];
+        let mark = if entry.craftable { "+" } else { "-" };
+        let label = if entry.result_count > 1 {
+            format!("[{mark}] {}  x{}", entry.result_name, entry.result_count)
+        } else {
+            format!("[{mark}] {}", entry.result_name)
+        };
+        let mut name = RowCell::new(label, 15.0, theme::TEXT_BRIGHT);
+        name.grow = 1.0;
+        rows.push((
+            Some(entry.recipe_key.clone()),
+            TextRow {
+                node: Node {
+                    flex_direction: FlexDirection::Row,
+                    padding: UiRect::horizontal(Val::Px(12.0)),
+                    border: UiRect::bottom(Val::Px(1.0)),
+                    ..virtual_list.row_node()
+                },
+                background: if i == focus.min(total_in_cat.saturating_sub(1)) {
                     theme.item_focus_bg()
                 } else {
                     theme::PANEL_BG
-                };
-
-                let mark = if entry.craftable { "+" } else { "-" };
-                let row_label = if entry.result_count > 1 {
-                    format!("[{}] {}  x{}", mark, entry.result_name, entry.result_count)
-                } else {
-                    format!("[{}] {}", mark, entry.result_name)
-                };
-                let id_label = format!("  [{}]", entry.result_id);
-
-                list_node
-                    .spawn((
-                        Node {
-                            width: Val::Percent(100.0),
-                            flex_direction: FlexDirection::Row,
-                            align_items: AlignItems::Center,
-                            padding: UiRect::axes(Val::Px(12.0), Val::Px(6.0)),
-                            border: UiRect::bottom(Val::Px(1.0)),
-                            ..default()
-                        },
-                        BackgroundColor(row_bg),
-                        BorderColor::all(theme::DIVIDER),
-                    ))
-                    .with_children(|row| {
-                        row.spawn((
-                            Text::new(row_label),
-                            TextFont {
-                                font_size: 15.0,
-                                ..default()
-                            },
-                            TextColor(theme::TEXT_BRIGHT),
-                            Node {
-                                flex_grow: 1.0,
-                                ..default()
-                            },
-                        ));
-                        row.spawn((
-                            Text::new(id_label),
-                            TextFont {
-                                font_size: 13.0,
-                                ..default()
-                            },
-                            TextColor(theme::TEXT_ID),
-                        ));
-                    });
-            }
-        });
-
-    // Feed the recipe list's focused row to the shared keep-visible scroll.
-    commands
-        .entity(list)
-        .insert(crate::render::scroll::FocusedRow(
-            focus.min(total_in_cat.saturating_sub(1)),
+                },
+                border: theme::DIVIDER,
+                cells: vec![
+                    name,
+                    RowCell::new(format!("  [{}]", entry.result_id), 13.0, theme::TEXT_ID),
+                ],
+            },
         ));
+    }
+    retained.sync(&mut commands, list, &virtual_list, rows);
+
+    if !content_changed {
+        return;
+    }
 
     // ── Detail panel ───────────────────────────────────────────────────────
     commands
@@ -818,6 +834,7 @@ pub fn update_crafting_ui(
             fb.spawn((
                 Node {
                     width: Val::Percent(100.0),
+                    flex_shrink: 0.0,
                     padding: UiRect::axes(Val::Px(8.0), Val::Px(4.0)),
                     ..default()
                 },
@@ -836,4 +853,11 @@ pub fn update_crafting_ui(
                 }),
             ));
         });
+}
+
+#[derive(Default)]
+pub struct CraftingPresentation {
+    root: Option<Entity>,
+    filter: super::crafting_state::RecipeFilter,
+    category: (usize, usize, String, bool),
 }

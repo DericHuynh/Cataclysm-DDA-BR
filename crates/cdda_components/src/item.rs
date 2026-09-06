@@ -4,15 +4,15 @@
 
 use bevy_ecs::component::Component;
 use bevy_ecs::entity::Entity;
-use bevy_ecs::prelude::Resource;
 use bevy_reflect::Reflect;
 
 // ===========================================================================
 // Item identity
 // ===========================================================================
 
-/// Numeric index of the definition entity this runtime item was spawned from.
-/// Used by `merge_or_stack` to compare items without needing the string `DefStrId`.
+/// Session-local item-type token, matching ItemTypeRegistry for native spawns.
+/// Legacy callers may supply opaque values. Never serialize it as a definition
+/// identity; native persistence must resolve the stable item key.
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 pub struct DefOrigin(pub u32);
 
@@ -84,6 +84,7 @@ pub struct ItemDamage(pub u32);
 #[derive(Component, Debug, Default, Clone, Copy, Reflect)]
 pub struct Sealed;
 
+/// Exterior volume excludes contents; nested contents still contribute weight.
 #[derive(Component, Debug, Default, Clone, Copy, Reflect)]
 pub struct Rigid;
 
@@ -185,6 +186,8 @@ pub struct IsPocket;
 // Pocket system
 // ===========================================================================
 
+/// Total capacity limits. The inventory boundary validates projected stack and
+/// nested contents loads; this data component alone does not enforce placement.
 #[derive(Component, Debug, Clone, Reflect)]
 pub struct Pocket {
     pub max_volume: crate::Volume,
@@ -302,20 +305,6 @@ pub const INVLET_CHARS: &[char; 62] = &[
 /// Removed on drop / transfer out of inventory.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
 pub struct Invlet(pub char);
-
-// ===========================================================================
-// InventoryFocus — focused row in the inventory screen
-// ===========================================================================
-
-/// Tracks which item row (by sorted position) is focused in the inventory screen.
-///
-/// `panel`: 0 = pocket list (left), 1 = wielded panel (top-right).
-/// Written by `inventory_screen_input`, read by `cdda_render` to highlight rows.
-#[derive(Resource, Debug, Clone, Default)]
-pub struct InventoryFocus {
-    pub index: usize,
-    pub panel: usize,
-}
 
 // ===========================================================================
 // InProgressCraft — partially-crafted item entity

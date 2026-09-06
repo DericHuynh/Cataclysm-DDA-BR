@@ -6,8 +6,8 @@
 //! `AmmoData`; items with `"subtypes": ["ARMOR"]` get `ArmourData`; items with
 //! both get both.  No monolithic structs.
 //!
-//! The `DefinitionWorld` resource is just a `HashMap<String, Entity>` index
-//! that maps string IDs to the definition entities in the main World.
+//! The `DefinitionWorld` resource in cdda_catalog indexes category-qualified
+//! stable keys to definition entities in the main World.
 //! Systems that need definition data query directly:
 //! `Query<&GunData, With<IsDef>>` — the entities are in the main World.
 
@@ -23,91 +23,11 @@ use crate::interner::{
 
 use bevy_ecs::prelude::*;
 
-use std::collections::HashMap;
-
 // ===========================================================================
 // Resource: DefinitionWorld
 // ===========================================================================
 
-/// Definition category — the namespace of a definition key. Same-text IDs in
-/// different categories are distinct definitions (an item "zombie" and a
-/// monster "zombie" must not overwrite each other).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum DefCategory {
-    Item,
-    Monster,
-    Terrain,
-    Furniture,
-    Recipe,
-    BodyPart,
-}
-
-/// Maps typed definition keys (category + string ID) to the definition Entity
-/// in the main game World. Also keeps a flat item index: every current string
-/// lookup is an item lookup, and items were the only unambiguous users.
-///
-/// A `generation` counter increments on every rebuild so runtime caches can
-/// detect staleness. Definition entities are marked with `IsDef`.
-#[derive(Resource, Debug, Default)]
-pub struct DefinitionWorld {
-    by_key: HashMap<(DefCategory, String), Entity>,
-    items: HashMap<String, Entity>,
-    generation: u64,
-}
-
-impl DefinitionWorld {
-    pub fn empty() -> Self {
-        Self {
-            by_key: HashMap::new(),
-            items: HashMap::new(),
-            generation: 0,
-        }
-    }
-
-    /// Look up an ITEM definition entity by its string ID. (Legacy flat
-    /// lookup; unambiguous because only item builders feed the flat index.)
-    pub fn entity_by_str(&self, id: &str) -> Option<Entity> {
-        self.items.get(id).copied()
-    }
-
-    /// Look up a definition entity by its typed key.
-    pub fn entity_in(&self, category: DefCategory, id: &str) -> Option<Entity> {
-        self.by_key.get(&(category, id.to_string())).copied()
-    }
-
-    /// Number of times the definition set was rebuilt (0 = never built).
-    /// Runtime components caching definition entities should re-resolve when
-    /// this changes.
-    pub fn generation(&self) -> u64 {
-        self.generation
-    }
-
-    /// Register a definition entity under its typed key; items also enter the
-    /// flat legacy index. Same-key replacement is the normal reload path;
-    /// cross-category same-text IDs no longer collide.
-    fn register(&mut self, category: DefCategory, id: String, entity: Entity) {
-        self.by_key.insert((category, id.clone()), entity);
-        if category == DefCategory::Item {
-            self.items.insert(id, entity);
-        }
-    }
-
-    /// Number of registered definitions across all categories.
-    pub fn len(&self) -> usize {
-        self.by_key.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.by_key.is_empty()
-    }
-
-    /// Iterate over all (category, id, entity) triples.
-    pub fn iter(&self) -> impl Iterator<Item = (DefCategory, &str, Entity)> + '_ {
-        self.by_key
-            .iter()
-            .map(|((c, id), &e)| (*c, id.as_str(), e))
-    }
-}
+pub use cdda_catalog::definition::{DefCategory, DefinitionWorld};
 
 // ===========================================================================
 // Helper functions
@@ -300,14 +220,15 @@ pub fn build_def_world(
         world.despawn(e);
     }
 
-    let mut def_world = DefinitionWorld::empty();
     // Bump the generation so runtime caches of definition entities can detect
     // a rebuild (hot reload) and re-resolve their references.
-    def_world.generation = world
-        .get_resource::<DefinitionWorld>()
-        .map(|previous| previous.generation())
-        .unwrap_or(0)
-        + 1;
+    let mut def_world = DefinitionWorld::at_generation(
+        world
+            .get_resource::<DefinitionWorld>()
+            .map(|previous| previous.generation())
+            .unwrap_or(0)
+            + 1,
+    );
 
     if spawn_all {
         build_item_defs(world, def_registry, &mut def_world);
@@ -808,7 +729,7 @@ fn build_monster_defs(
                         100
                     },
                     attack_cost: 100,
-                    dodge: monster.melee_dice as i32,
+                    dodge: monster.dodge.unwrap_or(0),
                     morale: monster.morale,
                     aggression: monster.aggression,
                     melee_skill: monster.melee_skill,
@@ -1188,7 +1109,8 @@ fn build_body_part_defs(
         if let Some(sub_ids) = &bp.sub_parts {
             if let Some(parent) = def_world.entity_in(DefCategory::BodyPart, def_id.as_str()) {
                 for child_id in sub_ids {
-                    if let Some(child_entity) = def_world.entity_in(DefCategory::BodyPart, child_id) {
+                    if let Some(child_entity) = def_world.entity_in(DefCategory::BodyPart, child_id)
+                    {
                         if child_entity != parent && world.get::<ParentPart>(child_entity).is_none()
                         {
                             world.entity_mut(child_entity).insert(ParentPart(parent));

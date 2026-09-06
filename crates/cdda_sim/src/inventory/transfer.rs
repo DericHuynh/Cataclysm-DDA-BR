@@ -1,13 +1,13 @@
 //! Focused, synchronous inventory action boundary.
 //!
-//! Validates live ownership and costs before changing anything. Legacy
-//! ItemMoveEvent/merge paths do not yet use this boundary. Pocket volume/weight
-//! restrictions remain deferred; the body pocket is the existing omnibus store.
+//! Validates live ownership, projected capacity and costs before changing anything.
+//! Native intents and the legacy whole-stack adapter share this commit boundary.
 use std::collections::HashSet;
 
+use super::capacity;
 use bevy_ecs::prelude::*;
 use cdda_components::actor::{ActionPoints, HandCount, IsAlive};
-use cdda_components::def::{IsDef, ItemVolume};
+use cdda_components::def::IsDef;
 use cdda_components::item::{
     ContainerContents, InsideContainer, Invlet, IsPocket, MountedOn, MountedPockets, WieldedBy,
     WieldedItems, WornBy, WornOn, FLOOR_CAP_ML,
@@ -24,6 +24,7 @@ pub enum InventoryAction {
     Wield,
     Drop,
     Stow,
+    Transfer { container: Entity },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,10 +36,16 @@ pub enum TransferError {
     OutOfReach,
     HandsFull,
     FloorFull,
+    PocketFull,
+    TooHeavy,
+    ItemTooLarge,
+    RestrictedPocket,
+    InvalidCount,
+    UnsupportedItem,
 }
 
-#[derive(Clone, Copy)]
-enum Location {
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Location {
     Ground(WorldPos),
     Inside(Entity),
     Wielded(Entity),
@@ -47,7 +54,7 @@ enum Location {
 }
 
 /// Require exactly one location; stale ground positions never override ownership.
-fn location(world: &World, entity: Entity) -> Result<Location, TransferError> {
+pub(super) fn location(world: &World, entity: Entity) -> Result<Location, TransferError> {
     let locations = [
         world
             .get::<WorldPosition>(entity)
@@ -92,6 +99,29 @@ pub fn location_root(world: &World, item: Entity) -> Result<Entity, TransferErro
     }
 }
 
+/// Validate an item's exclusive ownership chain up to a known actor. Headless
+/// actors need no ground position for crafting; every descendant still needs
+/// exactly one valid location. Work is bounded by nesting depth.
+pub(crate) fn belongs_to(world: &World, item: Entity, actor: Entity) -> bool {
+    let mut current = item;
+    let mut seen = HashSet::new();
+    while current != actor {
+        if !seen.insert(current) {
+            return false;
+        }
+        current = match location(world, current) {
+            Ok(
+                Location::Inside(parent)
+                | Location::Wielded(parent)
+                | Location::Worn(parent)
+                | Location::Mounted(parent),
+            ) => parent,
+            _ => return false,
+        };
+    }
+    world.get_entity(actor).is_ok()
+}
+
 /// Same-z one-tile Chebyshev reach, safe even at coordinate extremes.
 pub fn within_reach(actor: WorldPos, item: WorldPos) -> bool {
     actor.z == item.z && actor.x.abs_diff(item.x) <= 1 && actor.y.abs_diff(item.y) <= 1
@@ -116,6 +146,9 @@ pub fn apply_inventory_action(
     action: InventoryAction,
 ) -> Result<(), TransferError> {
     if world.get::<IsAlive>(actor).is_none()
+        || world
+            .get::<cdda_components::activity::ActivityProgress>(actor)
+            .is_some()
         || world.get::<IsDef>(actor).is_some()
         || !world
             .get::<ActionPoints>(actor)
@@ -135,15 +168,21 @@ pub fn apply_inventory_action(
         return Err(TransferError::InvalidItem);
     }
     let source = location(world, item)?;
+    capacity::check_access(world, capacity::parent(world, item))?;
     let root = location_root(world, item)?;
     let owned = root == actor;
+    let reachable_unowned = world.get::<IsAlive>(root).is_none()
+        && matches!(location(world, root)?, Location::Ground(pos) if within_reach(actor_pos, pos));
     let reachable_ground = matches!(source, Location::Ground(pos) if within_reach(actor_pos, pos));
     let (destination, cost) = match action {
         InventoryAction::Pickup => {
             if !reachable_ground {
                 return Err(TransferError::OutOfReach);
             }
-            (Location::Inside(actor), AP_COST_PICKUP)
+            (
+                Location::Inside(select_storage(world, actor, item)?),
+                AP_COST_PICKUP,
+            )
         }
         InventoryAction::Wield => {
             if !reachable_ground && !(owned && matches!(source, Location::Inside(_))) {
@@ -162,14 +201,23 @@ pub fn apply_inventory_action(
             if !owned || matches!(source, Location::Mounted(_)) {
                 return Err(TransferError::NotOwned);
             }
-            let item_volume = world.get::<ItemVolume>(item).map_or(0, |v| u64::from(v.0));
-            let mut floor = world.query::<(Entity, &WorldPosition, Option<&ItemVolume>)>();
-            let floor_volume: u64 = floor
-                .iter(world)
-                .filter(|(entity, pos, _)| *entity != actor && pos.get() == actor_pos)
-                .map(|(_, _, volume)| volume.map_or(0, |v| u64::from(v.0)))
-                .sum();
-            if floor_volume.saturating_add(item_volume) > u64::from(FLOOR_CAP_ML) {
+            let item_volume = capacity::item_load(world, item)?.volume_ml;
+            let mut floor = world.query_filtered::<(Entity, &WorldPosition), (Without<IsAlive>, Without<IsDef>, Without<IsPocket>)>();
+            let mut floor_volume = 0u64;
+            for (entity, pos) in floor.iter(world) {
+                if pos.get() == actor_pos {
+                    if !matches!(location(world, entity)?, Location::Ground(_)) {
+                        return Err(TransferError::InvalidLocation);
+                    }
+                    floor_volume = floor_volume
+                        .checked_add(capacity::item_load(world, entity)?.volume_ml)
+                        .ok_or(TransferError::FloorFull)?;
+                }
+            }
+            if floor_volume
+                .checked_add(item_volume)
+                .is_none_or(|v| v > u64::from(FLOOR_CAP_ML))
+            {
                 return Err(TransferError::FloorFull);
             }
             (Location::Ground(actor_pos), AP_COST_PICKUP)
@@ -178,17 +226,29 @@ pub fn apply_inventory_action(
             if !owned || !matches!(source, Location::Wielded(owner) if owner == actor) {
                 return Err(TransferError::NotOwned);
             }
-            let destination = world
-                .get::<MountedPockets>(actor)
-                .into_iter()
-                .flat_map(|pockets| pockets.iter())
-                .filter(|pocket| world.get::<IsPocket>(*pocket).is_some())
-                .min_by_key(|pocket| stable_key(world, *pocket))
-                .unwrap_or(actor);
-            if location_root(world, destination)? != actor {
+            (
+                Location::Inside(select_storage(world, actor, item)?),
+                AP_COST_WIELD,
+            )
+        }
+        InventoryAction::Transfer { container } => {
+            if (!owned && !reachable_unowned) || matches!(source, Location::Mounted(_)) {
+                return Err(TransferError::NotOwned);
+            }
+            if matches!(source, Location::Inside(old) if old == container) {
                 return Err(TransferError::InvalidLocation);
             }
-            (Location::Inside(destination), AP_COST_WIELD)
+            let destination_root = location_root(world, container)?;
+            if destination_root != actor {
+                let Location::Ground(pos) = location(world, destination_root)? else {
+                    return Err(TransferError::InvalidLocation);
+                };
+                if world.get::<IsAlive>(destination_root).is_some() || !within_reach(actor_pos, pos)
+                {
+                    return Err(TransferError::NotOwned);
+                }
+            }
+            (Location::Inside(container), AP_COST_PICKUP)
         }
     };
     // The new parent must not be the item or one of its descendants. Checking
@@ -208,6 +268,10 @@ pub fn apply_inventory_action(
                 | Location::Mounted(p) => current = p,
             }
         }
+    }
+
+    if let Location::Inside(parent) = destination {
+        capacity::validate_capacity(world, parent, item)?;
     }
 
     // Everything above is read-only; commits and reverse links are immediate.
@@ -256,4 +320,83 @@ pub fn apply_inventory_action(
         .expect("validated actor")
         .spend(cost);
     Ok(())
+}
+
+fn select_storage(world: &mut World, actor: Entity, item: Entity) -> Result<Entity, TransferError> {
+    let mut q = world.query::<(Entity, &cdda_components::item::Pocket)>();
+    let mut candidates: Vec<_> = q
+        .iter(world)
+        .map(|(e, _)| e)
+        .filter(|&e| {
+            if location_root(world, e) != Ok(actor) {
+                return false;
+            }
+            let mut parent = Some(e);
+            while let Some(p) = parent {
+                if p == item {
+                    return false;
+                }
+                parent = capacity::parent(world, p);
+            }
+            true
+        })
+        .collect();
+    candidates.sort_by_key(|&e| stable_key(world, e));
+    let has_storage = !candidates.is_empty();
+    for e in candidates {
+        if capacity::validate_capacity(world, e, item).is_ok() {
+            return Ok(e);
+        }
+    }
+    if !has_storage {
+        capacity::validate_capacity(world, actor, item)?;
+        return Ok(actor);
+    }
+    Err(TransferError::PocketFull)
+}
+
+/// Compatibility adapter: stale source/count claims never relocate a whole stack.
+/// A living actor must be inferable from the source or requested destination.
+pub fn apply_legacy_move(
+    world: &mut World,
+    request: &cdda_components::events::ItemMoveEvent,
+) -> Result<(), TransferError> {
+    use cdda_components::{events::MoveLocation, item::StackCount};
+    let actual = location(world, request.item)?;
+    let matches = match (actual, &request.from) {
+        (Location::Ground(a), MoveLocation::Ground(b)) => a == *b,
+        (Location::Inside(a), MoveLocation::Container(b))
+        | (Location::Wielded(a), MoveLocation::Wielded(b))
+        | (Location::Worn(a), MoveLocation::Worn(b)) => a == *b,
+        _ => false,
+    };
+    if !matches {
+        return Err(TransferError::InvalidLocation);
+    }
+    if request.count != world.get::<StackCount>(request.item).map_or(1, |s| s.get()) {
+        return Err(TransferError::InvalidCount);
+    }
+    let source_root = location_root(world, request.item)?;
+    let actor = if world.get::<IsAlive>(source_root).is_some() {
+        source_root
+    } else {
+        let parent = match request.to {
+            MoveLocation::Container(e) | MoveLocation::Wielded(e) => e,
+            _ => return Err(TransferError::IneligibleActor),
+        };
+        location_root(world, parent)?
+    };
+    let action = match request.to {
+        MoveLocation::Container(container) => InventoryAction::Transfer { container },
+        MoveLocation::Wielded(e) if e == actor => InventoryAction::Wield,
+        MoveLocation::Ground(pos)
+            if world
+                .get::<WorldPosition>(actor)
+                .is_some_and(|p| p.get() == pos) =>
+        {
+            InventoryAction::Drop
+        }
+        _ => return Err(TransferError::InvalidLocation),
+    };
+    apply_inventory_action(world, actor, request.item, action)
 }

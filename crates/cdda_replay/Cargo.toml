@@ -8,6 +8,7 @@ description = "Deterministic session recording and replay"
 devtools = []
 
 [dependencies]
+cdda_input.workspace = true
 bevy_ecs.workspace = true
 bevy_app.workspace = true
 cdda_core_types = { path = "../cdda_core_types" }

@@ -311,3 +311,58 @@ mod tests {
         assert_eq!(reg.category_count(), 2);
     }
 }
+
+/// Translate source HTN definitions into the runtime compiler's native input.
+impl cdda_catalog::htn::HtnSource for DefRegistry {
+    fn htn_program(&self) -> cdda_catalog::htn::HtnProgram {
+        use cdda_catalog::htn::*;
+        HtnProgram {
+            items: self
+                .items
+                .keys()
+                .map(|id| id.as_str().to_string())
+                .collect(),
+            item_categories: self
+                .item_categories
+                .keys()
+                .map(|id| id.as_str().to_string())
+                .collect(),
+            htn_compounds: self
+                .htn_compounds
+                .iter()
+                .map(|(id, def)| {
+                    (
+                        id.as_str().to_string(),
+                        Arc::new(Compound {
+                            parameters: def.parameters.clone(),
+                            methods: def
+                                .methods
+                                .iter()
+                                .map(|m| Method {
+                                    id: m.id.clone(),
+                                    when: m
+                                        .when
+                                        .iter()
+                                        .map(|p| Predicate {
+                                            predicate: p.predicate.clone(),
+                                            args: p.args.clone(),
+                                        })
+                                        .collect(),
+                                    steps: m
+                                        .steps
+                                        .iter()
+                                        .map(|s| Step {
+                                            operator: s.operator.clone(),
+                                            task: s.task.clone(),
+                                            args: s.args.clone(),
+                                        })
+                                        .collect(),
+                                })
+                                .collect(),
+                        }),
+                    )
+                })
+                .collect(),
+        }
+    }
+}

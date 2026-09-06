@@ -1,4 +1,4 @@
-use cdda_components::input::{ActionSource, GameAction};
+use cdda_input::vocabulary::{ActionSource, GameAction};
 use cdda_replay::replay::{ReplaySpeed, ReplayState};
 use cdda_replay::session_log::{ActionRecord, SessionLog};
 

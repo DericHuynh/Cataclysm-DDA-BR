@@ -13,9 +13,9 @@
 //! fn gun_recoil_system(query: Query<&GunData, With<GunData>>) { }
 //! ```
 //!
-//! These components live on entities in a **separate `World`** (the
-//! `DefinitionWorld`), never in the gameplay world. Runtime entities
-//! reference definition entities via a single component.
+//! Definition entities live in the main gameplay World and carry `IsDef`.
+//! Runtime queries sharing these types must exclude `IsDef`. `DefinitionWorld`
+//! in cdda_catalog is a category-qualified entity index, not another World.
 
 use crate::item::ItemType;
 use crate::item::QualityId;

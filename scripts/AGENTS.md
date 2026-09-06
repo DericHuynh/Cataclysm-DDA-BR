@@ -1,10 +1,10 @@
 # Scripts DOX
 
 ## Purpose
-Owns development, validation, and data-extraction scripts that operate on the JSON data and Rust struct surface.
+Owns development, dependency-boundary validation, content-baseline and data-extraction scripts that operate on the JSON data and Rust struct surface.
 
 ## Ownership
-- Scripts here are run by hand (or in CI) outside of `cargo`. They read from `data/` and `crates/cdda_core_types/src/core/raw_defs/`.
+- Scripts here are run by hand (or in CI) outside of `cargo`. They read from `data/` and `crates/cdda_defs_raw/src/raw_defs/`.
 - `scripts/README.md` is the user-facing quick reference for this subtree.
 
 ## Local Contracts

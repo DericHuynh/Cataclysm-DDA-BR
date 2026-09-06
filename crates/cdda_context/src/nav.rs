@@ -9,9 +9,9 @@ use bevy_ecs::prelude::*;
 use bevy_state::prelude::*;
 
 use crate::overlay::OverlayStack;
-pub use cdda_components::context::{pop_ctx, push_ctx, ContextStack, Ctx, FocusedCommandIndex};
+pub use crate::state::{pop_ctx, push_ctx, ContextStack, Ctx, FocusedCommandIndex};
 pub use cdda_components::events::{GameEvent, GameEventDispatch};
-use cdda_components::input::{GameAction, InputAction};
+use cdda_input::vocabulary::{GameAction, InputAction};
 
 // ---------------------------------------------------------------------------
 // TransitionTarget
@@ -57,7 +57,7 @@ pub struct ScreenDefinition {
 }
 
 // FocusedCommandIndex, push_ctx, pop_ctx, Ctx, and ContextStack are now
-// defined in cdda_components::context and re-exported above.
+// defined in crate::state and re-exported above.
 
 // ---------------------------------------------------------------------------
 // screen_def — static navigation data for every screen
@@ -438,10 +438,10 @@ pub struct ScreenListItem {
 /// System that synchronises `InputContextStack` to match the current screen.
 /// Runs on state transitions so keyboard bindings switch with the screen.
 pub fn sync_input_context(
-    mut stack: ResMut<cdda_components::input::InputContextStack>,
+    mut stack: ResMut<cdda_input::vocabulary::InputContextStack>,
     screen: Res<State<Ctx>>,
 ) {
-    use cdda_components::input::InputContextId;
+    use cdda_input::vocabulary::InputContextId;
     use Ctx::*;
 
     let ctx = match *screen.get() {

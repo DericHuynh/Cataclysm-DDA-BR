@@ -11,30 +11,31 @@
 //!   `InsideContainer`/`ContainerContents`, wielded items use
 //!   `WieldedBy`/`WieldedItems`.
 //! - **Invlets** are `Invlet` components on item entities, assigned when an
-//!   item enters an inventory. Items lacking an `Invlet` are picked up by
-//!   `assign_invlets_system` via `Without<Invlet>` query filter.
-//! - **Stack merging** — identical items (same `DefOrigin`, same damage,
-//!   same charges) merge into one entity with `StackCount > 1` and the
-//!   incoming entity is despawned.
+//!   item enters an inventory. `assign_invlets_system` reserves unique letters
+//!   for unlettered items without moving or merging them.
+//! - **Stack merging** is explicit: compatible colocated stacks consolidate
+//!   through `merge_stacks`, preserving native snapshot identity and checking
+//!   arithmetic before despawning the incoming entity.
 //! - **Binned lookup** — `InventoryBin` resource is rebuilt each frame
 //!   by querying items with `Invlet` inside creature containers.
 //!
 //! Reference: CDDA-master `inventory.h` / `inventory.cpp`.
 
-use bevy_ecs::message::MessageReader;
+use bevy_ecs::message::MessageCursor;
 use bevy_ecs::prelude::*;
 use bevy_ecs::world::World;
+#[cfg(test)]
 use cdda_components::def::ItemVolume;
-use cdda_components::events::{ItemMoveEvent, MoveLocation};
+use cdda_components::events::ItemMoveEvent;
+#[cfg(test)]
+use cdda_components::item::ItemDamage;
 use cdda_components::item::{
-    Container, ContainerContents, CurrentCharges, DefOrigin, InsideContainer, Invlet, ItemDamage,
-    MountedOn, MountedPockets, Pocket, StackCount, WieldedBy, WieldedItems, WornBy, INVLET_CHARS,
+    ContainerContents, CurrentCharges, DefOrigin, InsideContainer, Invlet, MountedPockets,
+    StackCount, WieldedItems, WornBy, INVLET_CHARS,
 };
 use cdda_components::sim::WorldPosition;
 use cdda_core_types::core::coords::WorldPos;
 use cdda_core_types::core::units::*;
-
-use super::pocket;
 
 // ===========================================================================
 // Helper: collect all items reachable from a creature
@@ -48,12 +49,7 @@ use super::pocket;
 pub fn all_items_for_creature(creature: Entity, world: &World) -> Vec<Entity> {
     let mut items = Vec::new();
     let mut visited = std::collections::HashSet::new();
-    collect_inventory_domain(
-        creature,
-        world,
-        &mut items,
-        &mut visited,
-    );
+    collect_inventory_domain(creature, world, &mut items, &mut visited);
     items
 }
 
@@ -117,30 +113,13 @@ fn push_item_recursively(
 }
 
 /// Returns all invlet chars currently in use by items in `creature`'s domain.
+#[cfg(test)]
 fn used_invlets(creature: Entity, world: &World) -> std::collections::HashSet<char> {
     let items = all_items_for_creature(creature, world);
     items
         .iter()
         .filter_map(|&e| world.get::<Invlet>(e).map(|i| i.0))
         .collect()
-}
-
-/// Follow a container entity to find the owning creature.
-/// If it's a pocket, traverse MountedOn. If it's a creature, return it.
-fn find_owning_creature_q(
-    container: Entity,
-    creature_q: &Query<(), With<cdda_components::actor::Creature>>,
-    pocket_q: &Query<(), With<cdda_components::item::IsPocket>>,
-    mounted_on_q: &Query<&MountedOn>,
-) -> Entity {
-    if creature_q.get(container).is_ok() {
-        container
-    } else if pocket_q.get(container).is_ok() {
-        pocket::find_creature_for_pocket(container, mounted_on_q, pocket_q, creature_q)
-            .unwrap_or(container)
-    } else {
-        container
-    }
 }
 
 /// Collects all items reachable from a creature using query references —
@@ -180,12 +159,16 @@ fn collect_inventory_domain_q(
 ) {
     if let Ok(worn) = worn_q.get(holder) {
         for item in worn.iter() {
-            push_item_recursively_q(item, contents_q, mounted_q, wielded_q, worn_q, items, visited);
+            push_item_recursively_q(
+                item, contents_q, mounted_q, wielded_q, worn_q, items, visited,
+            );
         }
     }
     if let Ok(cc) = contents_q.get(holder) {
         for item in cc.iter() {
-            push_item_recursively_q(item, contents_q, mounted_q, wielded_q, worn_q, items, visited);
+            push_item_recursively_q(
+                item, contents_q, mounted_q, wielded_q, worn_q, items, visited,
+            );
         }
     }
     if let Ok(mp) = mounted_q.get(holder) {
@@ -193,13 +176,7 @@ fn collect_inventory_domain_q(
             if let Ok(cc) = contents_q.get(pocket) {
                 for item in cc.iter() {
                     push_item_recursively_q(
-                        item,
-                        contents_q,
-                        mounted_q,
-                        wielded_q,
-                        worn_q,
-                        items,
-                        visited,
+                        item, contents_q, mounted_q, wielded_q, worn_q, items, visited,
                     );
                 }
             }
@@ -207,7 +184,9 @@ fn collect_inventory_domain_q(
     }
     if let Ok(wi) = wielded_q.get(holder) {
         for item in wi.iter() {
-            push_item_recursively_q(item, contents_q, mounted_q, wielded_q, worn_q, items, visited);
+            push_item_recursively_q(
+                item, contents_q, mounted_q, wielded_q, worn_q, items, visited,
+            );
         }
     }
 }
@@ -226,83 +205,13 @@ fn push_item_recursively_q(
         return;
     }
     items.push(item);
-    collect_inventory_domain_q(item, contents_q, mounted_q, wielded_q, worn_q, items, visited);
+    collect_inventory_domain_q(
+        item, contents_q, mounted_q, wielded_q, worn_q, items, visited,
+    );
 }
 
-/// Find an existing item in `creature`'s domain that `item` can merge into.
-fn find_merge_target_for_creature_q(
-    creature: Entity,
-    item: Entity,
-    contents_q: &Query<&ContainerContents>,
-    mounted_q: &Query<&MountedPockets>,
-    wielded_q: &Query<&WieldedItems>,
-    worn_q: &Query<&WornBy>,
-    origins_q: &Query<&DefOrigin>,
-    damages_q: &Query<&ItemDamage>,
-    charges_q: &Query<&CurrentCharges>,
-) -> Option<Entity> {
-    let incoming_origin = origins_q.get(item).ok().map(|d| d.0);
-    let incoming_damage = damages_q.get(item).ok().map(|d| d.0).unwrap_or(0);
-    let incoming_charges = charges_q.get(item).ok().map(|c| c.0).unwrap_or(0);
-
-    if incoming_origin.is_none() {
-        return None;
-    }
-
-    for candidate in all_items_for_creature_q(creature, contents_q, mounted_q, wielded_q, worn_q) {
-        if candidate == item || contents_q.get(candidate).is_err() {
-            continue;
-        }
-        let c_origin = origins_q.get(candidate).ok().map(|d| d.0);
-        let c_damage = damages_q.get(candidate).ok().map(|d| d.0).unwrap_or(0);
-        let c_charges = charges_q.get(candidate).ok().map(|c| c.0).unwrap_or(0);
-
-        if c_origin == incoming_origin
-            && c_damage == incoming_damage
-            && c_charges == incoming_charges
-        {
-            return Some(candidate);
-        }
-    }
-    None
-}
-
-/// Returns all invlet chars currently in use by items in `creature`'s domain.
-fn used_invlets_q(
-    creature: Entity,
-    contents_q: &Query<&ContainerContents>,
-    mounted_q: &Query<&MountedPockets>,
-    wielded_q: &Query<&WieldedItems>,
-    worn_q: &Query<&WornBy>,
-    _invlet_q: &Query<&Invlet>,
-) -> std::collections::HashSet<char> {
-    let items = all_items_for_creature_q(creature, contents_q, mounted_q, wielded_q, worn_q);
-    items
-        .iter()
-        .filter_map(|&e| _invlet_q.get(e).ok().map(|i| i.0))
-        .collect()
-}
-
-/// Finds an unassigned invlet char for `creature`, preferring `fav_chars`.
-fn allocate_invlet_for_q(
-    creature: Entity,
-    fav_chars: &[char],
-    contents_q: &Query<&ContainerContents>,
-    mounted_q: &Query<&MountedPockets>,
-    wielded_q: &Query<&WieldedItems>,
-    worn_q: &Query<&WornBy>,
-    invlet_q: &Query<&Invlet>,
-) -> Option<char> {
-    let used = used_invlets_q(creature, contents_q, mounted_q, wielded_q, worn_q, invlet_q);
-    for c in fav_chars {
-        if !used.contains(c) {
-            return Some(*c);
-        }
-    }
-    INVLET_CHARS.iter().copied().find(|c| !used.contains(c))
-}
-
-/// Finds an unassigned invlet char for `creature`, preferring `fav_chars`.
+/// Allocate from the live inventory so earlier assignments are visible.
+#[cfg(test)]
 fn allocate_invlet_for(creature: Entity, world: &World, fav_chars: &[char]) -> Option<char> {
     let used = used_invlets(creature, world);
     // Try favourites first
@@ -316,6 +225,7 @@ fn allocate_invlet_for(creature: Entity, world: &World, fav_chars: &[char]) -> O
 }
 
 /// Find an existing item in `creature`'s domain that `item` can merge into.
+#[cfg(test)]
 fn find_merge_target_for_creature(creature: Entity, item: Entity, world: &World) -> Option<Entity> {
     let incoming_origin = world.get::<DefOrigin>(item).map(|d| d.0);
     let incoming_damage = world.get::<ItemDamage>(item).map(|d| d.0).unwrap_or(0);
@@ -404,81 +314,38 @@ impl InventoryBin {
 /// invlet letters. Merges identical stacks when possible.
 pub fn assign_invlets_system(
     mut commands: Commands,
-    inside_query: Query<(Entity, &InsideContainer), Without<Invlet>>,
-    wielded_query: Query<(Entity, &WieldedBy), Without<Invlet>>,
-    invlet_query: Query<&Invlet>,
-    stack_counts: Query<&StackCount>,
-    creature_query: Query<(), With<cdda_components::actor::Creature>>,
-    pocket_query: Query<(), With<cdda_components::item::IsPocket>>,
-    container_contents: Query<&ContainerContents>,
-    mounted_pockets: Query<&MountedPockets>,
-    mounted_on: Query<&MountedOn>,
-    wielded_items: Query<&WieldedItems>,
-    worn_items: Query<&WornBy>,
-    item_origins: Query<&DefOrigin>,
-    item_damages: Query<&ItemDamage>,
-    current_charges_q: Query<&CurrentCharges>,
+    creatures: Query<
+        Entity,
+        Or<(
+            With<cdda_components::actor::Creature>,
+            With<cdda_components::actor::IsAlive>,
+        )>,
+    >,
+    contents: Query<&ContainerContents>,
+    mounted: Query<&MountedPockets>,
+    wielded: Query<&WieldedItems>,
+    worn: Query<&WornBy>,
+    invlets: Query<&Invlet>,
 ) {
-    // Collect items needing invlets grouped by owning creature
-    let mut by_creature: std::collections::HashMap<Entity, Vec<Entity>> =
-        std::collections::HashMap::new();
-
-    for (item, inside) in &inside_query {
-        let creature =
-            find_owning_creature_q(inside.0, &creature_query, &pocket_query, &mounted_on);
-        by_creature.entry(creature).or_default().push(item);
-    }
-    for (item, wielded) in &wielded_query {
-        by_creature.entry(wielded.0).or_default().push(item);
-    }
-
-    for (creature, pending) in by_creature {
-        let mut merge_adds: std::collections::HashMap<Entity, u32> =
-            std::collections::HashMap::new();
-
-        for item in pending {
-            let incoming_count = stack_counts.get(item).ok().map(|s| s.get()).unwrap_or(1);
-
-            let merge_target = find_merge_target_for_creature_q(
-                creature,
-                item,
-                &container_contents,
-                &mounted_pockets,
-                &wielded_items,
-                &worn_items,
-                &item_origins,
-                &item_damages,
-                &current_charges_q,
-            );
-
-            if let Some(target) = merge_target {
-                *merge_adds.entry(target).or_insert(0) += incoming_count;
-                commands.entity(item).despawn();
+    // Reserve letters in a local set before issuing deferred writes. Assignment
+    // owns letters only: no implicit transfers, count changes or despawns.
+    let mut creatures: Vec<_> = creatures.iter().collect();
+    creatures.sort_by_key(|e| e.to_bits());
+    for creature in creatures {
+        let mut items = all_items_for_creature_q(creature, &contents, &mounted, &wielded, &worn);
+        items.sort_by_key(|e| e.to_bits());
+        let mut used: std::collections::HashSet<_> = items
+            .iter()
+            .filter_map(|&e| invlets.get(e).ok().map(|v| v.0))
+            .collect();
+        for item in items {
+            if invlets.get(item).is_ok() {
                 continue;
             }
-
-            let existing_char = invlet_query.get(item).ok().map(|i| i.0);
-            let fav_chars: Vec<char> = existing_char.into_iter().collect();
-
-            let c = allocate_invlet_for_q(
-                creature,
-                &fav_chars,
-                &container_contents,
-                &mounted_pockets,
-                &wielded_items,
-                &worn_items,
-                &invlet_query,
-            );
-            if let Some(c) = c {
+            if let Some(c) = INVLET_CHARS.iter().copied().find(|c| !used.contains(c)) {
                 commands.entity(item).insert(Invlet(c));
+                used.insert(c);
             }
-        }
-
-        for (target, extra) in merge_adds {
-            let current = stack_counts.get(target).ok().map(|s| s.get()).unwrap_or(1);
-            commands.entity(target).insert(
-                StackCount::new(current + extra).expect("current >= 1, so current + extra >= 1"),
-            );
         }
     }
 }
@@ -498,9 +365,13 @@ pub fn build_inventory_bins(
 ) {
     bin.bins.clear();
     for creature in &creatures {
-        for item in
-            all_items_for_creature_q(creature, &contents_q, &mounted_pockets_q, &wielded_q, &worn_q)
-        {
+        for item in all_items_for_creature_q(
+            creature,
+            &contents_q,
+            &mounted_pockets_q,
+            &wielded_q,
+            &worn_q,
+        ) {
             if invlet_q.get(item).is_err() {
                 continue;
             }
@@ -515,61 +386,23 @@ pub fn build_inventory_bins(
 /// pickup, drop, and transfer operations.
 ///
 /// Reads from the broadcast `ItemMoveEvent` message queue each frame.
-/// Uses `Commands` for deferred entity mutation so relationship hooks
-/// (`InsideContainer` ↔ `ContainerContents`) fire at the right time.
-pub fn process_item_move_events(mut reader: MessageReader<ItemMoveEvent>, mut commands: Commands) {
-    let events: Vec<ItemMoveEvent> = reader.read().cloned().collect();
-    for event in events {
-        match (event.from, event.to) {
-            // Ground → Container (pickup)
-            (MoveLocation::Ground(_), MoveLocation::Container(container)) => {
-                commands
-                    .entity(event.item)
-                    .remove::<WorldPosition>()
-                    .insert(InsideContainer(container));
-            }
-            // Container → Ground (drop)
-            (MoveLocation::Container(_container), MoveLocation::Ground(pos)) => {
-                commands
-                    .entity(event.item)
-                    .remove::<InsideContainer>()
-                    .remove::<Invlet>()
-                    .insert(WorldPosition(pos));
-            }
-            // Container → Container (transfer)
-            (MoveLocation::Container(_from), MoveLocation::Container(to)) => {
-                // Inserting a new InsideContainer replaces the old one;
-                // relationship hooks handle both ContainerContents updates.
-                commands
-                    .entity(event.item)
-                    .insert(InsideContainer(to))
-                    .remove::<Invlet>();
-            }
-            // Ground → Wielded (pickup into hands)
-            (MoveLocation::Ground(_), MoveLocation::Wielded(wielder)) => {
-                commands
-                    .entity(event.item)
-                    .remove::<WorldPosition>()
-                    .insert(WieldedBy(wielder));
-            }
-            // Wielded → Ground (drop from hands)
-            (MoveLocation::Wielded(_wielder), MoveLocation::Ground(pos)) => {
-                commands
-                    .entity(event.item)
-                    .remove::<WieldedBy>()
-                    .remove::<Invlet>()
-                    .insert(WorldPosition(pos));
-            }
-            // Wielded → Container (stow from hands)
-            (MoveLocation::Wielded(_wielder), MoveLocation::Container(container)) => {
-                commands
-                    .entity(event.item)
-                    .remove::<WieldedBy>()
-                    .insert(InsideContainer(container))
-                    .remove::<Invlet>();
-            }
-            _ => {}
-        }
+/// Validates and commits synchronously; later requests observe prior commits.
+/// Publishes a terminal ItemMoveResult for every request.
+pub fn process_item_move_events(
+    world: &mut World,
+    mut reader: Local<MessageCursor<ItemMoveEvent>>,
+) {
+    let events: Vec<_> = reader
+        .read(world.resource::<Messages<ItemMoveEvent>>())
+        .cloned()
+        .collect();
+    for request in events {
+        let result = super::transfer::apply_legacy_move(world, &request);
+        world.write_message(cdda_components::events::ItemMoveResult {
+            request,
+            accepted: result.is_ok(),
+            reason: result.err().map(|e| format!("{e:?}")),
+        });
     }
 }
 
@@ -619,76 +452,16 @@ pub fn items_in_container(container: Entity, world: &World) -> Vec<Entity> {
 /// Check whether `item` can fit into `container` based on pocket/container
 /// volume, weight, and length constraints.
 pub fn can_fit_in_container(world: &World, container: Entity, item: Entity) -> bool {
-    use cdda_components::def::{ItemLongestSide, ItemWeight};
-
-    let item_vol = match world.get::<ItemVolume>(item) {
-        Some(v) => Volume::from_milliliters(v.0 as u64),
-        None => return true, // no volume restriction
-    };
-    let item_wgt = match world.get::<ItemWeight>(item) {
-        Some(w) => Weight::from_grams(w.0 as u64),
-        None => Weight::ZERO,
-    };
-
-    // Check pocket constraints first
-    if let Some(pocket) = world.get::<Pocket>(container) {
-        if item_vol > pocket.max_volume {
-            return false;
-        }
-        if item_wgt > pocket.max_weight {
-            return false;
-        }
-        if item_vol < pocket.min_item_volume {
-            return false;
-        }
-        if let Some(longest) = world.get::<ItemLongestSide>(item) {
-            if Length::from_millimeters(longest.0) > pocket.max_item_length {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    // Check generic container constraints
-    if let Some(cd) = world.get::<Container>(container) {
-        let current_vol = total_container_volume(world, container);
-        return current_vol + item_vol <= cd.capacity;
-    }
-
-    true
+    super::capacity::validate_capacity(world, container, item).is_ok()
 }
 
-/// Total volume occupied by all items inside `container`.
+/// Recursive contents load, including stacks and flexible nested pockets.
+/// Invalid graphs/overflow saturate display totals; validation returns an error.
 pub fn total_container_volume(world: &World, container: Entity) -> Volume {
-    let mut total = Volume::ZERO;
-    if let Some(contents) = world.get::<ContainerContents>(container) {
-        for child in contents.iter() {
-            let vol = world
-                .get::<ItemVolume>(child)
-                .map(|v| v.0 as u64)
-                .unwrap_or(0);
-            let count = world.get::<StackCount>(child).map(|s| s.get()).unwrap_or(1);
-            total = total + Volume::from_milliliters(vol * count as u64);
-        }
-    }
-    total
+    Volume(super::capacity::contents_load(world, container).map_or(u64::MAX, |v| v.volume_ml))
 }
-
-/// Total weight of all items inside `container`.
 pub fn total_container_weight(world: &World, container: Entity) -> Weight {
-    use cdda_components::def::ItemWeight;
-    let mut total = Weight::ZERO;
-    if let Some(contents) = world.get::<ContainerContents>(container) {
-        for child in contents.iter() {
-            let wgt = world
-                .get::<ItemWeight>(child)
-                .map(|w| w.0 as u64)
-                .unwrap_or(0);
-            let count = world.get::<StackCount>(child).map(|s| s.get()).unwrap_or(1);
-            total = total + Weight::from_grams(wgt * count as u64);
-        }
-    }
-    total
+    Weight(super::capacity::contents_load(world, container).map_or(u64::MAX, |v| v.weight_g))
 }
 
 // ===========================================================================
@@ -701,117 +474,11 @@ pub fn total_container_weight(world: &World, container: Entity) -> Weight {
 /// and `incoming` is despawned. Returns `true` if merged.
 ///
 /// # Invariant
-/// Both entities must be of the same `DefOrigin` (or same `DefStrId`).
-/// Different damage levels or charge states prevent merging.
+/// Both entities must have the same immediate location and compatible identity,
+/// dimensions and damage. Stateful containers cannot merge. Legacy charge totals
+/// are checked and summed; no relocation or AP charge occurs.
 pub fn merge_or_stack(world: &mut World, target: Entity, incoming: Entity) -> bool {
-    use cdda_components::def::DefStrId;
-
-    let same_type = match (
-        world.get::<DefOrigin>(target),
-        world.get::<DefOrigin>(incoming),
-    ) {
-        (Some(t), Some(i)) => t.0 == i.0,
-        _ => match (
-            world.get::<DefStrId>(target),
-            world.get::<DefStrId>(incoming),
-        ) {
-            (Some(t), Some(i)) => t.0 == i.0,
-            _ => return false,
-        },
-    };
-    if !same_type {
-        return false;
-    }
-
-    let incoming_count = world
-        .get::<StackCount>(incoming)
-        .map(|s| s.get())
-        .unwrap_or(1);
-    let target_count = world
-        .get::<StackCount>(target)
-        .map(|s| s.get())
-        .unwrap_or(1);
-    let incoming_charges = world
-        .get::<CurrentCharges>(incoming)
-        .map(|c| c.0)
-        .unwrap_or(0);
-    let target_charges = world
-        .get::<CurrentCharges>(target)
-        .map(|c| c.0)
-        .unwrap_or(0);
-    let incoming_damage = world.get::<ItemDamage>(incoming).map(|d| d.0).unwrap_or(0);
-    let target_damage = world.get::<ItemDamage>(target).map(|d| d.0).unwrap_or(0);
-
-    if incoming_damage != target_damage {
-        return false;
-    }
-
-    world.entity_mut(target).insert(
-        StackCount::new(target_count + incoming_count)
-            .expect("target_count + incoming_count >= 1 for any merge"),
-    );
-    world
-        .entity_mut(target)
-        .insert(CurrentCharges(target_charges + incoming_charges));
-    world.despawn(incoming);
-    true
-}
-
-// ===========================================================================
-// Move operations — generate events
-// ===========================================================================
-
-/// Pick up an item from the ground into a container (creature inventory or
-/// nested container). Emits an `ItemMoveEvent`.
-pub fn pickup_item(
-    _commands: &mut Commands,
-    collector: Entity,
-    item: Entity,
-    item_query: &Query<(&WorldPosition, Option<&StackCount>)>,
-) -> Option<ItemMoveEvent> {
-    if let Ok((pos, stack)) = item_query.get(item) {
-        let count = stack.map(|s| s.get()).unwrap_or(1);
-        Some(ItemMoveEvent {
-            item,
-            from: MoveLocation::Ground(pos.0),
-            to: MoveLocation::Container(collector),
-            count,
-        })
-    } else {
-        None
-    }
-}
-
-/// Drop an item from a container onto the ground at `drop_pos`.
-/// Emits an `ItemMoveEvent`.
-pub fn drop_item(
-    _commands: &mut Commands,
-    container: Entity,
-    item: Entity,
-    drop_pos: WorldPos,
-) -> Option<ItemMoveEvent> {
-    Some(ItemMoveEvent {
-        item,
-        from: MoveLocation::Container(container),
-        to: MoveLocation::Ground(drop_pos),
-        count: 1,
-    })
-}
-
-/// Transfer an item from one container to another.
-/// Emits an `ItemMoveEvent`.
-pub fn transfer_item(
-    _commands: &mut Commands,
-    item: Entity,
-    from_container: Entity,
-    to_container: Entity,
-) -> Option<ItemMoveEvent> {
-    Some(ItemMoveEvent {
-        item,
-        from: MoveLocation::Container(from_container),
-        to: MoveLocation::Container(to_container),
-        count: 1,
-    })
+    super::merge::merge_stacks(world, target, incoming)
 }
 
 // ===========================================================================
@@ -824,6 +491,7 @@ mod tests {
     use crate::runtime::test_utils::TestBed;
     use cdda_components::actor::Creature;
     use cdda_components::def::{DefStrId, ItemName, ItemWeight};
+    use cdda_components::item::{Container, Pocket};
 
     fn setup(t: &mut TestBed) {
         t.register::<DefOrigin>();
@@ -965,6 +633,9 @@ mod tests {
         assert_eq!(target, Some(a));
 
         // Perform merge
+        t.world_mut()
+            .entity_mut(b)
+            .insert(InsideContainer(creature));
         let merged = merge_or_stack(&mut t.world_mut(), a, b);
         assert!(merged);
         assert_eq!(t.get::<StackCount>(a).unwrap().get(), 5);
@@ -1003,6 +674,9 @@ mod tests {
             .entity_mut(a)
             .insert(InsideContainer(creature));
 
+        t.world_mut()
+            .entity_mut(b)
+            .insert(InsideContainer(creature));
         let merged = merge_or_stack(&mut t.world_mut(), a, b);
         assert!(merged);
         assert_eq!(t.get::<CurrentCharges>(a).unwrap().0, 200);

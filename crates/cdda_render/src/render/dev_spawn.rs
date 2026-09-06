@@ -5,21 +5,22 @@
 //!
 //! Spawned on `OnEnter(Ctx::DevSpawnPanel)`, auto-despawned via `DespawnOnExit`.
 //! The layout skeleton (title / body-row / filter / footer) is built once and
-//! persists; only the *content* inside each container is rebuilt each frame.
+//! persists; keyed rows are recycled and details update independently of scrolling.
 
 use bevy::prelude::*;
+use bevy_ecs::system::SystemParam;
 use bevy_state::state_scoped::DespawnOnExit;
+use cdda_ui::{sync_virtual_pane, FocusedRow, RetainedRows, RowCell, TextRow, VirtualList};
 
 use super::FooterHint;
 use crate::render::item_detail::{spawn_item_detail, ItemDetailQueries};
 use crate::render::theme::{self, UiTheme};
-use cdda_components::context::ContextActions;
 use cdda_components::def::{DefStrId, IsDef, ItemName};
 use cdda_context::ctx::Ctx;
 use cdda_context::screen::CddaScreen;
+use cdda_context::state::ContextActions;
 use cdda_data::interner::{
-    AmmoTypeRegistry, BodyPartRegistry, ComestibleRegistry, ItemTypeRegistry, QualityRegistry,
-    SkillRegistry,
+    AmmoTypeRegistry, BodyPartRegistry, ComestibleRegistry, QualityRegistry, SkillRegistry,
 };
 use cdda_input::ActiveKeybindings;
 use cdda_input::BindableAction;
@@ -29,7 +30,7 @@ use cdda_input::BindableAction;
 // ---------------------------------------------------------------------------
 
 /// Entry in the dev-spawn item catalog.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DevCatalogEntry {
     pub def_entity: Entity,
     pub name: String,
@@ -40,40 +41,80 @@ pub struct DevCatalogEntry {
 #[derive(Resource, Debug, Default)]
 pub struct DevSpawnFocus {
     pub index: usize,
-    pub catalog: Vec<DevCatalogEntry>,
     pub filter: String,
     pub filtering: bool,
 }
 
-impl DevSpawnFocus {
-    pub fn filtered_entries(&self) -> Vec<&DevCatalogEntry> {
-        if self.filter.is_empty() {
-            self.catalog.iter().collect()
-        } else {
-            let q = self.filter.to_lowercase();
-            self.catalog
-                .iter()
-                .filter(|e| {
-                    e.name.to_lowercase().contains(&q) || e.def_id.to_lowercase().contains(&q)
-                })
-                .collect()
+/// Extracted item labels and identities, independent of focus/filter input.
+#[derive(Resource, Debug, Default, PartialEq, Eq)]
+pub struct DevSpawnCatalog {
+    pub entries: Vec<DevCatalogEntry>,
+}
+
+/// Membership is rebuilt only for a catalog revision or filter edit.
+#[derive(Default)]
+pub struct SpawnFilter {
+    key: Option<(u32, String)>,
+    pub indices: Vec<usize>,
+    pub rebuilds: u64,
+}
+impl SpawnFilter {
+    pub fn update(&mut self, catalog: &DevSpawnCatalog, filter: &str, version: u32) {
+        if self
+            .key
+            .as_ref()
+            .is_some_and(|(v, f)| *v == version && f == filter)
+        {
+            return;
         }
+        let query = filter.to_lowercase();
+        self.indices = catalog
+            .entries
+            .iter()
+            .enumerate()
+            .filter_map(|(i, e)| {
+                (query.is_empty()
+                    || e.name.to_lowercase().contains(&query)
+                    || e.def_id.to_lowercase().contains(&query))
+                .then_some(i)
+            })
+            .collect();
+        self.key = Some((version, filter.to_string()));
+        self.rebuilds += 1;
     }
 }
 
-/// Populate [`DevSpawnFocus`]'s item catalog from the definition world.
-///
-/// Every item-definition entity (marked `IsDef` with an `ItemName`) becomes a
-/// catalog entry.  Run on `OnEnter(DevSpawnPanel)`.  Idempotent — if the
-/// catalog already has entries it returns early so the screen doesn't resize
-/// itself on every keypress.
+/// Gate extraction while the screen is open, including removed components.
+pub fn dev_spawn_catalog_changed(
+    changed: Query<
+        (),
+        (
+            With<IsDef>,
+            Or<(Changed<ItemName>, Changed<DefStrId>, Added<IsDef>)>,
+        ),
+    >,
+    mut removed_names: RemovedComponents<ItemName>,
+    mut removed_ids: RemovedComponents<DefStrId>,
+    mut removed_defs: RemovedComponents<IsDef>,
+    mut initialized: Local<bool>,
+) -> bool {
+    // Drain every reader even if an earlier source was already dirty.
+    let removed =
+        removed_names.read().count() + removed_ids.read().count() + removed_defs.read().count();
+    let dirty = !*initialized || !changed.is_empty() || removed != 0;
+    *initialized = true;
+    dirty
+}
+
+/// Refresh the item catalog; run unconditionally on entry so changes made while
+/// the screen was closed are observed even after removal events have expired.
+/// Selection follows the stable source ID across definition entity replacement.
 pub fn dev_spawn_populate(
     mut focus: ResMut<DevSpawnFocus>,
+    mut catalog: ResMut<DevSpawnCatalog>,
+    mut view: Local<SpawnFilter>,
     items: Query<(Entity, &ItemName, &DefStrId), With<IsDef>>,
 ) {
-    if !focus.catalog.is_empty() {
-        return;
-    }
     let mut entries: Vec<DevCatalogEntry> = items
         .iter()
         .map(|(def_entity, name, id)| DevCatalogEntry {
@@ -82,9 +123,31 @@ pub fn dev_spawn_populate(
             def_entity,
         })
         .collect();
-    entries.sort_by(|a, b| a.name.cmp(&b.name));
-    focus.catalog = entries;
-    focus.index = 0;
+    entries.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.def_id.cmp(&b.def_id)));
+    if catalog.entries == entries {
+        return;
+    }
+    view.update(&catalog, &focus.filter, catalog.last_changed().get());
+    let selected = view
+        .indices
+        .get(focus.index)
+        .map(|&i| catalog.entries[i].def_id.clone());
+    catalog.entries = entries;
+    // The resource tick may equal the prior extraction within one frame; force
+    // membership refresh after replacing the source rather than assuming a tick.
+    view.key = None;
+    view.update(&catalog, &focus.filter, catalog.last_changed().get());
+    let index = selected
+        .as_ref()
+        .and_then(|id| {
+            view.indices
+                .iter()
+                .position(|&i| &catalog.entries[i].def_id == id)
+        })
+        .unwrap_or_else(|| focus.index.min(view.indices.len().saturating_sub(1)));
+    if focus.index != index {
+        focus.index = index;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -92,19 +155,19 @@ pub fn dev_spawn_populate(
 // ---------------------------------------------------------------------------
 
 #[derive(Component)]
-pub(crate) struct SpawnListContainer;
+pub struct SpawnListContainer;
 
 #[derive(Component)]
-pub(crate) struct SpawnTitleBar;
+pub struct SpawnTitleBar;
 
 #[derive(Component)]
-pub(crate) struct SpawnListPanel;
+pub struct SpawnListPanel;
 
 #[derive(Component)]
-pub(crate) struct SpawnDetailPanel;
+pub struct SpawnDetailPanel;
 
 #[derive(Component)]
-pub(crate) struct SpawnFilterBar;
+pub struct SpawnFilterBar;
 
 // ---------------------------------------------------------------------------
 // Shared item detail queries
@@ -160,7 +223,7 @@ pub fn spawn_dev_spawn_panel(
             BackgroundColor(theme::BG),
         ))
         .with_children(|root| {
-            // Title bar — children rebuilt each frame
+            // Fixed title and count, updated in place
             root.spawn((
                 SpawnTitleBar,
                 Node {
@@ -172,7 +235,27 @@ pub fn spawn_dev_spawn_panel(
                     ..default()
                 },
                 BackgroundColor(theme::HEADER_BG),
-            ));
+            ))
+            .with_children(|header| {
+                header.spawn((
+                    SpawnHeading,
+                    Text::new("DEBUG: SPAWN ITEM"),
+                    TextFont {
+                        font_size: 22.0,
+                        ..default()
+                    },
+                    TextColor(theme::TEXT_BRIGHT),
+                ));
+                header.spawn((
+                    SpawnCount,
+                    Text::default(),
+                    TextFont {
+                        font_size: 13.0,
+                        ..default()
+                    },
+                    TextColor(theme::TEXT_DIM),
+                ));
+            });
 
             // Body row: grows to fill all space between title and footer
             root.spawn((Node {
@@ -187,6 +270,7 @@ pub fn spawn_dev_spawn_panel(
                     // Left: list panel — children rebuilt each frame
                     body.spawn((
                         SpawnListPanel,
+                        RetainedRows::<Option<String>>::default(),
                         crate::render::scroll::KeyboardScroll,
                         crate::render::scroll::FocusedRow::default(),
                         crate::render::scroll::VirtualList {
@@ -226,7 +310,7 @@ pub fn spawn_dev_spawn_panel(
                     ));
                 });
 
-            // Filter bar — background + child rebuilt each frame
+            // Fixed filter text
             root.spawn((
                 SpawnFilterBar,
                 Node {
@@ -237,6 +321,15 @@ pub fn spawn_dev_spawn_panel(
                 },
                 BackgroundColor(Color::NONE),
                 BorderColor::all(theme::DIVIDER),
+            ))
+            .with_child((
+                SpawnFilterText,
+                Text::default(),
+                TextFont {
+                    font_size: 13.0,
+                    ..default()
+                },
+                TextColor(theme::TEXT_DIM),
             ));
 
             // Footer — static, built once
@@ -266,203 +359,220 @@ pub fn spawn_dev_spawn_panel(
 }
 
 // ---------------------------------------------------------------------------
-// Update — rebuild only the *content* inside each persistent container
+// Update — independently synchronize rows, fixed text and selected detail.
 // ---------------------------------------------------------------------------
 
-pub(crate) fn update_dev_spawn_panel(
+#[derive(Component)]
+pub struct SpawnHeading;
+#[derive(Component)]
+pub struct SpawnCount;
+#[derive(Component)]
+pub struct SpawnFilterText;
+
+#[derive(SystemParam)]
+pub struct SpawnPanels<'w, 's> {
+    list: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static mut VirtualList,
+            &'static mut FocusedRow,
+            &'static mut ScrollPosition,
+            &'static ComputedNode,
+            &'static mut RetainedRows<Option<String>>,
+        ),
+        With<SpawnListPanel>,
+    >,
+    detail: Query<'w, 's, Entity, With<SpawnDetailPanel>>,
+    filter: Query<'w, 's, &'static mut BackgroundColor, With<SpawnFilterBar>>,
+    text: Query<
+        'w,
+        's,
+        (
+            &'static mut Text,
+            &'static mut TextColor,
+            Option<&'static SpawnHeading>,
+            Option<&'static SpawnCount>,
+        ),
+        Or<(With<SpawnHeading>, With<SpawnCount>, With<SpawnFilterText>)>,
+    >,
+}
+#[derive(Default)]
+pub struct SpawnPresentation {
+    pane: Option<Entity>,
+    filter: String,
+    membership: SpawnFilter,
+    detail_key: Option<(Entity, Option<Entity>, u32, theme::ThemePreset)>,
+}
+
+pub fn update_dev_spawn_panel(
     mut commands: Commands,
     focus: Res<DevSpawnFocus>,
-    title_bar: Query<Entity, With<SpawnTitleBar>>,
-    mut list_panel: Query<(Entity, &mut crate::render::scroll::VirtualList), With<SpawnListPanel>>,
-    detail_panel: Query<Entity, With<SpawnDetailPanel>>,
-    filter_bar: Query<Entity, With<SpawnFilterBar>>,
+    catalog: Res<DevSpawnCatalog>,
+    mut panels: SpawnPanels,
     detail: ItemDetailQueries,
     quality_registry: Res<QualityRegistry>,
     skill_registry: Res<SkillRegistry>,
     ammo_registry: Res<AmmoTypeRegistry>,
     body_part_registry: Res<BodyPartRegistry>,
     comestible_registry: Res<ComestibleRegistry>,
+    defs: Option<Res<cdda_data::def_world::DefinitionWorld>>,
     theme: Res<UiTheme>,
+    mut cache: Local<SpawnPresentation>,
 ) {
-    if !focus.is_changed()
+    let Ok((pane, mut list, mut selected, mut position, computed, mut rows)) =
+        panels.list.single_mut()
+    else {
+        return;
+    };
+    let reset = cache.pane != Some(pane) || cache.filter != focus.filter;
+    cache
+        .membership
+        .update(&catalog, &focus.filter, catalog.last_changed().get());
+    let source_changed = defs.as_ref().is_some_and(|d| d.is_changed())
+        || quality_registry.is_changed()
+        || skill_registry.is_changed()
+        || ammo_registry.is_changed()
+        || body_part_registry.is_changed()
+        || comestible_registry.is_changed();
+    if !reset
+        && !focus.is_changed()
+        && !catalog.is_changed()
         && !theme.is_changed()
-        && !list_panel.iter_mut().any(|(_, list)| list.is_changed())
+        && !source_changed
+        && !list.is_changed()
     {
         return;
     }
-    let filtered = focus.filtered_entries();
-    let total = filtered.len();
-
-    // ── Title bar ─────────────────────────────────────────────────────────
-    if let Ok(title_e) = title_bar.single() {
-        let status = if focus.filter.is_empty() {
-            format!("{} items", focus.catalog.len())
-        } else {
-            format!("{} / {} items", total, focus.catalog.len())
-        };
-        commands
-            .entity(title_e)
-            .despawn_children()
-            .with_children(|h| {
-                h.spawn((
-                    Text::new("DEBUG: SPAWN ITEM"),
-                    TextFont {
-                        font_size: 22.0,
-                        ..default()
+    cache.pane = Some(pane);
+    cache.filter.clone_from(&focus.filter);
+    let total = cache.membership.indices.len();
+    sync_virtual_pane(
+        &mut list,
+        &mut selected,
+        &mut position,
+        computed,
+        total,
+        focus.index,
+        reset,
+    );
+    let values = (list.window.0..list.window.1)
+        .map(|i| {
+            let entry = &catalog.entries[cache.membership.indices[i]];
+            (
+                Some(entry.def_id.clone()),
+                TextRow {
+                    node: Node {
+                        flex_direction: FlexDirection::Column,
+                        align_items: AlignItems::Start,
+                        padding: UiRect::axes(Val::Px(14.0), Val::Px(5.0)),
+                        border: UiRect::bottom(Val::Px(1.0)),
+                        ..list.row_node()
                     },
-                    TextColor(theme.accent()),
-                ));
-                h.spawn((
-                    Text::new(status),
-                    TextFont {
-                        font_size: 13.0,
-                        ..default()
-                    },
-                    TextColor(theme::TEXT_DIM),
-                ));
-            });
-    }
-
-    // ── List panel ────────────────────────────────────────────────────────
-    if let Ok((list_e, mut virtual_list)) = list_panel.single_mut() {
-        // Keep the virtualization size in sync with the data; the window is
-        // recomputed next frame from `ScrollPosition` by `update_virtual_windows`.
-        if virtual_list.total_rows != total {
-            virtual_list.total_rows = total;
-        }
-
-        commands
-            .entity(list_e)
-            .despawn_children()
-            .with_children(|list| {
-                if filtered.is_empty() {
-                    list.spawn((Node {
-                        padding: UiRect::axes(Val::Px(16.0), Val::Px(14.0)),
-                        ..default()
-                    },))
-                        .with_child((
-                            Text::new(if focus.catalog.is_empty() {
-                                "Loading..."
-                            } else {
-                                "No matches"
-                            }),
-                            TextFont {
-                                font_size: 16.0,
-                                ..default()
-                            },
-                            TextColor(theme::TEXT_DIM),
-                        ));
-                    return;
-                }
-
-                // Virtualized rows: a top spacer preserves scroll offset, then
-                // only the visible window's rows are spawned (so a 40k-item
-                // catalog stays cheap), then a bottom spacer keeps the scroll
-                // range equal to the full data height.
-                let (win_start, win_end) = virtual_list.window;
-                let top_px = crate::render::scroll::virtual_top_spacer_px(&virtual_list);
-                let bottom_px = crate::render::scroll::virtual_bottom_spacer_px(&virtual_list);
-                if top_px > 0.0 {
-                    list.spawn(Node {
-                        height: Val::Px(top_px),
-                        flex_shrink: 0.0,
-                        ..default()
-                    });
-                }
-
-                for i in win_start..win_end {
-                    let Some(entry) = filtered.get(i) else {
-                        break;
-                    };
-                    let is_focused = i == focus.index;
-                    let row_bg = if is_focused {
+                    background: if i == selected.0 {
                         theme.item_focus_bg()
                     } else {
                         theme::ITEM_BG
-                    };
+                    },
+                    border: theme::DIVIDER,
+                    cells: vec![
+                        RowCell::new(&entry.name, 15.0, theme::TEXT_BRIGHT),
+                        RowCell::new(&entry.def_id, 11.0, theme::TEXT_ID),
+                    ],
+                },
+            )
+        })
+        .collect::<Vec<_>>();
+    let values = if total == 0 {
+        vec![(
+            None,
+            TextRow {
+                node: list.row_node(),
+                background: theme::ITEM_BG,
+                border: theme::DIVIDER,
+                cells: vec![RowCell::new(
+                    if catalog.entries.is_empty() {
+                        "No item definitions"
+                    } else {
+                        "No matches"
+                    },
+                    16.0,
+                    theme::TEXT_DIM,
+                )],
+            },
+        )]
+    } else {
+        values
+    };
+    rows.sync(&mut commands, pane, &list, values);
 
-                    list.spawn((
-                        Node {
-                            width: Val::Percent(100.0),
-                            flex_direction: FlexDirection::Column,
-                            height: Val::Px(48.0),
-                            flex_shrink: 0.0,
-                            overflow: Overflow::clip(),
-                            padding: UiRect::axes(Val::Px(14.0), Val::Px(5.0)),
-                            border: UiRect::bottom(Val::Px(1.0)),
-                            ..default()
-                        },
-                        BackgroundColor(row_bg),
-                        BorderColor::all(theme::DIVIDER),
-                    ))
-                    .with_children(|row| {
-                        row.spawn((
-                            Text::new(entry.name.clone()),
-                            TextFont {
-                                font_size: 15.0,
-                                ..default()
-                            },
-                            TextColor(theme::TEXT_BRIGHT),
-                        ));
-                        row.spawn((
-                            Text::new(entry.def_id.clone()),
-                            TextFont {
-                                font_size: 11.0,
-                                ..default()
-                            },
-                            TextColor(theme::TEXT_ID),
-                        ));
-                    });
-                }
-                if bottom_px > 0.0 {
-                    list.spawn(Node {
-                        height: Val::Px(bottom_px),
-                        flex_shrink: 0.0,
-                        ..default()
-                    });
-                }
-            });
-
-        // Feed the focused row to the shared keep-visible scroll.
-        if focus.is_changed() {
-            commands
-                .entity(list_e)
-                .insert(crate::render::scroll::FocusedRow(focus.index));
-        }
+    for (mut text, mut color, heading, count) in &mut panels.text {
+        let (label, tint) = if heading.is_some() {
+            ("DEBUG: SPAWN ITEM".into(), theme.accent())
+        } else if count.is_some() {
+            (
+                if focus.filter.is_empty() {
+                    format!("{} items", total)
+                } else {
+                    format!("{} / {} items", total, catalog.entries.len())
+                },
+                theme::TEXT_DIM,
+            )
+        } else {
+            (
+                if focus.filtering {
+                    format!("Filter: {}_", focus.filter)
+                } else if focus.filter.is_empty() {
+                    "[/] to filter".into()
+                } else {
+                    format!("Filter: {}  (Enter=close  Esc=clear)", focus.filter)
+                },
+                if focus.filtering {
+                    theme::TEXT_BRIGHT
+                } else {
+                    theme::TEXT_DIM
+                },
+            )
+        };
+        text.set_if_neq(Text::new(label));
+        color.set_if_neq(TextColor(tint));
     }
-
-    // ── Detail panel (shared widget) ─────────────────────────────────────
-    if let Ok(det_e) = detail_panel.single() {
-        let selected_entity = filtered.get(focus.index).map(|e| e.def_entity);
-        let selected_name = filtered
-            .get(focus.index)
-            .map(|e| e.name.as_str())
-            .unwrap_or("");
-        let selected_id = filtered
-            .get(focus.index)
-            .map(|e| e.def_id.as_str())
-            .unwrap_or("");
-
-        commands
-            .entity(det_e)
-            .despawn_children()
-            .with_children(|d| {
-                let Some(def) = selected_entity else {
-                    d.spawn((
-                        Text::new("Select an item"),
-                        TextFont {
-                            font_size: 16.0,
-                            ..default()
-                        },
-                        TextColor(theme::TEXT_DIM),
-                    ));
-                    return;
-                };
+    if let Ok(mut bg) = panels.filter.single_mut() {
+        bg.set_if_neq(BackgroundColor(if focus.filtering {
+            theme::FILTER_ACTIVE_BG
+        } else {
+            Color::NONE
+        }));
+    }
+    let Ok(panel) = panels.detail.single() else {
+        return;
+    };
+    let entry = cache
+        .membership
+        .indices
+        .get(focus.index)
+        .map(|&i| &catalog.entries[i]);
+    let key = (
+        panel,
+        entry.map(|e| e.def_entity),
+        catalog.last_changed().get(),
+        theme.preset,
+    );
+    if cache.detail_key == Some(key) && !source_changed {
+        return;
+    }
+    cache.detail_key = Some(key);
+    commands
+        .entity(panel)
+        .despawn_children()
+        .with_children(|parent| {
+            if let Some(entry) = entry {
                 spawn_item_detail(
-                    d,
-                    selected_name,
-                    selected_id,
-                    def,
+                    parent,
+                    &entry.name,
+                    &entry.def_id,
+                    entry.def_entity,
                     &detail,
                     &quality_registry,
                     &skill_registry,
@@ -470,35 +580,15 @@ pub(crate) fn update_dev_spawn_panel(
                     &body_part_registry,
                     &comestible_registry,
                 );
-            });
-    }
-
-    // ── Filter bar ────────────────────────────────────────────────────────
-    if let Ok(filt_e) = filter_bar.single() {
-        let filter_bg = if focus.filtering {
-            theme::FILTER_ACTIVE_BG
-        } else {
-            Color::NONE
-        };
-        let filter_text = if focus.filtering {
-            format!("Filter: {}_", focus.filter)
-        } else if focus.filter.is_empty() {
-            "[/] to filter".to_string()
-        } else {
-            format!("Filter: {}  (Enter=close  Esc=clear)", focus.filter)
-        };
-        commands.entity(filt_e).insert(BackgroundColor(filter_bg));
-        commands.entity(filt_e).despawn_children().with_child((
-            Text::new(filter_text),
-            TextFont {
-                font_size: 13.0,
-                ..default()
-            },
-            TextColor(if focus.filtering {
-                theme::TEXT_BRIGHT
             } else {
-                theme::TEXT_DIM
-            }),
-        ));
-    }
+                parent.spawn((
+                    Text::new("Select an item"),
+                    TextFont {
+                        font_size: 16.0,
+                        ..default()
+                    },
+                    TextColor(theme::TEXT_DIM),
+                ));
+            }
+        });
 }

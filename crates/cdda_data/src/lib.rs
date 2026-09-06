@@ -33,3 +33,6 @@ pub mod schema_gen;
 
 pub use loader::Loader;
 pub use registry::DefRegistry;
+
+pub mod inventory_import;
+pub mod inventory_publish;

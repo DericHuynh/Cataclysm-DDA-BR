@@ -14,15 +14,15 @@ use crate::render::theme::{self, UiTheme};
 use crate::render::tiles::TileRegistry;
 use bevy::prelude::*;
 use bevy_state::state_scoped::DespawnOnExit;
-use cdda_components::context::ContextActions;
 use cdda_components::def::{ItemName, ItemSymbol};
 use cdda_components::dev::{DevGroundItemName, DevPlayer};
 use cdda_components::item::{
-    ContainerContents, InProgressCraft, InventoryFocus, Invlet, ItemType, MountedPockets,
-    StackCount, WieldedBy, WieldedItems, WornBy,
+    ContainerContents, InProgressCraft, Invlet, ItemType, MountedPockets, StackCount, WieldedBy,
+    WieldedItems, WornBy,
 };
 use cdda_context::ctx::Ctx;
 use cdda_context::screen::CddaScreen;
+use cdda_context::state::ContextActions;
 use cdda_data::interner::ItemTypeRegistry;
 use cdda_input::ActiveKeybindings;
 use cdda_input::BindableAction;
@@ -843,3 +843,17 @@ pub(crate) fn update_inventory_screen(world: &mut World) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// ===========================================================================
+// InventoryFocus — focused row in the inventory screen
+// ===========================================================================
+
+/// Tracks which item row (by sorted position) is focused in the inventory screen.
+///
+/// `panel`: 0 = pocket list (left), 1 = wielded panel (top-right).
+/// Written by `inventory_screen_input`, read by `cdda_render` to highlight rows.
+#[derive(Resource, Debug, Clone, Default)]
+pub struct InventoryFocus {
+    pub index: usize,
+    pub panel: usize,
+}
