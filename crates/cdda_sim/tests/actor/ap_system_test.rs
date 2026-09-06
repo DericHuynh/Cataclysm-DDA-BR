@@ -309,7 +309,10 @@ fn dead_actors_excluded_from_turn_queue() {
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
-    test.spawn((ActionPoints::default(),)); // no IsAlive
+    // ActionPoints requires IsAlive on insertion; simulate death explicitly.
+    let dead = test.spawn((ActionPoints::default(),));
+    test.world_mut().entity_mut(dead).remove::<IsAlive>();
+    assert!(test.get::<IsAlive>(dead).is_none());
     let alive = test.spawn((IsAlive, ActionPoints::default()));
 
     test.run_system(tick_move_points);
@@ -317,6 +320,7 @@ fn dead_actors_excluded_from_turn_queue() {
     let queue = test.resource::<TurnQueue>();
     assert_eq!(queue.actors.len(), 1);
     assert_eq!(queue.actors[0].entity, alive);
+    assert_eq!(test.get::<ActionPoints>(dead).unwrap().current, 0);
 }
 
 /// Faster actors have higher MP in the queue and act first.

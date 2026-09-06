@@ -57,13 +57,13 @@ fn hours_elapsed_one_day() {
     let time = GameTime {
         turn: GameTime::TURNS_PER_DAY,
     };
-    // 14400 * 6 / 3600 = 24
+    // 86400 one-second turns / 3600 = 24
     assert_eq!(time.hours_elapsed(), 24);
 }
 
 #[test]
 fn hours_elapsed_partial_day() {
-    let time = GameTime { turn: 6000 };
-    // 6000 * 6 / 3600 = 10
+    let time = GameTime { turn: 36000 };
+    // 36000 one-second turns / 3600 = 10
     assert_eq!(time.hours_elapsed(), 10);
 }

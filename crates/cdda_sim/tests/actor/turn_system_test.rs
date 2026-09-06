@@ -105,16 +105,21 @@ fn tick_move_points_ignores_non_alive() {
     let mut test = TestBed::new();
     test.register::<IsAlive>();
     test.register::<ActionPoints>();
+    test.add_message::<cdda_components::messages::TurnAdvanced>();
     test.insert_resource(TurnQueue::default());
     test.insert_resource(GameTime::default());
 
-    // Entity without IsAlive — should be skipped
-    test.spawn((ActionPoints::default(),));
+    // ActionPoints inserts IsAlive automatically; remove it to model death.
+    let dead = test.spawn((ActionPoints::default(),));
+    test.world_mut().entity_mut(dead).remove::<IsAlive>();
+    assert!(test.get::<IsAlive>(dead).is_none());
 
     test.run_system(tick_move_points);
 
     let queue = test.resource::<TurnQueue>();
     assert_eq!(queue.actors.len(), 0);
+    assert_eq!(test.get::<ActionPoints>(dead).unwrap().current, 0);
+    assert_eq!(test.resource::<GameTime>().turn, 1, "tick actually ran");
 }
 
 // ---------------------------------------------------------------------------

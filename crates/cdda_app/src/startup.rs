@@ -98,13 +98,27 @@ pub fn load_data_system(world: &mut World) {
 /// built.
 ///
 /// During hot reload the app is already `InGame`; in that case the state is
-/// left untouched (only transition on first load, from `DataLoading`).
+/// left untouched (only transition on first load, from `DataLoading`). Returns
+/// false if terrain IDs were removed: the reload is rejected before rebuilding
+/// definition entities, and existing handles/resources remain valid.
 pub(crate) fn apply_registry_to_world(
     world: &mut World,
     registry: &cdda_data::DefRegistry,
     count: usize,
-) {
+) -> bool {
     use tracing::info;
+
+    // Validate the terrain reload before mutating any definition-dependent world
+    // state. Existing chunks hold process-local slots which must not be reused.
+    let terrain_registry =
+        match build_terrain_registry(registry, world.get_resource::<TerrainRegistry>()) {
+            Ok(terrain_registry) => terrain_registry,
+            Err(error) => {
+                tracing::error!(%error, "Definition reload rejected; existing terrain IDs must remain available");
+                world.resource_mut::<LoadingStatus>().current_phase = format!("Reload rejected: {error}");
+                return false;
+            }
+        };
 
     world.resource_mut::<LoadingStatus>().current_phase = "Building definition entities...".into();
     let def_world = build_def_world(world, registry, true);
@@ -121,8 +135,9 @@ pub(crate) fn apply_registry_to_world(
         registry.monsters.len(),
     );
 
-    // --- Build TerrainRegistry from overmap_terrains ---
-    build_terrain_registry(world, registry, &def_world);
+    // --- Publish the validated, handle-preserving terrain registry ---
+    world.insert_resource(CoreTerrains::from_registry(&terrain_registry));
+    world.insert_resource(terrain_registry);
 
     world.insert_resource(CityBuildings(registry.city_buildings.clone()));
 
@@ -157,6 +172,7 @@ pub(crate) fn apply_registry_to_world(
             .resource_mut::<NextState<AppState>>()
             .set(AppState::WorldGen);
     }
+    true
 }
 
 // ===========================================================================
@@ -164,10 +180,9 @@ pub(crate) fn apply_registry_to_world(
 // ===========================================================================
 
 fn build_terrain_registry(
-    world: &mut World,
     registry: &cdda_data::DefRegistry,
-    _def_world: &DefinitionWorld,
-) {
+    existing: Option<&TerrainRegistry>,
+) -> Result<TerrainRegistry, cdda_overmap::registry::TerrainRegistryReloadError> {
     use tracing::info;
     let mut treg = TerrainRegistry::empty();
 
@@ -340,9 +355,13 @@ fn build_terrain_registry(
         "TerrainRegistry built: {} terrain types registered",
         treg.len()
     );
-    let core_terrains = CoreTerrains::from_registry(&treg);
-    world.insert_resource(core_terrains);
-    world.insert_resource(treg);
+    if let Some(existing) = existing {
+        let mut rebuilt = existing.clone();
+        rebuilt.rebuild_from(&treg)?;
+        Ok(rebuilt)
+    } else {
+        Ok(treg)
+    }
 }
 
 // ===========================================================================

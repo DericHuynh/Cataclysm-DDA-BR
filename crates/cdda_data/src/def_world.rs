@@ -29,41 +29,83 @@ use std::collections::HashMap;
 // Resource: DefinitionWorld
 // ===========================================================================
 
-/// Maps string definition IDs (e.g. "glock_17", "zombie") to the Entity
-/// in the main game World that holds the definition components.
+/// Definition category — the namespace of a definition key. Same-text IDs in
+/// different categories are distinct definitions (an item "zombie" and a
+/// monster "zombie" must not overwrite each other).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DefCategory {
+    Item,
+    Monster,
+    Terrain,
+    Furniture,
+    Recipe,
+    BodyPart,
+}
+
+/// Maps typed definition keys (category + string ID) to the definition Entity
+/// in the main game World. Also keeps a flat item index: every current string
+/// lookup is an item lookup, and items were the only unambiguous users.
 ///
-/// Definition entities are marked with `IsDef` and can be queried directly
-/// from any system: `Query<&GunData, With<IsDef>>`.
+/// A `generation` counter increments on every rebuild so runtime caches can
+/// detect staleness. Definition entities are marked with `IsDef`.
 #[derive(Resource, Debug, Default)]
 pub struct DefinitionWorld {
-    index: HashMap<String, Entity>,
+    by_key: HashMap<(DefCategory, String), Entity>,
+    items: HashMap<String, Entity>,
+    generation: u64,
 }
 
 impl DefinitionWorld {
     pub fn empty() -> Self {
         Self {
-            index: HashMap::new(),
+            by_key: HashMap::new(),
+            items: HashMap::new(),
+            generation: 0,
         }
     }
 
-    /// Look up a definition entity by its string ID.
+    /// Look up an ITEM definition entity by its string ID. (Legacy flat
+    /// lookup; unambiguous because only item builders feed the flat index.)
     pub fn entity_by_str(&self, id: &str) -> Option<Entity> {
-        self.index.get(id).copied()
+        self.items.get(id).copied()
     }
 
-    /// Register a mapping from string ID to entity.
-    fn register(&mut self, id: String, entity: Entity) {
-        self.index.insert(id, entity);
+    /// Look up a definition entity by its typed key.
+    pub fn entity_in(&self, category: DefCategory, id: &str) -> Option<Entity> {
+        self.by_key.get(&(category, id.to_string())).copied()
     }
 
-    /// Number of registered definitions.
+    /// Number of times the definition set was rebuilt (0 = never built).
+    /// Runtime components caching definition entities should re-resolve when
+    /// this changes.
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    /// Register a definition entity under its typed key; items also enter the
+    /// flat legacy index. Same-key replacement is the normal reload path;
+    /// cross-category same-text IDs no longer collide.
+    fn register(&mut self, category: DefCategory, id: String, entity: Entity) {
+        self.by_key.insert((category, id.clone()), entity);
+        if category == DefCategory::Item {
+            self.items.insert(id, entity);
+        }
+    }
+
+    /// Number of registered definitions across all categories.
     pub fn len(&self) -> usize {
-        self.index.len()
+        self.by_key.len()
     }
 
-    /// Iterate over all (id, entity) pairs.
-    pub fn iter(&self) -> impl Iterator<Item = (&str, Entity)> + '_ {
-        self.index.iter().map(|(id, &e)| (id.as_str(), e))
+    pub fn is_empty(&self) -> bool {
+        self.by_key.is_empty()
+    }
+
+    /// Iterate over all (category, id, entity) triples.
+    pub fn iter(&self) -> impl Iterator<Item = (DefCategory, &str, Entity)> + '_ {
+        self.by_key
+            .iter()
+            .map(|((c, id), &e)| (*c, id.as_str(), e))
     }
 }
 
@@ -259,6 +301,13 @@ pub fn build_def_world(
     }
 
     let mut def_world = DefinitionWorld::empty();
+    // Bump the generation so runtime caches of definition entities can detect
+    // a rebuild (hot reload) and re-resolve their references.
+    def_world.generation = world
+        .get_resource::<DefinitionWorld>()
+        .map(|previous| previous.generation())
+        .unwrap_or(0)
+        + 1;
 
     if spawn_all {
         build_item_defs(world, def_registry, &mut def_world);
@@ -718,7 +767,7 @@ fn build_item_defs(
             });
         }
 
-        def_world.register(id_str, entity);
+        def_world.register(DefCategory::Item, id_str, entity);
     }
 }
 
@@ -801,7 +850,7 @@ fn build_monster_defs(
             });
         }
 
-        def_world.register(id_str, monster_entity);
+        def_world.register(DefCategory::Monster, id_str, monster_entity);
     }
 }
 
@@ -833,7 +882,7 @@ fn build_terrain_defs(
                 TerrainConnectsTo(flags_to_vec(&terrain.connects_to)),
             ))
             .id();
-        def_world.register(id_str, e);
+        def_world.register(DefCategory::Terrain, id_str, e);
     }
 }
 
@@ -876,7 +925,7 @@ fn build_furniture_defs(
                 ),
             ))
             .id();
-        def_world.register(id_str, e);
+        def_world.register(DefCategory::Furniture, id_str, e);
     }
 }
 
@@ -902,7 +951,7 @@ fn build_recipe_defs(
         def_registry.items.keys().map(|k| k.as_str()).collect();
 
     let mut recipe_entities: Vec<Entity> = Vec::new();
-    for (_def_id, recipe) in &def_registry.recipes {
+    for (def_id, recipe) in &def_registry.recipes {
         // Skip abstract recipes and those with no result item.
         if recipe.abstract_.unwrap_or(false) {
             continue;
@@ -928,12 +977,17 @@ fn build_recipe_defs(
             .spawn((
                 IsDef,
                 IsRecipeDef,
+                // The resolved composite key (result + suffix/variant) is the
+                // recipe's stable identity; runtime references re-resolve by
+                // it instead of trusting a pre-reload Entity id.
+                DefStrId(def_id.to_string()),
                 RecipeResult(result_id),
                 RecipeResultCount(result_count),
                 RecipeTime(time_turns),
                 RecipeDifficulty(recipe.difficulty),
             ))
             .id();
+        def_world.register(DefCategory::Recipe, def_id.to_string(), entity);
 
         if let Some(skill) = &recipe.skill_used {
             let skill_token = world
@@ -1122,19 +1176,19 @@ fn build_body_part_defs(
             }
         }
 
-        def_world.register(id_str, entity);
+        def_world.register(DefCategory::BodyPart, id_str, entity);
     }
 
     // Second pass: wire up parent-child relationships.
     // sub_parts (explicit children in JSON) and main_part (parent reference).
     for (def_id, bp) in &def_registry.body_parts {
-        let child = def_world.entity_by_str(def_id.as_str());
+        let child = def_world.entity_in(DefCategory::BodyPart, def_id.as_str());
 
         // 1. Wire sub_parts → ParentPart on children
         if let Some(sub_ids) = &bp.sub_parts {
-            if let Some(parent) = def_world.entity_by_str(def_id.as_str()) {
+            if let Some(parent) = def_world.entity_in(DefCategory::BodyPart, def_id.as_str()) {
                 for child_id in sub_ids {
-                    if let Some(child_entity) = def_world.entity_by_str(child_id) {
+                    if let Some(child_entity) = def_world.entity_in(DefCategory::BodyPart, child_id) {
                         if child_entity != parent && world.get::<ParentPart>(child_entity).is_none()
                         {
                             world.entity_mut(child_entity).insert(ParentPart(parent));
@@ -1147,7 +1201,7 @@ fn build_body_part_defs(
         // 2. Wire main_part → ParentPart (for parts not in sub_parts, e.g. eyes → head)
         if let Some(child_entity) = child {
             if let Some(main_part_id) = &bp.main_part {
-                if let Some(parent) = def_world.entity_by_str(main_part_id) {
+                if let Some(parent) = def_world.entity_in(DefCategory::BodyPart, main_part_id) {
                     if child_entity != parent && world.get::<ParentPart>(child_entity).is_none() {
                         world.entity_mut(child_entity).insert(ParentPart(parent));
                     }
@@ -1263,11 +1317,48 @@ mod tests {
         let mut dw = DefinitionWorld::empty();
 
         let e = world.spawn(IsDef).id();
-        dw.register("test_item".into(), e);
+        dw.register(DefCategory::Item, "test_item".into(), e);
 
         assert_eq!(dw.len(), 1);
         assert_eq!(dw.entity_by_str("test_item"), Some(e));
+        assert_eq!(dw.entity_in(DefCategory::Item, "test_item"), Some(e));
+        assert!(dw.entity_in(DefCategory::Monster, "test_item").is_none());
         assert!(dw.entity_by_str("missing").is_none());
+    }
+
+    /// A same-text item and monster are distinct definitions — the flat
+    /// pre-typed index let one overwrite the other.
+    #[test]
+    fn cross_category_same_text_ids_do_not_collide() {
+        let mut world = World::new();
+        world.register_component::<IsDef>();
+        let mut dw = DefinitionWorld::empty();
+        let item = world.spawn(IsDef).id();
+        let monster = world.spawn(IsDef).id();
+        dw.register(DefCategory::Item, "zombie".into(), item);
+        dw.register(DefCategory::Monster, "zombie".into(), monster);
+
+        assert_eq!(dw.entity_in(DefCategory::Item, "zombie"), Some(item));
+        assert_eq!(dw.entity_in(DefCategory::Monster, "zombie"), Some(monster));
+        assert_eq!(dw.len(), 2);
+        // The legacy flat lookup stays item-scoped.
+        assert_eq!(dw.entity_by_str("zombie"), Some(item));
+    }
+
+    /// Rebuilding the definition world bumps the generation so runtime caches
+    /// can detect staleness and re-resolve.
+    #[test]
+    fn rebuild_bumps_generation() {
+        let mut world = World::new();
+        world.register_component::<IsDef>();
+        world.insert_resource(DefinitionWorld::empty());
+        let registry = DefRegistry::empty();
+        let built = build_def_world(&mut world, &registry, false);
+        assert_eq!(built.generation(), 1);
+        // Callers publish the rebuilt index; the next build sees its generation.
+        world.insert_resource(built);
+        let rebuilt = build_def_world(&mut world, &registry, false);
+        assert_eq!(rebuilt.generation(), 2);
     }
 
     #[test]
@@ -1278,10 +1369,10 @@ mod tests {
 
         let e1 = world.spawn(IsDef).id();
         let e2 = world.spawn(IsDef).id();
-        dw.register("a".into(), e1);
-        dw.register("b".into(), e2);
+        dw.register(DefCategory::Item, "a".into(), e1);
+        dw.register(DefCategory::Item, "b".into(), e2);
 
-        let pairs: Vec<(&str, Entity)> = dw.iter().collect();
+        let pairs: Vec<(DefCategory, &str, Entity)> = dw.iter().collect();
         assert_eq!(pairs.len(), 2);
     }
 

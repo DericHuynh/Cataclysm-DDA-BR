@@ -350,7 +350,9 @@ fn test_terrain_with_flags() {
 
     populate_def_flags(&mut world, &reg, &def_world);
 
-    let entity = def_world.entity_by_str("t_wall").unwrap();
+    let entity = def_world
+        .entity_in(cdda_data::def_world::DefCategory::Terrain, "t_wall")
+        .unwrap();
     let wall_idx = world
         .resource::<TerrainFlagRegistry>()
         .0
@@ -505,7 +507,7 @@ fn test_integration_component_isolation() {
     let registry = loader.load().expect("Core data should load");
     let (world, def_world) = build_def_world_in_world(&registry);
 
-    for (_id, entity) in def_world.iter() {
+    for (_category, _id, entity) in def_world.iter() {
         assert!(
             world.get::<IsDef>(entity).is_some(),
             "Every def entity should have IsDef"

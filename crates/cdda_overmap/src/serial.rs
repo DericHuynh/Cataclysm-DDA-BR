@@ -1,113 +1,209 @@
-//! Binary chunk serialization — compact, zero-allocation-per-row.
+//! Versioned terrain persistence using stable definition IDs, not runtime slots.
 //!
-//! # Wire format
+//! All integers are little-endian. A chunk record is `OMTC`, version:u16,
+//! chunk_x:u8, chunk_y:u8, z_index:u8, om_x:i32, om_y:i32, palette_count:u16,
+//! then that many (byte_length:u16, UTF-8 ID) entries, followed by 900
+//! (palette_index:u16, rotation:u8) cells. Palette index 0 is implicit NULL;
+//! IDs occupy indices 1..=palette_count. IDs must be nonempty and at most
+//! 4096 bytes; the palette has at most 900 entries. NULL has rotation 0.
 //!
-//! Each chunk serializes as:
-//!
-//! ```text
-//! Header (11 bytes):
-//!   chunk_x  : u8       — column within overmap (0..6)
-//!   chunk_y  : u8       — row within overmap (0..6)
-//!   z_index  : u8       — z-level encoded as index 0..21 (z=-10 → 0)
-//!   om_x     : i32 LE   — overmap x in world grid
-//!   om_y     : i32 LE   — overmap y in world grid
-//!
-//! Terrain (900 × u32 LE = 3600 bytes):
-//!   One TerrainHandle per OMT slot, row-major, 30×30 = 900 slots.
-//!
-//! Total: 3611 bytes per chunk.
-//! ```
-//!
-//! Multi-chunk files prepend a u32 LE count, then concatenate chunk records.
-//!
-//! # Submap coordinates
-//!
-//! The wire format stores OMT-level terrain handles only. Submap tile data
-//! (the 12×12 map tiles within each submap) is stored separately and is not
-//! part of this format. To recover the world submap origin of a deserialized
-//! chunk, use `ChunkPosition::submap_origin()`.
+//! Multi-chunk streams are `OMTS`, version:u16, count:u32, then chunk records.
+//! Unknown versions, legacy raw-handle files, unknown IDs and malformed records
+//! are errors, not fallback terrain. Each reader consumes one record/stream;
+//! callers may frame or concatenate them. Submap tile content is not included.
 
 use crate::chunk::{ChunkPosition, OvermapChunk, CHUNK_SIZE};
-use crate::registry::TerrainHandle;
+use crate::registry::{TerrainHandle, TerrainRegistry};
 use cdda_core_types::core::coords::ZLevel;
+use std::collections::{HashMap, HashSet};
 use std::io;
 
-/// Serialize a single chunk to a binary writer.
+pub const TERRAIN_FORMAT_VERSION: u16 = 1;
+const CHUNK_MAGIC: &[u8; 4] = b"OMTC";
+const CHUNKS_MAGIC: &[u8; 4] = b"OMTS";
+const MAX_ID_BYTES: usize = 4096;
+
+fn invalid(message: impl Into<String>) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, message.into())
+}
+
+fn read_u16(reader: &mut impl io::Read) -> io::Result<u16> {
+    let mut bytes = [0; 2];
+    reader.read_exact(&mut bytes)?;
+    Ok(u16::from_le_bytes(bytes))
+}
+
+fn write_prefix(writer: &mut impl io::Write, magic: &[u8; 4]) -> io::Result<()> {
+    writer.write_all(magic)?;
+    writer.write_all(&TERRAIN_FORMAT_VERSION.to_le_bytes())
+}
+
+fn read_prefix(reader: &mut impl io::Read, magic: &[u8; 4]) -> io::Result<()> {
+    let mut actual = [0; 4];
+    reader.read_exact(&mut actual)?;
+    if &actual != magic {
+        return Err(invalid(
+            "unrecognized terrain format (legacy raw handles are unsupported)",
+        ));
+    }
+    let version = read_u16(reader)?;
+    if version != TERRAIN_FORMAT_VERSION {
+        return Err(invalid(format!(
+            "unsupported terrain format version {version}"
+        )));
+    }
+    Ok(())
+}
+
+/// Serialize one chunk, resolving runtime handles through its owning registry.
+/// Validation finishes before any record bytes are written (I/O may still fail).
 pub fn serialize_chunk(
     chunk: &OvermapChunk,
     pos: &ChunkPosition,
+    registry: &TerrainRegistry,
     writer: &mut impl io::Write,
 ) -> io::Result<()> {
-    // Header: 11 bytes
+    if pos.chunk_x >= 6 || pos.chunk_y >= 6 || !(-10..=10).contains(&pos.z.0) {
+        return Err(invalid("invalid chunk coordinates"));
+    }
+    let mut palette = Vec::new();
+    let mut indices = HashMap::new();
+    let mut cells = Vec::with_capacity(CHUNK_SIZE);
+    for &handle in chunk.terrain.as_ref() {
+        if handle.type_index() == 0 {
+            if !handle.is_null() {
+                return Err(invalid("NULL terrain must have rotation 0"));
+            }
+            cells.push((0u16, 0u8));
+            continue;
+        }
+        let index = if let Some(&index) = indices.get(&handle.type_index()) {
+            index
+        } else {
+            let id = registry.string_id_for(handle).ok_or_else(|| {
+                invalid(format!(
+                    "unregistered terrain handle {}",
+                    handle.type_index()
+                ))
+            })?;
+            if id.is_empty() || id.len() > MAX_ID_BYTES {
+                return Err(invalid("terrain ID length is outside format limits"));
+            }
+            palette.push(id);
+            let index = palette.len() as u16;
+            indices.insert(handle.type_index(), index);
+            index
+        };
+        cells.push((index, handle.rotation()));
+    }
+
+    write_prefix(writer, CHUNK_MAGIC)?;
     writer.write_all(&[pos.chunk_x, pos.chunk_y, z_to_index(pos.z)])?;
     writer.write_all(&pos.om_x.to_le_bytes())?;
     writer.write_all(&pos.om_y.to_le_bytes())?;
-
-    // Terrain: 900 × u32 LE = 3600 bytes
-    for &handle in chunk.terrain.as_ref() {
-        writer.write_all(&handle.0.to_le_bytes())?;
+    writer.write_all(&(palette.len() as u16).to_le_bytes())?;
+    for id in palette {
+        writer.write_all(&(id.len() as u16).to_le_bytes())?;
+        writer.write_all(id.as_bytes())?;
+    }
+    for (index, rotation) in cells {
+        writer.write_all(&index.to_le_bytes())?;
+        writer.write_all(&[rotation])?;
     }
     Ok(())
 }
 
-/// Deserialize a single chunk from a binary reader.
-pub fn deserialize_chunk(reader: &mut impl io::Read) -> io::Result<(ChunkPosition, OvermapChunk)> {
-    let mut header = [0u8; 11];
+/// Resolve every palette ID against the destination registry before returning
+/// a chunk. Rotation bytes are preserved independently of registry rotation links.
+pub fn deserialize_chunk(
+    reader: &mut impl io::Read,
+    registry: &TerrainRegistry,
+) -> io::Result<(ChunkPosition, OvermapChunk)> {
+    read_prefix(reader, CHUNK_MAGIC)?;
+    let mut header = [0; 11];
     reader.read_exact(&mut header)?;
-
-    let chunk_x = header[0];
-    let chunk_y = header[1];
-    let z       = z_from_index(header[2]);
-    let om_x    = i32::from_le_bytes(header[3..7].try_into().unwrap());
-    let om_y    = i32::from_le_bytes(header[7..11].try_into().unwrap());
-
-    let mut terrain = Box::new([TerrainHandle::NULL; CHUNK_SIZE]);
-    for slot in terrain.iter_mut() {
-        let mut bytes = [0u8; 4];
-        reader.read_exact(&mut bytes)?;
-        slot.0 = u32::from_le_bytes(bytes);
+    if header[0] >= 6 || header[1] >= 6 || header[2] > 20 {
+        return Err(invalid("invalid chunk coordinates"));
     }
-
-    Ok((
-        ChunkPosition { om_x, om_y, z, chunk_x, chunk_y },
-        OvermapChunk { terrain },
-    ))
+    let pos = ChunkPosition {
+        chunk_x: header[0],
+        chunk_y: header[1],
+        z: z_from_index(header[2]),
+        om_x: i32::from_le_bytes(header[3..7].try_into().unwrap()),
+        om_y: i32::from_le_bytes(header[7..11].try_into().unwrap()),
+    };
+    let count = read_u16(reader)? as usize;
+    if count > CHUNK_SIZE {
+        return Err(invalid("terrain palette exceeds chunk size"));
+    }
+    let mut palette = Vec::with_capacity(count + 1);
+    palette.push(TerrainHandle::NULL);
+    let mut seen = HashSet::new();
+    for _ in 0..count {
+        let len = read_u16(reader)? as usize;
+        if len == 0 || len > MAX_ID_BYTES {
+            return Err(invalid("terrain ID length is outside format limits"));
+        }
+        let mut bytes = vec![0; len];
+        reader.read_exact(&mut bytes)?;
+        let id = String::from_utf8(bytes).map_err(|_| invalid("terrain ID is not UTF-8"))?;
+        let handle = registry
+            .handle_by_id(&id)
+            .ok_or_else(|| invalid(format!("unknown terrain ID {id:?}")))?;
+        if !seen.insert(handle) {
+            return Err(invalid(format!("duplicate terrain palette ID {id:?}")));
+        }
+        palette.push(handle);
+    }
+    let mut chunk = OvermapChunk::new_filled(TerrainHandle::NULL);
+    for slot in chunk.terrain.iter_mut() {
+        let index = read_u16(reader)? as usize;
+        let mut rotation = [0];
+        reader.read_exact(&mut rotation)?;
+        let base = palette
+            .get(index)
+            .ok_or_else(|| invalid("invalid terrain palette index"))?;
+        if index == 0 && rotation[0] != 0 {
+            return Err(invalid("NULL terrain must have rotation 0"));
+        }
+        *slot = TerrainHandle::new(base.type_index(), rotation[0]);
+    }
+    Ok((pos, chunk))
 }
 
-/// Serialize multiple chunks into a single buffer (overmap save file).
-///
-/// Prepends a u32 LE chunk count, then each chunk record in order.
+/// Serialize a framed sequence of chunks using their owning registry.
 pub fn serialize_chunks(
     chunks: &[(ChunkPosition, &OvermapChunk)],
+    registry: &TerrainRegistry,
     writer: &mut impl io::Write,
 ) -> io::Result<()> {
-    writer.write_all(&(chunks.len() as u32).to_le_bytes())?;
+    let count = u32::try_from(chunks.len()).map_err(|_| invalid("too many chunks"))?;
+    write_prefix(writer, CHUNKS_MAGIC)?;
+    writer.write_all(&count.to_le_bytes())?;
     for (pos, chunk) in chunks {
-        serialize_chunk(chunk, pos, writer)?;
+        serialize_chunk(chunk, pos, registry, writer)?;
     }
     Ok(())
 }
 
-/// Deserialize multiple chunks from a buffer.
+/// Load a framed sequence atomically: no partially decoded chunks escape on error.
 pub fn deserialize_chunks(
     reader: &mut impl io::Read,
+    registry: &TerrainRegistry,
 ) -> io::Result<Vec<(ChunkPosition, OvermapChunk)>> {
-    let mut count_bytes = [0u8; 4];
-    reader.read_exact(&mut count_bytes)?;
-    let count = u32::from_le_bytes(count_bytes) as usize;
-
-    let mut chunks = Vec::with_capacity(count);
+    read_prefix(reader, CHUNKS_MAGIC)?;
+    let mut bytes = [0; 4];
+    reader.read_exact(&mut bytes)?;
+    let count = u32::from_le_bytes(bytes);
+    // Never reserve memory using an untrusted file's chunk count.
+    let mut chunks = Vec::new();
     for _ in 0..count {
-        chunks.push(deserialize_chunk(reader)?);
+        chunks.push(deserialize_chunk(reader, registry)?);
     }
     Ok(chunks)
 }
 
-// ---------------------------------------------------------------------------
-// Z-level encoding
-// ---------------------------------------------------------------------------
-
-/// Convert a storage index (0 = z=-10, 20 = z=+10) to a ZLevel.
+/// Convert a valid storage index (0 = z=-10, 20 = z=+10) to a ZLevel.
 #[inline]
 pub fn z_from_index(idx: u8) -> ZLevel {
     ZLevel::new(idx as i8 - 10)
@@ -119,77 +215,10 @@ pub fn z_to_index(z: ZLevel) -> u8 {
     (z.0 + 10) as u8
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::chunk::CHUNK_DIM;
-    use crate::registry::TerrainHandle;
-
-    fn make_pos(om_x: i32, om_y: i32, z: i8, cx: u8, cy: u8) -> ChunkPosition {
-        ChunkPosition {
-            om_x,
-            om_y,
-            z: ZLevel::new(z),
-            chunk_x: cx,
-            chunk_y: cy,
-        }
-    }
-
-    #[test]
-    fn roundtrip_single_chunk() {
-        let pos = make_pos(3, -2, 0, 1, 4);
-        let mut chunk = OvermapChunk::new_filled(TerrainHandle::new(42, 0));
-        chunk.set(0, 0, TerrainHandle::new(7, 1));
-        chunk.set(29, 29, TerrainHandle::new(99, 3));
-
-        let mut buf = Vec::new();
-        serialize_chunk(&chunk, &pos, &mut buf).unwrap();
-
-        // Expected size: 11 header + 900 * 4 terrain = 3611 bytes
-        assert_eq!(buf.len(), 11 + CHUNK_SIZE * 4);
-
-        let (pos2, chunk2) = deserialize_chunk(&mut buf.as_slice()).unwrap();
-        assert_eq!(pos2.om_x, 3);
-        assert_eq!(pos2.om_y, -2);
-        assert_eq!(pos2.z.0, 0);
-        assert_eq!(pos2.chunk_x, 1);
-        assert_eq!(pos2.chunk_y, 4);
-        assert_eq!(chunk2.get(0, 0), TerrainHandle::new(7, 1));
-        assert_eq!(chunk2.get(29, 29), TerrainHandle::new(99, 3));
-        // All other tiles should be fill value 42/0
-        assert_eq!(chunk2.get(1, 0), TerrainHandle::new(42, 0));
-    }
-
-    #[test]
-    fn roundtrip_multiple_chunks() {
-        let pos1 = make_pos(0, 0, 0, 0, 0);
-        let pos2 = make_pos(0, 0, 1, 0, 0);
-        let chunk1 = OvermapChunk::new_filled(TerrainHandle::new(1, 0));
-        let chunk2 = OvermapChunk::new_filled(TerrainHandle::new(2, 0));
-
-        let mut buf = Vec::new();
-        serialize_chunks(&[(pos1, &chunk1), (pos2, &chunk2)], &mut buf).unwrap();
-
-        let chunks = deserialize_chunks(&mut buf.as_slice()).unwrap();
-        assert_eq!(chunks.len(), 2);
-        assert_eq!(chunks[0].0.z.0, 0);
-        assert_eq!(chunks[1].0.z.0, 1);
-        assert_eq!(chunks[0].1.get(0, 0), TerrainHandle::new(1, 0));
-        assert_eq!(chunks[1].1.get(0, 0), TerrainHandle::new(2, 0));
-    }
-
-    #[test]
-    fn z_index_roundtrip() {
-        for z in -10i8..=10 {
-            let level = ZLevel::new(z);
-            let idx = z_to_index(level);
-            assert_eq!(z_from_index(idx).0, z);
-        }
-    }
 
     #[test]
     fn chunk_dim_is_30() {
@@ -199,18 +228,27 @@ mod tests {
 
     #[test]
     fn submap_origin_correct() {
-        // Chunk (0,0) of overmap (0,0) at z=0 should have submap origin (0,0).
-        let pos = make_pos(0, 0, 0, 0, 0);
+        let mut pos = ChunkPosition {
+            om_x: 0,
+            om_y: 0,
+            z: ZLevel::new(0),
+            chunk_x: 0,
+            chunk_y: 0,
+        };
         assert_eq!(pos.submap_origin(), (0, 0));
+        pos.chunk_x = 1;
+        assert_eq!(pos.omt_origin(), (30, 0));
+        assert_eq!(pos.submap_origin(), (60, 0));
+        pos.om_x = 1;
+        pos.chunk_x = 0;
+        assert_eq!(pos.omt_origin(), (180, 0));
+        assert_eq!(pos.submap_origin(), (360, 0));
+    }
 
-        // Chunk (1,0) of overmap (0,0): OMT origin = (30, 0), submap = (60, 0).
-        let pos2 = make_pos(0, 0, 0, 1, 0);
-        assert_eq!(pos2.omt_origin(), (30, 0));
-        assert_eq!(pos2.submap_origin(), (60, 0));
-
-        // Overmap (1,0), chunk (0,0): OMT origin = (180, 0), submap = (360, 0).
-        let pos3 = make_pos(1, 0, 0, 0, 0);
-        assert_eq!(pos3.omt_origin(), (180, 0));
-        assert_eq!(pos3.submap_origin(), (360, 0));
+    #[test]
+    fn z_index_roundtrip() {
+        for z in -10i8..=10 {
+            assert_eq!(z_from_index(z_to_index(ZLevel::new(z))).0, z);
+        }
     }
 }

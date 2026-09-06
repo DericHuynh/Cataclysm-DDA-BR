@@ -44,12 +44,12 @@ It also hosts the **screen input adapters** (`render/input.rs`) — the
 - Renderers read state only. State changes go through `cdda_input` actions
   (`Confirm`, `UseItem`, `NavigateUp`, `Drop`, …) and `cdda_context` nav.
 - Theming is hand-coded, not JSON. `theme::UiTheme` (Resource) wraps a
-  `ThemePreset` (`Blue` default, `Green`, `Amber`) plus a fixed-colour
+  `ThemePreset` (`Blue`, `Green` default, `Amber`) plus a fixed-colour
   constants block (`BG`, `PANEL_BG`, `TEXT_BRIGHT`, `BUTTON_FOCUS_BG`, …).
   Switch presets via `SettingsScreen`; every screen reads `Res<UiTheme>`
   instead of hard-coding colour.
 - Fonts: `UiFontHandle(Option<Handle<Font>>)` is loaded in `Startup` for
-  `assets/fonts/Inter-VariableFont.ttf` (all `bevy_ui` `Text`). The ASCII
+  `assets/fonts/ShareTechMono-Regular.ttf` (all `bevy_ui` `Text`). The ASCII
   viewport (`dev_worldgen`) loads `assets/fonts/ShareTechMono-Regular.ttf`
   separately for `Text2d`. Both assets live under `crates/cdda_app/assets/`
   and resolve through Bevy `AssetServer` by relative path.
@@ -61,7 +61,7 @@ It also hosts the **screen input adapters** (`render/input.rs`) — the
   maps CDDA entity ID → `TileInfo` (image handle + sprite size + CDDA offset)
   with OMT-suffix fallback (`barn_0_south` → `barn`).
 - Footer key hints: every screen tags one text entity with `FooterHint`; the
-  shared `refresh_all_footer_hints` system rewrites it each frame from
+  shared `refresh_all_footer_hints` system updates changed text from
   `ContextActions` + `ActiveKeybindings`. No per-screen footer systems.
 - **Scroll uses Bevy's native `ScrollPosition` + `Overflow::scroll_y()`**, driven
   by the shared `render/scroll.rs` primitives (`KeyboardScroll` marker, arrow/page
@@ -69,10 +69,21 @@ It also hosts the **screen input adapters** (`render/input.rs`) — the
   windowing. Item-heavy panes additionally carry a `VirtualList`, which **virtualizes
   rendering up-front**: the pane spawns only the visible row window plus top/bottom
   spacer nodes, so Bevy layout never processes 40k rows. `update_virtual_windows`
-  (PreUpdate) syncs each `VirtualList`'s window from its `ScrollPosition`. A new
+  (PostUpdate, before UI layout) syncs each `VirtualList`'s window after focus scrolling. A new
   long-list pane should attach `KeyboardScroll` + `VirtualList` (and `FocusedRow`
   if it has a focused-row index) to a `scroll_y()` node rather than spawning all
   rows or re-implementing scroll offsets.
+
+- Virtual rows and spacers must have `flex_shrink: 0` and exact heights matching
+  `VirtualList.row_height`; children must be top spacer → rows → bottom spacer.
+  Viewports use logical pixels (physical size × inverse scale). Selection reveal
+  runs only when `FocusedRow` changes, so manual scrolling remains independent.
+- Registry and spawn panes rebuild on state/theme/window changes; inventory
+  compares its displayed data before rebuilding. Idle frames preserve UI entities.
+  Registry detail text is retained while only the list window changes.
+- Wheel input resolves the nearest scrollable ancestor and respects line/pixel
+  units. `InactiveScrollPane` blocks keyboard input without disabling the mouse.
+- The shared palette uses dark teal surfaces, parchment text, and brass accents.
 
 ## Work Guidance
 - Add a new screen by (1) creating a unit struct in its own module,
@@ -97,6 +108,8 @@ It also hosts the **screen input adapters** (`render/input.rs`) — the
 ## Verification
 - `cargo check -p cdda_render` for compile sanity.
 - `cargo nextest run -p cdda_render` (fall back to `cargo test -p cdda_render` if `nextest` is unavailable).
+- `cargo nextest run -p cdda_render --test scroll_headless` exercises large lists,
+  selection reveal, manual scrolling, filtering, scale, and idle invalidation without a window.
 - `cargo run -p cdda_app` for visual smoke validation after render changes.
 - `cargo run -p cdda_cli -- schedule-graph` to confirm screen systems land in
   the expected `GameSet` (`Input`, `Sim`, `Render`).
@@ -106,7 +119,7 @@ It also hosts the **screen input adapters** (`render/input.rs`) — the
 Per-screen files in `src/render/`:
 
 - `mod.rs` — `CddaRenderPlugin`, `UiFontHandle`, `refresh_all_footer_hints`,
-  `render_setup` (camera + Inter font), `FooterHint` marker, and the shared
+  `render_setup` (camera + ShareTechMono font), `FooterHint` marker, and the shared
   scroll systems (`scroll::scroll_with_keyboard`/`scroll_with_wheel`/
   `scroll_to_focused_row`). **Wiring file —
   edit this first** when adding/changing screens.

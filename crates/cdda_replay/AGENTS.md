@@ -3,8 +3,8 @@
 ## Purpose
 Deterministic session recording, replay, and state hashing for CDDA-BR. Captures
 player `InputAction` messages into a `SessionLog`, replays them injectively, and
-(gated by the `devtools` feature) hashes the `SimId` set per turn to detect
-simulation drift between runs.
+(gated by the `devtools` feature) hashes committed gameplay state per turn to
+detect simulation drift between runs.
 
 ## Ownership
 - The two `bevy_app::Plugin` entry points, the postcard `SessionLog` format, the
@@ -22,12 +22,13 @@ simulation drift between runs.
   `StateHashLog` resource, the `hash_simulation_state` and `check_divergence`
   systems, and registers `SimulationDiverged` as a `Message`. The hash system
   is a no-op in non-`devtools` builds via a `cfg!` early-return.
-- Two plugins (mutually exclusive modes, registered separately):
+- Two plugins (mutually exclusive modes, registered separately), both phase-ordered
+  against the canonical simulation:
   - `CddaReplayPlugin { world_seed: u64 }` — recording mode. Inserts
-    `SessionLog::new(world_seed)` and adds `recording::record_actions` to
-    `Update`.
+    `SessionLog::new(world_seed)` and adds `recording::record_actions` in
+    `GameSet::Input` (before the simulation driver consumes the frame).
   - `CddaReplayModePlugin` — replay mode. Inserts `ReplayState::default()` and
-    adds `replay::inject_replay_actions` to `Update`.
+    adds `replay::inject_replay_actions` in `GameSet::Input`.
 - Recording pipeline (`recording.rs`): the `record_actions` system reads
   `InputAction` messages and the `GameTime` resource, appending an
   `ActionRecord { turn, action, source }` to `SessionLog.actions` each frame
@@ -42,13 +43,27 @@ simulation drift between runs.
     every record whose `turn == game_time.turn` and skips past records with
     `turn < game_time.turn` (resync). In `RealTime | Step` it emits at most
     one record per call, rewriting `source` to `ActionSource::Script`.
-- State hashing (`state_hash.rs`): `hash_simulation_state` queries
-  `Query<&SimId>`, sorts the collected `u64`s, and feeds entity count + each
-  id into a `DefaultHasher`. Both `StateHashLog.hashes` and
-  `SessionLog.state_hashes` are appended with `(turn, hash)`.
-  `check_divergence` (replay-only) compares the live vs recorded hash for
-  `game_time.turn` and writes a `SimulationDiverged { turn, detail }` message
-  on mismatch.
+- State hashing (`state_hash.rs`): `hash_simulation_state` (exclusive) digests
+  MEANINGFUL GAMEPLAY STATE, not just entity membership: per non-`IsDef`
+  entity the stable `SimId` (Entity bits ONLY as an intra-world test fallback),
+  world position, AP, health, stack count, plus the stable id of its
+  `InsideContainer`/`WieldedBy`/`WornOn` owner; rows are sorted by stable id so
+  spawn order does not change the digest; the turn is hashed in. It runs in
+  `GameSet::Render` — AFTER the simulation driver — so the digest always
+  reflects COMMITTED state. The live history `StateHashLog.hashes` is always
+  appended; `SessionLog.state_hashes` (the EXPECTED log) is appended ONLY in
+  recording mode (no `ReplayState` resource) — a replay never mutates the log
+  it is compared against. `compute_state_hash(&mut World)` is the pure entry
+  point the tests use. `check_divergence` (replay-only) compares the live vs
+  recorded hash for `game_time.turn` and writes a
+  `SimulationDiverged { turn, detail }` message on mismatch. Pinned by
+  `tests/state_hash_test.rs` (`#![cfg(feature = "devtools")]`): state changes
+  change the digest, spawn order does not, ownership edges are covered, and
+  replay/recording append behavior is enforced.
+- Remaining replay debt: recording still captures `InputAction` messages with
+  turn-at-drain stamps (not semantic commands with sequence numbers); the
+  digest does not yet include RNG state or a definition-version tag; and the
+  `Fast` vs `RealTime|Step` replay speeds still differ on missed turns.
 - Session log format (`session_log.rs`): postcard binary via `to_bytes` /
   `from_bytes` and `save_to_file` / `load_from_file`. Schema is
   `{ world_seed: u64, actions: Vec<ActionRecord>, state_hashes: Vec<(u64, u64)> }`.
@@ -75,6 +90,7 @@ simulation drift between runs.
 - `cargo check -p cdda_replay` for compile sanity, including with
   `--features devtools` and `--no-default-features`.
 - `cargo nextest run -p cdda_replay` covers the `SessionLog` round-trip / corruption / file I/O tests in `tests/session_log_test.rs` and the `ReplayState` / `ReplaySpeed` defaults and `is_complete` tests in `tests/replay_state_test.rs` (fall back to `cargo test -p cdda_replay` if `nextest` is unavailable).
+- `cargo nextest run -p cdda_replay --features devtools` additionally runs `tests/state_hash_test.rs` — the deterministic-digest regressions (state sensitivity, spawn-order invariance, ownership edges, immutable expected log). Without the feature that file compiles to nothing.
 
 ## Child DOX Index
 - *(none — `src/` and `tests/` are flat, no durable sub-boundaries yet)*

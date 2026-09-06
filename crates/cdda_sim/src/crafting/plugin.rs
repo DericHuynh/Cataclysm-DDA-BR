@@ -1,5 +1,4 @@
-use bevy_app::{App, Plugin, Update};
-use bevy_ecs::message::MessageReader;
+use bevy_app::{App, Plugin};
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::IntoScheduleConfigs;
 use bevy_state::prelude::OnEnter;
@@ -8,9 +7,10 @@ use super::input::process_pending_craft;
 use super::systems::{
     build_craft_state, complete_craft, CategoryIndex, CraftState, PendingCraft, RecipeIndex,
 };
+use crate::activity::systems::tick_crafting;
 use cdda_components::context::Ctx;
 use cdda_components::messages::CraftCompleted;
-use cdda_components::schedule::SimSet;
+use cdda_components::schedule::{SimSet, SimulationTurn};
 
 pub struct CraftingPlugin;
 
@@ -31,15 +31,20 @@ impl Plugin for CraftingPlugin {
         // Simulation: execute pending craft in the Activity phase so it
         // participates in the AP-driven activity system.
         app.add_systems(
-            Update,
+            SimulationTurn,
             process_pending_craft
                 .in_set(SimSet::Activity)
-                .run_if(bevy_state::condition::in_state(Ctx::CraftingMenu)),
+                .before(tick_crafting),
         );
 
         // Craft completion: reads CraftCompleted messages emitted by
         // tick_crafting and spawns the result item.
-        app.add_systems(Update, process_craft_completions.in_set(SimSet::Activity));
+        app.add_systems(
+            SimulationTurn,
+            process_craft_completions
+                .in_set(SimSet::Activity)
+                .after(tick_crafting),
+        );
     }
 }
 
@@ -51,7 +56,6 @@ impl Plugin for CraftingPlugin {
 fn process_craft_completions(world: &mut World) {
     let completed: Vec<(Entity, Entity)> = {
         let mut messages = world.resource_mut::<bevy_ecs::message::Messages<CraftCompleted>>();
-        messages.update();
         messages
             .drain()
             .map(|c| (c.crafter, c.craft_entity))

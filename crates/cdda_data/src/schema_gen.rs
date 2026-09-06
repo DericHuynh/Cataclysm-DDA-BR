@@ -96,8 +96,12 @@ pub fn collect_mod_registry_v2(world: &mut World) {
 
     let mut ids = HashSet::new();
     if let Some(def_world) = world.get_resource::<crate::def_world::DefinitionWorld>() {
-        for (id, _) in def_world.iter() {
-            ids.insert(id.to_string());
+        // all_item_ids feeds the item-mod schema: only the Item category is
+        // unambiguous now that same-text IDs across categories coexist.
+        for (category, id, _) in def_world.iter() {
+            if category == crate::def_world::DefCategory::Item {
+                ids.insert(id.to_string());
+            }
         }
     }
 

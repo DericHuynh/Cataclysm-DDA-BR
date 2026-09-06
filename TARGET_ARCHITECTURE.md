@@ -1,116 +1,54 @@
 # Target Architecture — CDDA-BR
 
-> **Last updated:** Planned migration roadmap from current state to target.
-> See [CURRENT_ARCHITECTURE.md](CURRENT_ARCHITECTURE.md) for what's implemented now.
+The rewrite preserves CDDA's semantic responsibilities, not its global objects or giant functions. CURRENT_ARCHITECTURE.md records implemented behavior; this roadmap orders the remaining foundation work.
 
-## Vision
+## Foundation checklist
 
-CDDA-BR aims for:
-1. **Maintainability** — small focused crates with clear dependency direction
-2. **Performance** — SoA tile storage, deterministic tick, efficient spatial queries
-3. **First-class modding** — hot-reloadable definitions, mod layering via ACL
+- [x] Canonical headless SimulationPlugin/SimulationTurn reused by the app.
+- [x] One-second game-time units; turn-based/manual/optional realtime drivers; central pause gate; no per-render-frame effect decay.
+- [x] Sequential live intent commits and correlated outcomes; contested-pickup/position validation regressions.
+- [x] Stable-ID terrain save palettes and append-only, fallible terrain registry reload.
+- [x] Repeated AP-budget selection for AI/planner actors (player budgets bank; activity actors tick per turn).
+- [x] Item-action transactional boundary (`inventory::transfer`) used by UI, AI and the resolver for Pickup/Wield/Drop/Stow.
+- [ ] Wield/Drop parity for combat verbs (MeleeAttack/UseItem/Reload) and activity-vs-action arbitration.
+- [ ] One validating merge/transfer boundary for the legacy `ItemMoveEvent` path and pocket capacity/restrictions.
+- [ ] Typed definition keys and validated generation publication; stable recipe identity and activity/plan reference migration.
+- [ ] Persistent local submaps, active-region membership, dynamic entity activation/deactivation, dirty saves and elapsed-time catch-up.
+- [x] Canonical full-state digest (positions/AP/health/stacks/ownership by stable SimId, spawn-order invariant) hashed after commit, with an immutable expected log during replay.
+- [ ] Semantic replay command ingress with sequence numbers, RNG/definition-version in the digest, and uniform replay-speed handling of missed turns.
+- [ ] Restore Cargo discovery of migrated actor/combat/inventory tests and add production-schedule scenarios.
 
-## Decomposition Plan
+## Simulation boundary
 
-### Phase 1 — Fix the God Functions (short-term)
+The renderer never defines game time. GameSet orders outer adapters; SimulationTurn and explicit action/turn phases own simulation. Real-time pacing is optional and must not change action semantics. Activities consume the same actor budget as other actions; fast actors must execute more work, not merely accumulate AP.
 
-**1. Decompose `build_def_world`**
-- Current: ~900-line monolith spawning all definition types in one function
-- Target: Per-category builder functions in separate modules:
-  - `build_item_world()`, `build_monster_world()`, `build_terrain_world()`,
-    `build_furniture_world()`, `build_recipe_world()`, `build_body_part_world()`
-- Each builder takes `&DefRegistry` and returns `Vec<(String, Entity)>`
+An action operation validates actual state, commits state plus costs, and publishes its result. Deferred commands inside a loop do not provide intermediate visibility. A bounded exclusive commit is acceptable; reservations/commit buffers are alternatives only with equivalent invariant tests.
 
-**2. DefRegistry decomposition**
-- Current: single struct with ~100+ `HashMap` fields
-- Target: Trait-based registry with per-category `Registry<T>` + global
-  `RegistrySet` for combined queries
+Use events for notifications and bounded reactions. Do not replace the scheduler with an unconstrained observer cascade. Choose components, tags and child entities for actual query/lifecycle needs rather than blanket decomposition rules.
 
-### Phase 2 — ID System Unification (medium-term)
+## Identity and data boundary
 
-**3. Unified ID system**
-- Current: Three concurrent ID patterns
-  - `DefStrId(String)` — stored as ECS component
-  - `DefId<T>(String)` — type-safe generic wrapper
-  - Interned tokens (`SkillId(u16)`, `BodyPartId(u16)`) — numeric
-- Target: Single interned `DefIdx(u32)` backed by `Arc<str>` string table
-  - Per-category concrete types via `def_id_type!` macro wrapping `DefIdx`
-  - Zero-cost comparison, small copy size, string resolution on demand
+Keep three concepts distinct:
+1. typed stable definition key (category + ID);
+2. persistent simulation-object identity;
+3. generation-local handles / Bevy Entity values.
 
-**4. From `DefStrId` component to `DefOrigin` + `DefIdx`**
-- Current: def entities use `DefStrId(String)` component
-- Target: `DefOrigin(DefIdx)` — numeric index into DefRegistry
-- Reduces string comparison to integer comparison for chunk/stack logic
+Runtime tables can use compact indices; saves use stable IDs or versioned palettes. Definition reload stages a validated replacement, then publishes atomically with explicit migrate/retain/cancel policies. Preserve or reject references in activities, items, terrain and plans rather than letting dangling Entity IDs silently change behavior.
 
-### Phase 3 — Data Pipeline Simplification (medium-term)
+Keep a validated catalog interface below simulation. Parsing/filesystem/asset loading and ECS publication are adapters, not mandatory runtime dependencies. Per-category builders already exist; further file splitting and registry ergonomics are lower priority than correctness of identity/publication.
 
-**5. Clean separation of parsing vs entity spawning**
-- Current: `cdda_data` crate handles both JSON deserialization AND
-  Bevy entity construction (in `build_def_world`)
-- Target: `cdda_parse` (pure JSON → typed AST, no Bevy dep) + `cdda_def_world`
-  (AST → Bevy entities, Bevy ECS dep)
+## World lifecycle boundary
 
-**6. Loader refactor**
-- Current: `Loader` struct handles file I/O + type resolution + copy-from in
-  a single ~1100-line file
-- Target: Separate `FileScanner`, `TypeResolver`, `CopyFromResolver` structs
+Overmap describes strategic terrain. Local submaps own playable terrain/furniture/fields/traps and persistent local state. Active-region membership determines detailed simulation, not render visibility. Leaving a region saves authoritative state; reentry accounts for elapsed game time. Spatial, navigation and visibility caches are derived and invalidated by committed mutations.
 
-### Phase 4 — Runtime Architecture (long-term)
+Chunked SoA arrays are appropriate for dense tiles (Master also uses this); dynamic entities remain ECS objects. Establish save/activation semantics before proliferating pathfinding, vehicles, fire and rot systems.
 
-**7. SoA tile storage**
-- Current: each tile is an ECS entity with components
-- Target: chunk-based `Vec<T>` storage for terrain data, ECS entities only
-  for dynamic objects (items, creatures)
+## Verification boundary
 
-**8. Event-driven simulation**
-- Current: direct system calls in ordered sets
-- Target: fully event-driven with observer-based triggers for all
-  entity-to-entity interactions
+Use the production persistent simulation schedule in headless App tests. Test idle/pause and frame partition, multi-action budgets, contested mutations, reload during craft/plan, save/load across reordered definitions, region leave/reenter, and replay equality under different presentation pacing.
 
-**9. Three-tier hot reload**
-- Current: no hot reload path exists
-- Target: mod subsecond reload via three tiers:
-  1. Tier 1: Asset file change → invalidate + reload changed files
-  2. Tier 2: In-memory def tree patching (no new entities)
-  3. Tier 3: Full def world rebuild (spawn/despawn entities)
+Keep isolated unit tests for pure logic, but do not mistake recreated-system TestBed calls for schedule coverage. CI must verify test target discovery so moved files do not silently disappear.
 
-## Design Principles
+## Dependency direction
 
-### Dependency Direction
-```
-cdda_core_types ← cdda_components ← game logic crates ← data/world crates ← app crates
-```
-No crate should depend on a crate above it in this hierarchy.
-
-### No Circular Dependencies
-If a circular dependency would form (e.g. `cdda_inventory` needs `cdda_actor`),
-extract the shared types into a new crate (e.g. `cdda_inventory_types`).
-
-### Registry Pattern
-All dynamic registries implement `Registry<T>`:
-```rust
-pub trait Registry<T> {
-    fn intern(&mut self, value: &str) -> T;       // returns a numeric ID
-    fn resolve(&self, id: T) -> Option<&str>;      // resolves ID back to string
-}
-```
-Where `T` is a newtype wrapper like `SkillId(2)`.
-
-### No Vec<T> in components
-If T has independent lifecycle (status effects, skills, mutations),
-each instance is its own entity related via `#[relationship]`.
-This enables granular change detection.
-
-## Migration Status
-
-| Item | Status |
-|---|---|
-| `build_def_world` decomposition | ❌ Not started |
-| `DefRegistry` trait-ification | ❌ Not started |
-| `DefId<T>` → `DefIdx` | ❌ Not started |
-| `DefStrId` → `DefOrigin` | ❌ Not started |
-| Bionic `active: bool` → `Active` tag | ✅ Done |
-| MutationEntry `visible: bool` → `Visible` tag | ✅ Done |
-| `StackCount::new` non-panicking | ✅ Done |
-| `ParentPart` immutable | ✅ Done |
-| Architecture docs created | ✅ Done |
+Domain values/raw schemas → shared contracts and validated catalog → simulation/world → input/render/app adapters. The planner core cdda_htn depends on no cdda crate. No crate depends on cdda_app/cdda_cli. Existing mixed data/asset and input-in-components boundaries should be narrowed as contracts stabilize, without adding circular dependencies or cosmetic crate churn.

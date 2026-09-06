@@ -187,7 +187,10 @@ fn spawn_inventory_ui(
                             InvListContainer,
                             crate::render::scroll::KeyboardScroll,
                             crate::render::scroll::FocusedRow::default(),
-                            crate::render::scroll::VirtualList::default(),
+                            crate::render::scroll::VirtualList {
+                                row_height: 35.0,
+                                ..default()
+                            },
                             ScrollPosition::default(),
                             Node {
                                 flex_direction: FlexDirection::Column,
@@ -336,12 +339,23 @@ fn spawn_inventory_ui(
 
 /// Pre-collected item display data, extracted from ECS queries before
 /// `Commands` is obtained (avoids borrowing conflicts with `&mut World`).
+#[derive(Clone, PartialEq)]
 struct ItemRowData {
     name: String,
     qty: u32,
     cdda_id: String,
     sym: char,
     craft_display: Option<String>,
+}
+
+#[derive(Component, PartialEq)]
+struct InventoryPresentation {
+    pocket: Vec<(char, Entity, ItemRowData)>,
+    wielded: Vec<(char, Entity, ItemRowData)>,
+    worn: Vec<(char, Entity, ItemRowData)>,
+    focus: (usize, usize),
+    window: Option<(usize, usize)>,
+    preset: theme::ThemePreset,
 }
 
 fn collect_item_display_data(
@@ -434,7 +448,7 @@ fn build_item_panel_from_data(
     let font_size = if compact { 14.0 } else { 15.0 };
     let icon_size = if compact { 20.0 } else { 24.0 };
     let pad_v = if compact { 4.0 } else { 5.0 };
-    let row_height = 15.0 + 2.0 * pad_v;
+    let row_height = icon_size + 2.0 * pad_v + 1.0;
 
     // Virtualize: render only the visible window + spacer nodes above/below so
     // the native `ScrollPosition` still spans the full data height (Bevy lays
@@ -447,6 +461,7 @@ fn build_item_panel_from_data(
         commands.entity(container).with_children(|p| {
             p.spawn(Node {
                 height: Val::Px(win_start as f32 * row_height),
+                flex_shrink: 0.0,
                 ..default()
             });
         });
@@ -483,6 +498,9 @@ fn build_item_panel_from_data(
                 Node {
                     width: Val::Percent(100.0),
                     flex_direction: FlexDirection::Row,
+                    height: Val::Px(row_height),
+                    flex_shrink: 0.0,
+                    overflow: Overflow::clip(),
                     align_items: AlignItems::Center,
                     padding: UiRect::new(
                         Val::Px(10.0),
@@ -554,6 +572,7 @@ fn build_item_panel_from_data(
         commands.entity(container).with_children(|p| {
             p.spawn(Node {
                 height: Val::Px(remaining as f32 * row_height),
+                flex_shrink: 0.0,
                 ..default()
             });
         });
@@ -600,7 +619,9 @@ pub(crate) fn update_inventory_screen(world: &mut World) {
             .entity_mut(container_entity)
             .get_mut::<crate::render::scroll::FocusedRow>()
         {
-            fr.0 = focus_index;
+            if fr.0 != focus_index {
+                fr.0 = focus_index;
+            }
         }
     }
 
@@ -698,12 +719,29 @@ pub(crate) fn update_inventory_screen(world: &mut World) {
         let mut q = world.query::<&mut crate::render::scroll::VirtualList>();
         match q.get_mut(world, container_entity) {
             Ok(mut vl) => {
-                vl.total_rows = pocket_data.len();
+                if vl.total_rows != pocket_data.len() {
+                    vl.total_rows = pocket_data.len();
+                }
                 Some(vl.window)
             }
             Err(_) => None,
         }
     };
+
+    let presentation = InventoryPresentation {
+        pocket: pocket_data.clone(),
+        wielded: wielded_data.clone(),
+        worn: worn_data.clone(),
+        focus: (focus_panel, focus_index),
+        window: pocket_window,
+        preset: theme.preset,
+    };
+    if world.get::<InventoryPresentation>(container_entity) == Some(&presentation)
+        && !world.is_resource_changed::<TileRegistry>()
+    {
+        return;
+    }
+    world.entity_mut(container_entity).insert(presentation);
 
     // ── Phase 2: Build UI with Commands ─────────────────────────────────
     let mut cmds = world.commands();

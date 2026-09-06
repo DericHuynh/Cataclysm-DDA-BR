@@ -242,8 +242,11 @@ pub fn reload_modified_data(
     match loader.resolve() {
         Ok(registry) => {
             let count = registry.total_count();
-            apply_registry_to_world(world, &registry, count);
-            tracing::info!("CDDA hot-reload complete: {} resolved definitions", count);
+            if apply_registry_to_world(world, &registry, count) {
+                tracing::info!("CDDA hot-reload complete: {} resolved definitions", count);
+            } else {
+                tracing::warn!("CDDA hot-reload rejected; keeping previous definitions active");
+            }
         }
         Err(errors) => {
             for err in &errors {

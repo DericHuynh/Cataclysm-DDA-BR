@@ -67,9 +67,11 @@ impl GameTime {
         self.turn += 1;
     }
     pub fn hours_elapsed(&self) -> u64 {
-        (self.turn * 6) / 3600
+        self.turn / Self::TURNS_PER_HOUR
     }
-    pub const TURNS_PER_DAY: u64 = 14400;
+    /// One logical turn is one simulated second, matching definition durations.
+    pub const TURNS_PER_HOUR: u64 = 3600;
+    pub const TURNS_PER_DAY: u64 = 86400;
 }
 
 // TurnAdvanced message — defined in the messages module.

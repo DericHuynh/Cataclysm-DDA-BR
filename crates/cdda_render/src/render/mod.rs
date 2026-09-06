@@ -56,7 +56,9 @@ pub fn refresh_all_footer_hints(
             let key = active_keys.key_for(entry.action);
             hints.push_str(&format!("  [{}] {}", key, entry.label));
         }
-        **text = hints;
+        if **text != hints {
+            **text = hints;
+        }
     }
 }
 
@@ -104,13 +106,17 @@ impl Plugin for CddaRenderPlugin {
         // opt in; inactive panes just have no scrollable nodes.
         app.add_systems(
             PreUpdate,
-            (
-                scroll::update_virtual_windows,
-                scroll::scroll_with_wheel,
-                scroll::scroll_with_keyboard,
-            ),
+            (scroll::scroll_with_wheel, scroll::scroll_with_keyboard),
         );
-        app.add_systems(Update, scroll::scroll_to_focused_row);
+        app.add_systems(
+            PostUpdate,
+            (
+                scroll::scroll_to_focused_row,
+                scroll::update_virtual_windows,
+            )
+                .chain()
+                .before(bevy::ui::UiSystems::Layout),
+        );
 
         // ── Main menu ─────────────────────────────────────────────────────
         app.add_systems(OnEnter(Screen::MainMenu), main_menu::spawn);
@@ -227,7 +233,7 @@ impl Plugin for CddaRenderPlugin {
 }
 
 fn render_setup(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let font_handle: Handle<Font> = asset_server.load("fonts/Inter-VariableFont.ttf");
+    let font_handle: Handle<Font> = asset_server.load("fonts/ShareTechMono-Regular.ttf");
     commands.insert_resource(UiFontHandle(Some(font_handle)));
 
     commands.spawn((

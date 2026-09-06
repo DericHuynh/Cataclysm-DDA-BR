@@ -12,9 +12,11 @@ pub mod recording;
 pub mod replay;
 pub mod session_log;
 pub mod state_hash;
-pub use replay::{ReplayState, ReplaySpeed, inject_replay_actions};
+pub use replay::{inject_replay_actions, ReplaySpeed, ReplayState};
 
 use bevy_app::{App, Plugin, Update};
+use bevy_ecs::schedule::IntoScheduleConfigs;
+use cdda_components::schedule::GameSet;
 use recording::record_actions;
 use session_log::SessionLog;
 
@@ -29,12 +31,17 @@ pub struct CddaReplayPlugin {
 impl Plugin for CddaReplayPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(SessionLog::new(self.world_seed));
-        app.add_systems(Update, record_actions);
+        // Ingress ordering: record declared input BEFORE the simulation driver
+        // consumes the frame; hash COMMITTED state after the driver ran.
+        app.add_systems(Update, record_actions.in_set(GameSet::Input));
 
         #[cfg(feature = "devtools")]
         {
             app.insert_resource(state_hash::StateHashLog::default());
-            app.add_systems(Update, state_hash::hash_simulation_state);
+            app.add_systems(
+                Update,
+                state_hash::hash_simulation_state.in_set(GameSet::Render),
+            );
         }
     }
 }
@@ -48,13 +55,20 @@ pub struct CddaReplayModePlugin;
 impl Plugin for CddaReplayModePlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(ReplayState::default());
-        app.add_systems(Update, inject_replay_actions);
+        app.add_systems(Update, inject_replay_actions.in_set(GameSet::Input));
 
         #[cfg(feature = "devtools")]
         {
             app.insert_resource(state_hash::StateHashLog::default());
-            app.add_systems(Update, state_hash::hash_simulation_state);
-            app.add_systems(Update, state_hash::check_divergence);
+            app.add_systems(
+                Update,
+                (
+                    state_hash::hash_simulation_state,
+                    state_hash::check_divergence,
+                )
+                    .chain()
+                    .in_set(GameSet::Render),
+            );
             app.add_message::<state_hash::SimulationDiverged>();
         }
     }

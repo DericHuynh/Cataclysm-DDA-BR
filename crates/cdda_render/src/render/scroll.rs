@@ -22,6 +22,10 @@ use cdda_components::input::{GameAction, InputAction};
 #[derive(Component, Default)]
 pub struct KeyboardScroll;
 
+/// Disables keyboard scrolling while retaining mouse-wheel access.
+#[derive(Component)]
+pub struct InactiveScrollPane;
+
 /// Per-pane virtualized-list config for item-heavy scroll panes.
 ///
 /// Bevy's `ScrollPosition` scroll **clips but still lays out every child**, so a
@@ -33,7 +37,7 @@ pub struct KeyboardScroll;
 ///
 /// Attach this (plus `KeyboardScroll` and a `ScrollPosition`) to the pane, and
 /// tell the pane the current `window` before it builds each frame. Call
-/// [`update_virtual_windows`] in `PreUpdate` to keep `window` synced to the
+/// [`update_virtual_windows`] after focus scrolling to keep `window` synced to the
 /// native `ScrollPosition`.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct VirtualList {
@@ -60,28 +64,41 @@ impl Default for VirtualList {
 }
 
 /// Updates every [`VirtualList`]'s `window` from its `ScrollPosition` + measured
-/// viewport, so a pane can build only the visible rows that frame. Run before
-/// the pane's build system.
+/// viewport, so a pane can build only the visible rows that frame. The following presentation update consumes the new window.
 pub fn update_virtual_windows(
     mut q: Query<(&mut VirtualList, &ScrollPosition, Option<&ComputedNode>)>,
 ) {
     for (mut list, pos, computed) in &mut q {
-        if list.total_rows == 0 {
-            list.window = (0, 0);
-            continue;
+        let height = viewport_height(computed, list.row_height);
+        let window = list.visible_window(pos.0.y, height);
+        if list.window != window {
+            list.window = window;
         }
-        let view_height = computed
-            .map(|c| c.size().y)
-            .unwrap_or(list.row_height * VIEWPORT_DEFAULT_ROWS)
-            .max(list.row_height);
-        let scroll_y = pos.0.y.max(0.0);
-        let start = (scroll_y / list.row_height) as usize;
-        let start = start
-            .saturating_sub(list.overscan_rows)
-            .min(list.total_rows);
-        let end = ((scroll_y + view_height) / list.row_height) as usize + list.overscan_rows;
-        let end = end.min(list.total_rows).max(start + 1);
-        list.window = (start, end);
+    }
+}
+
+fn viewport_height(computed: Option<&ComputedNode>, row_height: f32) -> f32 {
+    computed
+        .map(|c| c.size().y * c.inverse_scale_factor())
+        .filter(|h| *h > 0.0)
+        .unwrap_or(row_height * VIEWPORT_DEFAULT_ROWS)
+}
+
+impl VirtualList {
+    pub fn visible_window(&self, offset: f32, viewport: f32) -> (usize, usize) {
+        if self.total_rows == 0 {
+            return (0, 0);
+        }
+        let row = self.row_height.max(1.0);
+        let viewport = viewport.max(row);
+        let offset = offset.clamp(0.0, (self.total_rows as f32 * row - viewport).max(0.0));
+        let start = (offset / row) as usize;
+        (
+            start.saturating_sub(self.overscan_rows),
+            (((offset + viewport) / row).ceil() as usize)
+                .saturating_add(self.overscan_rows)
+                .min(self.total_rows),
+        )
     }
 }
 
@@ -115,8 +132,6 @@ pub struct FocusedRow(pub usize);
 const ROW_PX: f32 = 34.0;
 /// Rows scrolled per page-up/page-down.
 const PAGE_ROWS: f32 = 10.0;
-/// Height of the "keep focused visible" window, in px.
-const KEEP_VISIBLE_PX: f32 = 6.0 * ROW_PX;
 
 /// Maximum vertical scroll offset from layout data (content taller than view).
 fn max_scroll_y(content: f32, view: f32, scale: f32) -> f32 {
@@ -132,7 +147,14 @@ fn max_scroll_y(content: f32, view: f32, scale: f32) -> f32 {
 /// index.
 pub fn scroll_with_keyboard(
     mut actions: MessageReader<InputAction>,
-    mut q: Query<(&mut ScrollPosition, &ComputedNode), (With<KeyboardScroll>, Without<FocusedRow>)>,
+    mut q: Query<
+        (&mut ScrollPosition, &ComputedNode),
+        (
+            With<KeyboardScroll>,
+            Without<FocusedRow>,
+            Without<InactiveScrollPane>,
+        ),
+    >,
 ) {
     for action in actions.read() {
         let step = match action.action {
@@ -161,14 +183,32 @@ pub fn scroll_with_keyboard(
 /// visible window, scroll just enough to bring it back. Reads a [`FocusedRow`]
 /// component stored on the pane entity.
 pub fn scroll_to_focused_row(
-    mut q: Query<(&mut ScrollPosition, &FocusedRow), With<KeyboardScroll>>,
+    mut q: Query<
+        (
+            &mut ScrollPosition,
+            Ref<FocusedRow>,
+            Option<&VirtualList>,
+            Option<&ComputedNode>,
+        ),
+        With<KeyboardScroll>,
+    >,
 ) {
-    for (mut pos, focused) in &mut q {
-        let focus_top = focused.0 as f32 * ROW_PX;
-        if focus_top < pos.0.y {
-            pos.0.y = focus_top;
-        } else if focus_top > pos.0.y + KEEP_VISIBLE_PX - ROW_PX {
-            pos.0.y = focus_top - (KEEP_VISIBLE_PX - ROW_PX);
+    for (mut pos, focused, list, computed) in &mut q {
+        if !focused.is_changed() {
+            continue;
+        }
+        let row = list.map_or(ROW_PX, |l| l.row_height);
+        let view = viewport_height(computed, row);
+        let top = focused.0 as f32 * row;
+        let next = if top < pos.0.y {
+            top
+        } else if top + row > pos.0.y + view {
+            top + row - view
+        } else {
+            pos.0.y
+        };
+        if next != pos.0.y {
+            pos.0.y = next.max(0.0);
         }
     }
 }
@@ -178,11 +218,19 @@ pub fn scroll_to_focused_row(
 /// clamped to its content size. Mirrors the reference `on_scroll_handler`.
 pub fn scroll_with_wheel(
     mut scroll_events: MessageReader<Pointer<Scroll>>,
+    parents: Query<&ChildOf>,
     mut q: Query<(&mut ScrollPosition, &ComputedNode), With<KeyboardScroll>>,
 ) {
     for ev in scroll_events.read() {
         // `ev.entity` is the event target (the node under the cursor).
-        let Ok((mut pos, computed)) = q.get_mut(ev.entity) else {
+        let mut target = ev.entity;
+        while !q.contains(target) {
+            let Ok(parent) = parents.get(target) else {
+                break;
+            };
+            target = parent.parent();
+        }
+        let Ok((mut pos, computed)) = q.get_mut(target) else {
             continue;
         };
         let max_y = max_scroll_y(
@@ -190,7 +238,11 @@ pub fn scroll_with_wheel(
             computed.size().y,
             computed.inverse_scale_factor(),
         );
-        let delta = ev.event.y;
+        let delta = -ev.event.y
+            * match ev.event.unit {
+                bevy::input::mouse::MouseScrollUnit::Line => ROW_PX,
+                bevy::input::mouse::MouseScrollUnit::Pixel => 1.0,
+            };
         let new_y = (pos.0.y + delta).clamp(0.0, max_y);
         if (new_y - pos.0.y).abs() > f32::EPSILON {
             pos.0.y = new_y;

@@ -7,7 +7,7 @@
 use bevy_ecs::prelude::*;
 use fixedbitset::FixedBitSet;
 
-use crate::def_world::{flags_to_vec, DefinitionWorld};
+use crate::def_world::{flags_to_vec, DefCategory, DefinitionWorld};
 use crate::flags::{
     FurnitureFlagRegistry, FurnitureFlags, ItemFlagRegistry, ItemFlags, MonsterFlagRegistry,
     MonsterFlags, TerrainFlagRegistry, TerrainFlags,
@@ -34,7 +34,7 @@ pub fn populate_def_flags(
                 .items
                 .iter()
                 .filter_map(|(def_id, item)| {
-                    let entity = def_world.entity_by_str(def_id.as_str())?;
+                    let entity = def_world.entity_in(DefCategory::Item, def_id.as_str())?;
                     let bitset = reg.0.register_all(&item.flags);
                     Some((entity, bitset))
                 })
@@ -52,7 +52,7 @@ pub fn populate_def_flags(
                 .monsters
                 .iter()
                 .filter_map(|(def_id, m)| {
-                    let entity = def_world.entity_by_str(def_id.as_str())?;
+                    let entity = def_world.entity_in(DefCategory::Monster, def_id.as_str())?;
                     let bitset = reg.0.register_all(&m.flags);
                     Some((entity, bitset))
                 })
@@ -70,7 +70,7 @@ pub fn populate_def_flags(
                 .terrain
                 .iter()
                 .filter_map(|(def_id, t)| {
-                    let entity = def_world.entity_by_str(def_id.as_str())?;
+                    let entity = def_world.entity_in(DefCategory::Terrain, def_id.as_str())?;
                     let strings = flags_to_vec(&t.flags);
                     let bitset = reg.0.register_all(&strings);
                     Some((entity, bitset))
@@ -89,7 +89,7 @@ pub fn populate_def_flags(
                 .furniture
                 .iter()
                 .filter_map(|(def_id, f)| {
-                    let entity = def_world.entity_by_str(def_id.as_str())?;
+                    let entity = def_world.entity_in(DefCategory::Furniture, def_id.as_str())?;
                     let strings = flags_to_vec(&f.flags);
                     let bitset = reg.0.register_all(&strings);
                     Some((entity, bitset))

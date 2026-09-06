@@ -125,6 +125,7 @@ impl TerrainFlags {
 pub struct TerrainRegistry {
     // Per-type data — all Vecs must stay the same length.
     def_entities:    Vec<Option<Entity>>,
+    string_ids:      Vec<String>,
     flags:           Vec<TerrainFlags>,
     travel_costs:    Vec<u8>,
     mapgen_ids:      Vec<String>,
@@ -145,6 +146,7 @@ impl TerrainRegistry {
     pub fn empty() -> Self {
         Self {
             def_entities:      vec![None],
+            string_ids:        vec![String::new()],
             flags:             vec![TerrainFlags::empty()],
             travel_costs:      vec![0],
             mapgen_ids:        vec![String::new()],
@@ -172,7 +174,8 @@ impl TerrainRegistry {
         id
     }
 
-    /// Register a terrain type backed by an existing ECS definition entity.
+    /// Register or update a terrain type backed by an ECS definition entity.
+    /// An existing stable ID retains its slot and rotation links.
     ///
     /// `family_id` should be obtained from `get_or_create_family`. Pass `0`
     /// if this terrain has no family (it will never match family queries).
@@ -185,13 +188,13 @@ impl TerrainRegistry {
         mapgen_id: String,
         family_id: u32,
     ) -> u32 {
-        let idx = self.push_slot(None, flags, travel_cost, mapgen_id, family_id);
-        self.def_entities[idx as usize] = Some(def_entity);
-        self.id_to_index.insert(string_id.to_string(), idx);
-        idx
+        self.upsert_slot(
+            Some(def_entity), string_id, flags, travel_cost, mapgen_id, family_id,
+        )
     }
 
-    /// Register a terrain type with no backing ECS entity.
+    /// Register or update a terrain type with no backing ECS entity.
+    /// An existing stable ID retains its slot and rotation links.
     pub fn register_no_entity(
         &mut self,
         string_id: &str,
@@ -200,20 +203,32 @@ impl TerrainRegistry {
         mapgen_id: String,
         family_id: u32,
     ) -> u32 {
-        let idx = self.push_slot(None, flags, travel_cost, mapgen_id, family_id);
-        self.id_to_index.insert(string_id.to_string(), idx);
-        idx
+        self.upsert_slot(None, string_id, flags, travel_cost, mapgen_id, family_id)
     }
 
-    fn push_slot(
+    // Registration is an upsert: a stable ID never acquires a different slot.
+    fn upsert_slot(
         &mut self,
         def_entity: Option<Entity>,
+        string_id: &str,
         flags: TerrainFlags,
         travel_cost: u8,
         mapgen_id: String,
         family_id: u32,
     ) -> u32 {
+        if let Some(&idx) = self.id_to_index.get(string_id) {
+            let i = idx as usize;
+            self.def_entities[i] = def_entity;
+            self.flags[i] = flags;
+            self.travel_costs[i] = travel_cost;
+            self.mapgen_ids[i] = mapgen_id;
+            self.family_ids[i] = family_id;
+            return idx;
+        }
         let idx = self.def_entities.len() as u32;
+        assert!(idx < (1 << 24), "terrain registry exhausted handle slots");
+        self.string_ids.push(string_id.to_owned());
+        self.id_to_index.insert(string_id.to_owned(), idx);
         self.def_entities.push(def_entity);
         self.flags.push(flags);
         self.travel_costs.push(travel_cost);
@@ -318,13 +333,64 @@ impl TerrainRegistry {
             .flatten()
     }
 
-    /// Reverse lookup: string ID for a handle. O(N) scan — do not call in
-    /// hot loops. For debugging and cold paths only.
+    /// Stable definition ID for a handle. NULL and unregistered indices return None.
     pub fn string_id_for(&self, handle: TerrainHandle) -> Option<&str> {
-        self.id_to_index
-            .iter()
-            .find(|(_, &v)| v == handle.type_index())
-            .map(|(k, _)| k.as_str())
+        if handle.type_index() == 0 {
+            return None;
+        }
+        self.string_ids
+            .get(handle.type_index() as usize)
+            .map(String::as_str)
+    }
+
+    /// Atomically replace properties from a freshly built registry, preserving
+    /// existing terrain and family slots and appending new IDs. Rotation links
+    /// are remapped by stable ID, never copied as foreign numeric indices.
+    ///
+    /// Removal is deliberately unsupported: any missing old ID rejects the
+    /// entire rebuild, even if no chunk currently uses it. Callers must reject
+    /// the definition reload too, or provide a separate explicit migration.
+    pub fn rebuild_from(&mut self, definitions: &Self) -> Result<(), TerrainRegistryReloadError> {
+        for id in self.string_ids.iter().skip(1) {
+            if definitions.index_by_id(id).is_none() {
+                return Err(TerrainRegistryReloadError::RemovedId(id.clone()));
+            }
+        }
+        let mut rebuilt = self.clone();
+        let mut families = HashMap::from([(0, 0)]);
+        for (name, &source) in &definitions.family_name_to_id {
+            families.insert(source, rebuilt.get_or_create_family(name));
+        }
+        let mut remap = vec![0; definitions.len()];
+        for (i, id) in definitions.string_ids.iter().enumerate().skip(1) {
+            let family = families
+                .get(&definitions.family_ids[i])
+                .copied()
+                .ok_or_else(|| TerrainRegistryReloadError::InvalidFamily(id.clone()))?;
+            remap[i] = rebuilt.upsert_slot(
+                definitions.def_entities[i],
+                id,
+                definitions.flags[i],
+                definitions.travel_costs[i],
+                definitions.mapgen_ids[i].clone(),
+                family,
+            );
+        }
+        for (i, &target) in remap.iter().enumerate().skip(1) {
+            let mut rotations = [TerrainHandle::NULL; 8];
+            for (slot, handle) in rotations.iter_mut().zip(definitions.rotated_handles[i]) {
+                let index = remap
+                    .get(handle.type_index() as usize)
+                    .copied()
+                    .ok_or_else(|| {
+                        TerrainRegistryReloadError::InvalidRotation(definitions.string_ids[i].clone())
+                    })?;
+                *slot = TerrainHandle::new(index, handle.rotation());
+            }
+            rebuilt.rotated_handles[target as usize] = rotations;
+        }
+        *self = rebuilt;
+        Ok(())
     }
 
     /// Get a rotated handle variant. O(1) indexed read.
@@ -355,6 +421,26 @@ impl TerrainRegistry {
         self.def_entities.len() <= 1
     }
 }
+
+/// A reload cannot safely preserve the registry's existing identities.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TerrainRegistryReloadError {
+    RemovedId(String),
+    InvalidFamily(String),
+    InvalidRotation(String),
+}
+
+impl std::fmt::Display for TerrainRegistryReloadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::RemovedId(id) => write!(f, "terrain reload removed existing ID {id:?}"),
+            Self::InvalidFamily(id) => write!(f, "terrain {id:?} references an unknown family"),
+            Self::InvalidRotation(id) => write!(f, "terrain {id:?} references an unknown rotation type"),
+        }
+    }
+}
+
+impl std::error::Error for TerrainRegistryReloadError {}
 
 // ---------------------------------------------------------------------------
 // CoreTerrains — game-specific handles, separate from the generic registry

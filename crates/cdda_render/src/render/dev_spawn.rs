@@ -189,7 +189,10 @@ pub fn spawn_dev_spawn_panel(
                         SpawnListPanel,
                         crate::render::scroll::KeyboardScroll,
                         crate::render::scroll::FocusedRow::default(),
-                        crate::render::scroll::VirtualList::default(),
+                        crate::render::scroll::VirtualList {
+                            row_height: 48.0,
+                            ..default()
+                        },
                         ScrollPosition::default(),
                         Node {
                             width: Val::Percent(38.0),
@@ -281,6 +284,12 @@ pub(crate) fn update_dev_spawn_panel(
     comestible_registry: Res<ComestibleRegistry>,
     theme: Res<UiTheme>,
 ) {
+    if !focus.is_changed()
+        && !theme.is_changed()
+        && !list_panel.iter_mut().any(|(_, list)| list.is_changed())
+    {
+        return;
+    }
     let filtered = focus.filtered_entries();
     let total = filtered.len();
 
@@ -318,7 +327,9 @@ pub(crate) fn update_dev_spawn_panel(
     if let Ok((list_e, mut virtual_list)) = list_panel.single_mut() {
         // Keep the virtualization size in sync with the data; the window is
         // recomputed next frame from `ScrollPosition` by `update_virtual_windows`.
-        virtual_list.total_rows = total;
+        if virtual_list.total_rows != total {
+            virtual_list.total_rows = total;
+        }
 
         commands
             .entity(list_e)
@@ -344,29 +355,6 @@ pub(crate) fn update_dev_spawn_panel(
                     return;
                 }
 
-                // Position indicator
-                list.spawn((
-                    Node {
-                        padding: UiRect::new(
-                            Val::Px(14.0),
-                            Val::Px(14.0),
-                            Val::Px(3.0),
-                            Val::Px(3.0),
-                        ),
-                        border: UiRect::bottom(Val::Px(1.0)),
-                        ..default()
-                    },
-                    BorderColor::all(theme::DIVIDER),
-                ))
-                .with_child((
-                    Text::new(format!("{} / {}", focus.index + 1, total)),
-                    TextFont {
-                        font_size: 11.0,
-                        ..default()
-                    },
-                    TextColor(theme::TEXT_DIM),
-                ));
-
                 // Virtualized rows: a top spacer preserves scroll offset, then
                 // only the visible window's rows are spawned (so a 40k-item
                 // catalog stays cheap), then a bottom spacer keeps the scroll
@@ -377,6 +365,7 @@ pub(crate) fn update_dev_spawn_panel(
                 if top_px > 0.0 {
                     list.spawn(Node {
                         height: Val::Px(top_px),
+                        flex_shrink: 0.0,
                         ..default()
                     });
                 }
@@ -396,6 +385,9 @@ pub(crate) fn update_dev_spawn_panel(
                         Node {
                             width: Val::Percent(100.0),
                             flex_direction: FlexDirection::Column,
+                            height: Val::Px(48.0),
+                            flex_shrink: 0.0,
+                            overflow: Overflow::clip(),
                             padding: UiRect::axes(Val::Px(14.0), Val::Px(5.0)),
                             border: UiRect::bottom(Val::Px(1.0)),
                             ..default()
@@ -425,15 +417,18 @@ pub(crate) fn update_dev_spawn_panel(
                 if bottom_px > 0.0 {
                     list.spawn(Node {
                         height: Val::Px(bottom_px),
+                        flex_shrink: 0.0,
                         ..default()
                     });
                 }
             });
 
         // Feed the focused row to the shared keep-visible scroll.
-        commands
-            .entity(list_e)
-            .insert(crate::render::scroll::FocusedRow(focus.index));
+        if focus.is_changed() {
+            commands
+                .entity(list_e)
+                .insert(crate::render::scroll::FocusedRow(focus.index));
+        }
     }
 
     // ── Detail panel (shared widget) ─────────────────────────────────────

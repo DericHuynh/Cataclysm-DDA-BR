@@ -668,7 +668,9 @@ fn collect_def_world_entries(world: &World) -> (RegistryCategoryData, Vec<Regist
     };
     let mut entries: Vec<RegistryEntry> = def_world
         .iter()
-        .map(|(id, entity)| {
+        .map(|(category, id, entity)| {
+            let id = format!("{category:?}::{id}");
+
             let entity_ref = world.entity(entity);
             let type_info = if entity_ref.contains::<WeaponData>() {
                 "weapon"
@@ -885,7 +887,10 @@ pub fn spawn_registry_viewer(world: &mut World) {
                     body.spawn((
                         RegCategoryPanel,
                         crate::render::scroll::KeyboardScroll,
-                        crate::render::scroll::VirtualList::default(),
+                        crate::render::scroll::VirtualList {
+                            row_height: 30.0,
+                            ..default()
+                        },
                         crate::render::scroll::FocusedRow::default(),
                         ScrollPosition::default(),
                         Node {
@@ -905,7 +910,10 @@ pub fn spawn_registry_viewer(world: &mut World) {
                     body.spawn((
                         RegEntryListPanel,
                         crate::render::scroll::KeyboardScroll,
-                        crate::render::scroll::VirtualList::default(),
+                        crate::render::scroll::VirtualList {
+                            row_height: 26.0,
+                            ..default()
+                        },
                         crate::render::scroll::FocusedRow::default(),
                         ScrollPosition::default(),
                         Node {
@@ -1095,6 +1103,15 @@ fn apply_pane_tint(world: &mut World, tint: &impl Fn(bool) -> Color) {
     for (collect, active) in jobs {
         for e in collect(world) {
             world.entity_mut(e).insert(BackgroundColor(tint(active)));
+            if active {
+                world
+                    .entity_mut(e)
+                    .remove::<super::scroll::InactiveScrollPane>();
+            } else {
+                world
+                    .entity_mut(e)
+                    .insert(super::scroll::InactiveScrollPane);
+            }
         }
     }
 }
@@ -1112,7 +1129,7 @@ fn pane_name(pane: usize) -> &'static str {
 
 /// For an index-navigated list pane: sync its `VirtualList` size + `FocusedRow`
 /// to the focused index and return the visible row window `[start, end)`. The
-/// pane's window is recomputed from its `ScrollPosition` each PreUpdate by
+/// pane's window is recomputed from its `ScrollPosition` each PostUpdate by
 /// `scroll::update_virtual_windows`; this only feeds `total_rows` and sets the
 /// focused row so the shared keep-visible scroll shows it.
 fn virtual_list_for_panel(
@@ -1128,9 +1145,13 @@ fn virtual_list_for_panel(
     let Ok((mut vl, mut fr)) = q.get_mut(world, panel) else {
         return (0, total_rows);
     };
-    vl.total_rows = total_rows;
+    if vl.total_rows != total_rows {
+        vl.total_rows = total_rows;
+    }
     let window = vl.window;
-    fr.0 = focused;
+    if fr.0 != focused {
+        fr.0 = focused;
+    }
     (
         window.0.min(total_rows),
         window.1.min(total_rows).max(window.0),
@@ -1142,28 +1163,23 @@ fn virtual_list_for_panel(
 fn spawn_virtual_spacers(
     cmd: &mut EntityWorldMut,
     start: usize,
-    end: usize,
-    total: usize,
+    _end: usize,
+    _total: usize,
     row_px: f32,
 ) {
     if start > 0 {
         cmd.with_children(|p| {
             p.spawn(Node {
                 height: Val::Px(start as f32 * row_px),
-                ..default()
-            });
-        });
-    }
-    let remaining = total.saturating_sub(end);
-    if remaining > 0 {
-        cmd.with_children(|p| {
-            p.spawn(Node {
-                height: Val::Px(remaining as f32 * row_px),
+                flex_shrink: 0.0,
                 ..default()
             });
         });
     }
 }
+
+#[derive(Component, PartialEq)]
+struct RenderedDetail(usize, usize, theme::ThemePreset);
 
 pub fn update_registry_viewer(world: &mut World) {
     let theme = world.resource::<UiTheme>().clone();
@@ -1274,18 +1290,48 @@ pub fn update_registry_viewer(world: &mut World) {
         let _state = world.resource::<RegistryViewerState>();
     }
 
-    // Phase 2: Snapshot state for rendering
-    let (cat_idx, ent_idx, cats, all_entries, active_pane) = {
+    let dirty = changed
+        || world.is_resource_changed::<RegistryViewerState>()
+        || world.is_resource_changed::<UiTheme>()
+        || world
+            .query_filtered::<Entity, Changed<crate::render::scroll::VirtualList>>()
+            .iter(world)
+            .next()
+            .is_some();
+    if !dirty {
+        return;
+    }
+
+    // Copy only visible labels and the selected detail, never the whole catalog.
+    let window = world
+        .query_filtered::<&super::scroll::VirtualList, With<RegEntryListPanel>>()
+        .iter(world)
+        .next()
+        .map_or((0, 0), |list| list.window);
+    let (cat_idx, ent_idx, cats, current_entries, total_entries, selected_entry, active_pane) = {
         let s = world.resource::<RegistryViewerState>();
+        let entries = s
+            .all_entries
+            .get(s.category_index)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+        let labels: Vec<_> = entries
+            .iter()
+            .enumerate()
+            .skip(window.0)
+            .take(window.1.saturating_sub(window.0))
+            .map(|(i, e)| (i, e.id.clone()))
+            .collect();
         (
             s.category_index,
             s.entry_index,
             s.categories.clone(),
-            s.all_entries.clone(),
+            labels,
+            entries.len(),
+            entries.get(s.entry_index).cloned(),
             s.pane,
         )
     };
-    let current_entries = all_entries.get(cat_idx).cloned().unwrap_or_default();
 
     // Pane-focus highlight: tint each panel container when it is the active
     // pane so the user can see where keyboard focus is. IDs are collected
@@ -1354,7 +1400,10 @@ pub fn update_registry_viewer(world: &mut World) {
                 list.spawn((
                     Node {
                         width: Val::Percent(100.0),
-                        padding: UiRect::axes(Val::Px(10.0), Val::Px(6.0)),
+                        height: Val::Px(30.0),
+                        flex_shrink: 0.0,
+                        overflow: Overflow::clip(),
+                        padding: UiRect::horizontal(Val::Px(10.0)),
                         ..default()
                     },
                     BackgroundColor(if selected {
@@ -1379,6 +1428,16 @@ pub fn update_registry_viewer(world: &mut World) {
                 ));
             }
         });
+        let remaining = total.saturating_sub(end);
+        if remaining > 0 {
+            list_cmd.with_children(|p| {
+                p.spawn(Node {
+                    height: Val::Px(remaining as f32 * 30.0),
+                    flex_shrink: 0.0,
+                    ..default()
+                });
+            });
+        }
     }
 
     // ── Entry list (middle) ──────────────────────────────────────────────
@@ -1387,13 +1446,13 @@ pub fn update_registry_viewer(world: &mut World) {
         .iter(world)
         .next()
     {
-        let total = current_entries.len();
+        let total = total_entries;
         let (start, end) = virtual_list_for_panel(world, list_e, total, ent_idx);
         let mut list_cmd = world.entity_mut(list_e);
         list_cmd.despawn_children();
         spawn_virtual_spacers(&mut list_cmd, start, end, total, 26.0);
         list_cmd.with_children(|list| {
-            if current_entries.is_empty() {
+            if total_entries == 0 {
                 list.spawn(Node {
                     padding: UiRect::axes(Val::Px(12.0), Val::Px(10.0)),
                     ..default()
@@ -1408,16 +1467,15 @@ pub fn update_registry_viewer(world: &mut World) {
                 ));
                 return;
             }
-            for (i, entry) in current_entries
-                .iter()
-                .enumerate()
-                .skip(start)
-                .take(end - start)
-            {
+            for (i, label) in &current_entries {
+                let i = *i;
                 list.spawn((
                     Node {
                         width: Val::Percent(100.0),
-                        padding: UiRect::axes(Val::Px(10.0), Val::Px(5.0)),
+                        height: Val::Px(26.0),
+                        flex_shrink: 0.0,
+                        overflow: Overflow::clip(),
+                        padding: UiRect::horizontal(Val::Px(10.0)),
                         ..default()
                     },
                     BackgroundColor(if i == ent_idx {
@@ -1429,7 +1487,7 @@ pub fn update_registry_viewer(world: &mut World) {
                     }),
                 ))
                 .with_child((
-                    Text::new(entry.id.clone()),
+                    Text::new(label.clone()),
                     TextFont {
                         font_size: 12.0,
                         ..default()
@@ -1442,12 +1500,36 @@ pub fn update_registry_viewer(world: &mut World) {
                 ));
             }
         });
+        let remaining = total.saturating_sub(end);
+        if remaining > 0 {
+            list_cmd.with_children(|p| {
+                p.spawn(Node {
+                    height: Val::Px(remaining as f32 * 26.0),
+                    flex_shrink: 0.0,
+                    ..default()
+                });
+            });
+        }
     }
 
     // ── Detail panel (right) — two sub-panels ────────────────────────────
-    let Some(entry) = current_entries.get(ent_idx) else {
+    let Some(entry) = selected_entry.as_ref() else {
         return;
     };
+
+    let detail_key = RenderedDetail(cat_idx, ent_idx, theme.preset);
+    if let Some(panel) = world
+        .query_filtered::<Entity, With<RegRawJsonPanel>>()
+        .iter(world)
+        .next()
+    {
+        if world.get::<RenderedDetail>(panel) == Some(&detail_key)
+            && !world.is_resource_changed::<RegistryViewerState>()
+        {
+            return;
+        }
+        world.entity_mut(panel).insert(detail_key);
+    }
 
     // ── Raw JSON sub-panel (left half) ────────────────────────────────────
     if let Some(raw_e) = world
@@ -1566,5 +1648,75 @@ pub fn update_registry_viewer(world: &mut World) {
                     TextColor(theme.label_color()),
                 ));
             });
+    }
+}
+
+#[cfg(test)]
+mod presentation_tests {
+    use super::super::scroll::*;
+    use super::*;
+
+    #[test]
+    fn headless_registry_preserves_idle_entities_and_orders_spacers() {
+        let mut app = App::new();
+        app.init_resource::<UiTheme>()
+            .init_resource::<ButtonInput<KeyCode>>();
+        app.insert_resource(RegistryViewerState {
+            all_entries: vec![(0..40_000)
+                .map(|i| RegistryEntry {
+                    id: format!("item_{i}"),
+                    raw_json: "{}".into(),
+                    parsed_fields: "fields".into(),
+                    status: "ok".into(),
+                })
+                .collect()],
+            ..default()
+        });
+        let panel = app
+            .world_mut()
+            .spawn((
+                RegEntryListPanel,
+                Node::default(),
+                KeyboardScroll,
+                FocusedRow(0),
+                ScrollPosition::default(),
+                VirtualList {
+                    row_height: 26.0,
+                    ..default()
+                },
+            ))
+            .id();
+        app.add_systems(Update, update_registry_viewer);
+        app.add_systems(
+            PostUpdate,
+            (scroll_to_focused_row, update_virtual_windows).chain(),
+        );
+        for _ in 0..4 {
+            app.update();
+        }
+        let children = app.world().get::<Children>(panel).unwrap().to_vec();
+        for _ in 0..10 {
+            app.update();
+        }
+        assert_eq!(
+            app.world().get::<Children>(panel).unwrap().to_vec(),
+            children
+        );
+        assert!(children.len() < 40);
+        let last = *children.last().unwrap();
+        assert_eq!(app.world().get::<Node>(last).unwrap().flex_shrink, 0.0);
+        assert!(
+            app.world().get::<Children>(last).is_none(),
+            "bottom spacer must follow rows"
+        );
+        app.world_mut()
+            .resource_mut::<RegistryViewerState>()
+            .entry_index = 20_000;
+        for _ in 0..3 {
+            app.update();
+        }
+        let list = app.world().get::<VirtualList>(panel).unwrap();
+        assert!(list.window.0 <= 20_000 && list.window.1 > 20_000);
+        assert!(app.world().get::<Children>(panel).unwrap().len() < 40);
     }
 }
